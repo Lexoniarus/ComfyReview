@@ -1,0 +1,40 @@
+<script>
+  function asNumber(v){
+    if (v === null || v === undefined) return NaN;
+    const s = String(v).trim().replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  function makeSortable(table){
+    const headRow = table.querySelector("tr");
+    if (!headRow) return;
+
+    const ths = headRow.querySelectorAll("th");
+    ths.forEach((th, idx) => {
+      th.style.cursor = "pointer";
+      th.title = "Klicken zum Sortieren";
+      let asc = true;
+
+      th.addEventListener("click", () => {
+        ths.forEach(t => t.dataset.sort = "");
+        th.dataset.sort = asc ? "asc" : "desc";
+
+        const rows = Array.from(table.querySelectorAll("tr")).slice(1);
+        rows.sort((a,b) => {
+          const av = a.children[idx]?.innerText ?? "";
+          const bv = b.children[idx]?.innerText ?? "";
+          const an = asNumber(av);
+          const bn = asNumber(bv);
+          if (!Number.isNaN(an) && !Number.isNaN(bn)) return asc ? (an - bn) : (bn - an);
+          return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+
+        rows.forEach(r => table.appendChild(r));
+        asc = !asc;
+      });
+    });
+  }
+
+  document.querySelectorAll("table.sortable").forEach(makeSortable);
+</script>

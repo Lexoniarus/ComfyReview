@@ -1,0 +1,293 @@
+{% extends "_base.html" %}
+{% set page_title = "Comfy Review" %}
+
+{% block head %}
+<style>
+  img{
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+
+    max-height: 78vh;
+    object-fit: contain;
+  }
+
+  .wrap{
+    display:grid;
+    grid-template-columns: 340px 1.7fr 380px;
+    gap: 24px;
+    align-items:start;
+    margin-top: 14px;
+  }
+
+  .panel{
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    background: rgba(255,255,255,0.02);
+    box-shadow: var(--shadow);
+  }
+
+  .centercol{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  .btnrow{
+    display:flex;
+    gap:8px;
+    margin:16px 0 0 0;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+
+  textarea{
+    width:100%;
+    min-height:120px;
+    background: rgba(0,0,0,0.45);
+    color: rgba(255,255,255,0.9);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:10px;
+    box-sizing:border-box;
+  }
+
+  .kv{
+    display:grid;
+    grid-template-columns:140px 1fr;
+    gap:8px;
+    margin:10px 0;
+  }
+
+  .miniRow{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+    margin: 8px 0 12px 0;
+  }
+
+  .miniTag{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .jsonPath{
+    width:100%;
+    max-width: 1200px;
+  }
+
+  details pre{
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 10px 0 0 0;
+  }
+
+  .filter{
+    gap: 8px;
+  }
+  .filter button{
+    padding: 9px 12px;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+  <div class="top">
+    <div>
+      <div class="pill">Gesamt: {{ total }}</div>
+      {% if it %}
+        <div class="pill">Bild: {{ idx+1 }}/{{ total }}</div>
+        <div class="pill">Status: {{ status }}</div>
+        <div class="pill">Bewertungen: {{ rated_count }}</div>
+        <div class="pill">Keys: 1-0 d</div>
+      {% endif %}
+    </div>
+    {% include "_nav.html" %}
+  </div>
+
+  <form class="filter" method="get" action="/">
+    <label class="small">Nur unbewertete</label>
+    <select name="unrated">
+      <option value="1" {% if unrated==1 %}selected{% endif %}>ja</option>
+      <option value="0" {% if unrated==0 %}selected{% endif %}>nein</option>
+    </select>
+
+    <label class="small">Modell</label>
+    <select name="model">
+      <option value="" {% if not model %}selected{% endif %}>alle</option>
+      {% for m in model_list %}
+        <option value="{{ m }}" {% if model==m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="small">Ordner</label>
+    <select name="subdir">
+      <option value="" {% if not subdir %}selected{% endif %}>alle</option>
+      {% for s in subdir_list %}
+        <option value="{{ s }}" {% if subdir==s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit">anwenden</button>
+  </form>
+
+  {% if not it %}
+    <p class="small">Keine Items gefunden.</p>
+  {% else %}
+
+  <div class="wrap">
+
+    <div class="panel">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <h3 style="margin:0;">Prompts</h3>
+        <span class="small">links statt Tab</span>
+      </div>
+
+      <div class="box" style="margin-top:12px;">
+        <div class="small">Positiv</div>
+        <textarea readonly>{{ view.get("pos_prompt") }}</textarea>
+      </div>
+
+      <div class="box" style="margin-top:12px;">
+        <div class="small">Negativ</div>
+        <textarea readonly>{{ view.get("neg_prompt") }}</textarea>
+      </div>
+
+      <div class="small" style="margin-top:8px;">{{ prompt_hint }}</div>
+    </div>
+
+    <div class="centercol">
+      <img src="{{ img_url }}" alt="preview">
+
+      <div class="box jsonPath" style="margin-top:14px;">
+        <div class="small">JSON</div>
+        <div class="small">{{ it.json_path }}</div>
+      </div>
+
+      <form id="rateForm" method="post" action="/rate">
+        <input type="hidden" name="combo_key" value="{{ it.combo_key }}">
+        <input type="hidden" name="model_branch" value="{{ it.model_branch }}">
+        <input type="hidden" name="checkpoint" value="{{ it.checkpoint }}">
+        <input type="hidden" name="json_path" value="{{ it.json_path }}">
+        <input type="hidden" name="png_path" value="{{ it.png_path }}">
+        <input type="hidden" name="sampler" value="{{ view.get('sampler') }}">
+        <input type="hidden" name="scheduler" value="{{ view.get('scheduler') }}">
+        <input type="hidden" name="steps" value="{{ view.get('steps') }}">
+        <input type="hidden" name="cfg" value="{{ view.get('cfg') }}">
+        <input type="hidden" name="denoise" value="{{ view.get('denoise') }}">
+        <input type="hidden" name="loras_json" value="{{ loras_json|e }}">
+        <input type="hidden" name="filter_unrated" value="{{ unrated }}">
+        <input type="hidden" name="filter_model" value="{{ model }}">
+        <input type="hidden" name="filter_subdir" value="{{ subdir }}">
+
+        <div class="btnrow">
+          {% for i in range(1,11) %}
+            <button type="submit" name="rating" value="{{ i }}" data-rating="{{ i }}">{{ i }}</button>
+          {% endfor %}
+          <button class="danger" type="submit" name="delete" value="1" data-delete="1">Löschen</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin:0;">Settings</h3>
+
+      <div class="miniRow">
+        {% if rating_runs and rating_runs > 0 %}
+          <span class="miniTag">Ø {{ rating_avg }}</span>
+          <span class="miniTag">{{ rating_runs }}x</span>
+          {% if trend_delta is not none %}
+            <span class="miniTag">Δ {{ trend_delta }}</span>
+          {% endif %}
+          {% if last_rating is not none %}
+            <span class="miniTag">letzte {{ last_rating }}</span>
+          {% endif %}
+        {% else %}
+          <span class="miniTag">noch keine bewertung</span>
+        {% endif %}
+      </div>
+
+      <div class="kv">
+        <div>Checkpoint</div><div>{{ view.get("checkpoint") }}</div>
+        <div>Sampler</div><div>{{ view.get("sampler") }}</div>
+        <div>Steps</div><div>{{ view.get("steps") }}</div>
+        <div>CFG</div><div>{{ view.get("cfg") }}</div>
+        <div>Scheduler</div><div>{{ view.get("scheduler") }}</div>
+        <div>Denoise</div><div>{{ view.get("denoise") }}</div>
+        <div>Seed</div><div>{{ view.get("seed") }}</div>
+        <div>Auflösung</div><div>{{ view.get("resolution") }}</div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="small">Preset</div>
+        <textarea readonly>{{ preset_text }}</textarea>
+      </div>
+
+      <details style="margin-top:12px;">
+        <summary>Raw</summary>
+        <pre>{{ meta_pre }}</pre>
+      </details>
+    </div>
+
+  </div>
+
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function(){
+    const rateForm = document.getElementById('rateForm');
+    if(!rateForm) return;
+
+    function isTypingContext(el){
+      if(!el) return false;
+      const tag = (el.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    }
+
+    function clickRating(n){
+      const btn = rateForm.querySelector(`button[data-rating="${n}"]`);
+      if(btn){
+        if(window.toast) window.toast("rating " + n);
+        btn.click();
+      }
+    }
+
+    function clickDelete(){
+      const btn = rateForm.querySelector('button[data-delete="1"]');
+      if(!btn) return;
+      const ok = confirm('Wirklich löschen? PNG und JSON werden entfernt, DB Eintrag bleibt als deleted=1.');
+      if(ok){
+        if(window.toast) window.toast("delete");
+        btn.click();
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if(e.defaultPrevented) return;
+      if(e.ctrlKey || e.metaKey || e.altKey) return;
+      if(isTypingContext(document.activeElement)) return;
+
+      const k = (e.key || '').toLowerCase();
+
+      if(k === 'delete'){ e.preventDefault(); clickDelete(); return; }
+
+      if(k >= '1' && k <= '9'){ e.preventDefault(); clickRating(Number(k)); return; }
+      if(k === '0'){ e.preventDefault(); clickRating(10); return; }
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,347 @@
+{# templates/playground_generator.html #}
+{% extends "_base.html" %}
+{% set page_title = "Playground Generator" %}
+
+{% block head %}
+<style>
+  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  .grid3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; }
+  .grid1{ display:grid; grid-template-columns: 1fr; gap:10px; }
+
+  .hint{ color:var(--muted); font-size:12px; margin-top:6px; }
+  .mono{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+  }
+
+  .kpiRow{ display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
+  .kpi{
+    border: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 12px;
+    padding: 10px 12px;
+    min-width: 140px;
+  }
+  .kpi .k{ font-size:12px; color:var(--muted); }
+  .kpi .v{ font-size:18px; font-weight:700; }
+
+  .chip{
+    display:inline-block;
+    border: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 999px;
+    padding: 6px 10px;
+    margin: 4px 6px 0 0;
+    font-size: 12px;
+  }
+
+  .boxSub{
+    border: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  textarea{
+    width:100%;
+    min-height:120px;
+    resize: vertical;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 10px;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .rowActions{ display:flex; gap:10px; align-items:center; }
+  .btnRow{ display:flex; gap:10px; }
+  .btnSmall{
+    padding: 6px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .err{
+    border: 1px solid #5b1f2a;
+    background: #2b1218;
+    color: #ffd4dc;
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+
+  .ok{
+    border: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .small{ font-size:12px; color:var(--muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+
+  <h1>Playground Generator</h1>
+
+  <div class="hint">
+    Slots ausser Character sind optional.
+    Leer bedeutet random.
+    Prompts sind Komma getrennt, keine Space Split Logik.
+  </div>
+
+  <div style="margin-top:12px;">
+    <form method="post" action="/playground/generator" class="grid1">
+
+      <div class="grid2">
+        <div>
+          <div class="small">Character (Pflicht)</div>
+          <select name="character_id" required>
+            <option value="" disabled {% if not form.character_id %}selected{% endif %}>bitte waehlen</option>
+            {% for c in characters %}
+              <option value="{{ c['id'] }}" {% if form.character_id == (c['id'] ~ '') %}selected{% endif %}>
+                {{ c['name'] }}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="hint">Dieser Slot ist fix, damit Rules und Adult Checks stabil greifen.</div>
+        </div>
+
+        <div>
+          <div class="small">Seed (optional, reproduzierbar)</div>
+          <input name="seed" value="{{ form.seed }}" placeholder="zB 12345">
+          <div class="hint">Leer bedeutet normal random. Zahl bedeutet reproduzierbar.</div>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div>
+          <div class="small">Scene</div>
+          <select name="scene_id">
+            <option value="" {% if not form.scene_id %}selected{% endif %}>random</option>
+            {% for s in scenes %}
+              <option value="{{ s['id'] }}" {% if form.scene_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <div class="small">Outfit</div>
+          <select name="outfit_id">
+            <option value="" {% if not form.outfit_id %}selected{% endif %}>random</option>
+            {% for s in outfits %}
+              <option value="{{ s['id'] }}" {% if form.outfit_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <div class="small">Pose</div>
+          <select name="pose_id">
+            <option value="" {% if not form.pose_id %}selected{% endif %}>random</option>
+            {% for s in poses %}
+              <option value="{{ s['id'] }}" {% if form.pose_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div>
+          <div class="small">Expression</div>
+          <select name="expression_id">
+            <option value="" {% if not form.expression_id %}selected{% endif %}>random</option>
+            {% for s in expressions %}
+              <option value="{{ s['id'] }}" {% if form.expression_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <div class="small">Lighting</div>
+          <select name="lighting_id">
+            <option value="" {% if not form.lighting_id %}selected{% endif %}>random</option>
+            {% for s in lightings %}
+              <option value="{{ s['id'] }}" {% if form.lighting_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <div class="small">Modifier</div>
+          <select name="modifier_id">
+            <option value="" {% if not form.modifier_id %}selected{% endif %}>random</option>
+            {% for s in modifiers %}
+              <option value="{{ s['id'] }}" {% if form.modifier_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <div class="small">include lighting</div>
+          <select name="include_lighting">
+            <option value="1" {% if form.include_lighting %}selected{% endif %}>yes</option>
+            <option value="0" {% if not form.include_lighting %}selected{% endif %}>no</option>
+          </select>
+          <div class="hint">Wenn no, wird Lighting ignoriert, auch wenn ausgewaehlt.</div>
+        </div>
+
+        <div>
+          <div class="small">include modifier</div>
+          <select name="include_modifier">
+            <option value="1" {% if form.include_modifier %}selected{% endif %}>yes</option>
+            <option value="0" {% if not form.include_modifier %}selected{% endif %}>no</option>
+          </select>
+          <div class="hint">Wenn no, wird Modifier ignoriert, auch wenn ausgewaehlt.</div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <div class="small">max tries</div>
+          <input name="max_tries" type="number" min="1" value="{{ form.max_tries }}">
+          <div class="hint">Reject Loop Limit, wenn Rules viele Kombinationen blocken.</div>
+        </div>
+
+        <div class="btnRow" style="align-items:flex-end;">
+          <button type="submit" name="action" value="generate">generieren</button>
+          <a href="/playground" class="small">zurueck zu playground</a>
+        </div>
+      </div>
+
+    </form>
+  </div>
+
+  {% if error %}
+    <div class="err" style="margin-top:14px;">
+      <div class="mono">{{ error }}</div>
+    </div>
+  {% endif %}
+
+  {% if result %}
+    <div class="ok" style="margin-top:14px;">
+
+      <div class="kpiRow">
+        <div class="kpi">
+          <div class="k">aktive tags</div>
+          <div class="v">{{ (result.get("active_tags") or []) | length }}</div>
+        </div>
+        <div class="kpi">
+          <div class="k">attempt</div>
+          <div class="v">{{ result.get("debug", {}).get("attempt", "") }}</div>
+        </div>
+        <div class="kpi">
+          <div class="k">seed</div>
+          <div class="v">{{ result.get("debug", {}).get("seed", "") }}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        {% set sel = result.get("selection") %}
+        {% if sel %}
+          {% for k, v in sel.items() %}
+            <span class="chip">{{ k }}: {{ v.get("name") }}</span>
+          {% endfor %}
+        {% endif %}
+      </div>
+
+      <div class="grid2" style="margin-top:12px;">
+        <div class="boxSub">
+          <div class="small">Positiv Prompt</div>
+          <div class="rowActions" style="justify-content:flex-end; margin-top:6px;">
+            <button class="btnSmall" type="button" onclick="copyText('pos_prompt')">copy</button>
+          </div>
+          <textarea id="pos_prompt" readonly>{{ result.get("positive") }}</textarea>
+          <div class="hint">Komma getrennt, so wie eure Token Pflege.</div>
+        </div>
+
+        <div class="boxSub">
+          <div class="small">Negativ Prompt</div>
+          <div class="rowActions" style="justify-content:flex-end; margin-top:6px;">
+            <button class="btnSmall" type="button" onclick="copyText('neg_prompt')">copy</button>
+          </div>
+          <textarea id="neg_prompt" readonly>{{ result.get("negative") }}</textarea>
+          <div class="hint">Komma getrennt, so wie eure Token Pflege.</div>
+        </div>
+      </div>
+
+      <div class="boxSub" style="margin-top:12px;">
+        <div class="small">Notes</div>
+        <textarea readonly>{{ result.get("notes") }}</textarea>
+        <div class="hint">Notes sind Lesetext, nicht Prompt Tokens.</div>
+      </div>
+
+      <div class="boxSub" style="margin-top:12px;">
+        <div class="small">An ComfyUI uebergeben</div>
+        <div class="hint">Absenden nutzt exakt die oben angezeigten Prompts. Es wird dabei nicht erneut generiert.</div>
+
+        <form method="post" action="/playground/generator" style="margin-top:10px;">
+          <input type="hidden" name="action" value="submit">
+
+          <input type="hidden" name="character_id" value="{{ form.character_id }}">
+          <input type="hidden" name="scene_id" value="{{ form.scene_id }}">
+          <input type="hidden" name="outfit_id" value="{{ form.outfit_id }}">
+          <input type="hidden" name="pose_id" value="{{ form.pose_id }}">
+          <input type="hidden" name="expression_id" value="{{ form.expression_id }}">
+          <input type="hidden" name="lighting_id" value="{{ form.lighting_id }}">
+          <input type="hidden" name="modifier_id" value="{{ form.modifier_id }}">
+
+          <input type="hidden" name="include_lighting" value="{{ 1 if form.include_lighting else 0 }}">
+          <input type="hidden" name="include_modifier" value="{{ 1 if form.include_modifier else 0 }}">
+
+          <input type="hidden" name="seed" value="{{ form.seed }}">
+          <input type="hidden" name="max_tries" value="{{ form.max_tries }}">
+
+          <input type="hidden" name="positive_prompt" value="{{ result.get('positive') }}">
+          <input type="hidden" name="negative_prompt" value="{{ result.get('negative') }}">
+
+          <div class="btnRow" style="margin-top:8px;">
+            <button type="submit">absenden</button>
+          </div>
+        </form>
+
+        {% if enqueue %}
+          <div class="hint mono" style="margin-top:10px; white-space:pre-wrap;">{{ enqueue }}</div>
+        {% endif %}
+      </div>
+
+      <details style="margin-top:12px;">
+        <summary class="small">Debug anzeigen</summary>
+
+        <div class="boxSub" style="margin-top:10px;">
+          <div class="small">active tags</div>
+          <div class="mono">{{ result.get("active_tags") }}</div>
+        </div>
+
+        <div class="boxSub" style="margin-top:10px;">
+          <div class="small">selection</div>
+          <div class="mono">{{ result.get("selection") }}</div>
+        </div>
+
+        <div class="boxSub" style="margin-top:10px;">
+          <div class="small">debug</div>
+          <div class="mono">{{ result.get("debug") }}</div>
+        </div>
+      </details>
+
+    </div>
+  {% endif %}
+
+</div>
+
+<script>
+  function copyText(id){
+    const el = document.getElementById(id);
+    if(!el){ return; }
+    el.select();
+    document.execCommand("copy");
+  }
+</script>
+{% endblock %}

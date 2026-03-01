@@ -1,0 +1,183 @@
+{% extends "_base.html" %}
+{% set page_title = "Prompt Tokens" %}
+
+{% block head %}
+<style>
+  .kpiGrid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.kpiCard{
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  box-shadow: var(--shadow);
+  padding: 12px;
+}
+
+.kpiTitle{
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.kpiVal{
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiSub{
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+  word-break: break-word;
+}
+
+.kpiRow{
+  display:flex;
+  justify-content:space-between;
+  gap: 12px;
+  align-items:baseline;
+}
+  .nBar{
+    width:140px;
+    height:7px;
+    border-radius:999px;
+    background: rgba(255,255,255,0.08);
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,0.10);
+  }
+  .nBar > div{
+    height:100%;
+    background: rgba(50,197,255,0.8);
+  }
+  .num{ text-align:right; }
+  .tokenCell{
+    max-width:500px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="top">
+  <div>
+    <div class="pill">Prompt Tokens</div>
+  </div>
+  {% include "_nav.html" %}
+</div>
+{% set ns = namespace(total_n=0, weighted_sum=0.0, top10_n=0, best=None, worst=None) %}
+
+{% for r in rows %}
+  {% set ns.total_n = ns.total_n + (r["n"] or 0) %}
+  {% set ns.weighted_sum = ns.weighted_sum + ((r["mean_score"] or 0) * (r["n"] or 0)) %}
+
+  {% if ns.best is none or (r["lb05"] > ns.best["lb05"]) %}
+    {% set ns.best = r %}
+  {% endif %}
+
+  {% if ns.worst is none or (r["lb05"] < ns.worst["lb05"]) %}
+    {% set ns.worst = r %}
+  {% endif %}
+{% endfor %}
+
+{% for r in rows[:10] %}
+  {% set ns.top10_n = ns.top10_n + (r["n"] or 0) %}
+{% endfor %}
+
+{% set unique_tokens = rows|length %}
+{% set weighted_mean = (ns.weighted_sum / ns.total_n) if ns.total_n > 0 else 0 %}
+{% set top10_share = ((ns.top10_n / ns.total_n) * 100) if ns.total_n > 0 else 0 %}
+
+<div class="kpiGrid">
+  <div class="kpiCard">
+    <div class="kpiTitle">token basis</div>
+    <div class="kpiRow">
+      <div class="kpiVal">{{ unique_tokens }}</div>
+      <div class="small">unique</div>
+    </div>
+    <div class="kpiSub">scope {{ scope }}, limit {{ limit }}, min_n {{ min_n }}</div>
+  </div>
+
+  <div class="kpiCard">
+    <div class="kpiTitle">support</div>
+    <div class="kpiRow">
+      <div class="kpiVal">{{ ns.total_n }}</div>
+      <div class="small">sum n</div>
+    </div>
+    <div class="kpiSub">top 10 coverage {{ "%.1f"|format(top10_share) }}%</div>
+  </div>
+
+  <div class="kpiCard">
+    <div class="kpiTitle">qualität</div>
+    <div class="kpiRow">
+      <div class="kpiVal">{{ "%.3f"|format(weighted_mean) }}</div>
+      <div class="small">mean weighted</div>
+    </div>
+    <div class="kpiSub">gewichtet nach token vorkommen</div>
+  </div>
+
+  <div class="kpiCard">
+    <div class="kpiTitle">best lb05</div>
+    {% if ns.best %}
+      <div class="kpiVal">{{ "%.3f"|format(ns.best["lb05"]) }}</div>
+      <div class="kpiSub">
+        n {{ ns.best["n"] }}, mean {{ "%.3f"|format(ns.best["mean_score"]) }}<br>
+        {{ ns.best["token"] }}
+      </div>
+    {% else %}
+      <div class="kpiVal">0</div>
+      <div class="kpiSub">keine daten</div>
+    {% endif %}
+  </div>
+
+  <div class="kpiCard">
+    <div class="kpiTitle">worst lb05</div>
+    {% if ns.worst %}
+      <div class="kpiVal">{{ "%.3f"|format(ns.worst["lb05"]) }}</div>
+      <div class="kpiSub">
+        n {{ ns.worst["n"] }}, mean {{ "%.3f"|format(ns.worst["mean_score"]) }}<br>
+        {{ ns.worst["token"] }}
+      </div>
+    {% else %}
+      <div class="kpiVal">0</div>
+      <div class="kpiSub">keine daten</div>
+    {% endif %}
+  </div>
+</div>
+{% set max_n = rows[0]["n"] if rows and rows|length > 0 else 1 %}
+
+<div class="tableWrap">
+<table class="sortable dense">
+<tr>
+  <th>Token</th>
+  <th class="num">n</th>
+  <th>n</th>
+  <th class="num">mean_score</th>
+  <th class="num">lb05</th>
+</tr>
+
+{% for r in rows %}
+<tr>
+  <td class="tokenCell" title="{{ r["token"] }}">{{ r["token"] }}</td>
+  <td class="num">{{ r["n"] }}</td>
+  <td>
+    <div class="nBar">
+      <div style="width: {{ ((r["n"] / max_n) * 100)|round(1) }}%"></div>
+    </div>
+  </td>
+  <td class="num">{{ r["mean_score"] }}</td>
+  <td class="num">{{ "%.3f"|format(r["lb05"]) }}</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+{% include "_sortable.html" %}
+{% endblock %}

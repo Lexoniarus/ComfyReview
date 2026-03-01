@@ -1,0 +1,277 @@
+{% extends "_base.html" %}
+{% set page_title = "Top Pictures" %}
+
+{% block head %}
+<style>
+  .filters{
+    margin-top: 12px;
+    display:flex;
+    gap: 12px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  select{
+    padding:6px 10px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background: rgba(0,0,0,0.35);
+    color: var(--text);
+  }
+
+  .grid{
+    margin-top: 16px;
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+
+  .card{
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.02);
+    overflow:hidden;
+    padding: 10px;
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+    box-shadow: var(--shadow);
+    transition: transform 0.12s ease, border 0.12s ease, background 0.12s ease;
+  }
+  .card:hover{
+    transform: translateY(-3px);
+    border-color: rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.03);
+  }
+
+  .thumb{
+    width:100%;
+    height:auto;
+    border-radius: 12px;
+    border:1px solid var(--border);
+    cursor: zoom-in;
+  }
+
+  .meta{
+    display:grid;
+    grid-template-columns: 120px 1fr;
+    gap: 6px;
+  }
+
+  .title{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap: 10px;
+  }
+  .rank{ font-weight:700; }
+
+  .modal{
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 18px;
+  }
+  .modal.open{ display:flex; }
+
+  .modalCard{
+    width: min(1200px, 96vw);
+    max-height: 92vh;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 16px;
+    background: rgba(15,22,36,0.86);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display:flex;
+    flex-direction: column;
+  }
+
+  .modalTop{
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+  }
+
+  .modalTop .left{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items:center;
+  }
+
+  .modalImgWrap{
+    padding: 12px;
+    overflow: auto;
+  }
+
+  .modalImg{
+    width: 100%;
+    height: auto;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.12);
+    cursor: zoom-out;
+  }
+
+  .closeBtn{
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .closeBtn:hover{ background: rgba(255,255,255,0.08); }
+</style>
+{% endblock %}
+
+{% block body %}
+  <div class="top">
+    <div>
+      <div class="pill">Top Pictures</div>
+      <div class="pill">min 5 Bewertungen</div>
+      <div class="pill">klick auf bild zum zoomen</div>
+    </div>
+    {% include "_nav.html" %}
+  </div>
+
+  <form class="filters" method="get" action="/top_pictures">
+    <label class="small">Modell</label>
+    <select name="model">
+      <option value="" {% if not model %}selected{% endif %}>alle</option>
+      {% for m in model_list %}
+        <option value="{{ m }}" {% if model==m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="small">Ordner</label>
+    <select name="subdir">
+      <option value="" {% if not subdir %}selected{% endif %}>alle</option>
+      {% for s in subdir_list %}
+        <option value="{{ s }}" {% if subdir==s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit">anwenden</button>
+  </form>
+
+  {% if not cards %}
+    <p class="small" style="margin-top:14px;">Keine Kandidaten. Du brauchst mindestens 10 Bilder mit je mindestens 5 Bewertungen.</p>
+  {% else %}
+    <div class="grid">
+      {% for c in cards %}
+        <div class="card">
+          <div class="title">
+            <div class="rank">#{{ loop.index }}</div>
+            <div class="small">Ø {{ "%.2f"|format(c.avg) }} / {{ c.runs }}</div>
+          </div>
+
+          <img
+            class="thumb"
+            src="{{ c.img_url }}"
+            alt="top"
+            data-full="{{ c.img_url }}"
+            data-title="#{{ loop.index }}  Ø {{ "%.2f"|format(c.avg) }}  runs {{ c.runs }}"
+            data-sub="{{ c.model_branch }}  {{ c.checkpoint }}"
+          >
+
+          <div class="meta small">
+            <div>model</div><div>{{ c.model_branch }}</div>
+            <div>ckpt</div><div>{{ c.checkpoint }}</div>
+            <div>sampler</div><div>{{ c.sampler }}</div>
+            <div>sched</div><div>{{ c.scheduler }}</div>
+            <div>steps</div><div>{{ c.steps }}</div>
+            <div>cfg</div><div>{{ c.cfg }}</div>
+            <div>denoise</div><div>{{ c.denoise }}</div>
+          </div>
+
+<form method="post" action="/top_delete" onsubmit="return confirm('wirklich löschen? png+json werden entfernt, db bekommt deleted=1 (neuer run).');">
+  <input type="hidden" name="json_path" value="{{ c.json_path }}">
+  <input type="hidden" name="png_path" value="{{ c.png_path }}">
+  <input type="hidden" name="combo_key" value="{{ c.combo_key }}">
+  <input type="hidden" name="model_branch" value="{{ c.model_branch }}">
+  <input type="hidden" name="checkpoint" value="{{ c.checkpoint }}">
+  <input type="hidden" name="filter_model" value="{{ model }}">
+  <input type="hidden" name="filter_subdir" value="{{ subdir }}">
+  <button class="danger" type="submit">löschen</button>
+</form>
+
+          <details>
+            <summary class="small">paths</summary>
+            <div class="small" style="word-break:break-word;">{{ c.json_path }}</div>
+          </details>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div id="imgModal" class="modal" aria-hidden="true">
+    <div class="modalCard">
+      <div class="modalTop">
+        <div class="left">
+          <span id="mTitle" class="pill"></span>
+          <span id="mSub" class="pill"></span>
+        </div>
+        <button id="mClose" class="closeBtn" type="button">schließen</button>
+      </div>
+      <div class="modalImgWrap">
+        <img id="mImg" class="modalImg" src="" alt="preview">
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const modal = document.getElementById("imgModal");
+  const mImg = document.getElementById("mImg");
+  const mTitle = document.getElementById("mTitle");
+  const mSub = document.getElementById("mSub");
+  const mClose = document.getElementById("mClose");
+
+  function openModal(src, title, sub){
+    mImg.src = src;
+    mTitle.textContent = title || "";
+    mSub.textContent = sub || "";
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    if(window.toast) window.toast("zoom");
+  }
+
+  function closeModal(){
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    mImg.src = "";
+  }
+
+  document.querySelectorAll("img.thumb").forEach(img => {
+    img.addEventListener("click", () => {
+      openModal(
+        img.dataset.full || img.src,
+        img.dataset.title || "",
+        img.dataset.sub || ""
+      );
+    });
+  });
+
+  mClose.addEventListener("click", closeModal);
+
+  modal.addEventListener("click", (e) => {
+    if(e.target === modal) closeModal();
+  });
+
+  mImg.addEventListener("click", closeModal);
+
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && modal.classList.contains("open")) closeModal();
+  });
+})();
+</script>
+{% endblock %}

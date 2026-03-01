@@ -1,0 +1,346 @@
+{% extends "_base.html" %}
+{% set page_title = "Playground" %}
+
+{% block head %}
+<style>
+  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  .grid1{ display:grid; grid-template-columns: 1fr; gap:10px; }
+  .hint{ color:var(--muted); font-size:12px; margin-top:6px; }
+  .mono{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  textarea, select, input{
+    width:100%;
+    background: rgba(0,0,0,0.45);
+    color: rgba(255,255,255,0.9);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:10px;
+    box-sizing:border-box;
+  }
+  textarea{ min-height:84px; }
+  .rowActions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  details > summary{ cursor:pointer; }
+  .pillSmall{
+    display:inline-block;
+    padding:2px 8px;
+    border:1px solid var(--border);
+    border-radius:999px;
+    font-size:12px;
+    color: var(--muted);
+  }
+  img.preview{
+    max-height: 90px;
+    max-width: 160px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    object-fit: contain;
+    display:block;
+    margin-top: 6px;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+
+<div class="top">
+  <div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="pill">Playground</div>
+      <div class="pill">Bausteine</div>
+      <div class="pill">Pos und Neg getrennt</div>
+    </div>
+    <div class="hint">
+      Builder Datenbasis fuer Generator. Kein Log. Hard delete.
+    </div>
+  </div>
+  {% include "_nav.html" %}
+</div>
+
+<form class="filter" method="get" action="/playground">
+  <label class="small">Kategorie</label>
+  <select name="kind">
+    <option value="" {% if not kind %}selected{% endif %}>alle</option>
+    <option value="character" {% if kind=="character" %}selected{% endif %}>Charakter</option>
+    <option value="scene" {% if kind=="scene" %}selected{% endif %}>Szene</option>
+    <option value="outfit" {% if kind=="outfit" %}selected{% endif %}>Outfit</option>
+    <option value="modifier" {% if kind=="modifier" %}selected{% endif %}>Modifier</option>
+    <option value="pose" {% if kind=="pose" %}selected{% endif %}>Pose</option>
+    <option value="expression" {% if kind=="expression" %}selected{% endif %}>Ausdruck</option>
+    <option value="lighting" {% if kind=="lighting" %}selected{% endif %}>Licht</option>
+  </select>
+
+  <label class="small">Suche</label>
+  <input type="text" name="q" value="{{ q }}" placeholder="name, key, tags">
+  <button type="submit">anwenden</button>
+  <a href="/playground">reset</a>
+</form>
+
+<div class="box" style="margin-top:14px;">
+  <h3>Neuen Baustein anlegen</h3>
+
+  <form method="post" action="/playground/create" class="grid1" id="createForm">
+
+    <div class="grid2">
+      <div>
+        <div class="small">Kategorie</div>
+        <select name="kind" required>
+          <option value="" disabled selected>bitte waehlen</option>
+          <option value="character">Charakter</option>
+          <option value="scene">Szene</option>
+          <option value="outfit">Outfit</option>
+          <option value="modifier">Modifier</option>
+          <option value="pose">Pose</option>
+          <option value="expression">Ausdruck</option>
+          <option value="lighting">Licht</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="small">Name</div>
+        <input name="name" placeholder="Rooftop School" required>
+      </div>
+    </div>
+
+    <div>
+      <div class="small">Tags</div>
+      <input name="tags" placeholder="school, rooftop, outdoor">
+      <div class="hint">Komma getrennt, fuer Filter und spaeter Generator</div>
+    </div>
+
+    <div>
+      <div class="small">Positiv Prompt</div>
+      <textarea name="pos" rows="3" id="create_pos"></textarea>
+      <div id="create_pos_stats" class="hint mono"></div>
+    </div>
+
+    <div>
+      <div class="small">Negativ Prompt</div>
+      <textarea name="neg" rows="3" id="create_neg"></textarea>
+      <div id="create_neg_stats" class="hint mono"></div>
+    </div>
+
+    <div>
+      <div class="small">Notizen</div>
+      <textarea name="notes" rows="2"></textarea>
+    </div>
+
+    <div class="rowActions">
+      <button type="submit">anlegen</button>
+    </div>
+  </form>
+</div>
+
+<div class="box" style="margin-top:20px;">
+  <h3>Eintraege</h3>
+  <div class="hint">Tabelle sortierbar, Header klicken.</div>
+
+  <table class="sortable">
+    <tr>
+      <th>kategorie</th>
+      <th>name</th>
+      <th>key</th>
+      <th>tags</th>
+      <th>pos</th>
+      <th>neg</th>
+      <th>match</th>
+      <th>actions</th>
+    </tr>
+
+    {% for r in rows %}
+    <tr>
+      <td>{{ r["kind"] }}</td>
+      <td>{{ r["name"] }}</td>
+      <td class="mono">{{ r["key"] }}</td>
+      <td>{{ r["tags"] }}</td>
+
+      <td class="mono" style="max-width:360px;">{{ r["pos"] }}</td>
+      <td class="mono" style="max-width:360px;">{{ r["neg"] }}</td>
+
+      <td style="min-width:240px;">
+        {% set bm = r["best_match"] %}
+        {% if bm %}
+          <div class="pillSmall">
+            hits {{ bm["hits"] }}
+            {% if bm["avg_rating"] is not none %}
+              avg {{ "%.2f"|format(bm["avg_rating"]) }}
+            {% else %}
+              avg n/a
+            {% endif %}
+            runs {{ bm["runs"] }}
+          </div>
+
+          {% if bm.get("url") %}
+            <a href="{{ bm['url'] }}" target="_blank">
+              <img class="preview" src="{{ bm['url'] }}">
+            </a>
+          {% else %}
+            <div class="hint mono">kein png_path join</div>
+          {% endif %}
+        {% else %}
+          <div class="hint">no match</div>
+        {% endif %}
+      </td>
+
+      <td style="min-width:240px;">
+        <details>
+          <summary>edit</summary>
+
+          <form method="post" action="/playground/update" class="grid1" style="margin-top:10px;">
+            <input type="hidden" name="item_id" value="{{ r['id'] }}">
+
+            <div class="grid2">
+              <div>
+                <div class="small">Kategorie</div>
+                <select name="kind" required>
+                  <option value="character" {% if r["kind"]=="character" %}selected{% endif %}>Charakter</option>
+                  <option value="scene" {% if r["kind"]=="scene" %}selected{% endif %}>Szene</option>
+                  <option value="outfit" {% if r["kind"]=="outfit" %}selected{% endif %}>Outfit</option>
+                  <option value="modifier" {% if r["kind"]=="modifier" %}selected{% endif %}>Modifier</option>
+                  <option value="pose" {% if r["kind"]=="pose" %}selected{% endif %}>Pose</option>
+                  <option value="expression" {% if r["kind"]=="expression" %}selected{% endif %}>Ausdruck</option>
+                  <option value="lighting" {% if r["kind"]=="lighting" %}selected{% endif %}>Licht</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="small">Name</div>
+                <input name="name" value="{{ r['name'] }}" required>
+              </div>
+            </div>
+
+            <div>
+              <div class="small">Tags</div>
+              <input name="tags" value="{{ r['tags'] }}">
+            </div>
+
+            <div>
+              <div class="small">Positiv Prompt</div>
+              <textarea name="pos" rows="3" class="edit_pos" data-id="{{ r['id'] }}">{{ r['pos'] }}</textarea>
+              <div id="edit_pos_stats_{{ r['id'] }}" class="hint mono"></div>
+            </div>
+
+            <div>
+              <div class="small">Negativ Prompt</div>
+              <textarea name="neg" rows="3" class="edit_neg" data-id="{{ r['id'] }}">{{ r['neg'] }}</textarea>
+              <div id="edit_neg_stats_{{ r['id'] }}" class="hint mono"></div>
+            </div>
+
+            <div>
+              <div class="small">Notizen</div>
+              <textarea name="notes" rows="2">{{ r['notes'] }}</textarea>
+            </div>
+
+            <div class="rowActions">
+              <button type="submit">speichern</button>
+            </div>
+          </form>
+        </details>
+
+        <form method="post" action="/playground/delete" style="margin-top:8px;">
+          <input type="hidden" name="item_id" value="{{ r['id'] }}">
+          <button class="danger" type="submit">loeschen</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<script>
+  function splitTokens(text){
+    return (text || "")
+      .split(",")
+      .map(t => t.trim())
+      .filter(Boolean);
+  }
+
+  async function fetchStats(scope, tokens){
+    if(!tokens || tokens.length === 0) return {};
+    const res = await fetch("/playground/token_stats", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        scope: scope,
+        tokens: tokens,
+        model_branch: ""
+      })
+    });
+    if(!res.ok) return {};
+    const data = await res.json();
+    return data.stats || {};
+  }
+
+  function formatStats(stats, tokens){
+    if(!tokens.length) return "";
+    const lines = [];
+    for(const t of tokens){
+      const s = stats[t];
+      if(!s){
+        lines.push(`${t}: n=0 mean=0.00 lb05=0.00`);
+      } else {
+        lines.push(`${t}: n=${s.n} mean=${Number(s.mean).toFixed(2)} lb05=${Number(s.lb05).toFixed(2)}`);
+      }
+    }
+    return lines.join("\\n");
+  }
+
+  function debounce(fn, ms){
+    let h = null;
+    return (...args) => {
+      if(h) clearTimeout(h);
+      h = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  const createPos = document.getElementById("create_pos");
+  const createNeg = document.getElementById("create_neg");
+  const createPosStats = document.getElementById("create_pos_stats");
+  const createNegStats = document.getElementById("create_neg_stats");
+
+  const updateCreatePos = debounce(async () => {
+    const toks = splitTokens(createPos.value);
+    const stats = await fetchStats("pos", toks);
+    createPosStats.textContent = formatStats(stats, toks);
+  }, 350);
+
+  const updateCreateNeg = debounce(async () => {
+    const toks = splitTokens(createNeg.value);
+    const stats = await fetchStats("neg", toks);
+    createNegStats.textContent = formatStats(stats, toks);
+  }, 350);
+
+  if(createPos) createPos.addEventListener("input", updateCreatePos);
+  if(createNeg) createNeg.addEventListener("input", updateCreateNeg);
+
+  const editPosAreas = document.querySelectorAll("textarea.edit_pos");
+  const editNegAreas = document.querySelectorAll("textarea.edit_neg");
+
+  const updateEditPos = debounce(async (id, value) => {
+    const toks = splitTokens(value);
+    const stats = await fetchStats("pos", toks);
+    const el = document.getElementById(`edit_pos_stats_${id}`);
+    if(el) el.textContent = formatStats(stats, toks);
+  }, 350);
+
+  const updateEditNeg = debounce(async (id, value) => {
+    const toks = splitTokens(value);
+    const stats = await fetchStats("neg", toks);
+    const el = document.getElementById(`edit_neg_stats_${id}`);
+    if(el) el.textContent = formatStats(stats, toks);
+  }, 350);
+
+  editPosAreas.forEach(a => {
+    const id = a.getAttribute("data-id");
+    a.addEventListener("input", () => updateEditPos(id, a.value));
+  });
+
+  editNegAreas.forEach(a => {
+    const id = a.getAttribute("data-id");
+    a.addEventListener("input", () => updateEditNeg(id, a.value));
+  });
+</script>
+
+{% endblock %}

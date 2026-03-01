@@ -1,0 +1,184 @@
+{% extends "_base.html" %}
+{% set page_title = "Arena" %}
+
+{% block head %}
+<style>
+  .arena-wrap{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .card{
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.02);
+    overflow:hidden;
+    padding: 12px;
+
+    transition: transform 0.12s ease, border 0.12s ease, background 0.12s ease;
+    box-shadow: var(--shadow);
+  }
+  .card:hover{
+    transform: translateY(-3px);
+    border-color: rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.03);
+  }
+  .imgbox{ display:flex; justify-content:center; }
+  img{
+    max-width: 100%;
+    height: auto;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.30);
+  }
+  .meta{
+    margin-top: 10px;
+    display:grid;
+    grid-template-columns: 150px 1fr;
+    gap: 8px;
+  }
+  .actions{
+    display:flex;
+    gap: 12px;
+    justify-content:center;
+    margin-top: 16px;
+    flex-wrap:wrap;
+  }
+  .actions button{
+    min-width: 220px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    cursor:pointer;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+  }
+  .actions button:hover{ background: rgba(255,255,255,0.07); }
+
+  .actions button[data-win="left"]{
+    border-color: rgba(50,197,255,0.30);
+    background: rgba(50,197,255,0.10);
+  }
+  .actions button[data-win="right"]{
+    border-color: rgba(46,204,113,0.28);
+    background: rgba(46,204,113,0.09);
+  }
+
+  .hint{ text-align:center; color: var(--muted); margin-top: 8px; }
+  .filters{
+    margin-top: 12px;
+    display:flex;
+    gap: 12px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  select{ padding:6px 10px; border-radius:10px; border:1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text); }
+</style>
+{% endblock %}
+
+{% block body %}
+  <div class="top">
+    <div>
+      <div class="pill">Arena</div>
+      <div class="pill">Top 48, min 5 Bewertungen</div>
+      <div class="pill">Keys: ← / →</div>
+    </div>
+    {% include "_nav.html" %}
+  </div>
+
+  <form class="filters" method="get" action="/arena">
+    <label class="small">Modell</label>
+    <select name="model">
+      <option value="" {% if not model %}selected{% endif %}>alle</option>
+      {% for m in model_list %}
+        <option value="{{ m }}" {% if model==m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="small">Ordner</label>
+    <select name="subdir">
+      <option value="" {% if not subdir %}selected{% endif %}>alle</option>
+      {% for s in subdir_list %}
+        <option value="{{ s }}" {% if subdir==s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit">anwenden</button>
+  </form>
+
+  {% if message %}
+    <p class="small" style="margin-top:14px;">{{ message }}</p>
+  {% endif %}
+
+  {% if left and right %}
+    <div class="arena-wrap">
+      <div class="card">
+        <div class="imgbox"><img src="{{ left.img_url }}" alt="left"></div>
+        <div class="meta">
+          <div class="small">Ø / runs</div><div>{{ "%.2f"|format(left.avg) }} / {{ left.runs }}</div>
+          <div class="small">model</div><div>{{ left.model_branch }}</div>
+          <div class="small">checkpoint</div><div>{{ left.checkpoint }}</div>
+          <div class="small">sampler</div><div>{{ left.view.get("sampler") }}</div>
+          <div class="small">scheduler</div><div>{{ left.view.get("scheduler") }}</div>
+          <div class="small">steps</div><div>{{ left.view.get("steps") }}</div>
+          <div class="small">cfg</div><div>{{ left.view.get("cfg") }}</div>
+          <div class="small">denoise</div><div>{{ left.view.get("denoise") }}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="imgbox"><img src="{{ right.img_url }}" alt="right"></div>
+        <div class="meta">
+          <div class="small">Ø / runs</div><div>{{ "%.2f"|format(right.avg) }} / {{ right.runs }}</div>
+          <div class="small">model</div><div>{{ right.model_branch }}</div>
+          <div class="small">checkpoint</div><div>{{ right.checkpoint }}</div>
+          <div class="small">sampler</div><div>{{ right.view.get("sampler") }}</div>
+          <div class="small">scheduler</div><div>{{ right.view.get("scheduler") }}</div>
+          <div class="small">steps</div><div>{{ right.view.get("steps") }}</div>
+          <div class="small">cfg</div><div>{{ right.view.get("cfg") }}</div>
+          <div class="small">denoise</div><div>{{ right.view.get("denoise") }}</div>
+        </div>
+      </div>
+    </div>
+
+    <form id="arenaForm" method="post" action="/arena_result">
+      <input type="hidden" name="left_json" value="{{ left.json_path }}">
+      <input type="hidden" name="right_json" value="{{ right.json_path }}">
+      <input type="hidden" name="model" value="{{ model }}">
+      <input type="hidden" name="subdir" value="{{ subdir }}">
+
+      <div class="actions">
+        <button type="submit" name="winner_side" value="left" data-win="left">links gewinnt</button>
+        <button type="submit" name="winner_side" value="right" data-win="right">rechts gewinnt</button>
+      </div>
+      <div class="hint small">Rückspiel ist möglich (B links vs A rechts). Danach ist das Paar durch.</div>
+    </form>
+
+    <script>
+      (function(){
+        const f = document.getElementById("arenaForm");
+        if(!f) return;
+
+        function win(side){
+          const btn = f.querySelector('button[data-win="'+side+'"]');
+          if(btn){
+            if(window.toast) window.toast(side + " gewinnt");
+            btn.click();
+          }
+        }
+
+        document.addEventListener("keydown", (e) => {
+          if(e.defaultPrevented) return;
+          if(e.ctrlKey || e.metaKey || e.altKey) return;
+
+          const k = e.key;
+          if(k === "ArrowLeft"){ e.preventDefault(); win("left"); return; }
+          if(k === "ArrowRight"){ e.preventDefault(); win("right"); return; }
+        });
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

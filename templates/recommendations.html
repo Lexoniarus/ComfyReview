@@ -1,0 +1,77 @@
+{% extends "_base.html" %}
+{% set page_title = "Ergebnisse" %}
+
+{% block head %}
+<style>
+  .miniProg{
+    width:120px;
+    height:7px;
+    border-radius:999px;
+    background: rgba(255,255,255,0.08);
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,0.10);
+  }
+  .miniProg > div{
+    height:100%;
+    background: linear-gradient(90deg, rgba(50,197,255,0.8), rgba(46,204,113,0.8));
+  }
+  .num{ text-align:right; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="top">
+  <div>
+    <div class="pill">Stabile Presets</div>
+  </div>
+  {% include "_nav.html" %}
+</div>
+
+<div class="tableWrap">
+<table class="sortable dense">
+<tr>
+  <th>Modell</th>
+  <th class="num">n</th>
+  <th class="num">Avg</th>
+  <th class="num">Exp</th>
+  <th class="num">lb05</th>
+  <th>lb</th>
+  <th>Sampler</th>
+  <th>Scheduler</th>
+  <th class="num">Steps</th>
+  <th class="num">CFG</th>
+  <th class="num">Denoise</th>
+</tr>
+
+{% for r in stable %}
+{% set ck = r["combo_key"] %}
+{% set sampler = (ck.split("sampler=")[1].split("|")[0]) if "sampler=" in ck else "" %}
+{% set sched = (ck.split("sched=")[1].split("|")[0]) if "sched=" in ck else "" %}
+{% set steps = (ck.split("steps=")[1].split("|")[0]) if "steps=" in ck else "" %}
+{% set cfg = (ck.split("cfg=")[1].split("|")[0]) if "cfg=" in ck else "" %}
+{% set denoise = (ck.split("denoise=")[1].split("|")[0]) if "denoise=" in ck else "" %}
+{% set lb = r["stability_lb05"] %}
+
+<tr>
+  <td>{{ r["model_branch"] }}</td>
+  <td class="num">{{ r["n"] }}</td>
+  <td class="num">{{ r["avg_rating"] }}</td>
+  <td class="num">{{ r["exp_success_rate"] }}</td>
+  <td class="num">{{ "%.3f"|format(lb) }}</td>
+  <td>
+    <div class="miniProg">
+      <div style="width: {{ (lb*100)|round(1) }}%"></div>
+    </div>
+  </td>
+  <td>{{ sampler }}</td>
+  <td>{{ sched }}</td>
+  <td class="num">{{ steps }}</td>
+  <td class="num">{{ cfg }}</td>
+  <td class="num">{{ denoise }}</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+{% include "_sortable.html" %}
+{% endblock %}

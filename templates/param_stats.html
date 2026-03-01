@@ -1,0 +1,264 @@
+{% extends "_base.html" %}
+{% set page_title = "Parameter" %}
+
+{% block body %}
+  <div class="top">
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+      <h2 style="margin:0;">Parameter Stats</h2>
+      <a href="/">zurück</a>
+      <span class="pill">mix aus cards und tabelle</span>
+    </div>
+    {% include "_nav.html" %}
+  </div>
+
+  <form class="filter" method="get" action="/param_stats" style="margin-top:12px;">
+    <label class="small">Modell</label>
+    <select name="model">
+      <option value="" {% if not model %}selected{% endif %}>alle</option>
+      {% for m in model_list %}
+        <option value="{{ m }}" {% if model==m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="small">Mindestanzahl</label>
+    <input type="number" name="min_n" value="{{ min_n }}" min="1" style="width:110px;">
+
+    <label class="small">Schwelle T</label>
+    <input type="number" name="t" value="{{ t }}" min="1" max="10" style="width:90px;">
+
+    <label class="small">Delete Gewicht</label>
+    <input type="number" name="dw" value="{{ dw }}" min="1" max="20" style="width:120px;">
+
+    <button type="submit">anwenden</button>
+  </form>
+
+  <div style="display:grid; grid-template-columns: 0.95fr 1.05fr; gap:16px; align-items:start; margin-top:14px;">
+    <div>
+      <div class="card" style="margin-top:0;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:16px; font-weight:800;">Best Case</div>
+            <div class="small">Top 5 Vorschläge, rechnerisch pro Checkpoint</div>
+
+            <div class="tabbar" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+              <button type="button" class="besttabbtn" data-besttab="calc" style="padding:6px 10px; border-radius:10px;">Calculated</button>
+              <button type="button" class="besttabbtn" data-besttab="tested" style="padding:6px 10px; border-radius:10px;">Tested</button>
+            </div>
+          </div>
+
+          <a class="small" href="/recommendations?model={{ model }}&min_n={{ min_n }}&t={{ t }}&dw={{ dw }}">Details</a>
+        </div>
+
+        <div class="besttabpane" data-besttab="calc" style="margin-top:12px;">
+          {% if best and best|length > 0 %}
+            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+              {% for r in best[:5] %}
+                {% set ckpt = r["checkpoint"] %}
+                {% set cp = r.get("checkpoint_stats", {}) %}
+                {% set cp_lb = cp.get("stability_lb05", 0.0) %}
+                {% set cp_n = cp.get("n", 0) %}
+                {% set cp_avg = cp.get("avg_rating", 0.0) %}
+
+                {% set picks = r.get("picks", {}) %}
+                {% set p_steps = picks.get("steps") %}
+                {% set p_cfg = picks.get("cfg") %}
+                {% set p_sampler = picks.get("sampler") %}
+                {% set p_sched = picks.get("scheduler") %}
+
+                {% set lb = cp_lb %}
+                {% set lb_class = "b-good" if lb >= 0.70 else ("b-warn" if lb >= 0.55 else "b-bad") %}
+
+                <div class="box" style="margin:0;">
+                  <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                    <div>
+                      <div style="font-weight:800;">{{ ckpt }}</div>
+
+                      <div class="small">
+                        {% if p_sampler %}{{ p_sampler["value"] }}{% endif %}
+                        {% if p_sched %} / {{ p_sched["value"] }}{% endif %}
+                      </div>
+
+                      <div class="small">
+                        {% if p_steps %}{{ p_steps["value"] }} steps{% endif %}
+                        {% if p_cfg %}, {{ p_cfg["value"] }} cfg{% endif %}
+                      </div>
+
+                      <div class="small" style="opacity:0.8;">
+                        {% if p_steps %}steps n={{ p_steps["n"] }}{% endif %}
+                        {% if p_cfg %}, cfg n={{ p_cfg["n"] }}{% endif %}
+                        {% if p_sampler %}, sampler n={{ p_sampler["n"] }}{% endif %}
+                        {% if p_sched %}, scheduler n={{ p_sched["n"] }}{% endif %}
+                      </div>
+                    </div>
+
+                    <div style="text-align:right;">
+                      <div><span class="badge {{ lb_class }}">cp lb05 {{ "%.3f"|format(cp_lb) }}</span></div>
+                      <div class="small">cp n={{ cp_n }}, cp avg={{ cp_avg }}</div>
+                      <div class="small">reco score={{ "%.3f"|format(r.get("score", 0.0)) }}</div>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="box" style="margin-top:12px;">
+              <div class="small">Noch keine Daten vorhanden.</div>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="besttabpane" data-besttab="tested" style="margin-top:12px;">
+          {% if best_tested and best_tested|length > 0 %}
+            <div style="display:grid; grid-template-columns: 1fr; gap:10px;">
+              {% for r in best_tested[:5] %}
+                {% set lb = r["stability_lb05"] %}
+                {% set lb_class = "b-good" if lb >= 0.70 else ("b-warn" if lb >= 0.55 else "b-bad") %}
+                {% set ck = r["combo_key"] %}
+                {% set ckpt = r.get("checkpoint","") %}
+
+                {% set sampler = (ck.split("sampler=")[1].split("|")[0]) if (ck and "sampler=" in ck) else "" %}
+                {% set sched = (ck.split("sched=")[1].split("|")[0]) if (ck and "sched=" in ck) else "" %}
+                {% set steps = (ck.split("steps=")[1].split("|")[0]) if (ck and "steps=" in ck) else "" %}
+                {% set cfg = (ck.split("cfg=")[1].split("|")[0]) if (ck and "cfg=" in ck) else "" %}
+
+                <div class="box" style="margin:0;">
+                  <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                    <div>
+                      <div style="font-weight:800;">{{ ckpt }}</div>
+                      <div class="small">{{ sampler }} / {{ sched }}</div>
+                      <div class="small">{{ steps }} steps, {{ cfg }} cfg</div>
+                    </div>
+                    <div style="text-align:right;">
+                      <div><span class="badge {{ lb_class }}">lb05 {{ "%.3f"|format(lb) }}</span></div>
+                      <div class="small">n={{ r["n"] }}, avg={{ r["avg_rating"] }}</div>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="box" style="margin-top:12px;">
+              <div class="small">Noch keine realen Kombos mit Mindestanzahl.</div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-top:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div style="font-size:16px; font-weight:800;">Parameter</div>
+
+          <div class="tabbar" style="display:flex; gap:8px; flex-wrap:wrap;">
+            {% for section in stats %}
+              <button
+                type="button"
+                class="tabbtn"
+                data-tab="{{ section['key'] }}"
+                style="padding:6px 10px; border-radius:10px;"
+              >
+                {{ section["title"] }}
+              </button>
+            {% endfor %}
+          </div>
+        </div>
+
+        {% for section in stats %}
+          <div class="tabpane" data-tab="{{ section['key'] }}" style="margin-top:12px;">
+            <div class="tableWrap">
+              <table class="sortable dense">
+                <tr>
+                  <th>Wert</th>
+                  <th>n</th>
+                  <th>Erfolg</th>
+                  <th>Fail</th>
+                  <th>Erfolg w/n</th>
+                  <th>Fail w/n</th>
+                  <th>Avg Rating</th>
+                  <th>Exp Success</th>
+                  <th>lb05</th>
+                </tr>
+                {% for r in section["rows"] %}
+                {% set lb = r["stability_lb05"] %}
+                {% set lb_class = "b-good" if lb >= 0.70 else ("b-warn" if lb >= 0.55 else "b-bad") %}
+                <tr>
+                  <td><code>{{ r["value"] }}</code></td>
+                  <td>{{ r["n"] }}</td>
+                  <td>{{ r.get("success_raw", 0) }}</td>
+                  <td>{{ r.get("fail_raw", 0) }}</td>
+                  <td>{{ "%.3f"|format(r.get("success_per_n", 0.0)) }}</td>
+                  <td>{{ "%.3f"|format(r.get("fail_per_n", 0.0)) }}</td>
+                  <td>{{ r["avg_rating"] }}</td>
+                  <td>{{ r["exp_success_rate"] }}</td>
+                  <td><span class="badge {{ lb_class }}">{{ "%.3f"|format(lb) }}</span></td>
+                </tr>
+                {% endfor %}
+              </table>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+{% include "_sortable.html" %}
+
+<script>
+  function setActiveTab(tabKey){
+    const panes = document.querySelectorAll(".tabpane");
+    const btns = document.querySelectorAll(".tabbtn");
+
+    panes.forEach(p => {
+      p.style.display = (p.dataset.tab === tabKey) ? "block" : "none";
+    });
+
+    btns.forEach(b => {
+      const active = (b.dataset.tab === tabKey);
+      b.style.opacity = active ? "1" : "0.6";
+      b.style.border = active ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(255,255,255,0.08)";
+    });
+  }
+
+  (function initTabs(){
+    const btns = document.querySelectorAll(".tabbtn");
+    if(!btns || btns.length === 0) return;
+
+    btns.forEach(b => {
+      b.addEventListener("click", () => setActiveTab(b.dataset.tab));
+    });
+
+    setActiveTab(btns[0].dataset.tab);
+  })();
+</script>
+
+<script>
+  function setBestTab(tabKey){
+    const panes = document.querySelectorAll(".besttabpane");
+    const btns = document.querySelectorAll(".besttabbtn");
+
+    panes.forEach(p => {
+      p.style.display = (p.dataset.besttab === tabKey) ? "block" : "none";
+    });
+
+    btns.forEach(b => {
+      const active = (b.dataset.besttab === tabKey);
+      b.style.opacity = active ? "1" : "0.6";
+      b.style.border = active ? "1px solid rgba(255,255,255,0.18)" : "1px solid rgba(255,255,255,0.08)";
+    });
+  }
+
+  (function initBestTabs(){
+    const btns = document.querySelectorAll(".besttabbtn");
+    if(!btns || btns.length === 0) return;
+
+    btns.forEach(b => {
+      b.addEventListener("click", () => setBestTab(b.dataset.besttab));
+    });
+
+    setBestTab("calc");
+  })();
+</script>
+{% endblock %}
