@@ -1,0 +1,21 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# local state
+data/ui_state/
+output/
+
+# databases and artifacts
+*.sqlite3
+
+# certificates and keys
+certs/*.pem
+certs/*.key
+certs/*.crt
+
+# OS
+.DS_Store
+Thumbs.db

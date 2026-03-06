@@ -1,0 +1,64 @@
+{#
+  Shared label badges.
+
+  Matching and label resolution happen in services. This template only renders.
+
+  Rules:
+  - One label per category when present.
+  - Modifiers can be multiple labels (limited).
+
+  Usage:
+    {% from "_label_badges.html" import render_labels %}
+    {{ render_labels(card, modifier_limit=4, boxed=True) }}
+#}
+
+{% macro _badge(text, strong=False, title=None) -%}
+  <span class="crBadge{% if strong %} crBadgeStrong{% endif %}"{% if title %} title="{{ title }}"{% endif %}>{{ text }}</span>
+{%- endmacro %}
+
+{#
+  render_labels(it)
+
+  Parameters:
+  - modifier_limit: max number of modifier badges to show
+  - show_character: include character badge when available
+  - boxed: wrap badges in a compact box so they sit nicely in cards
+  - show_prefix: prepend "scene:" etc. (defaults to False for cleaner UI)
+#}
+{% macro render_labels(it, modifier_limit=4, show_character=True, boxed=True, show_prefix=False) -%}
+  {%- set has_any = (it.character_name or it.scene_name or it.outfit_name or it.pose_name or it.expression_name or it.light_name or (it.modifiers and it.modifiers|length>0)) -%}
+  {%- if not has_any -%}{# nothing #}{%- else -%}
+    {%- if boxed -%}<div class="crLabelBox">{%- endif -%}
+    <div class="crBadges">
+      {%- if show_character and it.character_name -%}
+        {{ _badge((('character: ' ~ it.character_name) if show_prefix else it.character_name), True, 'character') }}
+      {%- endif -%}
+
+      {%- if it.scene_name -%}
+        {{ _badge((('scene: ' ~ it.scene_name) if show_prefix else it.scene_name), False, 'scene') }}
+      {%- endif -%}
+      {%- if it.outfit_name -%}
+        {{ _badge((('outfit: ' ~ it.outfit_name) if show_prefix else it.outfit_name), False, 'outfit') }}
+      {%- endif -%}
+      {%- if it.pose_name -%}
+        {{ _badge((('pose: ' ~ it.pose_name) if show_prefix else it.pose_name), False, 'pose') }}
+      {%- endif -%}
+      {%- if it.expression_name -%}
+        {{ _badge((('expression: ' ~ it.expression_name) if show_prefix else it.expression_name), False, 'expression') }}
+      {%- endif -%}
+      {%- if it.light_name -%}
+        {{ _badge((('light: ' ~ it.light_name) if show_prefix else it.light_name), False, 'light') }}
+      {%- endif -%}
+
+      {%- if it.modifiers and it.modifiers|length > 0 -%}
+        {%- for m in it.modifiers[:modifier_limit] -%}
+          {{ _badge((('modifier: ' ~ m) if show_prefix else m), False, 'modifier') }}
+        {%- endfor -%}
+        {%- if it.modifiers|length > modifier_limit -%}
+          {{ _badge((('modifier: +' ~ (it.modifiers|length - modifier_limit) ~ ' more') if show_prefix else ('+' ~ (it.modifiers|length - modifier_limit) ~ ' more')), False, 'modifier') }}
+        {%- endif -%}
+      {%- endif -%}
+    </div>
+    {%- if boxed -%}</div>{%- endif -%}
+  {%- endif -%}
+{%- endmacro %}

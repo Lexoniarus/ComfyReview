@@ -1,0 +1,163 @@
+{% extends "_base.html" %}
+{% set page_title = "Playground" %}
+
+{% block body %}
+<div class="top">
+  <div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="pill">Playground</div>
+      <div class="pill">Hub</div>
+      <div class="pill">Top8 Kombis</div>
+    </div>
+
+    <div class="crHint">
+      Kombi Score basiert auf Image Ratings. Prompt Metrics sind nur Zusatzinfos. Best Images sind nur existierende Dateien.
+    </div>
+
+    <div class="rowActions">
+      <a href="/playground/browse"><button>Browse und Edit</button></a>
+      <a href="/playground/generator"><button>Generator</button></a>
+    </div>
+
+    <div class="crHint" style="margin-top:10px;">
+      max_rating_id: {{ max_rating_id }}
+    </div>
+
+    {% if mv_status %}
+      <div class="tableWrap" style="margin-top:10px;">
+        <table class="dense">
+          <thead>
+            <tr>
+              <th>aggregator</th>
+              <th>last_processed_rating_id</th>
+              <th>pending</th>
+              <th>last_run_at</th>
+              <th>last_error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in mv_status %}
+              <tr>
+                <td>{{ s.name }}</td>
+                <td>{{ s.last_processed_rating_id }}</td>
+                <td>{{ s.pending }}</td>
+                <td>{{ s.last_run_at or "" }}</td>
+                <td>{{ s.last_error or "" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  {% include "_nav.html" %}
+</div>
+
+<div class="box">
+  <h3>Top 8 2er Kombis (Character plus Scene)</h3>
+
+  {% if not top2 %}
+    <div class="crHint">
+      Leer. Worker hat noch keine Daten geschrieben oder ist noch nicht fertig.
+    </div>
+  {% endif %}
+
+  <div class="crGridWrap">
+    {% for c in top2 %}
+      <div class="crComboCard">
+        <div class="crComboTitle">{{ c.label }}</div>
+
+        <div class="crComboMeta">
+          pos avg {{ "%.2f"|format(c.combo_pos_avg_rating) if c.combo_pos_avg_rating is not none else "n/a" }}
+          | pos runs {{ c.combo_pos_runs or 0 }}
+          | pos cov {{ "%.2f"|format(c.combo_pos_coverage) if c.combo_pos_coverage is not none else "0.00" }}
+          | neg avg {{ "%.2f"|format(c.combo_neg_avg_rating) if c.combo_neg_avg_rating is not none else "n/a" }}
+          | neg runs {{ c.combo_neg_runs or 0 }}
+          | images {{ c.combo_image_count or 0 }}
+          | image runs {{ c.combo_total_runs or 0 }}
+        </div>
+
+        {% if c.best_images and c.best_images|length > 0 %}
+          <div class="crThumbRow">
+            {% for bi in c.best_images %}
+              {% if bi.url %}
+                <a class="crThumbLink" href="#" data-cr-zoom="{{ bi.url }}" data-cr-zoom-meta="{{ (c.label ~ ' | avg ' ~ bi.avg_rating ~ ' runs ' ~ bi.runs)|e }}">
+                  <img class="crThumb" src="{{ bi.url }}" alt="best">
+                </a>
+              {% else %}
+                <img class="crThumb" src="" alt="">
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="crHint">Keine Bilder gefunden. Kombi ist klickbar fuer Generator.</div>
+        {% endif %}
+
+        <div class="rowActions">
+          <form method="post" action="/playground/generator/apply_combo" style="display:inline;">
+            <input type="hidden" name="character_id" value="{{ c.character_id }}">
+            <input type="hidden" name="scene_id" value="{{ c.scene_id }}">
+            <input type="hidden" name="outfit_id" value="">
+            <button type="submit">Im Generator oeffnen</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="box" style="margin-top:16px;">
+  <h3>Top 8 3er Kombis (Character plus Scene plus Outfit)</h3>
+
+  {% if not top3 %}
+    <div class="crHint">
+      Leer. Worker hat noch keine Daten geschrieben oder ist noch nicht fertig.
+    </div>
+  {% endif %}
+
+  <div class="crGridWrap">
+    {% for c in top3 %}
+      <div class="crComboCard">
+        <div class="crComboTitle">{{ c.label }}</div>
+
+        <div class="crComboMeta">
+          pos avg {{ "%.2f"|format(c.combo_pos_avg_rating) if c.combo_pos_avg_rating is not none else "n/a" }}
+          | pos runs {{ c.combo_pos_runs or 0 }}
+          | pos cov {{ "%.2f"|format(c.combo_pos_coverage) if c.combo_pos_coverage is not none else "0.00" }}
+          | neg avg {{ "%.2f"|format(c.combo_neg_avg_rating) if c.combo_neg_avg_rating is not none else "n/a" }}
+          | neg runs {{ c.combo_neg_runs or 0 }}
+          | images {{ c.combo_image_count or 0 }}
+          | image runs {{ c.combo_total_runs or 0 }}
+        </div>
+
+        {% if c.best_images and c.best_images|length > 0 %}
+          <div class="crThumbRow">
+            {% for bi in c.best_images %}
+              {% if bi.url %}
+                <a class="crThumbLink" href="#" data-cr-zoom="{{ bi.url }}" data-cr-zoom-meta="{{ (c.label ~ ' | avg ' ~ bi.avg_rating ~ ' runs ' ~ bi.runs)|e }}">
+                  <img class="crThumb" src="{{ bi.url }}" alt="best">
+                </a>
+              {% else %}
+                <img class="crThumb" src="" alt="">
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="crHint">Keine Bilder gefunden. Kombi ist klickbar fuer Generator.</div>
+        {% endif %}
+
+        <div class="rowActions">
+          <form method="post" action="/playground/generator/apply_combo" style="display:inline;">
+            <input type="hidden" name="character_id" value="{{ c.character_id }}">
+            <input type="hidden" name="scene_id" value="{{ c.scene_id }}">
+            <input type="hidden" name="outfit_id" value="{{ c.outfit_id }}">
+            <button type="submit">Im Generator oeffnen</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}
