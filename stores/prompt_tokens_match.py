@@ -4,6 +4,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from config import MIN_RUNS, POOL_LIMIT
+
 
 def _split_tokens_csv(text: str) -> List[str]:
     if not text:
@@ -41,6 +43,23 @@ def _rating_summary_for_json(
     has_png = "png_path" in cols
     has_run = "run" in cols
     has_model = "model_branch" in cols
+
+    # Latest-state guard (vNext): if the newest row for this json_path is deleted=1,
+    # the image must be treated as deleted even if older rating rows exist.
+    if has_deleted:
+        where_latest = "WHERE json_path = ?"
+        args_latest: List[Any] = [json_path]
+        if model_branch and has_model:
+            where_latest += " AND model_branch = ?"
+            args_latest.append(model_branch)
+
+        row_latest = con.execute(
+            f"SELECT COALESCE(deleted,0) AS deleted FROM ratings {where_latest} ORDER BY id DESC LIMIT 1",
+            args_latest,
+        ).fetchone()
+
+        if row_latest and int(row_latest["deleted"] or 0) == 1:
+            return None, 0, None
 
     if not has_rating:
         return None, 0, None
@@ -99,6 +118,169 @@ def _rating_summary_for_json(
 
     return avg_rating, runs, png_path
 
+def _rating_avg_and_runs_for_json(
+    ratings_db_path: Path,
+    json_path: str,
+    model_branch: str = "",
+) -> Tuple[Optional[float], int, Optional[str]]:
+    """
+    Backward compatible wrapper.
+
+    fetch_best_match_preview ruft aktuell _rating_avg_and_runs_for_json auf,
+    aber die Datei implementiert _rating_summary_for_json (mit Connection).
+
+    Diese Funktion glueht die beiden zusammen, ohne bestehende Logik zu aendern.
+    """
+    con = sqlite3.connect(ratings_db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        return _rating_summary_for_json(con, json_path=json_path, model_branch=model_branch)
+    finally:
+        con.close()
+
+def _normalize_best_match_args(
+    *,
+    tokens: List[str],
+    scope: str,
+    min_hits: int,
+    model_branch: str,
+    candidate_limit: int,
+    min_runs: int,
+) -> Tuple[List[str], str, int, str, int, int]:
+    """Normalize and validate inputs for best match preview."""
+    toks = [str(t).strip() for t in (tokens or []) if str(t).strip()]
+    scope_n = str(scope or "pos").strip()
+    if scope_n not in {"pos", "neg"}:
+        scope_n = "pos"
+
+    mh = int(min_hits or 1)
+    if mh < 1:
+        mh = 1
+
+    cl = int(candidate_limit or int(POOL_LIMIT))
+    if cl < 1:
+        cl = int(POOL_LIMIT)
+    if cl > int(POOL_LIMIT):
+        cl = int(POOL_LIMIT)
+
+    mr = int(min_runs or int(MIN_RUNS))
+    if mr < int(MIN_RUNS):
+        mr = int(MIN_RUNS)
+
+    return toks, scope_n, mh, str(model_branch or ""), cl, mr
+
+
+def _query_token_hit_candidates(
+    con: sqlite3.Connection,
+    *,
+    toks: List[str],
+    scope: str,
+    min_hits: int,
+    model_branch: str,
+    candidate_limit: int,
+) -> List[sqlite3.Row]:
+    """Return candidate json_paths with token hit counts."""
+    if not toks:
+        return []
+
+    qmarks = ",".join(["?"] * len(toks))
+    sql = f"""
+        SELECT json_path, COUNT(DISTINCT token) AS hits
+        FROM tokens
+        WHERE deleted = 0
+          AND scope = ?
+          AND token IN ({qmarks})
+          AND json_path IS NOT NULL
+          AND json_path != ''
+    """
+    args: List[Any] = [scope] + toks
+
+    if model_branch:
+        sql += " AND model_branch = ?"
+        args.append(model_branch)
+
+    sql += """
+        GROUP BY json_path
+        HAVING hits >= ?
+        ORDER BY hits DESC
+        LIMIT ?
+    """
+    args.extend([min_hits, candidate_limit])
+    return con.execute(sql, args).fetchall()
+
+
+def _safe_float(v: Any, *, default: float = float("-inf")) -> float:
+    try:
+        return float(v)
+    except Exception:
+        return float(default)
+
+
+def _pick_best_candidate(
+    ratings_con: sqlite3.Connection,
+    *,
+    rows: List[sqlite3.Row],
+    model_branch: str,
+    min_runs: int,
+) -> Optional[Dict[str, Any]]:
+    """Rank candidates by hits DESC, avg_rating DESC, runs DESC."""
+    best: Optional[Dict[str, Any]] = None
+
+    for r in rows:
+        json_path = str(r["json_path"])
+        hits = int(r["hits"] or 0)
+
+        avg_rating, runs, png_path = _rating_summary_for_json(
+            ratings_con,
+            json_path=json_path,
+            model_branch=model_branch,
+        )
+
+        runs_n = int(runs or 0)
+        if min_runs and runs_n < int(min_runs):
+            continue
+
+        if png_path:
+            try:
+                if not Path(str(png_path)).exists():
+                    continue
+            except Exception:
+                continue
+
+        candidate = {
+            "json_path": json_path,
+            "png_path": png_path or "",
+            "hits": int(hits),
+            "avg_rating": avg_rating,
+            "runs": int(runs_n),
+        }
+
+        if best is None:
+            best = candidate
+            continue
+
+        b_hits = int(best.get("hits") or 0)
+        b_avg = best.get("avg_rating")
+        b_runs = int(best.get("runs") or 0)
+
+        c_hits = int(candidate.get("hits") or 0)
+        c_avg = candidate.get("avg_rating")
+        c_runs = int(candidate.get("runs") or 0)
+
+        if c_hits > b_hits:
+            best = candidate
+            continue
+
+        if c_hits == b_hits:
+            if _safe_float(c_avg) > _safe_float(b_avg):
+                best = candidate
+                continue
+            if _safe_float(c_avg) == _safe_float(b_avg) and c_runs > b_runs:
+                best = candidate
+                continue
+
+    return best
+
 
 def fetch_best_match_preview(
     prompt_tokens_db_path: Path,
@@ -108,199 +290,63 @@ def fetch_best_match_preview(
     scope: str = "pos",
     min_hits: int = 1,
     model_branch: str = "",
-    candidate_limit: int = 50,
+    candidate_limit: int = POOL_LIMIT,
+    min_runs: int = MIN_RUNS,
 ) -> Optional[Dict[str, Any]]:
     """
-    GLOBAL (A) IDF Matching:
-    - Matching basiert auf Token overlap in prompt_tokens.sqlite3.
-    - Statt nur hits zu zaehlen, berechnen wir einen gewichteten score:
-        score = sum(log(total_docs / df(token))) ueber die gematchten tokens.
-      Dadurch verlieren generische tokens (masterpiece, best quality, solo, ...) an Gewicht,
-      und seltene identity tokens gewinnen Gewicht.
-    - Finales Ranking:
-        score DESC, avg_rating DESC, runs DESC, hits DESC
+    Best Picture Matching nach deiner Hub Logik:
 
-    Kompatibel zur bestehenden Signatur inklusive model_branch, damit Router nicht bricht.
-    model_branch filtert Kandidaten optional in Schritt 1 und 2, IDF bleibt global.
+    Kandidaten
+    - prompt_tokens.sqlite3: json_path Kandidaten via Token Overlap (hits)
+    - ratings.sqlite3: latest-state guard fuer deleted (siehe _rating_summary_for_json)
+    - min_runs Gate
+
+    Ranking
+    - hits DESC
+    - avg_rating DESC
+    - runs DESC
+
+    Rueckgabe
+    - dict mit json_path, png_path, hits, avg_rating, runs
     """
-    toks = [str(t).strip() for t in (tokens or []) if str(t).strip()]
+    toks, scope_n, mh, mb, cl, mr = _normalize_best_match_args(
+        tokens=tokens,
+        scope=scope,
+        min_hits=min_hits,
+        model_branch=model_branch,
+        candidate_limit=candidate_limit,
+        min_runs=min_runs,
+    )
     if not toks:
         return None
 
-    scope = str(scope or "pos").strip()
-    if scope not in {"pos", "neg"}:
-        scope = "pos"
-
-    min_hits = int(min_hits or 1)
-    if min_hits < 1:
-        min_hits = 1
-
-    candidate_limit = int(candidate_limit or 50)
-    if candidate_limit < 1:
-        candidate_limit = 50
-
     con = sqlite3.connect(prompt_tokens_db_path)
     con.row_factory = sqlite3.Row
-
-    qmarks = ",".join(["?"] * len(toks))
-
-    # total_docs global (A): ohne model_branch filter
-    total_row = con.execute(
-        """
-        SELECT COUNT(DISTINCT json_path) AS n
-        FROM tokens
-        WHERE deleted = 0 AND scope = ?
-        """,
-        (scope,),
-    ).fetchone()
-
-    total_docs = int(total_row["n"] or 0) if total_row else 0
-    if total_docs <= 0:
-        con.close()
-        return None
-
-    # df pro token global (A): ohne model_branch filter
-    df_rows = con.execute(
-        f"""
-        SELECT token, COUNT(DISTINCT json_path) AS df
-        FROM tokens
-        WHERE deleted = 0
-          AND scope = ?
-          AND token IN ({qmarks})
-        GROUP BY token
-        """,
-        [scope] + toks,
-    ).fetchall()
-
-    df_map: Dict[str, int] = {str(r["token"]): int(r["df"] or 0) for r in df_rows}
-
-    idf: Dict[str, float] = {}
-    for t in toks:
-        d = int(df_map.get(t, 0) or 0)
-        if d < 1:
-            d = 1
-        idf[t] = math.log(float(total_docs) / float(d))
-
-    # --------------------------------------
-    # 1) Kandidaten: hits aus prompt_tokens
-    # --------------------------------------
-    sql = f"""
-        SELECT
-          json_path,
-          model_branch,
-          COUNT(*) AS hits
-        FROM tokens
-        WHERE deleted = 0
-          AND scope = ?
-          AND token IN ({qmarks})
-    """
-    args: List[Any] = [scope] + toks
-
-    if model_branch:
-        sql += " AND model_branch = ?"
-        args.append(model_branch)
-
-    sql += """
-        GROUP BY json_path, model_branch
-        HAVING hits >= ?
-        ORDER BY hits DESC
-        LIMIT ?
-    """
-    args.append(min_hits)
-    args.append(candidate_limit)
-
-    rows = con.execute(sql, args).fetchall()
-    if not rows:
-        con.close()
-        return None
-
-    candidates: List[Dict[str, Any]] = []
-    json_paths: List[str] = []
-    for r in rows:
-        jp = str(r["json_path"])
-        json_paths.append(jp)
-        candidates.append(
-            {
-                "json_path": jp,
-                "model_branch": str(r["model_branch"] or ""),
-                "hits": int(r["hits"] or 0),
-            }
+    ratings_con = sqlite3.connect(ratings_db_path)
+    ratings_con.row_factory = sqlite3.Row
+    try:
+        rows = _query_token_hit_candidates(
+            con,
+            toks=toks,
+            scope=scope_n,
+            min_hits=mh,
+            model_branch=mb,
+            candidate_limit=cl,
         )
-
-    # --------------------------------------
-    # 1b) fuer diese Kandidaten: distinct tokens holen, um score zu bauen
-    # --------------------------------------
-    in_json = ",".join(["?"] * len(json_paths))
-    pair_rows = con.execute(
-        f"""
-        SELECT json_path, token
-        FROM tokens
-        WHERE deleted = 0
-          AND scope = ?
-          AND token IN ({qmarks})
-          AND json_path IN ({in_json})
-        GROUP BY json_path, token
-        """,
-        [scope] + toks + json_paths,
-    ).fetchall()
-    con.close()
-
-    tok_by_json: Dict[str, List[str]] = {}
-    for pr in pair_rows:
-        jp = str(pr["json_path"])
-        tk = str(pr["token"])
-        tok_by_json.setdefault(jp, []).append(tk)
-
-    for c in candidates:
-        tlist = tok_by_json.get(c["json_path"], [])
-        score = 0.0
-        for tk in tlist:
-            score += float(idf.get(tk, 0.0))
-        c["score"] = float(score)
-
-    # --------------------------------------
-    # 2) Ranking via ratings.sqlite3 Durchschnitt
-    # --------------------------------------
-    con2 = sqlite3.connect(ratings_db_path)
-    con2.row_factory = sqlite3.Row
-
-    def _safe_avg(x: Optional[float]) -> float:
-        return float(x) if x is not None else -1.0
-
-    best: Optional[Dict[str, Any]] = None
-    for c in candidates:
-        avg_rating, runs, png_path = _rating_summary_for_json(
-            con2,
-            json_path=c["json_path"],
-            model_branch=(model_branch or c["model_branch"] or ""),
+        if not rows:
+            return None
+        return _pick_best_candidate(
+            ratings_con,
+            rows=rows,
+            model_branch=mb,
+            min_runs=mr,
         )
-
-        cand = {
-            "json_path": c["json_path"],
-            "model_branch": (model_branch or c["model_branch"] or ""),
-            "hits": int(c["hits"]),
-            "score": float(c.get("score") or 0.0),
-            "avg_rating": avg_rating,
-            "runs": int(runs),
-            "png_path": png_path,
-        }
-
-        if best is None:
-            best = cand
-            continue
-
-        # Sort: score DESC, avg_rating DESC, runs DESC, hits DESC
-        if cand["score"] > best["score"]:
-            best = cand
-        elif cand["score"] == best["score"]:
-            if _safe_avg(cand["avg_rating"]) > _safe_avg(best["avg_rating"]):
-                best = cand
-            elif _safe_avg(cand["avg_rating"]) == _safe_avg(best["avg_rating"]):
-                if cand["runs"] > best["runs"]:
-                    best = cand
-                elif cand["runs"] == best["runs"]:
-                    if cand["hits"] > best["hits"]:
-                        best = cand
-
-    con2.close()
-    return best
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+        try:
+            ratings_con.close()
+        except Exception:
+            pass

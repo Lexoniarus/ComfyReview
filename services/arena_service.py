@@ -2,7 +2,15 @@ import json
 import random
 from datetime import datetime
 
-from config import ARENA_DB_PATH, DB_PATH
+from config import (
+    ARENA_DB_PATH,
+    DB_PATH,
+    PROMPT_TOKENS_DB_PATH,
+    MV_QUEUE_DB_PATH,
+    IMAGES_DB_PATH,
+)
+import sqlite3
+from stores.images_store import init_images_db
 from arena_store import (
     ensure_schema as ensure_arena_schema,
     has_match as arena_has_match,
@@ -11,6 +19,9 @@ from arena_store import (
 from db_store import db, insert_or_update_rating
 from meta_view import extract_prompts, extract_view
 from services.rating_service import parse_float, parse_int, rating_avg_and_runs_for_json
+from stores.mv_jobs_store import enqueue_job
+from services.prompt_tokens_service import write_prompt_tokens_for_latest_run
+
 
 
 def arena_target_ratings(avg_a: float, avg_b: float):
@@ -118,12 +129,33 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
     # - arena.sqlite3: Match gespeichert
     # - ratings.sqlite3: 2 neue rating Runs
 
-    con = db(DB_PATH)
-    try:
-        left_avg, _ = rating_avg_and_runs_for_json(con, str(left_it.json_path))
-        right_avg, _ = rating_avg_and_runs_for_json(con, str(right_it.json_path))
-    finally:
-        con.close()
+    # vNext: avg values should come from images.sqlite3 (score MV, keyed by png_path).
+    # Fallback to ratings aggregation only if MV row is missing.
+    def _avg_from_images(png_path: str):
+        init_images_db(IMAGES_DB_PATH)
+        con2 = sqlite3.connect(IMAGES_DB_PATH)
+        con2.row_factory = sqlite3.Row
+        try:
+            r = con2.execute(
+                "SELECT avg_rating FROM images WHERE png_path = ? LIMIT 1",
+                [str(png_path)],
+            ).fetchone()
+            if r and r["avg_rating"] is not None:
+                return float(r["avg_rating"])
+        finally:
+            con2.close()
+        return None
+
+    left_avg = _avg_from_images(str(left_it.png_path))
+    right_avg = _avg_from_images(str(right_it.png_path))
+
+    if left_avg is None or right_avg is None:
+        con = db(DB_PATH)
+        try:
+            left_avg, _ = rating_avg_and_runs_for_json(con, str(left_it.json_path))
+            right_avg, _ = rating_avg_and_runs_for_json(con, str(right_it.json_path))
+        finally:
+            con.close()
 
     if left_avg is None or right_avg is None:
         return
@@ -182,6 +214,26 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
             pos_prompt=pos_prompt,
             neg_prompt=neg_prompt,
         )
+        # Rohdaten Update: prompt_tokens pro Run schreiben (kein MV)
+        try:
+            write_prompt_tokens_for_latest_run(
+                ratings_db_path=DB_PATH,
+                prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
+                json_path=str(it.json_path),
+                model_branch=str(it.model_branch or ""),
+                pos_prompt=str(pos_prompt or ""),
+                neg_prompt=str(neg_prompt or ""),
+                rating=int(rating_int),
+                deleted=0,
+            )
+        except Exception as e:
+            print(f"prompt_tokens write failed after arena rating: {e}")
+
+        # Queue Trigger: Worker Catchup
+        try:
+            enqueue_job(MV_QUEUE_DB_PATH, job_type="catchup")
+        except Exception as e:
+            print(f"enqueue mv_job failed after arena rating: {e}")
 
     _insert_int_rating(winner_it, winner_target)
     _insert_int_rating(loser_it, loser_target)

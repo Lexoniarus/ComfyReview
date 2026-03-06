@@ -3,26 +3,50 @@
 
 {% block head %}
 <style>
+  .pgSubnav{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:10px;
+  }
+  .btnLink{
+    display:inline-block;
+    padding:10px 14px;
+    border-radius:12px;
+    border:1px solid var(--border);
+    background: rgba(255,255,255,0.05);
+    color: var(--text);
+    cursor: pointer;
+    text-decoration:none;
+    transition: background 0.12s ease, border 0.12s ease;
+  }
+  .btnLink:hover{ background: rgba(255,255,255,0.08); }
+  .btnLink.active{
+    border-color: rgba(50,197,255,0.45);
+    background: rgba(50,197,255,0.16);
+  }
+
   .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
   .grid1{ display:grid; grid-template-columns: 1fr; gap:10px; }
+
   .hint{ color:var(--muted); font-size:12px; margin-top:6px; }
   .mono{
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     white-space: pre-wrap;
     word-break: break-word;
   }
-  textarea, select, input{
+
+  .formGrid input,
+  .formGrid select,
+  .formGrid textarea{
     width:100%;
-    background: rgba(0,0,0,0.45);
-    color: rgba(255,255,255,0.9);
-    border:1px solid var(--border);
-    border-radius:12px;
-    padding:10px;
     box-sizing:border-box;
   }
-  textarea{ min-height:84px; }
+  .formGrid textarea{ min-height:84px; }
+
   .rowActions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   details > summary{ cursor:pointer; }
+
   .pillSmall{
     display:inline-block;
     padding:2px 8px;
@@ -31,14 +55,21 @@
     font-size:12px;
     color: var(--muted);
   }
+
   img.preview{
-    max-height: 90px;
-    max-width: 160px;
-    border-radius: 10px;
+    max-height: 140px;
+    max-width: 260px;
+    border-radius: 12px;
     border: 1px solid var(--border);
     object-fit: contain;
     display:block;
     margin-top: 6px;
+    cursor: zoom-in;
+    background: rgba(255,255,255,0.03);
+  }
+
+  .searchGrow{
+    min-width: 280px;
   }
 </style>
 {% endblock %}
@@ -49,17 +80,25 @@
   <div>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
       <div class="pill">Playground</div>
-      <div class="pill">Bausteine</div>
+      <div class="pill">Browse und Edit</div>
       <div class="pill">Pos und Neg getrennt</div>
     </div>
+
     <div class="hint">
       Builder Datenbasis fuer Generator. Kein Log. Hard delete.
     </div>
+
+    <div class="pgSubnav">
+      <a class="btnLink" href="/playground">Hub</a>
+      <a class="btnLink active" href="/playground/browse">Browse und Edit</a>
+      <a class="btnLink" href="/playground/generator">Generator</a>
+    </div>
   </div>
+
   {% include "_nav.html" %}
 </div>
 
-<form class="filter" method="get" action="/playground">
+<form class="filter" method="get" action="/playground/browse">
   <label class="small">Kategorie</label>
   <select name="kind">
     <option value="" {% if not kind %}selected{% endif %}>alle</option>
@@ -73,15 +112,16 @@
   </select>
 
   <label class="small">Suche</label>
-  <input type="text" name="q" value="{{ q }}" placeholder="name, key, tags">
+  <input class="searchGrow" type="text" name="q" value="{{ q }}" placeholder="name, key, tags">
+
   <button type="submit">anwenden</button>
-  <a href="/playground">reset</a>
+  <a href="/playground/browse">reset</a>
 </form>
 
 <div class="box" style="margin-top:14px;">
   <h3>Neuen Baustein anlegen</h3>
 
-  <form method="post" action="/playground/create" class="grid1" id="createForm">
+  <form method="post" action="/playground/create" class="grid1 formGrid" id="createForm">
 
     <div class="grid2">
       <div>
@@ -160,35 +200,14 @@
       <td class="mono" style="max-width:360px;">{{ r["neg"] }}</td>
 
       <td style="min-width:240px;">
-        {% set bm = r["best_match"] %}
-        {% if bm %}
-          <div class="pillSmall">
-            hits {{ bm["hits"] }}
-            {% if bm["avg_rating"] is not none %}
-              avg {{ "%.2f"|format(bm["avg_rating"]) }}
-            {% else %}
-              avg n/a
-            {% endif %}
-            runs {{ bm["runs"] }}
-          </div>
-
-          {% if bm.get("url") %}
-            <a href="{{ bm['url'] }}" target="_blank">
-              <img class="preview" src="{{ bm['url'] }}">
-            </a>
-          {% else %}
-            <div class="hint mono">kein png_path join</div>
-          {% endif %}
-        {% else %}
-          <div class="hint">no match</div>
-        {% endif %}
+        <div class="hint" data-preview-cell="{{ r['id'] }}">preview wird geladen</div>
       </td>
 
-      <td style="min-width:240px;">
+      <td style="min-width:260px;">
         <details>
           <summary>edit</summary>
 
-          <form method="post" action="/playground/update" class="grid1" style="margin-top:10px;">
+          <form method="post" action="/playground/update" class="grid1 formGrid" style="margin-top:10px;">
             <input type="hidden" name="item_id" value="{{ r['id'] }}">
 
             <div class="grid2">
@@ -284,7 +303,7 @@
         lines.push(`${t}: n=${s.n} mean=${Number(s.mean).toFixed(2)} lb05=${Number(s.lb05).toFixed(2)}`);
       }
     }
-    return lines.join("\\n");
+    return lines.join("\n");
   }
 
   function debounce(fn, ms){
@@ -340,6 +359,64 @@
   editNegAreas.forEach(a => {
     const id = a.getAttribute("data-id");
     a.addEventListener("input", () => updateEditNeg(id, a.value));
+  });
+
+  async function loadPreviewsForVisibleRows(){
+    const cells = Array.from(document.querySelectorAll("[data-preview-cell]"));
+    const ids = cells.map(el => el.getAttribute("data-preview-cell")).filter(Boolean);
+
+    if(!ids.length) return;
+
+    let res;
+    try {
+      res = await fetch("/playground/api/previews", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          item_ids: ids,
+          scope: "pos",
+          min_hits: 1,
+          min_runs: 0,
+          model_branch: ""
+        })
+      });
+    } catch (e) {
+      return;
+    }
+
+    if(!res || !res.ok) return;
+
+    const data = await res.json();
+
+    for(const el of cells){
+      const id = el.getAttribute("data-preview-cell");
+      const bm = data[id];
+
+      if(!bm || !bm.url){
+        el.innerHTML = '<div class="hint">no match</div>';
+        continue;
+      }
+
+      const avg = (bm.avg_rating === null || bm.avg_rating === undefined) ? "n/a" : Number(bm.avg_rating).toFixed(2);
+      el.innerHTML = `
+        <div class="pillSmall">
+          hits ${bm.hits || 0}
+          avg ${avg}
+          runs ${bm.runs || 0}
+        </div>
+        <img
+          class="preview"
+          src="${bm.url}"
+          data-cr-full="${bm.url}"
+          data-cr-title="item ${id}"
+          data-cr-sub="hits ${bm.hits || 0} avg ${avg} runs ${bm.runs || 0}"
+        >
+      `;
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadPreviewsForVisibleRows();
   });
 </script>
 

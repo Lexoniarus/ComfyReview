@@ -2,9 +2,13 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>{{ page_title or "Comfy Review" }}</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<title>{{ page_title or "ComfyLan" }}</title>
+<meta name="ComfyReview" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/x-icon" href="/static/icons/favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/static/icons/icon-512.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#0b0f17">
 <style>
 :root{
   --bg: #0b0f17;
@@ -50,6 +54,10 @@ a:hover{
 .small{
   font-size: 12px;
   color: var(--muted);
+}
+
+.num{
+  text-align: right;
 }
 
 /* -------------------- Buttons -------------------- */
@@ -205,6 +213,337 @@ tr:hover{
   background: rgba(255,255,255,0.03);
 }
 
+/* -------------------- Simple Layout Helpers -------------------- */
+
+.crRow{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.crRowBetween{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+}
+
+.crH2{
+  margin:0;
+}
+
+.crMt0{ margin-top:0; }
+.crMt8{ margin-top:8px; }
+.crMt10{ margin-top:10px; }
+.crMt12{ margin-top:12px; }
+.crMt14{ margin-top:14px; }
+
+.crGridTwoCol{
+  display:grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap:16px;
+  align-items:start;
+}
+
+.w90{ width:90px; }
+.w110{ width:110px; }
+.w120{ width:120px; }
+
+/* -------------------- Tabs -------------------- */
+
+.crTabBar{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.crTabBtn{
+  padding:6px 10px;
+  border-radius:10px;
+  font-size:12px;
+  line-height: 1;
+  opacity: 0.65;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.crTabBtn.is-active{
+  opacity: 1;
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
+.crTabPane{
+  display:none;
+}
+
+.crTabPane.is-active{
+  display:block;
+}
+
+/* -------------------- Helpers -------------------- */
+
+.tableWrap{
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+}
+
+.dense th, .dense td{
+  padding: 6px 8px;
+}
+
+.card{
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  box-shadow: var(--shadow);
+  margin-top: 14px;
+}
+
+.badge{
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  font-size: 12px;
+}
+
+.b-good{
+  border-color: rgba(46,204,113,0.45);
+  background: rgba(46,204,113,0.12);
+}
+
+.b-warn{
+  border-color: rgba(241,196,15,0.45);
+  background: rgba(241,196,15,0.10);
+}
+
+.b-bad{
+  border-color: rgba(255,80,80,0.45);
+  background: rgba(255,80,80,0.12);
+}
+
+.btnSmall{
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.rowActions{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items:center;
+  margin-top: 8px;
+}
+
+.thumbStrip{
+  display:flex;
+  gap:8px;
+  flex-wrap: nowrap;
+  align-items:center;
+}
+.thumbStrip a{
+  display:inline-block;
+  border-radius: 10px;
+  overflow:hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+.thumbStrip img{
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  display:block;
+}
+
+/* -------------------- Label Badges (shared) -------------------- */
+
+.crBadges{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  align-items:center;
+}
+
+.crBadge{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  font-size:11px;
+  color: var(--muted);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow:hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crBadgeStrong{
+  color: var(--text);
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.05);
+}
+
+.crLabelBox{
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+
+.crLabelBox .crBadges{
+  gap: 8px;
+}
+
+/* -------------------- KPI Cards (shared) -------------------- */
+
+.crKpiGrid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.crKpiCard{
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  box-shadow: var(--shadow);
+  padding: 12px;
+}
+
+.crKpiTitle{
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.crKpiVal{
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.crKpiSub{
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+  word-break: break-word;
+}
+
+.crKpiRow{
+  display:flex;
+  justify-content:space-between;
+  gap: 12px;
+  align-items:baseline;
+}
+
+/* -------------------- Progress Bars (shared) -------------------- */
+
+.crBar{
+  width: 140px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.crBarSm{
+  width: 120px;
+}
+
+.crBar > div{
+  height: 100%;
+}
+
+.crBarFill{
+  background: rgba(50,197,255,0.8);
+}
+
+.crBarFillGradient{
+  background: linear-gradient(90deg, rgba(50,197,255,0.8), rgba(46,204,113,0.8));
+}
+
+.crTokenCell{
+  max-width: 500px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -------------------- Playground Dashboard (shared) -------------------- */
+
+.crGridWrap{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px,1fr));
+  gap: 14px;
+}
+
+.crComboCard{
+  background: rgba(0,0,0,0.45);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.crComboTitle{
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.crComboMeta{
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.crThumbRow{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.crThumbLink{
+  display:block;
+}
+
+img.crThumb{
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  background: rgba(255,255,255,0.04);
+  cursor: zoom-in;
+}
+
+.crHint{
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.crSectionTitle{
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0 0 10px 0;
+}
+
+
 </style>
 
 {% block head %}{% endblock %}
@@ -213,6 +552,295 @@ tr:hover{
 <body>
 
 {% block body %}{% endblock %}
+
+<script>
+(function(){
+  const CR_GEN_KEY = "comfyreview:pg_gen_state_v1";
+  const CR_GEN_FIELDS = [
+    "character_id","scene_id","outfit_id","pose_id","expression_id","lighting_id","modifier_id",
+    "include_lighting","include_modifier",
+    "gen_seed","comfy_seed","max_tries","batch_runs",
+    "checkpoint_name","sampler_name","scheduler_name","steps","cfg","denoise"
+  ];
+
+  async function crCopyText(text){
+    const s = (text ?? "").toString();
+    if(!s) return false;
+    try{
+      await navigator.clipboard.writeText(s);
+      return true;
+    }catch(e){}
+    try{
+      const ta = document.createElement("textarea");
+      ta.value = s;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.top = "0";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      return true;
+    }catch(e){}
+    return false;
+  }
+
+  function crReadGenState(){
+    try{
+      const raw = localStorage.getItem(CR_GEN_KEY);
+      if(!raw) return {};
+      const d = JSON.parse(raw);
+      return (d && typeof d === "object") ? d : {};
+    }catch(e){
+      return {};
+    }
+  }
+
+  function crWriteGenState(state){
+    try{
+      localStorage.setItem(CR_GEN_KEY, JSON.stringify(state || {}));
+    }catch(e){}
+  }
+
+  function crGetFormField(form, name){
+    const el = form.querySelector(`[name="${name}"]`);
+    if(!el) return "";
+    if(el.type === "checkbox"){
+      return el.checked ? "1" : "0";
+    }
+    return (el.value ?? "").toString();
+  }
+
+  function crCaptureGeneratorForm(){
+    if(window.location.pathname !== "/playground/generator") return;
+
+    const form = document.querySelector('form[action="/playground/generator"][method="post"]');
+    if(!form) return;
+
+    function snapshot(){
+      const prev = crReadGenState();
+      const next = Object.assign({}, prev);
+      CR_GEN_FIELDS.forEach((name) => {
+        next[name] = crGetFormField(form, name);
+      });
+      crWriteGenState(next);
+    }
+
+    snapshot();
+
+    form.addEventListener("change", snapshot);
+    form.addEventListener("input", (ev) => {
+      const t = ev.target;
+      if(!t || !t.name) return;
+      if(CR_GEN_FIELDS.indexOf(t.name) === -1) return;
+      snapshot();
+    });
+  }
+
+  function crParseComboKey(comboKey){
+    const out = {};
+    const s = (comboKey ?? "").toString().trim();
+    if(!s) return out;
+
+    const parts = s.split("|");
+    for(const p of parts){
+      const idx = p.indexOf("=");
+      if(idx < 0) continue;
+      const k = p.slice(0, idx).trim();
+      const v = p.slice(idx+1).trim();
+      if(!v) continue;
+
+      if(k === "ckpt" || k === "checkpoint"){
+        out.checkpoint_name = v;
+      }else if(k === "sampler"){
+        out.sampler_name = v;
+      }else if(k === "sched" || k === "scheduler"){
+        out.scheduler_name = v;
+      }else if(k === "steps"){
+        out.steps = v;
+      }else if(k === "cfg"){
+        out.cfg = v.replace(",", ".");
+      }else if(k === "denoise"){
+        out.denoise = v.replace(",", ".");
+      }
+    }
+    return out;
+  }
+
+  function crSubmitGeneratorPreset(overrides){
+    const base = crReadGenState();
+    const merged = Object.assign({}, base, overrides || {});
+    const form = document.createElement("form");
+    form.method = "post";
+    form.action = "/playground/generator";
+
+    function addHidden(name, value){
+      const i = document.createElement("input");
+      i.type = "hidden";
+      i.name = name;
+      i.value = (value ?? "").toString();
+      form.appendChild(i);
+    }
+
+    // Persist head state without generating preview.
+    addHidden("action", "head_save");
+
+    CR_GEN_FIELDS.forEach((name) => {
+      addHidden(name, merged[name] ?? "");
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  function crBindToGeneratorButtons(){
+    const btns = document.querySelectorAll("[data-cr-to-generator]");
+    if(!btns || btns.length === 0) return;
+
+    btns.forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const ds = btn.dataset || {};
+        let overrides = {};
+
+        if(ds.combo){
+          overrides = Object.assign(overrides, crParseComboKey(ds.combo));
+        }
+
+        if(ds.checkpoint){
+          overrides.checkpoint_name = ds.checkpoint;
+        }
+        if(ds.sampler){
+          overrides.sampler_name = ds.sampler;
+        }
+        if(ds.scheduler){
+          overrides.scheduler_name = ds.scheduler;
+        }
+        if(ds.steps){
+          overrides.steps = ds.steps;
+        }
+        if(ds.cfg){
+          overrides.cfg = ds.cfg.replace(",", ".");
+        }
+        if(ds.denoise){
+          overrides.denoise = ds.denoise.replace(",", ".");
+        }
+
+        crSubmitGeneratorPreset(overrides);
+      });
+    });
+  }
+
+  function crInitTabs(btnSelector, paneSelector, dataKeyAttr, defaultKey){
+    const btns = Array.from(document.querySelectorAll(btnSelector));
+    const panes = Array.from(document.querySelectorAll(paneSelector));
+    if(btns.length === 0 || panes.length === 0) return;
+
+    function setActive(key){
+      panes.forEach((p) => {
+        const isActive = (p.dataset && p.dataset[dataKeyAttr] === key);
+        p.classList.toggle("is-active", isActive);
+      });
+      btns.forEach((b) => {
+        const isActive = (b.dataset && b.dataset[dataKeyAttr] === key);
+        b.classList.toggle("is-active", isActive);
+      });
+    }
+
+    btns.forEach((b) => {
+      b.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const key = (b.dataset && b.dataset[dataKeyAttr]) ? b.dataset[dataKeyAttr] : "";
+        if(key) setActive(key);
+      });
+    });
+
+    const initial = defaultKey || ((btns[0].dataset && btns[0].dataset[dataKeyAttr]) ? btns[0].dataset[dataKeyAttr] : "");
+    if(initial) setActive(initial);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    crInitTabs(".tabbtn", ".tabpane", "tab");
+    crInitTabs(".besttabbtn", ".besttabpane", "besttab", "calc");
+    crCaptureGeneratorForm();
+    crBindToGeneratorButtons();
+    crBindZoomThumbs();
+  });
+
+  function crBindZoomThumbs(){
+    const modal = document.getElementById("crImgModal");
+    const img = document.getElementById("crModalImg");
+    const meta = document.getElementById("crModalMeta");
+    if(!modal || !img) return;
+
+    function openModal(src, metaText){
+      img.src = src;
+      if(meta){
+        meta.textContent = metaText || "";
+      }
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+    }
+    function closeModal(){
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+      img.src = "";
+      if(meta) meta.textContent = "";
+    }
+
+    document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-cr-zoom]');
+  if(!el) return;
+  e.preventDefault();
+  const src = el.getAttribute('data-cr-zoom') || "";
+  const m = el.getAttribute('data-cr-zoom-meta') || "";
+  if(src){
+    openModal(src, m);
+  }
+});
+
+    modal.addEventListener('click', (e) => {
+      if(e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if(e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+    });
+    const closeBtn = document.getElementById('crModalClose');
+    if(closeBtn) closeBtn.addEventListener('click', closeModal);
+  }
+
+  // global helpers
+  window.crCopyText = crCopyText;
+  window.crSubmitGeneratorPreset = crSubmitGeneratorPreset;
+  window.crParseComboKey = crParseComboKey;
+})();
+</script>
+
+<style>
+  /* shared image modal (used by stats + param_stats thumbnails) */
+  .crModal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.55); z-index:9999; }
+  .crModal.open{ display:flex; }
+  .crModalCard{ width:min(1100px, 92vw); max-height:92vh; overflow:hidden; background:rgba(10,14,18,0.96); border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,0.6); }
+  .crModalTop{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--border); }
+  .crModalMeta{ font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:85%; }
+  .crModalClose{ border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text); border-radius:10px; padding:6px 10px; cursor:pointer; }
+  .crModalImgWrap{ padding:12px; display:flex; align-items:center; justify-content:center; }
+  .crModalImg{ max-width:100%; max-height:80vh; border-radius:14px; border:1px solid var(--border); }
+</style>
+
+<div id="crImgModal" class="crModal" aria-hidden="true">
+  <div class="crModalCard">
+    <div class="crModalTop">
+      <div id="crModalMeta" class="crModalMeta"></div>
+      <button id="crModalClose" class="crModalClose" type="button">close</button>
+    </div>
+    <div class="crModalImgWrap">
+      <img id="crModalImg" class="crModalImg" src="" alt="preview">
+    </div>
+  </div>
+</div>
 
 {% block scripts %}{% endblock %}
 

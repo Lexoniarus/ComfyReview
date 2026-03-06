@@ -1,76 +1,179 @@
 {% extends "_base.html" %}
 {% set page_title = "Ergebnisse" %}
 
-{% block head %}
-<style>
-  .miniProg{
-    width:120px;
-    height:7px;
-    border-radius:999px;
-    background: rgba(255,255,255,0.08);
-    overflow:hidden;
-    border:1px solid rgba(255,255,255,0.10);
-  }
-  .miniProg > div{
-    height:100%;
-    background: linear-gradient(90deg, rgba(50,197,255,0.8), rgba(46,204,113,0.8));
-  }
-  .num{ text-align:right; }
-</style>
-{% endblock %}
-
 {% block body %}
 <div class="top">
   <div>
-    <div class="pill">Stabile Presets</div>
+    <div class="pill">Recommendations</div>
+    <div class="pill">stable | avoid | approx</div>
   </div>
   {% include "_nav.html" %}
 </div>
 
-<div class="tableWrap">
-<table class="sortable dense">
-<tr>
-  <th>Modell</th>
-  <th class="num">n</th>
-  <th class="num">Avg</th>
-  <th class="num">Exp</th>
-  <th class="num">lb05</th>
-  <th>lb</th>
-  <th>Sampler</th>
-  <th>Scheduler</th>
-  <th class="num">Steps</th>
-  <th class="num">CFG</th>
-  <th class="num">Denoise</th>
-</tr>
+<form class="filter" method="get" action="/recommendations">
+  <label class="small">Modell</label>
+  <select name="model">
+    <option value="" {% if not model %}selected{% endif %}>alle</option>
+    {% for m in model_list %}
+      <option value="{{ m }}" {% if model==m %}selected{% endif %}>{{ m }}</option>
+    {% endfor %}
+  </select>
 
-{% for r in stable %}
-{% set ck = r["combo_key"] %}
-{% set sampler = (ck.split("sampler=")[1].split("|")[0]) if "sampler=" in ck else "" %}
-{% set sched = (ck.split("sched=")[1].split("|")[0]) if "sched=" in ck else "" %}
-{% set steps = (ck.split("steps=")[1].split("|")[0]) if "steps=" in ck else "" %}
-{% set cfg = (ck.split("cfg=")[1].split("|")[0]) if "cfg=" in ck else "" %}
-{% set denoise = (ck.split("denoise=")[1].split("|")[0]) if "denoise=" in ck else "" %}
-{% set lb = r["stability_lb05"] %}
+  <label class="small">min n</label>
+  <input type="number" name="min_n" value="{{ min_n }}" min="1" style="width:110px;">
 
-<tr>
-  <td>{{ r["model_branch"] }}</td>
-  <td class="num">{{ r["n"] }}</td>
-  <td class="num">{{ r["avg_rating"] }}</td>
-  <td class="num">{{ r["exp_success_rate"] }}</td>
-  <td class="num">{{ "%.3f"|format(lb) }}</td>
-  <td>
-    <div class="miniProg">
-      <div style="width: {{ (lb*100)|round(1) }}%"></div>
+  <label class="small">limit</label>
+  <input type="number" name="limit" value="{{ limit }}" min="1" style="width:110px;">
+
+  <label class="small">T</label>
+  <input type="number" name="t" value="{{ t }}" min="1" max="10" style="width:90px;">
+
+  <label class="small">dw</label>
+  <input type="number" name="dw" value="{{ dw }}" min="1" max="20" style="width:90px;">
+
+  <label class="small">min lb05</label>
+  <input type="number" name="min_lb" value="{{ min_lb }}" step="0.01" style="width:120px;" oninput="this.value=this.value.replace(',', '.')">
+
+  <span class="pill">approx</span>
+
+  <label class="small">approx min n</label>
+  <input type="number" name="approx_min_n" value="{{ approx_min_n }}" min="1" style="width:120px;">
+
+  <label class="small">approx limit</label>
+  <input type="number" name="approx_limit" value="{{ approx_limit }}" min="1" style="width:120px;">
+
+  <button type="submit">anwenden</button>
+</form>
+
+<div class="card" style="margin-top:0;">
+  <div class="crSectionTitle">Stable</div>
+  {% if not stable or stable|length == 0 %}
+    <div class="small">Keine stabilen Presets in diesem Filter.</div>
+  {% else %}
+    <div class="tableWrap">
+      <table class="sortable dense">
+        <tr>
+          <th>Modell</th>
+          <th class="num">n</th>
+          <th class="num">Avg</th>
+          <th class="num">Exp</th>
+          <th class="num">lb05</th>
+          <th>lb</th>
+          <th>Sampler</th>
+          <th>Scheduler</th>
+          <th class="num">Steps</th>
+          <th class="num">CFG</th>
+          <th class="num">Denoise</th>
+          <th>Action</th>
+        </tr>
+
+        {% for r in stable %}
+          {% set ck = r["combo_key"] %}
+          {% set sampler = (ck.split("sampler=")[1].split("|")[0]) if "sampler=" in ck else "" %}
+          {% set sched = (ck.split("sched=")[1].split("|")[0]) if "sched=" in ck else "" %}
+          {% set steps = (ck.split("steps=")[1].split("|")[0]) if "steps=" in ck else "" %}
+          {% set cfg = (ck.split("cfg=")[1].split("|")[0]) if "cfg=" in ck else "" %}
+          {% set denoise = (ck.split("denoise=")[1].split("|")[0]) if "denoise=" in ck else "" %}
+          {% set lb = r["stability_lb05"] %}
+          <tr>
+            <td>{{ r["model_branch"] }}</td>
+            <td class="num">{{ r["n"] }}</td>
+            <td class="num">{{ r["avg_rating"] }}</td>
+            <td class="num">{{ r["exp_success_rate"] }}</td>
+            <td class="num">{{ "%.3f"|format(lb) }}</td>
+            <td>
+              <div class="crBar crBarSm"><div class="crBarFillGradient" style="width: {{ (lb*100)|round(1) }}%"></div></div>
+            </td>
+            <td>{{ sampler }}</td>
+            <td>{{ sched }}</td>
+            <td class="num">{{ steps }}</td>
+            <td class="num">{{ cfg }}</td>
+            <td class="num">{{ denoise }}</td>
+            <td>
+              <button type="button" class="btnSmall" data-cr-to-generator data-combo="{{ r['combo_key']|e }}" data-checkpoint="{{ r.get('checkpoint','')|e }}">
+                to generator
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
     </div>
-  </td>
-  <td>{{ sampler }}</td>
-  <td>{{ sched }}</td>
-  <td class="num">{{ steps }}</td>
-  <td class="num">{{ cfg }}</td>
-  <td class="num">{{ denoise }}</td>
-</tr>
-{% endfor %}
-</table>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="crSectionTitle">Avoid</div>
+  {% if not avoid or avoid|length == 0 %}
+    <div class="small">Aktuell keine Avoid Liste (Backend liefert leer).</div>
+  {% else %}
+    <div class="tableWrap">
+      <table class="dense">
+        <tr>
+          <th>Modell</th>
+          <th class="num">n</th>
+          <th class="num">Avg</th>
+          <th class="num">lb05</th>
+          <th>combo_key</th>
+        </tr>
+        {% for r in avoid %}
+          <tr>
+            <td>{{ r.get("model_branch","") }}</td>
+            <td class="num">{{ r.get("n",0) }}</td>
+            <td class="num">{{ r.get("avg_rating",0) }}</td>
+            <td class="num">{{ "%.3f"|format(r.get("stability_lb05",0.0)) }}</td>
+            <td><code>{{ r.get("combo_key","") }}</code></td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="crSectionTitle">Approx</div>
+  {% if approx and approx.get("notes") %}
+    <div class="small" style="margin-bottom:10px;">{{ approx.get("notes") }}</div>
+  {% endif %}
+
+  {% set approx_rows = approx.get("rows", []) if approx else [] %}
+  {% if not approx_rows or approx_rows|length == 0 %}
+    <div class="small">Keine Approx Vorschläge.</div>
+  {% else %}
+    <div class="tableWrap">
+      <table class="dense">
+        <tr>
+          <th class="num">pred</th>
+          <th class="num">support</th>
+          <th>Sampler</th>
+          <th>Scheduler</th>
+          <th class="num">Steps</th>
+          <th class="num">CFG</th>
+          <th>Action</th>
+        </tr>
+        {% for r in approx_rows %}
+          <tr>
+            <td class="num">{{ "%.3f"|format(r.get("pred_success",0.0)) }}</td>
+            <td class="num">{{ r.get("support_min",0) }}</td>
+            <td>{{ r.get("sampler","") }}</td>
+            <td>{{ r.get("scheduler","") }}</td>
+            <td class="num">{{ r.get("steps","") }}</td>
+            <td class="num">{{ r.get("cfg","") }}</td>
+            <td>
+              <button type="button" class="btnSmall"
+                data-cr-to-generator
+                data-sampler="{{ r.get('sampler','')|e }}"
+                data-scheduler="{{ r.get('scheduler','')|e }}"
+                data-steps="{{ r.get('steps','')|e }}"
+                data-cfg="{{ r.get('cfg','')|e }}"
+              >
+                to generator
+              </button>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% endif %}
 </div>
 
 {% include "_sortable.html" %}

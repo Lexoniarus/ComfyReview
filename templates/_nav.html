@@ -8,3 +8,31 @@
   <a href="/prompt_tokens">Prompt Tokens</a>
   <a href="/playground">Playground</a>
 </div>
+
+<script>
+(function () {
+  const KEY = "comfyreview:last_query";
+
+  const currentSearch = window.location.search || "";
+
+  if (currentSearch && currentSearch.length > 1) {
+    try { localStorage.setItem(KEY, currentSearch); } catch (e) {}
+  }
+
+  let qs = currentSearch;
+  if (!qs || qs === "?") {
+    try { qs = localStorage.getItem(KEY) || ""; } catch (e) { qs = ""; }
+  }
+
+  if (!qs || qs === "?") return;
+
+  const links = document.querySelectorAll(".navbar a");
+  links.forEach((a) => {
+    const href = a.getAttribute("href") || "";
+    if (!href) return;
+    if (href.startsWith("http")) return;
+    if (href.includes("?")) return;
+    a.setAttribute("href", href + qs);
+  });
+})();
+</script>

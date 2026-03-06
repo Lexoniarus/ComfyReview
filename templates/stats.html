@@ -1,25 +1,6 @@
 {% extends "_base.html" %}
 {% set page_title = "Stats" %}
 
-{% block head %}
-<style>
-  .miniProg{
-    width:120px;
-    height:7px;
-    border-radius:999px;
-    background: rgba(255,255,255,0.08);
-    overflow:hidden;
-    border:1px solid rgba(255,255,255,0.10);
-  }
-  .miniProg > div{
-    height:100%;
-    background: linear-gradient(90deg, rgba(50,197,255,0.8), rgba(46,204,113,0.8));
-  }
-  .num{ text-align:right; }
-  .col-raw{ display:none; }
-</style>
-{% endblock %}
-
 {% block body %}
 <div class="top">
   <div>
@@ -57,6 +38,8 @@
   <th class="num">Steps</th>
   <th class="num">CFG</th>
   <th class="num">Denoise</th>
+  <th>Best</th>
+  <th>Action</th>
 </tr>
 
 {% for r in rows %}
@@ -75,16 +58,33 @@
   <td class="num">{{ r["exp_success_rate"] }}</td>
   <td class="num">{{ "%.3f"|format(lb) }}</td>
   <td>
-    <div class="miniProg">
-      <div style="width: {{ (lb*100)|round(1) }}%"></div>
+    <div class="crBar crBarSm">
+      <div class="crBarFillGradient" style="width: {{ (lb*100)|round(1) }}%"></div>
     </div>
   </td>
   <td>{{ sampler }}</td>
   <td>{{ sched }}</td>
   <td class="num">{{ steps }}</td>
   <td class="num">{{ cfg }}</td>
+
   <td class="num">{{ denoise }}</td>
+  
+<td>
+  <div class="thumbStrip">
+    {% for im in r.get("best_images", []) %}
+      <a href="#" data-cr-zoom="{{ im['url'] }}" data-cr-zoom-meta="{{ (r.get('combo_key') or '')|e }}">
+        <img src="{{ im['url'] }}" alt="best">
+      </a>
+    {% endfor %}
+  </div>
+</td>
+<td>
+    <button type="button" class="btnSmall" data-cr-to-generator data-combo="{{ r['combo_key']|e }}" data-checkpoint="{{ r['checkpoint']|e }}">
+      to generator
+    </button>
+  </td>
 </tr>
+
 {% endfor %}
 </table>
 </div>

@@ -1,4 +1,3 @@
-{# templates/playground_generator.html #}
 {% extends "_base.html" %}
 {% set page_title = "Playground Generator" %}
 
@@ -7,341 +6,451 @@
   .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
   .grid3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; }
   .grid1{ display:grid; grid-template-columns: 1fr; gap:10px; }
-
   .hint{ color:var(--muted); font-size:12px; margin-top:6px; }
-  .mono{
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    white-space: pre-wrap;
-  }
-
-  .kpiRow{ display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; }
-  .kpi{
-    border: 1px solid var(--border);
-    background: var(--card);
-    border-radius: 12px;
-    padding: 10px 12px;
-    min-width: 140px;
-  }
-  .kpi .k{ font-size:12px; color:var(--muted); }
-  .kpi .v{ font-size:18px; font-weight:700; }
-
-  .chip{
-    display:inline-block;
-    border: 1px solid var(--border);
-    background: var(--card);
-    border-radius: 999px;
-    padding: 6px 10px;
-    margin: 4px 6px 0 0;
-    font-size: 12px;
-  }
-
-  .boxSub{
-    border: 1px solid var(--border);
-    background: var(--card);
-    border-radius: 12px;
-    padding: 12px;
-  }
-
   textarea{
     width:100%;
-    min-height:120px;
+    min-height:110px;
     resize: vertical;
     border-radius: 10px;
     border: 1px solid var(--border);
     padding: 10px;
-    background: var(--bg);
+    background: rgba(255,255,255,0.04);
     color: var(--text);
   }
-
-  .rowActions{ display:flex; gap:10px; align-items:center; }
-  .btnRow{ display:flex; gap:10px; }
-  .btnSmall{
-    padding: 6px 10px;
+  input[type="number"],
+  input[type="text"],
+  select{
+    padding: 8px 10px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: var(--bg);
+    background: rgba(255,255,255,0.04);
     color: var(--text);
-    cursor: pointer;
-    font-size: 12px;
+    width: 100%;
+    box-sizing: border-box;
   }
-
-  .err{
-    border: 1px solid #5b1f2a;
-    background: #2b1218;
-    color: #ffd4dc;
-    border-radius: 12px;
-    padding: 10px 12px;
-  }
-
-  .ok{
-    border: 1px solid var(--border);
-    background: var(--card);
-    border-radius: 12px;
+  .panel{
     padding: 12px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
   }
-
+  .draftCard{
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    border-radius: 14px;
+    padding: 12px;
+    margin-top: 12px;
+  }
+  .rowActions{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
   .small{ font-size:12px; color:var(--muted); }
 </style>
 {% endblock %}
 
-{% block content %}
+{% block body %}
+<div class="top">
+  <div>
+    <div class="pill">Playground</div>
+    <div class="pill">Generator</div>
+  </div>
+  {% include "_nav.html" %}
+</div>
+
 <div class="panel">
-
-  <h1>Playground Generator</h1>
-
+  <div style="font-size:20px; font-weight:800;">Batch Preview Generator</div>
   <div class="hint">
-    Slots ausser Character sind optional.
-    Leer bedeutet random.
-    Prompts sind Komma getrennt, keine Space Split Logik.
+    Generate erzeugt eine Preview Liste. Submit sendet exakt die Preview Liste. Preview wird danach geleert.
   </div>
 
-  <div style="margin-top:12px;">
-    <form method="post" action="/playground/generator" class="grid1">
-
-      <div class="grid2">
-        <div>
-          <div class="small">Character (Pflicht)</div>
-          <select name="character_id" required>
-            <option value="" disabled {% if not form.character_id %}selected{% endif %}>bitte waehlen</option>
-            {% for c in characters %}
-              <option value="{{ c['id'] }}" {% if form.character_id == (c['id'] ~ '') %}selected{% endif %}>
-                {{ c['name'] }}
-              </option>
-            {% endfor %}
-          </select>
-          <div class="hint">Dieser Slot ist fix, damit Rules und Adult Checks stabil greifen.</div>
-        </div>
-
-        <div>
-          <div class="small">Seed (optional, reproduzierbar)</div>
-          <input name="seed" value="{{ form.seed }}" placeholder="zB 12345">
-          <div class="hint">Leer bedeutet normal random. Zahl bedeutet reproduzierbar.</div>
-        </div>
-      </div>
-
-      <div class="grid3">
-        <div>
-          <div class="small">Scene</div>
-          <select name="scene_id">
-            <option value="" {% if not form.scene_id %}selected{% endif %}>random</option>
-            {% for s in scenes %}
-              <option value="{{ s['id'] }}" {% if form.scene_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div>
-          <div class="small">Outfit</div>
-          <select name="outfit_id">
-            <option value="" {% if not form.outfit_id %}selected{% endif %}>random</option>
-            {% for s in outfits %}
-              <option value="{{ s['id'] }}" {% if form.outfit_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div>
-          <div class="small">Pose</div>
-          <select name="pose_id">
-            <option value="" {% if not form.pose_id %}selected{% endif %}>random</option>
-            {% for s in poses %}
-              <option value="{{ s['id'] }}" {% if form.pose_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-
-      <div class="grid3">
-        <div>
-          <div class="small">Expression</div>
-          <select name="expression_id">
-            <option value="" {% if not form.expression_id %}selected{% endif %}>random</option>
-            {% for s in expressions %}
-              <option value="{{ s['id'] }}" {% if form.expression_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div>
-          <div class="small">Lighting</div>
-          <select name="lighting_id">
-            <option value="" {% if not form.lighting_id %}selected{% endif %}>random</option>
-            {% for s in lightings %}
-              <option value="{{ s['id'] }}" {% if form.lighting_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div>
-          <div class="small">Modifier</div>
-          <select name="modifier_id">
-            <option value="" {% if not form.modifier_id %}selected{% endif %}>random</option>
-            {% for s in modifiers %}
-              <option value="{{ s['id'] }}" {% if form.modifier_id == (s['id'] ~ '') %}selected{% endif %}>{{ s['name'] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-
-      <div class="grid2">
-        <div>
-          <div class="small">include lighting</div>
-          <select name="include_lighting">
-            <option value="1" {% if form.include_lighting %}selected{% endif %}>yes</option>
-            <option value="0" {% if not form.include_lighting %}selected{% endif %}>no</option>
-          </select>
-          <div class="hint">Wenn no, wird Lighting ignoriert, auch wenn ausgewaehlt.</div>
-        </div>
-
-        <div>
-          <div class="small">include modifier</div>
-          <select name="include_modifier">
-            <option value="1" {% if form.include_modifier %}selected{% endif %}>yes</option>
-            <option value="0" {% if not form.include_modifier %}selected{% endif %}>no</option>
-          </select>
-          <div class="hint">Wenn no, wird Modifier ignoriert, auch wenn ausgewaehlt.</div>
-        </div>
-      </div>
-
-      <div class="grid2">
-        <div>
-          <div class="small">max tries</div>
-          <input name="max_tries" type="number" min="1" value="{{ form.max_tries }}">
-          <div class="hint">Reject Loop Limit, wenn Rules viele Kombinationen blocken.</div>
-        </div>
-
-        <div class="btnRow" style="align-items:flex-end;">
-          <button type="submit" name="action" value="generate">generieren</button>
-          <a href="/playground" class="small">zurueck zu playground</a>
-        </div>
-      </div>
-
-    </form>
-  </div>
+  {% if enqueue %}
+    <div class="hint" style="margin-top:10px;">{{ enqueue }}</div>
+  {% endif %}
 
   {% if error %}
-    <div class="err" style="margin-top:14px;">
-      <div class="mono">{{ error }}</div>
-    </div>
+    <div class="hint" style="margin-top:10px;">{{ error }}</div>
   {% endif %}
 
-  {% if result %}
-    <div class="ok" style="margin-top:14px;">
-
-      <div class="kpiRow">
-        <div class="kpi">
-          <div class="k">aktive tags</div>
-          <div class="v">{{ (result.get("active_tags") or []) | length }}</div>
-        </div>
-        <div class="kpi">
-          <div class="k">attempt</div>
-          <div class="v">{{ result.get("debug", {}).get("attempt", "") }}</div>
-        </div>
-        <div class="kpi">
-          <div class="k">seed</div>
-          <div class="v">{{ result.get("debug", {}).get("seed", "") }}</div>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;">
-        {% set sel = result.get("selection") %}
-        {% if sel %}
-          {% for k, v in sel.items() %}
-            <span class="chip">{{ k }}: {{ v.get("name") }}</span>
+  <form method="post" action="/playground/generator" class="grid1" style="margin-top:12px;">
+    
+    <div class="grid2">
+      <div>
+        <div class="small">Character</div>
+        <select name="character_id">
+          <option value="" {% if not form.character_id %}selected{% endif %}>random</option>
+          {% for c in characters %}
+            <option value="{{ c['id'] }}" {% if form.character_id == (c['id'] ~ '') %}selected{% endif %}>{{ c['name'] }}</option>
           {% endfor %}
-        {% endif %}
+        </select>
+        <div class="hint">Leer bedeutet random pro Draft.</div>
       </div>
 
-      <div class="grid2" style="margin-top:12px;">
-        <div class="boxSub">
-          <div class="small">Positiv Prompt</div>
-          <div class="rowActions" style="justify-content:flex-end; margin-top:6px;">
-            <button class="btnSmall" type="button" onclick="copyText('pos_prompt')">copy</button>
-          </div>
-          <textarea id="pos_prompt" readonly>{{ result.get("positive") }}</textarea>
-          <div class="hint">Komma getrennt, so wie eure Token Pflege.</div>
+      <div>
+        <div class="small">Generator Seed (nur Slot Randomness)</div>
+        <input type="number" name="gen_seed" step="1" value="{{ form.gen_seed }}" placeholder="zB 12345">
+        <div class="hint">Wenn gesetzt, wird pro Draft gen_seed plus index verwendet.</div>
+      </div>
+    </div>
+
+    <div class="grid3">
+      <div>
+        <div class="small">Scene</div>
+        <select name="scene_id">
+          <option value="" {% if not form.scene_id %}selected{% endif %}>random</option>
+          {% for x in scenes %}
+            <option value="{{ x['id'] }}" {% if form.scene_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <div class="small">Outfit</div>
+        <select name="outfit_id">
+          <option value="" {% if not form.outfit_id %}selected{% endif %}>random</option>
+          {% for x in outfits %}
+            <option value="{{ x['id'] }}" {% if form.outfit_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <div class="small">Pose</div>
+        <select name="pose_id">
+          <option value="" {% if not form.pose_id %}selected{% endif %}>random</option>
+          {% for x in poses %}
+            <option value="{{ x['id'] }}" {% if form.pose_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="grid3">
+      <div>
+        <div class="small">Expression</div>
+        <select name="expression_id">
+          <option value="" {% if not form.expression_id %}selected{% endif %}>random</option>
+          {% for x in expressions %}
+            <option value="{{ x['id'] }}" {% if form.expression_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <div class="small">Lighting</div>
+        <select name="lighting_id">
+          <option value="" {% if not form.lighting_id %}selected{% endif %}>random</option>
+          {% for x in lightings %}
+            <option value="{{ x['id'] }}" {% if form.lighting_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
+          {% endfor %}
+        </select>
+        <div class="hint">
+          <label><input type="checkbox" name="include_lighting" value="1" {% if form.include_lighting %}checked{% endif %}> include</label>
+        </div>
+      </div>
+
+      <div>
+        <div class="small">Modifier</div>
+        <select name="modifier_id">
+          <option value="" {% if not form.modifier_id %}selected{% endif %}>random</option>
+          {% for x in modifiers %}
+            <option value="{{ x['id'] }}" {% if form.modifier_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
+          {% endfor %}
+        </select>
+        <div class="hint">
+          <label><input type="checkbox" name="include_modifier" value="1" {% if form.include_modifier %}checked{% endif %}> include</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid3">
+      <div>
+        <div class="small">batch runs</div>
+        <input type="number" name="batch_runs" min="1" value="{{ form.batch_runs or 1 }}">
+      </div>
+
+      <div>
+        <div class="small">comfy seed seq</div>
+        <input type="text" name="comfy_seed" value="{{ form.comfy_seed }}" placeholder="zB 37-40 oder 1,2,3">
+        <div class="hint">Leer bedeutet Workflow Seed bleibt unberuehrt.</div>
+      </div>
+
+      <div>
+        <div class="small">max tries</div>
+        <input type="number" name="max_tries" min="1" value="{{ form.max_tries or default_max_tries }}">
+      </div>
+    </div>
+
+    <div class="grid3">
+      <div>
+        <div class="small">steps (min/max)</div>
+        <div class="grid2" style="gap:8px;">
+          <input type="number" name="steps_min" step="1" value="{{ form.steps_min }}" placeholder="min">
+          <input type="number" name="steps_max" step="1" value="{{ form.steps_max }}" placeholder="max">
+        </div>
+        <div class="hint">Optional. Wenn leer, wird der Workflow Default genutzt.</div>
+      </div>
+
+      <div>
+        <div class="small">cfg (min/max/step)</div>
+        <div class="grid3" style="gap:8px; grid-template-columns: 1fr 1fr 1fr;">
+          <input type="number" name="cfg_min" step="0.1" value="{{ form.cfg_min }}" placeholder="min" oninput="this.value = this.value.replace(',', '.')">
+          <input type="number" name="cfg_max" step="0.1" value="{{ form.cfg_max }}" placeholder="max" oninput="this.value = this.value.replace(',', '.')">
+          <input type="number" name="cfg_step" step="0.1" value="{{ form.cfg_step }}" placeholder="step" oninput="this.value = this.value.replace(',', '.')">
+        </div>
+        <div class="hint">Optional. Wenn leer, wird der Workflow Default genutzt. Schrittweite typischerweise 0.1.</div>
+      </div>
+
+      <div>
+        <div class="small">denoise seq</div>
+        <input type="text" name="denoise" value="{{ form.denoise }}" placeholder="zB 0.35-0.55:0.05">
+      </div>
+    </div>
+
+    <div class="grid3">
+      <div>
+        <div class="small">checkpoint</div>
+        <select name="checkpoint_name">
+          <option value="" {% if not form.checkpoint_name %}selected{% endif %}>random / auto</option>
+          {% for x in checkpoints %}
+            <option value="{{ x }}" {% if form.checkpoint_name == x %}selected{% endif %}>{{ x }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <div class="small">sampler</div>
+        <select name="sampler_name">
+          <option value="" {% if not form.sampler_name %}selected{% endif %}>random / auto</option>
+          {% for x in samplers %}
+            <option value="{{ x }}" {% if form.sampler_name == x %}selected{% endif %}>{{ x }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <div class="small">scheduler</div>
+        <select name="scheduler_name">
+          <option value="" {% if not form.scheduler_name %}selected{% endif %}>random / auto</option>
+          {% for x in schedulers %}
+            <option value="{{ x }}" {% if form.scheduler_name == x %}selected{% endif %}>{{ x }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="rowActions">
+      <button type="submit" name="action" value="preview_generate">Generate Preview</button>
+      {% if preview and preview|length > 0 %}
+        <button type="submit" name="action" value="submit_preview">Submit Preview</button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<div class="panel" style="margin-top:14px;">
+  <div style="font-weight:800;">Preview Batch</div>
+  {% if not preview or preview|length == 0 %}
+    <div class="hint">Leer. Generate Preview erzeugt Drafts.</div>
+  {% else %}
+    <div class="hint">Drafts: {{ preview|length }}</div>
+
+    {% for d in preview %}
+      <div class="draftCard">
+        <div style="font-weight:800;">draft {{ d.draft_id }}</div>
+
+        <div class="hint">
+          <span class="crBadge crBadgeStrong">{{ d.character_name }}</span>
+          {% if d.scene_name %}<span class="crBadge">{{ d.scene_name }}</span>{% endif %}
+          {% if d.outfit_name %}<span class="crBadge">{{ d.outfit_name }}</span>{% endif %}
+          {% if d.pose_name %}<span class="crBadge">{{ d.pose_name }}</span>{% endif %}
+          {% if d.expression_name %}<span class="crBadge">{{ d.expression_name }}</span>{% endif %}
+          {% if d.light_name %}<span class="crBadge">{{ d.light_name }}</span>{% endif %}
+          {% if d.modifier_name %}<span class="crBadge">{{ d.modifier_name }}</span>{% endif %}
         </div>
 
-        <div class="boxSub">
-          <div class="small">Negativ Prompt</div>
-          <div class="rowActions" style="justify-content:flex-end; margin-top:6px;">
-            <button class="btnSmall" type="button" onclick="copyText('neg_prompt')">copy</button>
-          </div>
-          <textarea id="neg_prompt" readonly>{{ result.get("negative") }}</textarea>
-          <div class="hint">Komma getrennt, so wie eure Token Pflege.</div>
+
+        <div id="bestbox-{{ d.draft_id }}" {% if not d.best_img_url %}data-cr-draft="{{ d.draft_id }}"{% endif %}>
+          <div class="hint" style="margin-top:10px;">Best Picture (scene match)</div>
+          {% if d.best_img_url %}
+            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+              <img src="{{ d.best_img_url }}" alt="best" style="width:220px; max-width:100%; border-radius:12px; border:1px solid var(--border);" data-cr-zoom="{{ d.best_img_url }}">
+              <div class="small">
+                {% if d.best_avg is not none %}Ø {{ "%.2f"|format(d.best_avg) }}{% endif %}
+                {% if d.best_runs is not none %} / {{ d.best_runs }}{% endif %}
+                {% if d.best_hits is not none %}<br>hits {{ d.best_hits }}{% endif %}
+              </div>
+            </div>
+          {% else %}
+            <div class="small" data-cr-best-status>loading...</div>
+          {% endif %}
         </div>
-      </div>
 
-      <div class="boxSub" style="margin-top:12px;">
-        <div class="small">Notes</div>
-        <textarea readonly>{{ result.get("notes") }}</textarea>
-        <div class="hint">Notes sind Lesetext, nicht Prompt Tokens.</div>
-      </div>
+        <form method="post" action="/playground/generator" class="grid1" style="margin-top:10px;">
+                    <input type="hidden" name="draft_id" value="{{ d.draft_id }}">
 
-      <div class="boxSub" style="margin-top:12px;">
-        <div class="small">An ComfyUI uebergeben</div>
-        <div class="hint">Absenden nutzt exakt die oben angezeigten Prompts. Es wird dabei nicht erneut generiert.</div>
+          <div class="grid3">
+            <div>
+              <div class="small">seed</div>
+              <input type="number" name="draft_seed" value="{{ d.seed }}" step="1">
+            </div>
+            <div>
+              <div class="small">steps</div>
+              <input type="number" name="draft_steps" value="{{ d.steps }}" step="1">
+            </div>
+            <div>
+              <div class="small">cfg</div>
+              <input type="number" name="draft_cfg" value="{{ d.cfg }}" step="0.1" oninput="this.value = this.value.replace(',', '.')">
+            </div>
+          </div>
 
-        <form method="post" action="/playground/generator" style="margin-top:10px;">
-          <input type="hidden" name="action" value="submit">
+          <div class="grid3">
+            <div>
+              <div class="small">sampler</div>
+              <select name="draft_sampler">
+                <option value="" {% if not d.sampler %}selected{% endif %}>random / auto</option>
+                {% for x in samplers %}
+                  <option value="{{ x }}" {% if d.sampler == x %}selected{% endif %}>{{ x }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <div class="small">scheduler</div>
+              <select name="draft_scheduler">
+                <option value="" {% if not d.scheduler %}selected{% endif %}>random / auto</option>
+                {% for x in schedulers %}
+                  <option value="{{ x }}" {% if d.scheduler == x %}selected{% endif %}>{{ x }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <div class="small">denoise</div>
+              <input type="number" name="draft_denoise" value="{{ d.denoise }}" step="0.01" oninput="this.value = this.value.replace(',', '.')">
+            </div>
+          </div>
 
-          <input type="hidden" name="character_id" value="{{ form.character_id }}">
-          <input type="hidden" name="scene_id" value="{{ form.scene_id }}">
-          <input type="hidden" name="outfit_id" value="{{ form.outfit_id }}">
-          <input type="hidden" name="pose_id" value="{{ form.pose_id }}">
-          <input type="hidden" name="expression_id" value="{{ form.expression_id }}">
-          <input type="hidden" name="lighting_id" value="{{ form.lighting_id }}">
-          <input type="hidden" name="modifier_id" value="{{ form.modifier_id }}">
+          <div>
+            <div class="small">checkpoint</div>
+            <select name="draft_checkpoint">
+              <option value="" {% if not d.checkpoint %}selected{% endif %}>random / auto</option>
+              {% for x in checkpoints %}
+                <option value="{{ x }}" {% if d.checkpoint == x %}selected{% endif %}>{{ x }}</option>
+              {% endfor %}
+            </select>
+          </div>
 
-          <input type="hidden" name="include_lighting" value="{{ 1 if form.include_lighting else 0 }}">
-          <input type="hidden" name="include_modifier" value="{{ 1 if form.include_modifier else 0 }}">
+          <div class="grid2">
+            <div>
+              <div class="small">prompt positive</div>
+              <textarea name="draft_pos">{{ d.prompt_positive }}</textarea>
+            </div>
+            <div>
+              <div class="small">prompt negative</div>
+              <textarea name="draft_neg">{{ d.prompt_negative }}</textarea>
+            </div>
+          </div>
 
-          <input type="hidden" name="seed" value="{{ form.seed }}">
-          <input type="hidden" name="max_tries" value="{{ form.max_tries }}">
-
-          <input type="hidden" name="positive_prompt" value="{{ result.get('positive') }}">
-          <input type="hidden" name="negative_prompt" value="{{ result.get('negative') }}">
-
-          <div class="btnRow" style="margin-top:8px;">
-            <button type="submit">absenden</button>
+          <div class="rowActions">
+            <button type="submit" name="action" value="draft_update">Update Draft</button>
+            <button type="submit" name="action" value="draft_remove">Remove</button>
           </div>
         </form>
-
-        {% if enqueue %}
-          <div class="hint mono" style="margin-top:10px; white-space:pre-wrap;">{{ enqueue }}</div>
-        {% endif %}
       </div>
-
-      <details style="margin-top:12px;">
-        <summary class="small">Debug anzeigen</summary>
-
-        <div class="boxSub" style="margin-top:10px;">
-          <div class="small">active tags</div>
-          <div class="mono">{{ result.get("active_tags") }}</div>
-        </div>
-
-        <div class="boxSub" style="margin-top:10px;">
-          <div class="small">selection</div>
-          <div class="mono">{{ result.get("selection") }}</div>
-        </div>
-
-        <div class="boxSub" style="margin-top:10px;">
-          <div class="small">debug</div>
-          <div class="mono">{{ result.get("debug") }}</div>
-        </div>
-      </details>
-
-    </div>
+    {% endfor %}
   {% endif %}
-
 </div>
 
 <script>
-  function copyText(id){
-    const el = document.getElementById(id);
-    if(!el){ return; }
-    el.select();
-    document.execCommand("copy");
+(function(){
+  const boxes = Array.from(document.querySelectorAll('[data-cr-draft]'));
+  if (!boxes.length) return;
+
+  const endpoint = '/playground/generator/preview_draft_best';
+  const concurrency = 3;
+  const maxAttempts = 20;
+
+  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+  async function loadBest(box){
+    const draftId = (box.dataset.crDraft || '').trim();
+    if (!draftId) return;
+
+    const statusEl = box.querySelector('[data-cr-best-status]');
+    let attempt = 0;
+
+    while(attempt < maxAttempts){
+      attempt += 1;
+      try{
+        const url = endpoint + '?draft_id=' + encodeURIComponent(draftId);
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if(!res.ok){
+          if(statusEl) statusEl.textContent = 'error';
+          return;
+        }
+        const data = await res.json();
+
+        if(data && data.status === 'ok' && data.best_img_url){
+          const avg = (data.best_avg !== null && data.best_avg !== undefined) ? Number(data.best_avg).toFixed(2) : '';
+          const runs = (data.best_runs !== null && data.best_runs !== undefined) ? String(data.best_runs) : '';
+          const hits = (data.best_hits !== null && data.best_hits !== undefined) ? String(data.best_hits) : '';
+
+          let meta = '';
+          if(avg) meta += 'Ø ' + avg;
+          if(runs) meta += (meta ? ' / ' : '') + runs;
+          if(hits) meta += (meta ? '<br>' : '') + 'hits ' + hits;
+
+          box.innerHTML =
+            '<div class="hint" style="margin-top:10px;">Best Picture (scene match)</div>' +
+            '<div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:6px;">' +
+              '<img src="' + data.best_img_url + '" alt="best" style="width:220px; max-width:100%; border-radius:12px; border:1px solid var(--border);" data-cr-zoom="' + data.best_img_url + '">' +
+              '<div class="small">' + meta + '</div>' +
+            '</div>';
+
+          if (window.crInitZoom) {
+            window.crInitZoom();
+          }
+          return;
+        }
+
+        const retry = data && data.retry;
+        if(!retry){
+          if(statusEl) statusEl.textContent = 'no match';
+          return;
+        }
+
+        const waitMs = (data && data.retry_after_ms) ? Number(data.retry_after_ms) : 2000;
+        if(statusEl) statusEl.textContent = 'loading...';
+        await sleep(waitMs);
+      }catch(e){
+        if(statusEl) statusEl.textContent = 'error';
+        return;
+      }
+    }
+
+    if(statusEl) statusEl.textContent = 'no match';
   }
+
+  async function runQueue(){
+    const queue = boxes.slice();
+    let running = 0;
+
+    return new Promise(resolve => {
+      const next = () => {
+        if(queue.length === 0 && running === 0){
+          resolve();
+          return;
+        }
+        while(running < concurrency && queue.length > 0){
+          const box = queue.shift();
+          running += 1;
+          loadBest(box).finally(() => {
+            running -= 1;
+            next();
+          });
+        }
+      };
+      next();
+    });
+  }
+
+  runQueue();
+})();
 </script>
 {% endblock %}

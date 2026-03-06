@@ -1,28 +1,21 @@
 {% extends "_base.html" %}
 {% set page_title = "Top Pictures" %}
+{% from "_label_badges.html" import render_labels %}
 
 {% block head %}
 <style>
-  .filters{
-    margin-top: 12px;
-    display:flex;
-    gap: 12px;
-    flex-wrap:wrap;
-    align-items:center;
-  }
-  select{
-    padding:6px 10px;
-    border-radius:10px;
-    border:1px solid var(--border);
-    background: rgba(0,0,0,0.35);
-    color: var(--text);
-  }
-
   .grid{
     margin-top: 16px;
     display:grid;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 14px;
+  }
+
+  @media (min-width: 1600px){
+    .grid{ grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+  }
+  @media (min-width: 2200px){
+    .grid{ grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
   }
 
   .card{
@@ -128,20 +121,48 @@
     cursor: pointer;
   }
   .closeBtn:hover{ background: rgba(255,255,255,0.08); }
+
 </style>
 {% endblock %}
 
 {% block body %}
   <div class="top">
     <div>
-      <div class="pill">Top Pictures</div>
-      <div class="pill">min 5 Bewertungen</div>
+      <div class="pill">{% if mode=='worst' %}Worst{% else %}Top{% endif %} Pictures</div>
+      <div class="pill">Top {{ pool_limit }}, min {{ min_runs }} Bewertungen</div>
       <div class="pill">klick auf bild zum zoomen</div>
     </div>
     {% include "_nav.html" %}
   </div>
 
-  <form class="filters" method="get" action="/top_pictures">
+  <form class="filter" method="get" action="/top_pictures">
+    <label class="small">Mode</label>
+    <select name="mode">
+      <option value="top" {% if mode!='worst' %}selected{% endif %}>top</option>
+      <option value="worst" {% if mode=='worst' %}selected{% endif %}>worst</option>
+    </select>
+
+    <label class="small">Character</label>
+    <select name="subdir">
+      <option value="" {% if not subdir %}selected{% endif %}>alle</option>
+      {% for o in character_options %}
+        <option value="{{ o.value }}" {% if subdir==o.value %}selected{% endif %}>{{ o.label }}</option>
+      {% endfor %}
+    </select>
+
+
+    <label class="small">Set</label>
+    <select name="set_key">
+      <option value="" {% if not set_key %}selected{% endif %}>alle</option>
+      <option value="unsorted" {% if set_key=='unsorted' %}selected{% endif %}>unsorted</option>
+      <option value="character_face" {% if set_key=='character_face' %}selected{% endif %}>character face</option>
+      <option value="character_body" {% if set_key=='character_body' %}selected{% endif %}>character body</option>
+      <option value="scene" {% if set_key=='scene' %}selected{% endif %}>scene</option>
+      <option value="outfit" {% if set_key=='outfit' %}selected{% endif %}>outfit</option>
+      <option value="pose" {% if set_key=='pose' %}selected{% endif %}>pose</option>
+      <option value="expression" {% if set_key=='expression' %}selected{% endif %}>expression</option>
+    </select>
+
     <label class="small">Modell</label>
     <select name="model">
       <option value="" {% if not model %}selected{% endif %}>alle</option>
@@ -150,19 +171,11 @@
       {% endfor %}
     </select>
 
-    <label class="small">Ordner</label>
-    <select name="subdir">
-      <option value="" {% if not subdir %}selected{% endif %}>alle</option>
-      {% for s in subdir_list %}
-        <option value="{{ s }}" {% if subdir==s %}selected{% endif %}>{{ s }}</option>
-      {% endfor %}
-    </select>
-
     <button type="submit">anwenden</button>
   </form>
 
   {% if not cards %}
-    <p class="small" style="margin-top:14px;">Keine Kandidaten. Du brauchst mindestens 10 Bilder mit je mindestens 5 Bewertungen.</p>
+    <p class="small" style="margin-top:14px;">Keine Kandidaten. Du brauchst mindestens 2 Bilder mit je mindestens {{ min_runs }} Bewertungen.</p>
   {% else %}
     <div class="grid">
       {% for c in cards %}
@@ -171,7 +184,6 @@
             <div class="rank">#{{ loop.index }}</div>
             <div class="small">Ø {{ "%.2f"|format(c.avg) }} / {{ c.runs }}</div>
           </div>
-
           <img
             class="thumb"
             src="{{ c.img_url }}"
@@ -180,6 +192,9 @@
             data-title="#{{ loop.index }}  Ø {{ "%.2f"|format(c.avg) }}  runs {{ c.runs }}"
             data-sub="{{ c.model_branch }}  {{ c.checkpoint }}"
           >
+
+          {{ render_labels(c, modifier_limit=4, boxed=True) }}
+
 
           <div class="meta small">
             <div>model</div><div>{{ c.model_branch }}</div>
@@ -191,6 +206,26 @@
             <div>denoise</div><div>{{ c.denoise }}</div>
           </div>
 
+          <form method="post" action="/assign_set" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="hidden" name="png_path" value="{{ c.png_path }}">
+            <input type="hidden" name="json_path" value="{{ c.json_path }}">
+            <input type="hidden" name="model" value="{{ model }}">
+            <input type="hidden" name="mode" value="{{ mode }}">
+            <input type="hidden" name="subdir" value="{{ subdir }}">
+            <input type="hidden" name="view_set_key" value="{{ set_key }}">
+
+            <select name="set_key">
+              <option value="unsorted">unsorted</option>
+              <option value="character_face">character face</option>
+              <option value="character_body">character body</option>
+              <option value="scene">scene</option>
+              <option value="outfit">outfit</option>
+              <option value="pose">pose</option>
+              <option value="expression">expression</option>
+            </select>
+            <button type="submit">assign</button>
+          </form>
+
 <form method="post" action="/top_delete" onsubmit="return confirm('wirklich löschen? png+json werden entfernt, db bekommt deleted=1 (neuer run).');">
   <input type="hidden" name="json_path" value="{{ c.json_path }}">
   <input type="hidden" name="png_path" value="{{ c.png_path }}">
@@ -199,6 +234,8 @@
   <input type="hidden" name="checkpoint" value="{{ c.checkpoint }}">
   <input type="hidden" name="filter_model" value="{{ model }}">
   <input type="hidden" name="filter_subdir" value="{{ subdir }}">
+  <input type="hidden" name="filter_mode" value="{{ mode }}">
+  <input type="hidden" name="filter_set_key" value="{{ set_key }}">
   <button class="danger" type="submit">löschen</button>
 </form>
 
@@ -228,6 +265,22 @@
 {% endblock %}
 
 {% block scripts %}
+
+<script>
+(function () {
+  const KEY = "comfyreview:last_query";
+
+  if (window.location.search && window.location.search.length > 1) return;
+
+  let qs = "";
+  try { qs = localStorage.getItem(KEY) || ""; } catch (e) { qs = ""; }
+
+  if (!qs || qs === "?") return;
+
+  window.location.replace(window.location.pathname + qs);
+})();
+</script>
+
 <script>
 (function(){
   const modal = document.getElementById("imgModal");

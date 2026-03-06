@@ -113,7 +113,7 @@ def _extract_ckpt(meta: Dict[str, Any]) -> str:
         for _, node in graph.items():
             if not isinstance(node, dict):
                 continue
-            if node.get("class_type") in ("CheckpointLoaderSimple", "CheckpointLoader"):
+            if node.get("class_type") in ("CheckpointLoaderSimple", "CheckpointLoader", "RandomLoadCheckpoint", "RandomLoadCheckpointSimple"):
                 inputs = node.get("inputs") or {}
                 ck = inputs.get("ckpt_name") or inputs.get("checkpoint") or ""
                 if ck:

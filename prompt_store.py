@@ -120,14 +120,16 @@ def fetch_token_stats(
     rows = con.execute(
         f"""
         SELECT token,
-               COUNT(*) as n,
-               AVG(CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END) as mean_score,
-               AVG(CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END) - 1.645 * (
-                    CASE WHEN COUNT(*) > 1 THEN
-                      sqrt(AVG((CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END) * (CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END))
-                           - AVG(CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END) * AVG(CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END))
+               SUM(CASE WHEN deleted=1 OR rating IS NOT NULL THEN 1 ELSE 0 END) as n,
+               AVG(CASE WHEN deleted=1 THEN 0 WHEN rating IS NOT NULL THEN rating END) as mean_score,
+               AVG(CASE WHEN deleted=1 THEN 0 WHEN rating IS NOT NULL THEN rating END) - 1.645 * (
+                    CASE WHEN SUM(CASE WHEN deleted=1 OR rating IS NOT NULL THEN 1 ELSE 0 END) > 1 THEN
+                      sqrt(
+                        AVG((CASE WHEN deleted=1 THEN 0 WHEN rating IS NOT NULL THEN rating END) * (CASE WHEN deleted=1 THEN 0 WHEN rating IS NOT NULL THEN rating END))
+                        - AVG(CASE WHEN deleted=1 THEN 0 WHEN rating IS NOT NULL THEN rating END) * AVG(CASE WHEN deleted=1 THEN 0 WHEN rating IS NOT NULL THEN rating END)
+                      )
                     ELSE 0 END
-                 ) / sqrt(COUNT(*)) as lb05
+                 ) / sqrt(SUM(CASE WHEN deleted=1 OR rating IS NOT NULL THEN 1 ELSE 0 END)) as lb05
         FROM tokens
         {where}
         GROUP BY token

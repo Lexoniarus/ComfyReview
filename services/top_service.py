@@ -6,7 +6,7 @@ from meta_view import extract_view
 from services.rating_service import rating_avg_and_runs_for_json
 
 
-def pick_top_candidates(items, min_runs: int = 5, limit: int = 48):
+def pick_top_candidates(items, min_runs: int = 3, limit: int = 128):
     # Zweck:
     # - nimmt Item-Liste (aus scan_output)
     # - liest pro Item avg + runs aus ratings.sqlite3

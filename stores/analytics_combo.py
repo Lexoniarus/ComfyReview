@@ -144,27 +144,9 @@ def fetch_combo_stats(
     return out[: int(limit)]
 
 
-def fetch_combo_predictions(
-    db_path: Path,
-    *,
-    model: str = "",
-    min_n: int = 10,
-    limit: int = 200,
-    success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
-    delete_weight: int = DELETE_WEIGHT_DEFAULT,
-) -> Dict[str, Any]:
-    # Was tut es?
-    # Approx Vorschlaege ueber additive log odds je Parameter.
-    #
-    # Wo kommt es her?
-    # ratings.sqlite3 Tabelle ratings.
-    #
-    # Wo geht es hin?
-    # recommendations.html approx block.
-    import math
-
+def _load_combo_prediction_rows(db_path: Path, *, model: str) -> List[Any]:
+    """Load rating rows needed for combo prediction."""
     con = db(db_path)
-
     where = ""
     args: List[Any] = []
     if model:
@@ -180,8 +162,21 @@ def fetch_combo_predictions(
         args,
     ).fetchall()
     con.close()
+    return rows
 
-    # Base Rate aus DB
+
+def _combo_base_logit(
+    rows: List[Any],
+    *,
+    success_threshold: int,
+    delete_weight: int,
+) -> Tuple[int, int, int, int, float, float]:
+    """Compute base logit and base summary for all rows.
+
+    Returns (base_n, base_success_w, base_fail_w_no_delete, base_deletes, base_p, base_logit)
+    """
+    import math
+
     base_n = 0
     base_success = 0
     base_fail = 0
@@ -216,44 +211,98 @@ def fetch_combo_predictions(
     base_beta = float(base_fail_w + 1)
     base_p = float(base_alpha / (base_alpha + base_beta))
     base_logit = math.log(max(1e-9, base_p) / max(1e-9, 1.0 - base_p))
+    return base_n, base_success, base_fail, base_deletes, base_p, base_logit
 
-    # Effekte je Feature aus DB
+
+def _combo_add_feat_obs(
+    d: Dict[Any, Dict[str, Any]],
+    *,
+    key: Any,
+    run: int,
+    rating: Optional[int],
+    deleted: int,
+    success_threshold: int,
+    delete_weight: int,
+) -> None:
+    """Aggregate one observation for one feature value."""
+    x = d.get(key)
+    if not x:
+        x = {"n": 0, "success": 0, "fail": 0, "deletes": 0, "delete_fail_w": 0}
+        d[key] = x
+
+    x["n"] += 1
+
+    if int(deleted or 0) == 1:
+        x["deletes"] += 1
+        x["delete_fail_w"] += _delete_weight_for_run(run, int(delete_weight))
+        return
+
+    cls2 = _classify(
+        run=run,
+        rating=rating,
+        deleted=deleted,
+        base_pass_min=int(success_threshold),
+    )
+    if cls2 is True:
+        x["success"] += _rating_weight_for_run(run)
+    elif cls2 is False:
+        x["fail"] += _rating_weight_for_run(run)
+
+
+def _combo_feature_deltas(
+    rows: List[Any],
+    *,
+    base_logit: float,
+    min_n: int,
+    success_threshold: int,
+    delete_weight: int,
+) -> Dict[str, Dict[Any, Dict[str, Any]]]:
+    """Compute delta logits per feature value."""
+    import math
+
     feats: Dict[str, Dict[Any, Dict[str, Any]]] = {"steps": {}, "cfg": {}, "sampler": {}, "scheduler": {}}
-
-    def add_feat(d: Dict[Any, Dict[str, Any]], k: Any, run: int, rating: Optional[int], deleted: int) -> None:
-        x = d.get(k)
-        if not x:
-            x = {"n": 0, "success": 0, "fail": 0, "deletes": 0, "delete_fail_w": 0}
-            d[k] = x
-
-        x["n"] += 1
-
-        if int(deleted or 0) == 1:
-            x["deletes"] += 1
-            x["delete_fail_w"] += _delete_weight_for_run(run, int(delete_weight))
-            return
-
-        cls2 = _classify(
-            run=run,
-            rating=rating,
-            deleted=deleted,
-            base_pass_min=int(success_threshold),
-        )
-        if cls2 is True:
-            x["success"] += _rating_weight_for_run(run)
-        elif cls2 is False:
-            x["fail"] += _rating_weight_for_run(run)
 
     for r in rows:
         run = int(r["run"] or 1)
         deleted = int(r["deleted"] or 0)
         rating = r["rating"]
-        add_feat(feats["steps"], r["steps"], run, rating, deleted)
-        add_feat(feats["cfg"], r["cfg_bin"], run, rating, deleted)
-        add_feat(feats["sampler"], r["sampler"], run, rating, deleted)
-        add_feat(feats["scheduler"], r["scheduler"], run, rating, deleted)
+        _combo_add_feat_obs(
+            feats["steps"],
+            key=r["steps"],
+            run=run,
+            rating=rating,
+            deleted=deleted,
+            success_threshold=success_threshold,
+            delete_weight=delete_weight,
+        )
+        _combo_add_feat_obs(
+            feats["cfg"],
+            key=r["cfg_bin"],
+            run=run,
+            rating=rating,
+            deleted=deleted,
+            success_threshold=success_threshold,
+            delete_weight=delete_weight,
+        )
+        _combo_add_feat_obs(
+            feats["sampler"],
+            key=r["sampler"],
+            run=run,
+            rating=rating,
+            deleted=deleted,
+            success_threshold=success_threshold,
+            delete_weight=delete_weight,
+        )
+        _combo_add_feat_obs(
+            feats["scheduler"],
+            key=r["scheduler"],
+            run=run,
+            rating=rating,
+            deleted=deleted,
+            success_threshold=success_threshold,
+            delete_weight=delete_weight,
+        )
 
-    # Delta Logits je Feature Value
     deltas: Dict[str, Dict[Any, Dict[str, Any]]] = {"steps": {}, "cfg": {}, "sampler": {}, "scheduler": {}}
     for feat_name, d in feats.items():
         for value, x in d.items():
@@ -266,15 +315,15 @@ def fetch_combo_predictions(
             logit = math.log(max(1e-9, p) / max(1e-9, 1.0 - p))
             deltas[feat_name][value] = {"n": int(x["n"]), "p": p, "delta": float(logit - base_logit)}
 
-    has_any_delta = any(bool(deltas[k]) for k in deltas)
-    if not has_any_delta:
-        return {
-            "base": {"n": base_n, "succ": base_success, "fail": base_fail, "deletes": base_deletes, "exp": base_p},
-            "rows": [],
-            "notes": "Noch nicht genug Daten fuer Approx.",
-        }
+    return deltas
 
-    # Kandidaten durch Kombinationen
+
+def _combo_prediction_candidates(
+    *,
+    deltas: Dict[str, Dict[Any, Dict[str, Any]]],
+    base_logit: float,
+) -> List[Dict[str, Any]]:
+    """Build prediction candidates via Cartesian product over feature deltas."""
     all_steps = list(deltas["steps"].keys()) or []
     all_cfg = list(deltas["cfg"].keys()) or []
     all_sampler = list(deltas["sampler"].keys()) or []
@@ -285,7 +334,7 @@ def fetch_combo_predictions(
         for c in all_cfg:
             for sa in all_sampler:
                 for sc in all_sched:
-                    logit = base_logit
+                    logit = float(base_logit)
                     support: List[int] = []
 
                     if s in deltas["steps"]:
@@ -314,8 +363,46 @@ def fetch_combo_predictions(
                             "support_min": support_min,
                         }
                     )
-
     cand.sort(key=lambda x: (x["pred_success"], x["support_min"]), reverse=True)
+    return cand
+
+
+def fetch_combo_predictions(
+    db_path: Path,
+    *,
+    model: str = "",
+    min_n: int = 10,
+    limit: int = 200,
+    success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
+    delete_weight: int = DELETE_WEIGHT_DEFAULT,
+) -> Dict[str, Any]:
+    """Approx suggestions over additive log-odds effects per parameter.
+
+    Output renders in recommendations.html (approx block).
+    """
+    rows = _load_combo_prediction_rows(db_path, model=model)
+
+    base_n, base_success, base_fail, base_deletes, base_p, base_logit = _combo_base_logit(
+        rows, success_threshold=success_threshold, delete_weight=delete_weight
+    )
+
+    deltas = _combo_feature_deltas(
+        rows,
+        base_logit=float(base_logit),
+        min_n=min_n,
+        success_threshold=success_threshold,
+        delete_weight=delete_weight,
+    )
+
+    has_any_delta = any(bool(deltas[k]) for k in deltas)
+    if not has_any_delta:
+        return {
+            "base": {"n": base_n, "succ": base_success, "fail": base_fail, "deletes": base_deletes, "exp": base_p},
+            "rows": [],
+            "notes": "Noch nicht genug Daten fuer Approx.",
+        }
+
+    cand = _combo_prediction_candidates(deltas=deltas, base_logit=float(base_logit))
     return {
         "base": {"n": base_n, "succ": base_success, "fail": base_fail, "deletes": base_deletes, "exp": base_p},
         "rows": cand[: int(limit)],
