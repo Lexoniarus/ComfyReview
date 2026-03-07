@@ -11,11 +11,14 @@ from scanner import scan_output
 from services.context_filters import (
     build_dropdown_lists,
     extract_character_from_subdir,
+    matches_character_scope,
+    matches_set_filter,
     normalize_model,
     normalize_set_key,
-    normalize_subdir,
+    normalize_scope_subdir,
     normalize_unrated_flag,
 )
+from services.file_urls import png_path_to_url
 from services.playground_label_service import get_playground_label_matcher
 from services.rating_service import rating_avg_and_runs_for_json
 from stores.curation_store import fetch_set_map
@@ -35,17 +38,16 @@ def _filter_items_for_review(
     for it in items:
         if model and getattr(it, "model_branch", "") != model:
             continue
-        if subdir and getattr(it, "subdir", "") != subdir:
+        if not matches_character_scope(item_subdir=str(getattr(it, "subdir", "") or ""), selected_subdir=subdir):
             continue
 
         assigned = set_map.get(str(it.png_path))
-        if set_key:
-            if set_key == "unsorted":
-                if assigned:
-                    continue
-            else:
-                if assigned != set_key:
-                    continue
+        if not matches_set_filter(
+            selected_set_key=set_key,
+            assigned_set_key=assigned,
+            png_path=str(it.png_path),
+        ):
+            continue
 
         rated_count = int(rated_map.get(str(it.json_path), 0) or 0)
         rated = 1 if rated_count > 0 else 0
@@ -80,7 +82,7 @@ def build_review_page_context(
 
     unrated_flag = normalize_unrated_flag(unrated)
     model_n = normalize_model(model)
-    subdir_n = normalize_subdir(subdir)
+    subdir_n = normalize_scope_subdir(subdir)
     set_key_n = normalize_set_key(set_key)
 
     items, total, model_list, subdir_list, character_options = _load_review_items(output_root)
@@ -274,7 +276,7 @@ def _build_review_context(
     trend_delta: Any,
     last_rating: Any,
 ) -> Dict[str, Any]:
-    img_url = f"/files/{it.subdir}/{it.png_path.name}"
+    img_url = png_path_to_url(str(it.png_path))
     meta_pre = json.dumps(it.meta, indent=2, ensure_ascii=False)
 
     character_name = extract_character_from_subdir(str(getattr(it, "subdir", "") or ""))

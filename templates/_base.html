@@ -560,7 +560,9 @@ img.crThumb{
     "character_id","scene_id","outfit_id","pose_id","expression_id","lighting_id","modifier_id",
     "include_lighting","include_modifier",
     "gen_seed","comfy_seed","max_tries","batch_runs",
-    "checkpoint_name","sampler_name","scheduler_name","steps","cfg","denoise"
+    "checkpoint_name","sampler_name","scheduler_name",
+    "steps_min","steps_max","cfg_min","cfg_max","cfg_step",
+    "steps","cfg","denoise"
   ];
 
   async function crCopyText(text){
@@ -660,8 +662,13 @@ img.crThumb{
         out.scheduler_name = v;
       }else if(k === "steps"){
         out.steps = v;
+        out.steps_min = v;
+        out.steps_max = v;
       }else if(k === "cfg"){
-        out.cfg = v.replace(",", ".");
+        const cfgVal = v.replace(",", ".");
+        out.cfg = cfgVal;
+        out.cfg_min = cfgVal;
+        out.cfg_max = cfgVal;
       }else if(k === "denoise"){
         out.denoise = v.replace(",", ".");
       }
@@ -720,9 +727,14 @@ img.crThumb{
         }
         if(ds.steps){
           overrides.steps = ds.steps;
+          overrides.steps_min = ds.steps;
+          overrides.steps_max = ds.steps;
         }
         if(ds.cfg){
-          overrides.cfg = ds.cfg.replace(",", ".");
+          const cfgVal = ds.cfg.replace(",", ".");
+          overrides.cfg = cfgVal;
+          overrides.cfg_min = cfgVal;
+          overrides.cfg_max = cfgVal;
         }
         if(ds.denoise){
           overrides.denoise = ds.denoise.replace(",", ".");

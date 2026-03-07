@@ -1,43 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="e0bb58ca-444d-44e2-b3a5-8d34ce317fc2" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/TextToImgReviewTool.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/ComfyReview.iml" afterDir="false" />
+    <list default="true" id="e0bb58ca-444d-44e2-b3a5-8d34ce317fc2" name="Changes" comment="Unstable Version">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/arena.sqlite3" beforeDir="false" afterPath="$PROJECT_DIR$/arena.sqlite3" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/playground.sqlite3" beforeDir="false" afterPath="$PROJECT_DIR$/data/playground.sqlite3" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/meta_view.py" beforeDir="false" afterPath="$PROJECT_DIR$/meta_view.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/prompt_store.py" beforeDir="false" afterPath="$PROJECT_DIR$/prompt_store.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/routers/arena_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/arena_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/routers/index_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/index_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/routers/playground_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/playground_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/routers/stats_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/stats_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/playground/_shared.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/playground/_shared.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/playground/generator_controller/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/playground/generator_controller/actions.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/playground/generator_controller/lazy_best.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/playground/generator_controller/page_context.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/playground/generator_controller/post_parsing.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/routers/playground_router.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/routers/top_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/routers/top_router.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scanner.py" beforeDir="false" afterPath="$PROJECT_DIR$/scanner.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/arena_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/arena_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/comfy_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/comfy_client.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/playground_generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/playground_generator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/playground_rules.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/playground_rules.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/services/top_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/top_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/stores/analytics_combo.py" beforeDir="false" afterPath="$PROJECT_DIR$/stores/analytics_combo.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/stores/analytics_params.py" beforeDir="false" afterPath="$PROJECT_DIR$/stores/analytics_params.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/stores/playground_store.py" beforeDir="false" afterPath="$PROJECT_DIR$/stores/playground_store.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/stores/prompt_tokens_match.py" beforeDir="false" afterPath="$PROJECT_DIR$/stores/prompt_tokens_match.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/analytics_page_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/analytics_page_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/context_filters.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/context_filters.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/curation_assignment_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/curation_assignment_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/gallery_view_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/gallery_view_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/path_relink_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/path_relink_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/playground_generator_ui/head_form.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/playground_generator_ui/head_form.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/pool_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/pool_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/review_page_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/services/review_page_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/services/top_service.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/templates/_base.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/_base.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/_nav.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/_nav.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/arena.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/arena.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/param_stats.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/param_stats.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/playground.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/playground.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/playground_generator.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/playground_generator.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/prompt_tokens.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/prompt_tokens.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/recommendations.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/recommendations.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/stats.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/stats.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/templates/top_pictures.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/top_pictures.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/workflows/_default_character.json" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -102,7 +89,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "ai.playground.ignore.import.keys.banner.in.settings": "true",
     "git-widget-placeholder": "master",
-    "last_opened_file_path": "C:/Users/Alexa/PycharmProjects/TextToImgReviewTool/templates",
+    "last_opened_file_path": "C:/Users/Alexa/PycharmProjects/TextToImgReviewTool",
     "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
     "vue.rearranger.settings.migration": "true"
@@ -157,8 +144,26 @@
       <workItem from="1772527230039" duration="24116000" />
       <workItem from="1772697465591" duration="15003000" />
       <workItem from="1772735711473" duration="21995000" />
-      <workItem from="1772789424745" duration="10295000" />
+      <workItem from="1772789424745" duration="10662000" />
+      <workItem from="1772875172489" duration="5257000" />
     </task>
+    <task id="LOCAL-00001" summary="Unstable Version">
+      <option name="closed" value="true" />
+      <created>1772835342096</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1772835342097</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Unstable Version">
+      <option name="closed" value="true" />
+      <created>1772835364959</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1772835364959</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -167,13 +172,17 @@
   <component name="UnknownFeatures">
     <option featureType="com.intellij.fileTypeFactory" implementationName="*.pem" />
   </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Unstable Version" />
+    <option name="LAST_COMMIT_MESSAGE" value="Unstable Version" />
+  </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/TextToImgReviewTool$app.coverage" NAME="app Coverage Results" MODIFIED="1771987616682" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/TextToImgReviewTool$comfy_client.coverage" NAME="comfy_client Coverage Results" MODIFIED="1772380691643" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/services" />
     <SUITE FILE_PATH="coverage/TextToImgReviewTool$scanner.coverage" NAME="scanner Coverage Results" MODIFIED="1771982416557" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/ComfyReview$playground_router.coverage" NAME="playground_router Coverage Results" MODIFIED="1772482334296" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/routers" />
     <SUITE FILE_PATH="coverage/ComfyReview$post_parsing.coverage" NAME="post_parsing Coverage Results" MODIFIED="1772825385323" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/routers/playground/generator_controller" />
-    <SUITE FILE_PATH="coverage/ComfyReview$main.coverage" NAME="main Coverage Results" MODIFIED="1772826112394" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/ComfyReview$main.coverage" NAME="main Coverage Results" MODIFIED="1772891676501" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/TextToImgReviewTool$main.coverage" NAME="main Coverage Results" MODIFIED="1772469448469" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/TextToImgReviewTool$meta_view.coverage" NAME="meta_view Coverage Results" MODIFIED="1771932781260" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/TextToImgReviewTool$prompt_store.coverage" NAME="prompt_store Coverage Results" MODIFIED="1772040146608" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

@@ -11,6 +11,7 @@ def relink_paths_after_move(
     prompt_tokens_db_path: Optional[Path],
     images_db_path: Optional[Path],
     combo_prompts_db_path: Optional[Path],
+    arena_db_path: Optional[Path],
     old_png_path: str,
     old_json_path: str,
     new_png_path: str,
@@ -34,6 +35,8 @@ def relink_paths_after_move(
         _relink_images(images_db_path, old_png_path, old_json_path, new_png_path, new_json_path)
     if combo_prompts_db_path:
         _relink_combo_prompts(combo_prompts_db_path, old_png_path, old_json_path, new_png_path, new_json_path)
+    if arena_db_path:
+        _relink_arena(arena_db_path, old_json_path, new_json_path)
 
 
 def _relink_ratings(
@@ -150,6 +153,26 @@ def _relink_combo_prompts(
             WHERE png_path = ? OR json_path = ?
             """,
             (new_png, new_json, old_png, old_json),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def _relink_arena(db_path: Path, old_json: str, new_json: str) -> None:
+    if not Path(db_path).exists():
+        return
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            UPDATE arena_matches
+            SET left_json = CASE WHEN left_json = ? THEN ? ELSE left_json END,
+                right_json = CASE WHEN right_json = ? THEN ? ELSE right_json END,
+                winner_json = CASE WHEN winner_json = ? THEN ? ELSE winner_json END
+            WHERE left_json = ? OR right_json = ? OR winner_json = ?
+            """,
+            (old_json, new_json, old_json, new_json, old_json, new_json, old_json, old_json, old_json),
         )
         con.commit()
     finally:

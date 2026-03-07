@@ -12,17 +12,10 @@ from db_store import (
     fetch_recommendations,
     list_models_from_db,
 )
-from routers.playground._shared import png_path_to_url
+from services.context_filters import normalize_model
+from services.file_urls import png_path_to_url
 from stores.images_store import fetch_best_images_by_combo_keys, fetch_best_images_by_param_values
 from stores.prompt_ratings_store import fetch_prompt_ratings_stats
-
-
-def normalize_model_filter(model: str) -> str:
-    """Normalisiert den Modellfilter: "all" und leere Strings bedeuten kein Filter."""
-
-    if not model:
-        return ""
-    return "" if model == "all" else model
 
 
 def load_model_dropdown_list() -> List[str]:
@@ -67,7 +60,7 @@ def build_stats_page_context(
 ) -> Dict[str, Any]:
     """Baut den Template-Context für /stats."""
 
-    model = normalize_model_filter(model)
+    model = normalize_model(model)
 
     rows = fetch_combo_stats(
         DB_PATH,
@@ -104,7 +97,7 @@ def build_recommendations_page_context(
 ) -> Dict[str, Any]:
     """Baut den Template-Context für /recommendations."""
 
-    model = normalize_model_filter(model)
+    model = normalize_model(model)
 
     rec = fetch_recommendations(
         DB_PATH,
@@ -193,7 +186,7 @@ def build_param_stats_page_context(
 ) -> Dict[str, Any]:
     """Baut den Template-Context für /param_stats."""
 
-    model = normalize_model_filter(model)
+    model = normalize_model(model)
 
     rows = fetch_param_stats(
         DB_PATH,
@@ -245,7 +238,7 @@ def build_prompt_tokens_page_context(
 ) -> Dict[str, Any]:
     """Baut den Template-Context für /prompt_tokens."""
 
-    model = normalize_model_filter(model)
+    model = normalize_model(model)
 
     rows = fetch_prompt_ratings_stats(
         PROMPT_RATINGS_DB_PATH,

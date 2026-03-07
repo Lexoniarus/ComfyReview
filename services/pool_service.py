@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from config import DB_PATH, IMAGES_DB_PATH, CURATION_DB_PATH, MIN_RUNS, POOL_LIMIT
-from services.context_filters import extract_character_from_subdir as _extract_character_from_subdir
+from services.context_filters import (
+    extract_character_from_subdir as _extract_character_from_subdir,
+    matches_character_scope,
+    matches_set_filter,
+)
 from stores.curation_store import fetch_set_map
 from stores.images_store import init_images_db
 from stores.ratings_state_store import fetch_latest_deleted_by_png_paths
@@ -78,8 +82,14 @@ def build_ranked_pool(
     subdir = str(subdir or "").strip()
 
     items_f = list(items)
-    if subdir:
-        items_f = [it for it in items_f if str(getattr(it, "subdir", "")) == subdir]
+    items_f = [
+        it
+        for it in items_f
+        if matches_character_scope(
+            item_subdir=str(getattr(it, "subdir", "") or ""),
+            selected_subdir=subdir,
+        )
+    ]
 
     png_paths = [str(it.png_path) for it in items_f]
     scores = _fetch_scores_by_png_paths(IMAGES_DB_PATH, png_paths)
@@ -105,13 +115,12 @@ def build_ranked_pool(
             continue
 
         assigned = curation_map.get(p)
-        if set_key:
-            if set_key == "unsorted":
-                if assigned:
-                    continue
-            else:
-                if assigned != set_key:
-                    continue
+        if not matches_set_filter(
+            selected_set_key=set_key,
+            assigned_set_key=assigned,
+            png_path=p,
+        ):
+            continue
 
         scored.append(
             ScoredItem(

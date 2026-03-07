@@ -215,13 +215,13 @@
             <input type="hidden" name="view_set_key" value="{{ set_key }}">
 
             <select name="set_key">
-              <option value="unsorted">unsorted</option>
-              <option value="character_face">character face</option>
-              <option value="character_body">character body</option>
-              <option value="scene">scene</option>
-              <option value="outfit">outfit</option>
-              <option value="pose">pose</option>
-              <option value="expression">expression</option>
+              <option value="unsorted" {% if c.assigned_set_key == 'unsorted' %}selected{% endif %}>unsorted</option>
+              <option value="character_face" {% if c.assigned_set_key == 'character_face' %}selected{% endif %}>character face</option>
+              <option value="character_body" {% if c.assigned_set_key == 'character_body' %}selected{% endif %}>character body</option>
+              <option value="scene" {% if c.assigned_set_key == 'scene' %}selected{% endif %}>scene</option>
+              <option value="outfit" {% if c.assigned_set_key == 'outfit' %}selected{% endif %}>outfit</option>
+              <option value="pose" {% if c.assigned_set_key == 'pose' %}selected{% endif %}>pose</option>
+              <option value="expression" {% if c.assigned_set_key == 'expression' %}selected{% endif %}>expression</option>
             </select>
             <button type="submit">assign</button>
           </form>

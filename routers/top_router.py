@@ -8,6 +8,7 @@ from config import (
     CURATION_SET_KEYS,
     COMBO_PROMPTS_DB_PATH,
     DB_PATH,
+    ARENA_DB_PATH,
     IMAGES_DB_PATH,
     LORA_EXPORT_ROOT,
     MIN_RUNS,
@@ -70,7 +71,7 @@ def assign_set(
     model: str = Form(""),
     mode: str = Form("top"),
     subdir: str = Form(""),
-    view_set_key: str = Form("unsorted"),
+    view_set_key: str = Form(""),
 ):
     assign_image_to_set(
         curation_db_path=CURATION_DB_PATH,
@@ -81,6 +82,7 @@ def assign_set(
         prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
         images_db_path=IMAGES_DB_PATH,
         combo_prompts_db_path=COMBO_PROMPTS_DB_PATH,
+        arena_db_path=ARENA_DB_PATH,
         png_path=str(png_path),
         json_path=str(json_path),
         set_key=str(set_key),
@@ -102,7 +104,7 @@ def top_delete(
     filter_model: str = Form(""),
     filter_subdir: str = Form(""),
     filter_mode: str = Form("top"),
-    filter_set_key: str = Form("unsorted"),
+    filter_set_key: str = Form(""),
 ):
     # unify delete behavior with /rate submission logic
     submit_rating(
