@@ -1,6 +1,6 @@
 # ComfyReview
 
-Version: 0.0.5b Unstable
+Version: 0.0.5b
 
 ComfyReview ist eine lokale FastAPI-Web-App zur Bewertung, Sichtung und Analyse von ComfyUI-Outputs. Der Schwerpunkt liegt auf reproduzierbaren Runs, SQLite-basierter Auswertung und einem Playground, der atomare Render-Settings und Prompts zuverlässig an ComfyUI übergibt.
 
