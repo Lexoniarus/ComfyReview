@@ -1,14 +1,80 @@
 # ComfyReview
 
-Version: 0.0.5b
+ComfyReview is a local review, curation, and analysis tool for ComfyUI outputs.
 
-ComfyReview ist eine lokale FastAPI-Web-App zur Bewertung, Sichtung und Analyse von ComfyUI-Outputs. Der Schwerpunkt liegt auf reproduzierbaren Runs, SQLite-basierter Auswertung und einem Playground, der atomare Render-Settings und Prompts zuverlässig an ComfyUI übergibt.
+It grew out of a pretty simple problem: once a workflow starts producing large batches of character images, picking the actually good ones turns into its own little boss fight.
 
-Der aktuelle 5b-Stand ist die modularisierte Weiterentwicklung von 5a. Die Architektur wurde in kleinere, besser lesbare Verantwortungsbereiche aufgeteilt, ohne die bestehende 5b-Semantik für Scanner, Review, Curation und Playground aufzugeben.
+The project is mainly built for character-focused workflows, especially anime-style image generation. It helps scan PNG + JSON output pairs, rate and compare images, filter them by character and set, preserve generation context, and prepare curated selections for later reuse or character LoRA dataset building.
 
-## Quickstart
+Instead of treating that step like endless file cleanup, ComfyReview turns it into a more structured and usable review flow.
 
-### 1) Environment anlegen
+## Why
+
+ComfyUI is great at generating images fast. But once you have many characters, variations, prompt changes, and runs, reviewing everything becomes a project of its own.
+
+ComfyReview exists to make that part easier:
+
+- scan local PNG + JSON output pairs
+- review images with direct 1–10 ratings and delete actions
+- compare candidates in Arena-style A/B views
+- filter results by character and set
+- keep prompt and generation context attached to each image
+- send selected values back into the Playground Generator
+- build curated image collections for character-focused LoRA workflows
+
+## What it does
+
+- **Review** generated images in a local web UI
+- **Rate** images on a 1–10 scale
+- **Compare** images in pairwise Arena views
+- **Filter** by character and set
+- **Track** prompts, sampler settings, checkpoint, seed, steps, cfg, scheduler, and denoise values
+- **Analyze** local results with SQLite-backed stats pages
+- **Reuse** selected generation values in the Playground Generator
+- **Maintain** persistent UI state for generator inputs
+- **Load** heavier generator-side data lazily to keep the page responsive
+- **Update** aggregate views such as Top and Arena through the MV worker path
+
+## Required ComfyUI Custom Node
+
+A required part of this workflow is the included ComfyUI custom node `name_meta_export`.
+
+ComfyReview depends on sidecar JSON files generated alongside each PNG. Without that JSON output, metadata extraction, statistics, and reproducible generator handoff are not reliable.
+
+Included in this repository:
+
+- file: `custom_node_for_comfyui/alex_nodes.py`
+- required node: `name_meta_export`
+
+The node is expected to export:
+
+- the rendered PNG
+- a JSON sidecar with the same base filename
+- prompt text
+- KSampler values such as seed, steps, cfg, sampler, scheduler, and denoise
+- prompt graph data for later reuse
+
+## Main Views
+
+ComfyReview currently revolves around a few main views:
+
+- **Review** for direct image rating and delete actions
+- **Top** for aggregated best-image views
+- **Arena** for pairwise comparison
+- **Stats** for local analysis pages
+- **Playground** for generator-side reuse and prompt/value handoff back into ComfyUI
+
+## Quick Start
+
+### Requirements
+
+- Python 3.11+
+- ComfyUI outputs with PNG + JSON sidecar files
+- the included ComfyUI custom node `name_meta_export`
+- a workflow that actually uses `name_meta_export`
+- optional: a running ComfyUI instance for Playground Generator features
+
+### Installation
 
 ```bash
 python -m venv .venv
@@ -26,101 +92,134 @@ macOS / Linux:
 source .venv/bin/activate
 ```
 
-### 2) Dependencies installieren
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3) Optional: Konfiguration setzen
+### Configuration
 
-Die Defaults laufen lokal ohne SSL auf `127.0.0.1:8000`.
+The current 5b source still uses `config.py` as the main source of truth for local paths and server settings.
 
-Wenn ein bestehender ComfyUI-Output-Ordner verwendet werden soll:
+Before starting the app, check at least:
 
-```bash
-set COMFYREVIEW_OUTPUT_ROOT=C:\Path\To\ComfyUI\output
-```
+- `OUTPUT_ROOT`
+- `COMFYUI_BASE_URL`
+- `WORKFLOWS_DIR`
+- `DEFAULT_WORKFLOW_PATH`
+- SSL settings if you do not want HTTPS locally
 
-Weitere Variablen stehen in `.env.example`.
+The defaults in `config.py` are local development values and should be adjusted for your machine.
 
-### 4) Start
+### Run
 
 ```bash
 python main.py
 ```
 
-## Testen
+Then open the app in your browser. The default source tree includes settings for local FastAPI startup via `uvicorn` from `main.py`.
+
+## Basic Workflow
+
+1. Generate images in ComfyUI with the included `name_meta_export` node in the workflow.
+2. Save PNG files together with matching JSON sidecars.
+3. Point ComfyReview at the correct ComfyUI output folder.
+4. Open the local web UI.
+5. Review images with ratings, deletes, filters, and Arena comparisons.
+6. Use Top, Stats, and Playground pages to reuse and analyze the results.
+7. Build curated character/set selections for later dataset or LoRA-oriented work.
+
+## Character and Set Semantics
+
+ComfyReview uses two separate filter axes:
+
+- **Character**
+- **Set**
+
+That means views such as **Character = All** and **Set = Face** are meant to work across multiple characters at once.
+
+This matters for character-focused curation workflows, where different images may belong to the same logical set category while still belonging to different characters.
+
+## Project Structure
+
+```text
+ComfyReview/
+├── app.py
+├── main.py
+├── config.py
+├── scanner.py
+├── routers/                  # page routes and API endpoints
+├── services/                 # business logic
+├── stores/                   # SQLite access and persistence helpers
+├── templates/                # HTML templates
+├── static/                   # CSS, JS, assets
+├── data/                     # runtime DBs, workflows, UI state
+├── custom_node_for_comfyui/  # required ComfyUI custom node
+├── tests/                    # test suite
+└── README.md
+```
+
+## Architecture Notes
+
+### Scanner
+
+The scanner reads PNG/JSON pairs from the ComfyUI output folder, extracts metadata, and upserts the relevant information into the local SQLite-backed app state.
+
+### Review Flow
+
+The review side of the app is built to make large batches of similar images easier to work through without turning the whole thing into miserable manual sorting.
+
+### Generator Reuse
+
+The Playground Generator is designed to carry values back into ComfyUI in a reproducible way instead of relying on vague memory and copy-paste archaeology.
+
+### MV Worker
+
+Aggregate-style views such as Top and Arena are not just static file listings. They depend on the app's worker/update path and the local derived data it maintains.
+
+## Testing
+
+Run the test suite with:
 
 ```bash
 pytest
 ```
 
-## Was 5b fachlich abbildet
+## Current Status
 
-### Review und Ratings
-- Bilder werden gescannt, mit Sidecar-JSON verknüpft und als reviewbare Items aufbereitet.
-- Ratings werden run-bezogen gespeichert.
-- SQLite ist die lokale Source of Truth für Auswertung, Worker-Läufe und Playground-bezogene Hilfsdaten.
+This README reflects the current `0.0.5b` line in the repository.
 
-### Character- und Set-Semantik
-- Character und Set sind getrennte Filterdimensionen.
-- `Character = All` aggregiert über Characters hinweg.
-- `Set = face` filtert fachlich auf das Set `face`, unabhängig davon, ob mehrere Characters beteiligt sind.
-- Diese Semantik ist in 5b bewusst erhalten und nicht Teil eines Cleanup-Refactors.
+Current focus:
 
-### Scanner-Semantik
-- Der Scanner arbeitet auf realen Output-Dateien und Sidecar-JSONs.
-- Für den UI-Kontext wird der Character-Scope logisch vom Pfad abgeleitet, statt reine Unterordner blind als eigenständige Characters zu behandeln.
-- Hilfs- und Exportpfade wie `_trash` oder `_lora_export` sollen nicht als reguläre Review-Inhalte behandelt werden.
+- stable local review flow
+- modularized Playground Generator structure
+- character/set-based curation semantics
+- local SQLite-backed analysis and aggregate pages
+- ComfyUI integration through the required metadata-export workflow
 
-### Playground Generator
-- Der Generator wurde gegenüber 5a bewusst in kleinere Verantwortungsbereiche aufgeteilt.
-- UI-State bleibt über State-Dateien stabil, damit Formwerte nach Submit oder Reload nicht ständig verloren gehen.
-- Teurere Auflösungen, etwa Best-Picture-Zuordnungen pro Draft, werden lazy geladen, damit die Seite schnell initial rendern kann.
-- Diese Zerlegung ist gewollte 5b-Architektur und kein Rückbaukandidat.
+Not the goal of this version:
 
-## Architekturüberblick
+- a fully redesigned data identity model
+- full separation of curation truth from physical folder layout
+- a final export/packaging architecture for future LoRA dataset builds
 
-### Einstiegspunkte
-- `main.py` startet die App.
-- `app.py` baut FastAPI, Router und Hintergrunddienste zusammen.
+## Notes
 
-### Router
-- `routers/index_router.py`
-- `routers/top_router.py`
-- `routers/stats_router.py`
-- `routers/arena_router.py`
-- `routers/playground/*`
+- The repository includes sample PNG/JSON files that can be used as scanner input for testing.
+- Local database files are created as needed.
+- Some current defaults are clearly development-oriented and may need cleanup before broader distribution.
 
-### Zentrale Services
-- `services/review_page_service.py`
-- `services/rating_submission_service.py`
-- `services/gallery_view_service.py`
-- `services/analytics_page_service.py`
-- `services/mv_worker.py` plus `services/mv_worker_core/*`
-- `services/playground_generator_core/*`
-- `services/playground_generator_ui/*`
-- `services/comfy_client_core/*`
-- `services/context_filters.py`
-- `services/curation_assignment_service.py`
+## Contributing
 
-### Stores / SQLite-Zugriff
-- `stores/*` kapseln datenbankspezifische Zugriffe.
-- Dazu gehören unter anderem Ratings, Images, Prompt-Daten, MV-Worker-State und Curation.
+If you change behavior in this project, try not to silently break the things that make the workflow usable in practice:
 
-## Wichtige Grenzen des aktuellen 5b-Stands
+- the required PNG + JSON pairing
+- character/set filtering semantics
+- generator state persistence
+- lazy loading behavior in generator-related views
+- reproducible value handoff back into ComfyUI
 
-Der aktuelle 5b-Stand ist **kein** Umbau auf ein komplett neues Datenmodell. Insbesondere gilt weiterhin:
+## License
 
-- Curation, Set-Zuordnung und physischer Dateipfad sind noch eng miteinander verbunden.
-- Path-Relinking und Dateibewegungen gehören zur aktuellen Semantik und sind nicht versehentlich „wegzuvereinfachen“.
-- Eine zukünftige Version kann diese Kopplung sauberer entkernen, aber das ist nicht Teil des 5b-Cleanups.
-
-Mit anderen Worten: 5b ist modularer als 5a, bleibt aber fachlich bewusst kompatibel mit der bestehenden Arbeitsweise.
-
-## Hinweise für lokale Repos
-
-- Die App erzeugt SQLite-Dateien bei Bedarf automatisch.
-- Lokale DBs, Zertifikate und andere maschinenspezifische Artefakte sollten nicht committed werden.
-- Eine `.gitignore` für solche Dateien gehört ins Repo und sollte aktiv gepflegt werden.
+Add your license here.
