@@ -1,26 +1,55 @@
+<div align="center">
+
 # ComfyReview
 
-ComfyReview is a local review, curation, and analysis tool for ComfyUI outputs.
+**Local review, curation, and analysis for ComfyUI outputs**  
+Built for character-focused workflows, especially anime-style generation and later LoRA-oriented curation.
+
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-app-009688?logo=fastapi&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-local-003B57?logo=sqlite&logoColor=white)
+![ComfyUI](https://img.shields.io/badge/ComfyUI-required_workflow-6A5ACD)
+![Status](https://img.shields.io/badge/status-0.0.5b-informational)
+
+</div>
+
+> ComfyUI can generate a small mountain of images very quickly.  
+> ComfyReview was built to turn that pile into something you can actually **review, compare, curate, and reuse**.
 
 It grew out of a pretty simple problem: once a workflow starts producing large batches of character images, picking the actually good ones turns into its own little boss fight.
 
-The project is mainly built for character-focused workflows, especially anime-style image generation. It helps scan PNG + JSON output pairs, rate and compare images, filter them by character and set, preserve generation context, and prepare curated selections for later reuse or character LoRA dataset building.
+Instead of treating that step like endless file cleanup, ComfyReview turns it into a more structured and usable review flow: scan outputs, rate them, compare them, filter them by character and set, keep the generation context attached, and prepare curated selections for later reuse or character LoRA dataset building.
 
-Instead of treating that step like endless file cleanup, ComfyReview turns it into a more structured and usable review flow.
+---
+
+## At a glance
+
+| What | Description |
+|---|---|
+| **Core purpose** | Review and curate ComfyUI generations locally |
+| **Best fit** | Character-heavy workflows, especially anime-style image generation |
+| **Main input** | PNG files plus matching JSON sidecars |
+| **Required dependency** | Included ComfyUI custom node `name_meta_export` |
+| **Main views** | Review, Top, Arena, Stats, Playground |
+| **Main benefit** | Faster selection, cleaner curation, reproducible reuse |
+
+---
 
 ## Why
 
-ComfyUI is great at generating images fast. But once you have many characters, variations, prompt changes, and runs, reviewing everything becomes a project of its own.
+ComfyUI is excellent at generating images fast. The trouble starts afterwards: lots of variations, lots of prompt tweaks, lots of near-duplicates, and suddenly the selection process becomes its own project.
 
 ComfyReview exists to make that part easier:
 
 - scan local PNG + JSON output pairs
-- review images with direct 1–10 ratings and delete actions
-- compare candidates in Arena-style A/B views
-- filter results by character and set
+- review images with direct **1–10 ratings** and delete actions
+- compare candidates in **Arena-style A/B views**
+- filter results by **character** and **set**
 - keep prompt and generation context attached to each image
-- send selected values back into the Playground Generator
-- build curated image collections for character-focused LoRA workflows
+- send selected values back into the **Playground Generator**
+- build curated image collections for character-focused **LoRA workflows**
+
+---
 
 ## What it does
 
@@ -35,18 +64,20 @@ ComfyReview exists to make that part easier:
 - **Load** heavier generator-side data lazily to keep the page responsive
 - **Update** aggregate views such as Top and Arena through the MV worker path
 
+---
+
 ## Required ComfyUI Custom Node
 
-A required part of this workflow is the included ComfyUI custom node `name_meta_export`.
+A required part of this workflow is the included ComfyUI custom node **`name_meta_export`**.
 
 ComfyReview depends on sidecar JSON files generated alongside each PNG. Without that JSON output, metadata extraction, statistics, and reproducible generator handoff are not reliable.
 
-Included in this repository:
+**Included in this repository**
 
 - file: `custom_node_for_comfyui/alex_nodes.py`
 - required node: `name_meta_export`
 
-The node is expected to export:
+**The node is expected to export**
 
 - the rendered PNG
 - a JSON sidecar with the same base filename
@@ -54,22 +85,26 @@ The node is expected to export:
 - KSampler values such as seed, steps, cfg, sampler, scheduler, and denoise
 - prompt graph data for later reuse
 
-## Main Views
+---
 
-ComfyReview currently revolves around a few main views:
+## Main views
 
-- **Review** for direct image rating and delete actions
-- **Top** for aggregated best-image views
-- **Arena** for pairwise comparison
-- **Stats** for local analysis pages
-- **Playground** for generator-side reuse and prompt/value handoff back into ComfyUI
+| View | Purpose |
+|---|---|
+| **Review** | Fast rating and delete workflow for image batches |
+| **Top** | Aggregated best-image views |
+| **Arena** | Pairwise comparison flow |
+| **Stats** | Local analysis and breakdown pages |
+| **Playground** | Prompt/value handoff back into ComfyUI |
 
-## Quick Start
+---
+
+## Quick start
 
 ### Requirements
 
 - Python 3.11+
-- ComfyUI outputs with PNG + JSON sidecar files
+- ComfyUI outputs with **PNG + JSON** sidecar files
 - the included ComfyUI custom node `name_meta_export`
 - a workflow that actually uses `name_meta_export`
 - optional: a running ComfyUI instance for Playground Generator features
@@ -80,13 +115,13 @@ ComfyReview currently revolves around a few main views:
 python -m venv .venv
 ```
 
-Windows:
+**Windows**
 
 ```bash
 .venv\Scripts\activate
 ```
 
-macOS / Linux:
+**macOS / Linux**
 
 ```bash
 source .venv/bin/activate
@@ -100,7 +135,7 @@ pip install -r requirements.txt
 
 ### Configuration
 
-The current 5b source still uses `config.py` as the main source of truth for local paths and server settings.
+The current `0.0.5b` source still uses `config.py` as the main source of truth for local paths and server settings.
 
 Before starting the app, check at least:
 
@@ -110,7 +145,7 @@ Before starting the app, check at least:
 - `DEFAULT_WORKFLOW_PATH`
 - SSL settings if you do not want HTTPS locally
 
-The defaults in `config.py` are local development values and should be adjusted for your machine.
+The defaults in `config.py` are development-oriented and should be adjusted for your machine.
 
 ### Run
 
@@ -118,9 +153,11 @@ The defaults in `config.py` are local development values and should be adjusted 
 python main.py
 ```
 
-Then open the app in your browser. The default source tree includes settings for local FastAPI startup via `uvicorn` from `main.py`.
+Then open the local app in your browser.
 
-## Basic Workflow
+---
+
+## Basic workflow
 
 1. Generate images in ComfyUI with the included `name_meta_export` node in the workflow.
 2. Save PNG files together with matching JSON sidecars.
@@ -130,7 +167,9 @@ Then open the app in your browser. The default source tree includes settings for
 6. Use Top, Stats, and Playground pages to reuse and analyze the results.
 7. Build curated character/set selections for later dataset or LoRA-oriented work.
 
-## Character and Set Semantics
+---
+
+## Character and set semantics
 
 ComfyReview uses two separate filter axes:
 
@@ -141,7 +180,9 @@ That means views such as **Character = All** and **Set = Face** are meant to wor
 
 This matters for character-focused curation workflows, where different images may belong to the same logical set category while still belonging to different characters.
 
-## Project Structure
+---
+
+## Project structure
 
 ```text
 ComfyReview/
@@ -160,23 +201,39 @@ ComfyReview/
 └── README.md
 ```
 
-## Architecture Notes
+---
 
-### Scanner
+## Architecture notes
+
+<details>
+<summary><strong>Scanner</strong></summary>
 
 The scanner reads PNG/JSON pairs from the ComfyUI output folder, extracts metadata, and upserts the relevant information into the local SQLite-backed app state.
 
-### Review Flow
+</details>
+
+<details>
+<summary><strong>Review flow</strong></summary>
 
 The review side of the app is built to make large batches of similar images easier to work through without turning the whole thing into miserable manual sorting.
 
-### Generator Reuse
+</details>
+
+<details>
+<summary><strong>Generator reuse</strong></summary>
 
 The Playground Generator is designed to carry values back into ComfyUI in a reproducible way instead of relying on vague memory and copy-paste archaeology.
 
-### MV Worker
+</details>
+
+<details>
+<summary><strong>MV worker</strong></summary>
 
 Aggregate-style views such as Top and Arena are not just static file listings. They depend on the app's worker/update path and the local derived data it maintains.
+
+</details>
+
+---
 
 ## Testing
 
@@ -186,11 +243,15 @@ Run the test suite with:
 pytest
 ```
 
-## Current Status
+The repository also includes sample PNG/JSON files that can be used as scanner input for local testing.
 
-This README reflects the current `0.0.5b` line in the repository.
+---
 
-Current focus:
+## Current status
+
+This README reflects the current **`0.0.5b`** line in the repository.
+
+**Current focus**
 
 - stable local review flow
 - modularized Playground Generator structure
@@ -198,17 +259,13 @@ Current focus:
 - local SQLite-backed analysis and aggregate pages
 - ComfyUI integration through the required metadata-export workflow
 
-Not the goal of this version:
+**Not the goal of this version**
 
 - a fully redesigned data identity model
 - full separation of curation truth from physical folder layout
-- a final export/packaging architecture for future LoRA dataset builds
+- a final export or packaging architecture for future LoRA dataset builds
 
-## Notes
-
-- The repository includes sample PNG/JSON files that can be used as scanner input for testing.
-- Local database files are created as needed.
-- Some current defaults are clearly development-oriented and may need cleanup before broader distribution.
+---
 
 ## Contributing
 
@@ -220,6 +277,5 @@ If you change behavior in this project, try not to silently break the things tha
 - lazy loading behavior in generator-related views
 - reproducible value handoff back into ComfyUI
 
-## License
+---
 
-Add your license here.
