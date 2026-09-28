@@ -16,6 +16,10 @@ class CurationMutationError(RuntimeError):
     """Raised when a legacy curation move cannot be completed safely."""
 
 
+class CurationValidationError(ValueError):
+    """Raised when a requested curation set is not configured."""
+
+
 def normalize_set_key(set_key: str, *, allowed: Iterable[str]) -> Optional[str]:
     """Normalize a set key.
 
@@ -193,7 +197,11 @@ def assign_image_to_set(
     pair = output_files.resolve_pair(png_path=str(png_path), json_path=str(json_path))
     p = pair.png_path
     j = pair.json_path
-    sk = normalize_set_key(set_key, allowed=allowed_set_keys)
+    allowed_set = {str(value).strip() for value in allowed_set_keys if str(value).strip()}
+    raw_set_key = str(set_key or "").strip()
+    if raw_set_key not in {"", "unsorted", *allowed_set}:
+        raise CurationValidationError("Unknown curation set")
+    sk = normalize_set_key(raw_set_key, allowed=allowed_set)
 
     character_root, _ = _derive_character_root(Path(output_root), p)
     dest_dir = _dest_dir_for_set(character_root, sk)

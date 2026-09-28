@@ -8,6 +8,7 @@ from arena_store import ensure_schema as ensure_arena_schema
 from services import arena_service, rating_submission_service
 from services.curation_assignment_service import (
     CurationMutationError,
+    CurationValidationError,
     assign_image_to_set,
 )
 from services.mv_worker_core import combo_pipeline, engine
@@ -87,6 +88,62 @@ def test_delete_writes_tombstone_and_removes_pair(tmp_path, monkeypatch):
         assert connection.execute(
             "SELECT deleted, rating FROM ratings ORDER BY id DESC LIMIT 1"
         ).fetchone() == (1, None)
+
+
+def test_review_rejects_score_outside_supported_range(tmp_path):
+    png_path = tmp_path / "image.png"
+    json_path = tmp_path / "image.json"
+    png_path.write_bytes(b"png")
+    json_path.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(rating_submission_service.ReviewValidationError):
+        rating_submission_service.submit_rating(
+            ratings_db_path=tmp_path / "ratings.sqlite3",
+            prompt_tokens_db_path=tmp_path / "prompt_tokens.sqlite3",
+            mv_queue_db_path=tmp_path / "mv_jobs.sqlite3",
+            output_root=tmp_path,
+            trash_root=tmp_path / "_trash",
+            soft_delete_to_trash=True,
+            rating=11,
+            deleted=None,
+            delete=None,
+            combo_key="combo",
+            model_branch="model",
+            checkpoint="checkpoint",
+            json_path=str(json_path),
+            png_path=str(png_path),
+            sampler=None,
+            scheduler=None,
+            steps=None,
+            cfg=None,
+            denoise=None,
+            loras_json=None,
+        )
+
+    assert not (tmp_path / "ratings.sqlite3").exists()
+
+
+def test_curation_rejects_unknown_set_before_moving_files(tmp_path):
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    png_path = output_root / "image.png"
+    json_path = output_root / "image.json"
+    png_path.write_bytes(b"png")
+    json_path.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(CurationValidationError, match="Unknown curation set"):
+        assign_image_to_set(
+            curation_db_path=tmp_path / "curation.sqlite3",
+            output_root=output_root,
+            lora_export_root=tmp_path / "export",
+            allowed_set_keys=("scene",),
+            png_path=str(png_path),
+            json_path=str(json_path),
+            set_key="unknown",
+        )
+
+    assert png_path.is_file()
+    assert json_path.is_file()
 
 
 def test_curation_moves_pair_and_relinks_paths(tmp_path, monkeypatch):

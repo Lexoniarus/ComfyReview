@@ -23,7 +23,7 @@ from services.context_filters import (
     normalize_subdir,
     normalize_unrated_flag,
 )
-from services.rating_submission_service import submit_rating
+from services.rating_submission_service import ReviewValidationError, submit_rating
 from services.output_file_service import (
     InvalidOutputPathError,
     OutputMutationError,
@@ -105,7 +105,7 @@ def rate(
             denoise=denoise,
             loras_json=loras_json,
         )
-    except InvalidOutputPathError as exc:
+    except (InvalidOutputPathError, ReviewValidationError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OutputPairNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

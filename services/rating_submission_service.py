@@ -11,6 +11,10 @@ from services.prompt_tokens_service import write_prompt_tokens_for_latest_run
 from stores.mv_jobs_store import enqueue_job
 
 
+class ReviewValidationError(ValueError):
+    """Raised when a review command contains an invalid score or action."""
+
+
 def _pressed_delete(*, deleted: Optional[int], delete: Optional[int]) -> bool:
     return bool(deleted or delete)
 
@@ -151,6 +155,8 @@ def submit_rating(
     - touch mv worker queue (debounced)
     """
     pressed = _pressed_delete(deleted=deleted, delete=delete)
+    if not pressed and (rating is None or not 1 <= int(rating) <= 10):
+        raise ReviewValidationError("rating must be between 1 and 10")
     output_files = OutputFileService(
         output_root=Path(output_root),
         trash_root=Path(trash_root),
