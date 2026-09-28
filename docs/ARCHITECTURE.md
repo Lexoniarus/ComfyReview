@@ -43,10 +43,10 @@ Repositories       Providers
 
 Concrete assembly occurs in one composition root.
 
-Suggested target package shape:
+Target package shape (introduced incrementally after the quality foundation):
 
 ```text
-app/
+comfyreview/
   domain/
     models.py
     values.py
@@ -294,6 +294,18 @@ native ES modules with a shared API client and explicit lifecycle where stateful
 
 Externally visible workflows use structured events and trace IDs.
 
+The current quality foundation provides a standard-library JSON formatter and
+ASGI request middleware in `services/observability.py`. For HTTP requests it:
+
+- accepts a safe caller-provided `X-Request-ID` or generates a UUID
+- returns the effective ID in the response, including controlled errors
+- binds the ID through a context variable for downstream logs
+- resets context after success or failure
+- records stable request lifecycle events without arbitrary prompt payloads
+
+This module remains a legacy-bootstrap integration point. It moves into the
+`comfyreview` package when the composition root is introduced.
+
 Minimum workflows:
 
 - review save/delete/restore
@@ -305,7 +317,16 @@ Minimum workflows:
 
 Logs describe IDs and outcomes rather than dumping full private payloads.
 
-## 14. Migration posture
+## 14. Enforced architecture boundary
+
+AST-based tests now measure existing boundary violations and reject new ones.
+The current legacy exceptions are versioned in
+`quality/architecture_baseline.json`. Future modules below
+`comfyreview/domain` and `comfyreview/application` have no legacy exceptions;
+they may not import SQLite, FastAPI, global configuration, routes, stores or
+legacy services into the core.
+
+## 15. Migration posture
 
 Refactor and data migration are staged:
 

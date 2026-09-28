@@ -15,7 +15,7 @@ Existing violations are migration work, not precedent for new code.
 - Public functions and methods have type annotations and concise docstrings.
 - Prefer explicit domain types over unstructured dictionaries inside the core.
 
-Recommended mandatory tooling for the quality gate:
+Mandatory tooling for the quality gate:
 
 - Ruff linting
 - Ruff formatting
@@ -298,13 +298,13 @@ Rules for new/changed frontend code:
 
 ## 14. Quality gate
 
-The repository shall converge on one command:
+The repository quality gate is:
 
 ```text
 python scripts/quality.py
 ```
 
-The gate must eventually run at least:
+The gate runs:
 
 1. Ruff check
 2. Ruff format --check
@@ -314,7 +314,30 @@ The gate must eventually run at least:
 6. Python-core statement coverage check
 7. function-test-manifest check
 8. architecture tests
-9. frontend lint/format/checkJs tests when frontend modules are present
+9. frontend lint/format/checkJs tests once frontend modules are introduced
 
-Until the gate is implemented, do not claim compliance merely because `pytest`
-passes.
+### Legacy ratchet
+
+Repository-wide violations that predate the standards are measured in
+`quality/legacy_diagnostics.json`; the corresponding files are listed in
+`quality/legacy_python_files.txt`.
+
+Rules:
+
+- the legacy file set may only shrink
+- a new diagnostic group or a higher diagnostic count fails the gate
+- every new or changed Python file must pass Ruff, formatting, mypy and
+  Pyright without a legacy exception
+- architecture exceptions may only shrink
+- files in `quality/core_scope.txt` require 100% statement coverage
+- every discovered public concrete core function or method requires an entry
+  in `tests/function_test_manifest.py`
+
+To migrate an existing file, make it fully clean, remove it from the legacy
+file list, remove its diagnostic and architecture exceptions, add behavior
+tests and update the manifest/core scope where applicable. Run the complete
+gate before committing.
+
+The current baseline is not a claim that the full repository already conforms
+to the target architecture. It is a versioned inventory that prevents new work
+from increasing known debt.

@@ -159,6 +159,12 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
+For development and repository quality checks, install the pinned toolchain:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 ### Configuration
 
 ComfyReview is configured through `config.py`, optional environment variables, and
@@ -251,6 +257,8 @@ ComfyReview/
 ├── routers/                  # page routes and API endpoints
 ├── services/                 # business logic
 ├── stores/                   # SQLite access and persistence helpers
+├── quality/                  # versioned quality and architecture baselines
+├── scripts/                  # shared repository automation
 ├── templates/                # HTML templates
 ├── static/                   # CSS, JS, assets
 ├── data/                     # local runtime data, ignored where needed
@@ -298,10 +306,22 @@ Aggregate-style views such as Top and Arena are not just static file listings. T
 Run the test suite with:
 
 ```bash
-pytest
+python -m pytest
 ```
 
-The repository may include sample PNG and JSON files that can be used as scanner input for local testing.
+Before review or integration, run the complete shared quality gate:
+
+```bash
+python scripts/quality.py
+```
+
+The gate runs Ruff, formatting, mypy, Pyright, all tests, architecture checks,
+the function-test manifest and 100% statement coverage for the defined Python
+core. Existing pre-baseline violations remain visible in versioned ratchet
+files; new and changed Python files must pass without adding exceptions.
+
+The repository may include sample PNG and JSON files that can be used as
+scanner input for local testing.
 
 ---
 
