@@ -16,6 +16,7 @@ from stores.mv_jobs_store import (
     mark_failed,
     mark_all_queued_done,
     enqueue_job,
+    recover_abandoned_running_jobs,
 )
 
 from stores.mv_state_store import (
@@ -54,6 +55,26 @@ def ensure_initial_catchup_job(
             break
     if behind:
         enqueue_job(queue_db_path, job_type="catchup")
+
+
+def initialize_worker_state(
+    *,
+    queue_db_path: Path,
+    state_db_path: Path,
+    ratings_db_path: Path,
+    aggregators: Tuple[str, ...],
+) -> int:
+    """Prepare schemas, recover abandoned work, and enqueue one catchup."""
+    ensure_jobs_schema(queue_db_path)
+    ensure_state_schema(state_db_path)
+    recovered = recover_abandoned_running_jobs(queue_db_path)
+    ensure_initial_catchup_job(
+        queue_db_path=queue_db_path,
+        state_db_path=state_db_path,
+        ratings_db_path=ratings_db_path,
+        aggregators=aggregators,
+    )
+    return recovered
 
 
 def drain_until_frontier_stable(
@@ -203,12 +224,9 @@ def run_worker_loop(
     poll_seconds: float = 0.75,
     stop_event: Optional[threading.Event] = None,
 ) -> None:
-    ensure_jobs_schema(queue_db_path)
-    ensure_state_schema(state_db_path)
-
     aggregators: Tuple[str, ...] = ("prompt_ratings", "combo_prompts", "images")
 
-    ensure_initial_catchup_job(
+    initialize_worker_state(
         queue_db_path=queue_db_path,
         state_db_path=state_db_path,
         ratings_db_path=ratings_db_path,

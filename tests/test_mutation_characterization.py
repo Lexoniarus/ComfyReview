@@ -10,8 +10,15 @@ from services.curation_assignment_service import (
     CurationMutationError,
     assign_image_to_set,
 )
-from services.mv_worker_core import combo_pipeline
+from services.mv_worker_core import combo_pipeline, engine
+from stores.db_core import insert_or_update_rating
 from stores.images_store import init_images_db, upsert_image
+from stores.mv_jobs_store import (
+    enqueue_job,
+    ensure_schema as ensure_jobs_schema,
+    fetch_job,
+    mark_running,
+)
 from stores.mv_state_store import get_state
 
 
@@ -256,7 +263,7 @@ def test_curation_restores_files_when_relink_fails(tmp_path, monkeypatch):
     assert not (source_dir / "scene" / "image.png").exists()
 
 
-def test_combo_rebuild_failure_is_stored_and_returned(tmp_path, monkeypatch):
+def test_combo_rebuild_failure_is_stored_and_raised(tmp_path, monkeypatch):
     state_path = tmp_path / "mv.sqlite3"
     get_state(state_path, aggregator_name="prompt_ratings")
     get_state(state_path, aggregator_name="images")
@@ -276,15 +283,91 @@ def test_combo_rebuild_failure_is_stored_and_returned(tmp_path, monkeypatch):
         lambda **_kwargs: (_ for _ in ()).throw(OSError("locked")),
     )
 
-    result = combo_pipeline.process_combo_prompts_once(
-        state_db_path=state_path,
+    with pytest.raises(combo_pipeline.ComboProjectionError):
+        combo_pipeline.process_combo_prompts_once(
+            state_db_path=state_path,
+            prompt_ratings_db_path=tmp_path / "prompt_ratings.sqlite3",
+            combo_db_path=tmp_path / "combo.sqlite3",
+            playground_db_path=tmp_path / "playground.sqlite3",
+            images_db_path=tmp_path / "images.sqlite3",
+            target_rating_id=5,
+        )
+
+    state = get_state(state_path, aggregator_name="combo_prompts")
+    assert state["last_error"] == "locked"
+
+
+def test_worker_startup_recovers_abandoned_jobs_and_queues_one_catchup(tmp_path):
+    queue_path = tmp_path / "mv_jobs.sqlite3"
+    ratings_path = tmp_path / "ratings.sqlite3"
+    ensure_jobs_schema(queue_path)
+    first_job = enqueue_job(queue_path, job_type="catchup")
+    mark_running(queue_path, first_job)
+    second_job = enqueue_job(queue_path, job_type="catchup")
+    mark_running(queue_path, second_job)
+    insert_or_update_rating(
+        ratings_path,
+        png_path="image.png",
+        json_path="image.json",
+        model_branch="model",
+        checkpoint="checkpoint",
+        combo_key="combo",
+        rating=8,
+        deleted=0,
+        steps=20,
+        cfg=7.0,
+        sampler="sampler",
+        scheduler="scheduler",
+        denoise=1.0,
+        loras_json="[]",
+        pos_prompt="positive",
+        neg_prompt="negative",
+    )
+
+    recovered = engine.initialize_worker_state(
+        queue_db_path=queue_path,
+        state_db_path=queue_path,
+        ratings_db_path=ratings_path,
+        aggregators=("prompt_ratings", "combo_prompts", "images"),
+    )
+
+    assert recovered == 2
+    with sqlite3.connect(queue_path) as connection:
+        statuses = connection.execute(
+            "SELECT status, COUNT(*) FROM mv_jobs GROUP BY status"
+        ).fetchall()
+    assert sorted(statuses) == [("failed", 2), ("queued", 1)]
+
+
+def test_worker_marks_job_failed_when_combo_projection_raises(tmp_path, monkeypatch):
+    queue_path = tmp_path / "mv_jobs.sqlite3"
+    ensure_jobs_schema(queue_path)
+    job_id = enqueue_job(queue_path, job_type="catchup")
+    job = fetch_job(queue_path, job_id=job_id)
+    monkeypatch.setattr(engine, "debounce_wait_for_catchup_job", lambda **_kwargs: None)
+    monkeypatch.setattr(engine, "max_queued_job_id", lambda _path: job_id)
+    monkeypatch.setattr(engine, "drain_until_frontier_stable", lambda **_kwargs: 5)
+    monkeypatch.setattr(
+        engine,
+        "process_combo_prompts_once",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("combo failed")),
+    )
+    monkeypatch.setattr(engine.time, "sleep", lambda _seconds: None)
+
+    engine.process_one_job(
+        job=job,
+        queue_db_path=queue_path,
+        state_db_path=queue_path,
+        ratings_db_path=tmp_path / "ratings.sqlite3",
+        prompt_tokens_db_path=tmp_path / "tokens.sqlite3",
         prompt_ratings_db_path=tmp_path / "prompt_ratings.sqlite3",
         combo_db_path=tmp_path / "combo.sqlite3",
         playground_db_path=tmp_path / "playground.sqlite3",
         images_db_path=tmp_path / "images.sqlite3",
-        target_rating_id=5,
+        poll_seconds=0,
+        stop_event=None,
     )
 
-    assert result == 0
-    state = get_state(state_path, aggregator_name="combo_prompts")
-    assert state["last_error"] == "locked"
+    failed = fetch_job(queue_path, job_id=job_id)
+    assert failed["status"] == "failed"
+    assert failed["error"] == "combo failed"

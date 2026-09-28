@@ -9,6 +9,10 @@ from services.combo_prompts_service import rebuild_combo_prompts
 from services.mv_worker_core.time_utils import utc_now_str
 
 
+class ComboProjectionError(RuntimeError):
+    """Raised when the legacy combination projection cannot be rebuilt."""
+
+
 def process_combo_prompts_once(
     *,
     state_db_path: Path,
@@ -82,7 +86,7 @@ def process_combo_prompts_once(
             last_run_at=utc_now_str(),
             last_error=str(e),
         )
-        return last_combo
+        raise ComboProjectionError("Could not rebuild combo projection") from e
 
     upsert_state(
         state_db_path,
