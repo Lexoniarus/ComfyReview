@@ -281,6 +281,47 @@ def load_baseline() -> dict[str, Any]:
     return payload
 
 
+def _load_base_baseline(base_ref: str) -> dict[str, Any] | None:
+    result = run_command(
+        ["git", "show", f"{base_ref}:quality/legacy_diagnostics.json"]
+    )
+    if result.return_code != 0:
+        return None
+    payload: Any = json.loads(result.stdout)
+    if not isinstance(payload, dict) or not isinstance(
+        payload.get("tools"), dict
+    ):
+        raise QualityError("Base quality baseline is invalid")
+    return payload
+
+
+def _find_baseline_growth(
+    current: dict[str, Any], previous: dict[str, Any]
+) -> list[str]:
+    growth: list[str] = []
+    previous_tools = previous["tools"]
+    for tool, counts in current["tools"].items():
+        prior_counts = previous_tools.get(tool, {})
+        for key, count in counts.items():
+            prior_count = int(prior_counts.get(key, 0))
+            if int(count) > prior_count:
+                growth.append(f"{key}: {count} > {prior_count}")
+    return sorted(growth)
+
+
+def _validate_baseline_does_not_grow(
+    base_ref: str,
+    baseline: dict[str, Any],
+) -> None:
+    """Reject baseline additions after the initial foundation bootstrap."""
+    previous = _load_base_baseline(base_ref)
+    if previous is None:
+        return
+    growth = _find_baseline_growth(baseline, previous)
+    if growth:
+        raise QualityError("Diagnostic baseline grew:\n" + "\n".join(growth))
+
+
 def compare_baseline(
     current: dict[str, Counter[str]], baseline: dict[str, Any]
 ) -> None:
@@ -407,9 +448,11 @@ def main() -> int:
                 render_baseline(base_commit, diagnostics, legacy_files), end=""
             )
             return 0
+        baseline = load_baseline()
+        _validate_baseline_does_not_grow(arguments.base_ref, baseline)
         compare_baseline(
             filter_legacy_diagnostics(diagnostics, legacy_files),
-            load_baseline(),
+            baseline,
         )
         strict_files = (
             current_files - legacy_files

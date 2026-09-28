@@ -114,7 +114,6 @@
       "format|templates.py|unformatted": 1,
       "format|tests/conftest.py|unformatted": 1,
       "format|tests/test_comfy_client_patch.py|unformatted": 1,
-      "format|tests/test_delete_and_missing_files.py|unformatted": 1,
       "format|tests/test_mutation_characterization.py|unformatted": 1,
       "format|tests/test_mutation_route_contracts.py|unformatted": 1,
       "format|tests/test_prompt_store_tokenize.py|unformatted": 1,
@@ -146,7 +145,7 @@
     },
     "pyright": {
       "pyright|custom_node_for_comfyui/alex_nodes.py|reportInvalidTypeForm": 1,
-      "pyright|custom_node_for_comfyui/alex_nodes.py|reportMissingImports": 2,
+      "pyright|custom_node_for_comfyui/alex_nodes.py|reportMissingImports": 4,
       "pyright|custom_node_for_comfyui/if_checkpoint_fails_in_comfyui.py|reportUndefinedVariable": 6,
       "pyright|services/analytics_page_service.py|reportArgumentType": 1,
       "pyright|services/arena_page_service.py|reportArgumentType": 4,
@@ -418,7 +417,6 @@
       "ruff|stores/ratings_state_store.py|UP035": 3,
       "ruff|templates.py|I001": 1,
       "ruff|tests/conftest.py|I001": 1,
-      "ruff|tests/test_delete_and_missing_files.py|I001": 1,
       "ruff|tests/test_mutation_characterization.py|I001": 1,
       "ruff|tests/test_mutation_route_contracts.py|I001": 1
     }
