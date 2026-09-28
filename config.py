@@ -2,6 +2,26 @@ from pathlib import Path
 import os
 
 
+def _load_env_file(path: Path) -> None:
+    """Load simple KEY=VALUE settings without overriding real environment variables."""
+    if not path.is_file():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        name, value = line.split("=", 1)
+        name = name.strip()
+        value = value.strip()
+        if not name:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        os.environ.setdefault(name, value)
+
+
 def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -31,12 +51,13 @@ def _env_path(name: str, default: Path) -> Path:
 
 
 BASE_DIR = Path(__file__).resolve().parent
+_load_env_file(BASE_DIR / ".env")
 
 # =============================
 # App
 # =============================
 APP_HOST = os.getenv("COMFYREVIEW_HOST", "127.0.0.1")
-APP_PORT = _env_int("COMFYREVIEW_PORT", 8000)
+APP_PORT = _env_int("COMFYREVIEW_PORT", 8014)
 
 # =============================
 # Paths

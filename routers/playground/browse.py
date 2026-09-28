@@ -23,8 +23,9 @@ def playground_browse(request: Request, kind: str = "", q: str = ""):
     rows = list_items(PLAYGROUND_DB_PATH, kind=kind, q=q, limit=200)
 
     return templates.TemplateResponse(
-        "playground.html",
-        {
+        request=request,
+        name="playground.html",
+        context={
             "request": request,
             "rows": rows,
             "kind": kind,
@@ -36,8 +37,9 @@ def playground_browse(request: Request, kind: str = "", q: str = ""):
 @router.get("/playground/create")
 def playground_create_page(request: Request, kind: str = "scene"):
     return templates.TemplateResponse(
-        "playground.html",
-        {
+        request=request,
+        name="playground.html",
+        context={
             "request": request,
             "rows": [],
             "kind": kind,

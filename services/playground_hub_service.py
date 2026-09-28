@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 from typing import Any, Dict, List
 
 from config import DB_PATH
@@ -59,13 +60,15 @@ def _attach_urls(rows: List[Dict[str, Any]], *, png_to_url) -> List[Dict[str, An
         r = dict(r0)
 
         best_png = str(r.get("best_png_path") or "")
-        r["best_url"] = png_to_url(best_png) if best_png else ""
+        r["best_url"] = png_to_url(best_png) if best_png and Path(best_png).is_file() else ""
 
         best_images = []
         for bi0 in (r.get("best_images") or []):
             bi = dict(bi0)
             bi_png = str(bi.get("png_path") or "")
-            bi["url"] = png_to_url(bi_png) if bi_png else ""
+            if not bi_png or not Path(bi_png).is_file():
+                continue
+            bi["url"] = png_to_url(bi_png)
             best_images.append(bi)
         r["best_images"] = best_images
 

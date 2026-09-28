@@ -1,0 +1,300 @@
+# ComfyReview Architecture
+
+Status: target architecture / refactor baseline, 2026-09-28.
+
+The current public prototype is functional but predates these boundaries. This
+document defines the architecture ComfyReview is being migrated toward. It does
+not claim that the current repository is already compliant.
+
+## 1. Product boundary
+
+ComfyReview is a local-first application for:
+
+- discovering ComfyUI image outputs and metadata
+- reviewing and rating generated images
+- pairwise Arena comparisons
+- curation and set assignment
+- prompt/content management
+- statistical learning from review history
+- reproducible handoff back to ComfyUI
+
+Character Chronicles may later reuse or extend this domain, but Character
+Chronicles gameplay, image description workers and embedding/RAG systems are not
+part of the ComfyReview core refactor unless explicitly added as product scope.
+
+## 2. Target layers
+
+```text
+Browser / Jinja
+      |
+      v
+FastAPI API + page routes
+      |
+      v
+Application services
+      |
+      v
+Domain ports / typed domain values
+   |                 |
+   v                 v
+Repositories       Providers
+(SQLite)           (ComfyUI / filesystem)
+```
+
+Concrete assembly occurs in one composition root.
+
+Suggested target package shape:
+
+```text
+app/
+  domain/
+    models.py
+    values.py
+    ports.py
+    policies.py
+  services/
+    review.py
+    arena.py
+    curation.py
+    generation.py
+    prompt_learning.py
+    ingestion.py
+  repositories/
+    sqlite/
+      connection.py
+      images.py
+      reviews.py
+      prompts.py
+      compositions.py
+      arena.py
+      curation.py
+      jobs.py
+  providers/
+    comfyui.py
+    output_filesystem.py
+  api/
+    routes/
+    projections.py
+  workers/
+    runtime.py
+  bootstrap.py
+  main.py
+```
+
+The exact file split may change, but the dependency direction does not.
+
+## 3. Domain model direction
+
+The core domain should speak in stable concepts, not database filenames.
+
+Primary concepts:
+
+- `PromptComponent` – character, scene, outfit, pose, expression, modifier,
+  lighting or another reusable prompt/content component.
+- `PromptComposition` – a concrete ordered set of components used or prepared
+  for generation.
+- `Prompt` – exact positive/negative prompt text with stable identity.
+- `PromptAtom` – normalized/reusable atom derived from a prompt.
+- `ImageRecord` – one generated image with stable ID and generation metadata.
+- `ReviewEvent` – user rating/delete/restore judgment about an image.
+- `ArenaMatch` – pairwise comparison between two image IDs.
+- `CurationAssignment` – optional dataset/set assignment for an image.
+- `BackgroundJob` – operational work item such as aggregate refresh/import.
+
+Derived statistical concepts may exist but are not canonical facts.
+
+## 4. Canonical runtime database
+
+The target ComfyReview runtime uses one writable SQLite database.
+
+Legacy databases remain readable migration sources during transition:
+
+```text
+ratings.sqlite3
+prompt_tokens.sqlite3
+images.sqlite3
+prompt_ratings.sqlite3
+combo_prompts.sqlite3
+playground.sqlite3
+arena.sqlite3
+curation.sqlite3
+mv_jobs.sqlite3
+```
+
+The old file split is not preserved as a runtime architectural requirement.
+
+### Canonical facts
+
+The new database should contain normalized source-of-truth records for:
+
+- prompt/content components
+- prompt compositions and membership
+- exact prompts and atom membership
+- images and generation metadata
+- review events
+- arena comparisons
+- curation assignments
+- operational jobs/schema metadata
+
+### Derived/rebuildable state
+
+Examples:
+
+- image score aggregates
+- prompt atom statistics
+- composition statistics
+- ranking projections
+
+Cheap aggregates should begin as SQL views. Materialization is introduced only
+when measured performance requires it.
+
+## 5. Identity model
+
+File paths are not domain identity.
+
+Target rule:
+
+```text
+stable image_id / image_uid
+        |
+        +-- current png_path
+        +-- current json_path
+        +-- generation metadata
+        +-- reviews
+        +-- arena matches
+        +-- curation
+```
+
+Moving a PNG/JSON pair must not require relinking every dependent table.
+
+The ComfyUI metadata export boundary should eventually provide or allow creation
+of a stable generation/image identifier.
+
+## 6. Prompt learning model
+
+The legacy prompt-token pipeline duplicates atom text per rating/run. The target
+model separates prompt structure from review events:
+
+```text
+Prompt
+  |
+  +-- PromptMembership -- PromptAtom
+  |
+  +-- ImageRecord -- ReviewEvent
+```
+
+A prompt is tokenized once. Ratings remain attached to images/review events.
+Prompt-atom performance is derived through joins and may be cached in a small
+aggregate table.
+
+This preserves the learning semantics without requiring a very large
+per-rating token journal as the canonical source of truth.
+
+## 7. Prompt compositions
+
+Legacy `combo_prompts` eagerly expands large portions of the theoretical
+character x scene x outfit space.
+
+Target rule:
+
+- components are canonical reusable records
+- a composition stores membership relationships
+- persist compositions that are generated, used, curated or intentionally
+  prepared
+- do not precompute every possible combination by default
+
+This keeps the domain relational without storing a large Cartesian product.
+
+## 8. ComfyUI boundary
+
+ComfyUI is an injected provider.
+
+A generation use case should conceptually look like:
+
+```text
+GenerationService
+  -> prepare generation request from domain data
+  -> ComfyUiProvider.submit(...)
+  -> receive external job/prompt ID
+  -> poll/watch outside DB write transaction
+  -> ComfyUiProvider.fetch_outputs(...)
+  -> persist resulting image facts atomically
+```
+
+Long-running work is explicit. A timeout while waiting does not imply the
+ComfyUI job failed.
+
+The provider owns HTTP/API details and workflow patching. Services own product
+intent.
+
+## 9. Filesystem boundary
+
+ComfyUI output scanning and sidecar parsing are external-input concerns.
+
+The filesystem provider discovers candidate files and reads raw metadata.
+An ingestion service maps validated provider data into domain values and calls
+repositories.
+
+Physical file moves for trash/curation/export are explicit provider operations
+coordinated by a service. Persistence updates are committed only after the
+filesystem operation has a known outcome.
+
+## 10. Transactions
+
+- Repositories participate in an explicit Unit of Work for related mutations.
+- Review write + related canonical state changes commit together.
+- External ComfyUI execution occurs outside write transactions.
+- Filesystem/network work does not run while holding a long SQLite write lock.
+- After an external action, mutable state is revalidated before final commit
+  when correctness depends on it.
+
+## 11. Workers and derived projections
+
+Background workers are application infrastructure, not a second business-logic
+path.
+
+Workers call the same services/repositories used by synchronous workflows.
+They may maintain derived projections, but every projection must document:
+
+- its source facts
+- its rebuild procedure
+- its freshness marker
+- failure behavior
+
+Worker queues and projection cursors may live in the same canonical database.
+
+## 12. API and frontend
+
+FastAPI routes translate HTTP and render Jinja responses or JSON projections.
+They call services rather than stores/providers directly.
+
+Jinja remains acceptable. New interactive browser behavior should move into
+native ES modules with a shared API client and explicit lifecycle where stateful.
+
+## 13. Observability
+
+Externally visible workflows use structured events and trace IDs.
+
+Minimum workflows:
+
+- review save/delete/restore
+- Arena decision
+- ComfyUI generation submit/complete/fail
+- ingestion scan/import
+- projection rebuild
+- migration
+
+Logs describe IDs and outcomes rather than dumping full private payloads.
+
+## 14. Migration posture
+
+Refactor and data migration are staged:
+
+1. establish engineering rules and quality gate
+2. introduce ports/repositories/providers around existing behavior
+3. define canonical schema and importers
+4. migrate copies of legacy data and verify invariants
+5. switch application runtime to the canonical database
+6. remove legacy runtime paths only after acceptance
+
+The old databases remain untouched until a migration result has been validated.

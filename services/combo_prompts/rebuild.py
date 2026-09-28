@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import gc
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -59,9 +61,34 @@ def rebuild_combo_prompts(
         max_combos_3=max_combos_3,
     )
 
-    os.replace(str(tmp_path), str(combo_db_path))
+    _replace_database_with_retry(tmp_path, combo_db_path)
     res["atomic_swap"] = True
     return res
+
+
+def _replace_database_with_retry(
+    tmp_path: Path,
+    target_path: Path,
+    *,
+    attempts: int = 20,
+    delay_seconds: float = 0.25,
+) -> None:
+    """Replace a rebuilt SQLite DB, tolerating short-lived Windows file locks."""
+    last_error: OSError | None = None
+    for attempt in range(max(1, int(attempts))):
+        try:
+            os.replace(str(tmp_path), str(target_path))
+            return
+        except OSError as exc:
+            last_error = exc
+            is_lock_error = isinstance(exc, PermissionError) or getattr(exc, "winerror", None) == 32
+            if not is_lock_error or attempt >= int(attempts) - 1:
+                raise
+            gc.collect()
+            time.sleep(max(0.0, float(delay_seconds)))
+
+    if last_error is not None:
+        raise last_error
 
 
 def get_top_combos_2(db_path: Path, limit: int = 3) -> List[Dict[str, Any]]:

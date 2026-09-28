@@ -188,15 +188,6 @@ def submit_rating(
     pressed = _pressed_delete(deleted=deleted, delete=delete)
     view, pos_prompt, neg_prompt = _read_meta_for_rating(str(json_path))
 
-    _apply_delete_policy(
-        pressed_delete=pressed,
-        soft_delete_to_trash=bool(soft_delete_to_trash),
-        output_root=Path(output_root),
-        trash_root=Path(trash_root),
-        png_path=str(png_path),
-        json_path=str(json_path),
-    )
-
     deleted_flag = 1 if pressed else 0
     rating_val = None if deleted_flag else (int(rating) if rating is not None else None)
 
@@ -241,3 +232,15 @@ def submit_rating(
     )
 
     _touch_mv_queue_quiet(mv_queue_db_path)
+
+    # Persist the tombstone before touching the filesystem. Otherwise a database
+    # write failure can remove PNG/JSON while every derived view still considers
+    # the image active.
+    _apply_delete_policy(
+        pressed_delete=pressed,
+        soft_delete_to_trash=bool(soft_delete_to_trash),
+        output_root=Path(output_root),
+        trash_root=Path(trash_root),
+        png_path=str(png_path),
+        json_path=str(json_path),
+    )

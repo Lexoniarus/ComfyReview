@@ -13,7 +13,7 @@ from db_store import (
     list_models_from_db,
 )
 from services.context_filters import normalize_model
-from services.file_urls import png_path_to_url
+from services.file_urls import existing_png_path_to_url
 from stores.images_store import fetch_best_images_by_combo_keys, fetch_best_images_by_param_values
 from stores.prompt_ratings_store import fetch_prompt_ratings_stats
 
@@ -39,15 +39,19 @@ def _attach_best_images_to_combo_rows(rows: List[Dict[str, Any]], model: str) ->
     for r in rows:
         ck = str(r.get("combo_key") or "")
         imgs = best_map.get(ck, [])
-        r["best_images"] = [
-            {
-                "url": png_path_to_url(str(i.get("png_path") or "")),
-                "avg_rating": i.get("avg_rating"),
-                "runs": i.get("runs"),
-            }
-            for i in imgs
-            if i.get("png_path")
-        ]
+        best_images = []
+        for image in imgs:
+            url = existing_png_path_to_url(str(image.get("png_path") or ""))
+            if not url:
+                continue
+            best_images.append(
+                {
+                    "url": url,
+                    "avg_rating": image.get("avg_rating"),
+                    "runs": image.get("runs"),
+                }
+            )
+        r["best_images"] = best_images
 
 
 def build_stats_page_context(
@@ -166,15 +170,19 @@ def _attach_best_images_to_param_sections(sections: List[Dict[str, Any]], model:
         for r in sec.get("rows", []):
             key = str(r.get("value"))
             imgs = best_map.get(key, [])
-            r["best_images"] = [
-                {
-                    "url": png_path_to_url(str(i.get("png_path") or "")),
-                    "avg_rating": i.get("avg_rating"),
-                    "runs": i.get("runs"),
-                }
-                for i in imgs
-                if i.get("png_path")
-            ]
+            best_images = []
+            for image in imgs:
+                url = existing_png_path_to_url(str(image.get("png_path") or ""))
+                if not url:
+                    continue
+                best_images.append(
+                    {
+                        "url": url,
+                        "avg_rating": image.get("avg_rating"),
+                        "runs": image.get("runs"),
+                    }
+                )
+            r["best_images"] = best_images
 
 
 def build_param_stats_page_context(

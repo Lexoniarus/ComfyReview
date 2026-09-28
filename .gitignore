@@ -1,5 +1,10 @@
 .venv/
 venv/
+.env
+
+# IDE
+.idea/
+.vscode/
 
 __pycache__/
 *.pyc
@@ -11,6 +16,8 @@ output/
 
 # databases and artifacts
 *.sqlite3
+*.sqlite3-*
+*.sqlite3.*
 
 # certificates and keys
 certs/

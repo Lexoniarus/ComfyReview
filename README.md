@@ -161,7 +161,9 @@ pip install -r requirements.txt
 
 ### Configuration
 
-ComfyReview is configured through `config.py` and optional environment variables.
+ComfyReview is configured through `config.py`, optional environment variables, and
+an optional local `.env` file (copy `.env.example` to `.env`). Explicit environment
+variables take precedence over values from `.env`.
 
 The default paths are development-oriented and safe for a fresh clone, but they should be adjusted for your local ComfyUI setup before serious use.
 

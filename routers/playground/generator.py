@@ -20,6 +20,7 @@ from ._shared import (
 )
 
 from services.ui_state_service import safe_int
+from services.file_urls import file_url_exists
 from services.playground_generator_ui_service import (
     load_playground_dropdown_items,
     discover_comfy_lists,
@@ -83,11 +84,18 @@ def playground_generator_page(request: Request):
     form = build_form_from_state(saved=saved, defaults=defaults)
 
     preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH)
+    for draft in preview:
+        if draft.get("best_img_url") and not file_url_exists(str(draft.get("best_img_url"))):
+            draft["best_img_url"] = ""
+            draft["best_avg"] = None
+            draft["best_runs"] = None
+            draft["best_hits"] = None
 
 
     return templates.TemplateResponse(
-        "playground_generator.html",
-        {
+        request=request,
+        name="playground_generator.html",
+        context={
             "request": request,
             "default_max_tries": DEFAULT_MAX_TRIES,
             "form": form,
@@ -130,7 +138,7 @@ def playground_generator_preview_draft_best(draft_id: str):
         return JSONResponse({"status": "error", "error": "draft not found"}, status_code=404)
 
     # fast path if already resolved
-    if str((d or {}).get("best_img_url") or "").strip():
+    if file_url_exists(str((d or {}).get("best_img_url") or "")):
         return JSONResponse(
             {
                 "status": "ok",
@@ -398,8 +406,9 @@ def _handle_submit_preview(*, request: Request, preview: list, dropdowns: dict, 
     form = _reload_form_from_head(dropdowns)
 
     return templates.TemplateResponse(
-        "playground_generator.html",
-        {
+        request=request,
+        name="playground_generator.html",
+        context={
             "request": request,
             "default_max_tries": DEFAULT_MAX_TRIES,
             "form": form,

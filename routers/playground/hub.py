@@ -23,6 +23,7 @@ def playground_home(request: Request):
     )
 
     return templates.TemplateResponse(
-        "playground_dashboard.html",
-        {"request": request, **ctx},
+        request=request,
+        name="playground_dashboard.html",
+        context={"request": request, **ctx},
     )

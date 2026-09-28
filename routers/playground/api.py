@@ -14,8 +14,7 @@ from config import (
 
 from stores.playground_store import fetch_token_stats_for_tokens, get_item_by_id
 from stores.prompt_tokens_match import fetch_best_match_preview
-
-from ._shared import png_path_to_url
+from services.file_urls import existing_png_path_to_url
 
 router = APIRouter()
 
@@ -85,7 +84,9 @@ def playground_api_previews(payload: dict = Body(...)):
 
         if best and best.get("png_path"):
             best = dict(best)
-            best["url"] = png_path_to_url(str(best.get("png_path") or ""))
+            best["url"] = existing_png_path_to_url(str(best.get("png_path") or ""))
+            if not best["url"]:
+                best = None
 
         out[str(item_id)] = best
 
