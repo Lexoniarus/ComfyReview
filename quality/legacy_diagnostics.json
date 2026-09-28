@@ -4,7 +4,6 @@
   "tools": {
     "format": {
       "format|arena_store.py|unformatted": 1,
-      "format|config.py|unformatted": 1,
       "format|custom_node_for_comfyui/alex_nodes.py|unformatted": 1,
       "format|custom_node_for_comfyui/if_checkpoint_fails_in_comfyui.py|unformatted": 1,
       "format|db_store.py|unformatted": 1,
@@ -167,7 +166,6 @@
     },
     "ruff": {
       "ruff|arena_store.py|UP045": 1,
-      "ruff|config.py|I001": 1,
       "ruff|custom_node_for_comfyui/alex_nodes.py|B904": 3,
       "ruff|custom_node_for_comfyui/alex_nodes.py|I001": 1,
       "ruff|custom_node_for_comfyui/alex_nodes.py|UP006": 11,

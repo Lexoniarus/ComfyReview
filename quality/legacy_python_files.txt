@@ -1,5 +1,4 @@
 arena_store.py
-config.py
 custom_node_for_comfyui/alex_nodes.py
 custom_node_for_comfyui/if_checkpoint_fails_in_comfyui.py
 db_store.py

@@ -1,5 +1,5 @@
-from pathlib import Path
 import os
+from pathlib import Path
 
 
 def _load_env_file(path: Path) -> None:
@@ -17,7 +17,11 @@ def _load_env_file(path: Path) -> None:
         value = value.strip()
         if not name:
             continue
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        if (
+            len(value) >= 2
+            and value[0] == value[-1]
+            and value[0] in {'"', "'"}
+        ):
             value = value[1:-1]
         os.environ.setdefault(name, value)
 
@@ -57,7 +61,7 @@ _load_env_file(BASE_DIR / ".env")
 # App
 # =============================
 APP_HOST = os.getenv("COMFYREVIEW_HOST", "127.0.0.1")
-APP_PORT = _env_int("COMFYREVIEW_PORT", 8014)
+APP_PORT = _env_int("COMFYREVIEW_PORT", 8000)
 
 # =============================
 # Paths
@@ -86,11 +90,15 @@ MV_DEBOUNCE_SECONDS = _env_int("COMFYREVIEW_MV_DEBOUNCE_SECONDS", 20)
 # =============================
 # vNext: LoRA curation
 # =============================
-CURATION_DB_PATH = _env_path("COMFYREVIEW_CURATION_DB", DATA_DIR / "curation.sqlite3")
+CURATION_DB_PATH = _env_path(
+    "COMFYREVIEW_CURATION_DB", DATA_DIR / "curation.sqlite3"
+)
 
 # Export root for LoRA dataset copies.
 # This folder is inside OUTPUT_ROOT, but the scanner is expected to ignore it.
-LORA_EXPORT_ROOT = _env_path("COMFYREVIEW_LORA_EXPORT_ROOT", OUTPUT_ROOT / "_lora_export")
+LORA_EXPORT_ROOT = _env_path(
+    "COMFYREVIEW_LORA_EXPORT_ROOT", OUTPUT_ROOT / "_lora_export"
+)
 LORA_EXPORT_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Allowed curation set keys (single label)
@@ -106,16 +114,28 @@ CURATION_SET_KEYS = [
 # =============================
 # Databases
 # =============================
-MV_QUEUE_DB_PATH = _env_path("COMFYREVIEW_MV_QUEUE_DB", DATA_DIR / "mv_jobs.sqlite3")
+MV_QUEUE_DB_PATH = _env_path(
+    "COMFYREVIEW_MV_QUEUE_DB", DATA_DIR / "mv_jobs.sqlite3"
+)
 
 DB_PATH = _env_path("COMFYREVIEW_RATINGS_DB", BASE_DIR / "ratings.sqlite3")
-PROMPT_DB_PATH = _env_path("COMFYREVIEW_PROMPT_TOKENS_DB", BASE_DIR / "prompt_tokens.sqlite3")
+PROMPT_DB_PATH = _env_path(
+    "COMFYREVIEW_PROMPT_TOKENS_DB", BASE_DIR / "prompt_tokens.sqlite3"
+)
 ARENA_DB_PATH = _env_path("COMFYREVIEW_ARENA_DB", BASE_DIR / "arena.sqlite3")
 
-PLAYGROUND_DB_PATH = _env_path("COMFYREVIEW_PLAYGROUND_DB", DATA_DIR / "playground.sqlite3")
-COMBO_PROMPTS_DB_PATH = _env_path("COMFYREVIEW_COMBO_DB", DATA_DIR / "combo_prompts.sqlite3")
-IMAGES_DB_PATH = _env_path("COMFYREVIEW_IMAGES_DB", DATA_DIR / "images.sqlite3")
-PROMPT_RATINGS_DB_PATH = _env_path("COMFYREVIEW_PROMPT_RATINGS_DB", DATA_DIR / "prompt_ratings.sqlite3")
+PLAYGROUND_DB_PATH = _env_path(
+    "COMFYREVIEW_PLAYGROUND_DB", DATA_DIR / "playground.sqlite3"
+)
+COMBO_PROMPTS_DB_PATH = _env_path(
+    "COMFYREVIEW_COMBO_DB", DATA_DIR / "combo_prompts.sqlite3"
+)
+IMAGES_DB_PATH = _env_path(
+    "COMFYREVIEW_IMAGES_DB", DATA_DIR / "images.sqlite3"
+)
+PROMPT_RATINGS_DB_PATH = _env_path(
+    "COMFYREVIEW_PROMPT_RATINGS_DB", DATA_DIR / "prompt_ratings.sqlite3"
+)
 PROMPT_TOKENS_DB_PATH = PROMPT_DB_PATH
 
 DEFAULT_MAX_TRIES = _env_int("COMFYREVIEW_DEFAULT_MAX_TRIES", 50)
@@ -126,12 +146,16 @@ SOFT_DELETE_TO_TRASH = _env_bool("COMFYREVIEW_SOFT_DELETE_TO_TRASH", False)
 # Playground
 # =============================
 # Master switch for the Playground Rules Engine
-PLAYGROUND_RULES_ENABLED = _env_bool("COMFYREVIEW_PLAYGROUND_RULES_ENABLED", False)
+PLAYGROUND_RULES_ENABLED = _env_bool(
+    "COMFYREVIEW_PLAYGROUND_RULES_ENABLED", False
+)
 
 # =============================
 # ComfyUI Bridge
 # =============================
-COMFYUI_BASE_URL = os.getenv("COMFYREVIEW_COMFYUI_BASE_URL", "http://127.0.0.1:8188")
+COMFYUI_BASE_URL = os.getenv(
+    "COMFYREVIEW_COMFYUI_BASE_URL", "http://127.0.0.1:8188"
+)
 
 WORKFLOWS_DIR = _env_path("COMFYREVIEW_WORKFLOWS_DIR", DATA_DIR / "workflows")
 WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
@@ -151,5 +175,9 @@ COMFYUI_CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
 # SSL / HTTPS
 # =============================
 SSL_ENABLED = _env_bool("COMFYREVIEW_SSL_ENABLED", False)
-SSL_CERTFILE = _env_path("COMFYREVIEW_SSL_CERTFILE", BASE_DIR / "certs" / "server.pem")
-SSL_KEYFILE = _env_path("COMFYREVIEW_SSL_KEYFILE", BASE_DIR / "certs" / "server-key.pem")
+SSL_CERTFILE = _env_path(
+    "COMFYREVIEW_SSL_CERTFILE", BASE_DIR / "certs" / "server.pem"
+)
+SSL_KEYFILE = _env_path(
+    "COMFYREVIEW_SSL_KEYFILE", BASE_DIR / "certs" / "server-key.pem"
+)
