@@ -52,7 +52,6 @@ services/mv_worker_core/engine.py
 services/mv_worker_core/images_pipeline.py
 services/mv_worker_core/prompt_ratings_pipeline.py
 services/mv_worker_core/ratings_io.py
-services/mv_worker_core/time_utils.py
 services/output_file_service.py
 services/path_relink_service.py
 services/playground_common/__init__.py
@@ -101,8 +100,6 @@ stores/combo_prompts_store.py
 stores/curation_store.py
 stores/db_core.py
 stores/images_store.py
-stores/mv_jobs_store.py
-stores/mv_state_store.py
 stores/playground/__init__.py
 stores/playground/connection.py
 stores/playground/items.py

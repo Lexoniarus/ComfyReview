@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 def _utc_now() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def ensure_schema(db_path: Path) -> None:
+    """Ensure that the legacy projection-state schema exists."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(db_path)
     try:
@@ -29,7 +30,8 @@ def ensure_schema(db_path: Path) -> None:
         con.close()
 
 
-def get_state(db_path: Path, *, aggregator_name: str) -> Dict[str, Any]:
+def get_state(db_path: Path, *, aggregator_name: str) -> dict[str, Any]:
+    """Return an aggregator state, creating its initial row when absent."""
     ensure_schema(db_path)
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
@@ -61,9 +63,10 @@ def upsert_state(
     *,
     aggregator_name: str,
     last_processed_rating_id: int,
-    last_run_at: Optional[str] = None,
-    last_error: Optional[str] = None,
+    last_run_at: str | None = None,
+    last_error: str | None = None,
 ) -> None:
+    """Insert or update one legacy aggregator state."""
     ensure_schema(db_path)
     con = sqlite3.connect(db_path)
     try:
@@ -88,7 +91,8 @@ def upsert_state(
         con.close()
 
 
-def list_states(db_path: Path) -> List[Dict[str, Any]]:
+def list_states(db_path: Path) -> list[dict[str, Any]]:
+    """List all legacy aggregator states in stable name order."""
     ensure_schema(db_path)
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
