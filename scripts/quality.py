@@ -332,14 +332,44 @@ def render_baseline(
 
 
 def run_pytest() -> None:
-    """Run the complete Python regression suite."""
+    """Run the complete Python regression suite with scoped core coverage."""
+    scope_path = ROOT / "quality" / "core_scope.txt"
+    coverage_sources: list[str] = []
+    for raw_line in scope_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        candidate = ROOT / line
+        if candidate.is_file():
+            coverage_sources.append(line.removesuffix(".py").replace("/", "."))
+        elif candidate.is_dir():
+            coverage_sources.append(line.replace("/", "."))
+    erase_result = run_command([sys.executable, "-m", "coverage", "erase"])
+    if erase_result.return_code != 0:
+        raise QualityError("coverage could not remove its prior data")
+    source_argument = ",".join(coverage_sources)
     result = subprocess.run(
-        [sys.executable, "-m", "pytest"],
+        [
+            sys.executable,
+            "-m",
+            "coverage",
+            "run",
+            f"--source={source_argument}",
+            "-m",
+            "pytest",
+        ],
         cwd=ROOT,
         check=False,
     )
     if result.returncode != 0:
         raise QualityError("pytest failed")
+    report_result = subprocess.run(
+        [sys.executable, "-m", "coverage", "report", "--fail-under=100"],
+        cwd=ROOT,
+        check=False,
+    )
+    if report_result.returncode != 0:
+        raise QualityError("Python-core coverage is below 100%")
 
 
 def parse_arguments() -> argparse.Namespace:
