@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, Query
+from fastapi import APIRouter, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from config import ARENA_DB_PATH, OUTPUT_ROOT, MIN_RUNS, POOL_LIMIT, PLAYGROUND_DB_PATH
@@ -6,7 +6,12 @@ from arena_store import ensure_schema as ensure_arena_schema
 from scanner import scan_output
 
 from services.arena_page_service import build_arena_page_context
-from services.arena_service import find_item_by_json, insert_arena_result
+from services.arena_service import (
+    ArenaMutationError,
+    ArenaValidationError,
+    find_item_by_json,
+    insert_arena_result,
+)
 from services.context_filters import build_gallery_context
 
 from templates import ARENA_HTML
@@ -79,7 +84,12 @@ def arena_result(
     # - Gewinner berechnen
     # - Rating für beide schreiben
     # - Match speichern
-    insert_arena_result(left_it, right_it, left_json, right_json, winner_side)
+    try:
+        insert_arena_result(left_it, right_it, left_json, right_json, winner_side)
+    except ArenaValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ArenaMutationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     # 5. Redirect zurück zur Arena
     return RedirectResponse(

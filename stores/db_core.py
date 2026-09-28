@@ -1,6 +1,6 @@
 import sqlite3
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # Was tut es?
 # SQLite Infrastruktur und Write API fuer ratings.
@@ -111,7 +111,7 @@ def insert_or_update_rating(
     loras_json: str,
     pos_prompt: str,
     neg_prompt: str,
-) -> None:
+) -> Tuple[int, int]:
     # Was tut es?
     # Schreibt einen neuen Run in ratings.
     # run wird als MAX(run)+1 pro json_path gebildet.
@@ -125,46 +125,59 @@ def insert_or_update_rating(
     # Wo geht es hin?
     # ratings.sqlite3 Tabelle ratings.
     con = db(db_path)
+    try:
+        row = con.execute(
+            "SELECT COALESCE(MAX(run), 0) AS m FROM ratings WHERE json_path = ?",
+            (json_path,),
+        ).fetchone()
+        next_run = int(row["m"] or 0) + 1
+        rating_count = next_run
 
-    row = con.execute(
-        "SELECT COALESCE(MAX(run), 0) AS m FROM ratings WHERE json_path = ?",
-        (json_path,),
-    ).fetchone()
-    next_run = int(row["m"] or 0) + 1
-    rating_count = next_run
-
-    con.execute(
-        """
-        INSERT INTO ratings(
-            png_path, json_path, run, model_branch, checkpoint, combo_key,
-            rating, deleted, rating_count,
-            steps, cfg, sampler, scheduler, denoise, loras_json,
-            pos_prompt, neg_prompt
+        cursor = con.execute(
+            """
+            INSERT INTO ratings(
+                png_path, json_path, run, model_branch, checkpoint, combo_key,
+                rating, deleted, rating_count,
+                steps, cfg, sampler, scheduler, denoise, loras_json,
+                pos_prompt, neg_prompt
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                png_path,
+                json_path,
+                next_run,
+                model_branch,
+                checkpoint,
+                combo_key,
+                rating,
+                int(deleted or 0),
+                rating_count,
+                steps,
+                cfg,
+                sampler,
+                scheduler,
+                denoise,
+                loras_json,
+                pos_prompt,
+                neg_prompt,
+            ),
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            png_path,
-            json_path,
-            next_run,
-            model_branch,
-            checkpoint,
-            combo_key,
-            rating,
-            int(deleted or 0),
-            rating_count,
-            steps,
-            cfg,
-            sampler,
-            scheduler,
-            denoise,
-            loras_json,
-            pos_prompt,
-            neg_prompt,
-        ),
-    )
-    con.commit()
-    con.close()
+        rating_id = int(cursor.lastrowid or 0)
+        con.commit()
+        return rating_id, next_run
+    finally:
+        con.close()
+
+
+def delete_rating_by_id(db_path: Path, *, rating_id: int) -> None:
+    """Delete one rating event as compensation for a failed legacy workflow."""
+    con = db(db_path)
+    try:
+        con.execute("DELETE FROM ratings WHERE id = ?", (int(rating_id),))
+        con.commit()
+    finally:
+        con.close()
 
 
 def get_rated_map(con: sqlite3.Connection) -> Dict[str, int]:

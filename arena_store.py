@@ -53,7 +53,7 @@ def insert_match(
     winner_json: str,
     created_at: str,
     run: Optional[int] = None,
-) -> None:
+) -> int:
     con = sqlite3.connect(str(db_path))
     try:
         con.execute(
@@ -63,6 +63,18 @@ def insert_match(
             """,
             (left_json, right_json, winner_json, created_at, run),
         )
+        match_id = int(con.execute("SELECT last_insert_rowid()").fetchone()[0])
+        con.commit()
+        return match_id
+    finally:
+        con.close()
+
+
+def delete_match(db_path: Path, *, match_id: int) -> None:
+    """Delete one Arena match as compensation for a failed legacy workflow."""
+    con = sqlite3.connect(str(db_path))
+    try:
+        con.execute("DELETE FROM arena_matches WHERE id = ?", (int(match_id),))
         con.commit()
     finally:
         con.close()

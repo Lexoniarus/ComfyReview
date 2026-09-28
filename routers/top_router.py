@@ -22,7 +22,7 @@ from config import (
 )
 
 from services.context_filters import build_gallery_context
-from services.curation_assignment_service import assign_image_to_set
+from services.curation_assignment_service import CurationMutationError, assign_image_to_set
 from services.gallery_view_service import build_top_pictures_page
 from services.rating_submission_service import submit_rating
 from services.output_file_service import (
@@ -78,20 +78,27 @@ def assign_set(
     subdir: str = Form(""),
     view_set_key: str = Form(""),
 ):
-    assign_image_to_set(
-        curation_db_path=CURATION_DB_PATH,
-        output_root=OUTPUT_ROOT,
-        lora_export_root=LORA_EXPORT_ROOT,
-        allowed_set_keys=CURATION_SET_KEYS,
-        ratings_db_path=DB_PATH,
-        prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-        images_db_path=IMAGES_DB_PATH,
-        combo_prompts_db_path=COMBO_PROMPTS_DB_PATH,
-        arena_db_path=ARENA_DB_PATH,
-        png_path=str(png_path),
-        json_path=str(json_path),
-        set_key=str(set_key),
-    )
+    try:
+        assign_image_to_set(
+            curation_db_path=CURATION_DB_PATH,
+            output_root=OUTPUT_ROOT,
+            lora_export_root=LORA_EXPORT_ROOT,
+            allowed_set_keys=CURATION_SET_KEYS,
+            ratings_db_path=DB_PATH,
+            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
+            images_db_path=IMAGES_DB_PATH,
+            combo_prompts_db_path=COMBO_PROMPTS_DB_PATH,
+            arena_db_path=ARENA_DB_PATH,
+            png_path=str(png_path),
+            json_path=str(json_path),
+            set_key=str(set_key),
+        )
+    except InvalidOutputPathError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OutputPairNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (CurationMutationError, OutputMutationError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return RedirectResponse(
         url=f"/top_pictures?model={model}&mode={mode}&subdir={subdir}&set_key={view_set_key}",

@@ -1,10 +1,15 @@
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from models import RatedItem
 from arena_store import ensure_schema as ensure_arena_schema
 from services import arena_service, rating_submission_service
-from services.curation_assignment_service import assign_image_to_set
+from services.curation_assignment_service import (
+    CurationMutationError,
+    assign_image_to_set,
+)
 from services.mv_worker_core import combo_pipeline
 from stores.images_store import init_images_db, upsert_image
 from stores.mv_state_store import get_state
@@ -150,6 +155,105 @@ def test_arena_result_records_match_and_two_ratings(tmp_path, monkeypatch):
         assert connection.execute("SELECT COUNT(*) FROM arena_matches").fetchone()[0] == 1
     with sqlite3.connect(ratings_path) as connection:
         assert connection.execute("SELECT COUNT(*) FROM ratings").fetchone()[0] == 2
+
+
+def test_arena_rejects_unknown_winner_side(tmp_path, monkeypatch):
+    left_json = tmp_path / "left.json"
+    right_json = tmp_path / "right.json"
+    left = RatedItem(tmp_path / "left.png", left_json, "", "", "", "", {})
+    right = RatedItem(tmp_path / "right.png", right_json, "", "", "", "", {})
+
+    with pytest.raises(arena_service.ArenaValidationError, match="winner_side"):
+        arena_service.insert_arena_result(
+            left,
+            right,
+            str(left_json),
+            str(right_json),
+            "invalid",
+        )
+
+
+def test_arena_compensates_match_and_first_rating_on_failure(tmp_path, monkeypatch):
+    images_path = tmp_path / "images.sqlite3"
+    arena_path = tmp_path / "arena.sqlite3"
+    ratings_path = tmp_path / "ratings.sqlite3"
+    prompt_tokens_path = tmp_path / "prompt_tokens.sqlite3"
+    left_png = tmp_path / "left.png"
+    left_json = tmp_path / "left.json"
+    right_png = tmp_path / "right.png"
+    right_json = tmp_path / "right.json"
+    init_images_db(images_path)
+    ensure_arena_schema(arena_path)
+    upsert_image(images_path, _image_row(left_png, left_json, 8.0))
+    upsert_image(images_path, _image_row(right_png, right_json, 4.0))
+    monkeypatch.setattr(arena_service, "IMAGES_DB_PATH", images_path)
+    monkeypatch.setattr(arena_service, "ARENA_DB_PATH", arena_path)
+    monkeypatch.setattr(arena_service, "DB_PATH", ratings_path)
+    monkeypatch.setattr(arena_service, "PROMPT_TOKENS_DB_PATH", prompt_tokens_path)
+    real_insert = arena_service.insert_or_update_rating
+    calls = 0
+
+    def fail_second_rating(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("second rating failed")
+        return real_insert(*args, **kwargs)
+
+    monkeypatch.setattr(arena_service, "insert_or_update_rating", fail_second_rating)
+    left = RatedItem(left_png, left_json, "", "model", "checkpoint", "combo", {})
+    right = RatedItem(right_png, right_json, "", "model", "checkpoint", "combo", {})
+
+    with pytest.raises(arena_service.ArenaMutationError):
+        arena_service.insert_arena_result(
+            left,
+            right,
+            str(left_json),
+            str(right_json),
+            "left",
+        )
+
+    with sqlite3.connect(arena_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM arena_matches").fetchone()[0] == 0
+    with sqlite3.connect(ratings_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM ratings").fetchone()[0] == 0
+
+
+def test_curation_restores_files_when_relink_fails(tmp_path, monkeypatch):
+    output_root = tmp_path / "output"
+    source_dir = output_root / "playground" / "Aiko"
+    source_dir.mkdir(parents=True)
+    png_path = source_dir / "image.png"
+    json_path = source_dir / "image.json"
+    png_path.write_bytes(b"png")
+    json_path.write_text("{}", encoding="utf-8")
+    calls = 0
+
+    def fail_first_relink(**_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("relink failed")
+
+    monkeypatch.setattr(
+        "services.curation_assignment_service.relink_paths_after_move",
+        fail_first_relink,
+    )
+
+    with pytest.raises(CurationMutationError, match="Could not assign"):
+        assign_image_to_set(
+            curation_db_path=tmp_path / "curation.sqlite3",
+            output_root=output_root,
+            lora_export_root=tmp_path / "export",
+            allowed_set_keys=("scene",),
+            png_path=str(png_path),
+            json_path=str(json_path),
+            set_key="scene",
+        )
+
+    assert png_path.is_file()
+    assert json_path.is_file()
+    assert not (source_dir / "scene" / "image.png").exists()
 
 
 def test_combo_rebuild_failure_is_stored_and_returned(tmp_path, monkeypatch):
