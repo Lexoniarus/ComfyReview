@@ -1,4 +1,3 @@
-app.py
 arena_store.py
 config.py
 custom_node_for_comfyui/alex_nodes.py

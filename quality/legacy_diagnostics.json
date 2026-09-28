@@ -3,7 +3,6 @@
   "schema_version": 1,
   "tools": {
     "format": {
-      "format|app.py|unformatted": 1,
       "format|arena_store.py|unformatted": 1,
       "format|config.py|unformatted": 1,
       "format|custom_node_for_comfyui/alex_nodes.py|unformatted": 1,
@@ -170,7 +169,6 @@
       "pyright|tests/test_prompt_store_tokenize.py|reportArgumentType": 1
     },
     "ruff": {
-      "ruff|app.py|I001": 1,
       "ruff|arena_store.py|UP045": 1,
       "ruff|config.py|I001": 1,
       "ruff|custom_node_for_comfyui/alex_nodes.py|B904": 3,
