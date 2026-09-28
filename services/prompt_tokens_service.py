@@ -86,3 +86,21 @@ def write_prompt_tokens_for_latest_run(
     )
     out["run"] = int(run)
     return out
+
+
+def delete_prompt_tokens_for_run(
+    *,
+    prompt_tokens_db_path: Path,
+    json_path: str,
+    run: int,
+) -> None:
+    """Delete token rows created by a compensated legacy mutation."""
+    con = prompt_tokens_db(prompt_tokens_db_path)
+    try:
+        con.execute(
+            "DELETE FROM tokens WHERE json_path = ? AND run = ?",
+            (str(json_path), int(run)),
+        )
+        con.commit()
+    finally:
+        con.close()

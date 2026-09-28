@@ -248,6 +248,25 @@ filesystem operation has a known outcome.
 - After an external action, mutable state is revalidated before final commit
   when correctness depends on it.
 
+### Legacy safety bridge
+
+Until the canonical database cutover, a few workflows still span independent
+SQLite files and the ComfyUI output filesystem. The legacy runtime therefore
+uses explicit validation and compensating actions:
+
+- submitted PNG/JSON paths must resolve to an existing matching pair below the
+  configured output root
+- delete operations stage the pair in the configured trash location before the
+  review tombstone is written and restore it if that write fails
+- Arena and curation workflows surface failures and compensate completed legacy
+  writes or file moves where possible
+- projection failures fail their queue job; startup marks jobs abandoned by a
+  previous process as failed and schedules one catchup when projections lag
+
+These measures protect ordinary failure paths but do not claim crash atomicity
+across multiple SQLite files. That guarantee requires the later canonical
+database and Unit of Work.
+
 ## 11. Workers and derived projections
 
 Background workers are application infrastructure, not a second business-logic

@@ -162,3 +162,22 @@ def mark_all_queued_done(db_path: Path, *, up_to_job_id: int) -> None:
         con.commit()
     finally:
         con.close()
+
+
+def recover_abandoned_running_jobs(db_path: Path) -> int:
+    """Mark jobs left running by a previous process as failed."""
+    ensure_schema(db_path)
+    con = sqlite3.connect(db_path)
+    try:
+        cursor = con.execute(
+            """
+            UPDATE mv_jobs
+            SET status = 'failed',
+                error = 'abandoned during previous process; recovered at startup'
+            WHERE status = 'running'
+            """
+        )
+        con.commit()
+        return int(cursor.rowcount or 0)
+    finally:
+        con.close()

@@ -12,15 +12,27 @@ from config import (
 import sqlite3
 from stores.images_store import init_images_db
 from arena_store import (
-    ensure_schema as ensure_arena_schema,
+    delete_match as arena_delete_match,
     has_match as arena_has_match,
     insert_match as arena_insert_match,
 )
 from db_store import db, insert_or_update_rating
+from stores.db_core import delete_rating_by_id
 from meta_view import extract_prompts, extract_view
 from services.rating_service import parse_float, parse_int, rating_avg_and_runs_for_json
 from stores.mv_jobs_store import enqueue_job
-from services.prompt_tokens_service import write_prompt_tokens_for_latest_run
+from services.prompt_tokens_service import (
+    delete_prompt_tokens_for_run,
+    write_prompt_tokens_for_run,
+)
+
+
+class ArenaValidationError(ValueError):
+    """Raised when an Arena decision is not valid for the selected pair."""
+
+
+class ArenaMutationError(RuntimeError):
+    """Raised when a legacy multi-database Arena mutation fails."""
 
 
 
@@ -129,6 +141,11 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
     # - arena.sqlite3: Match gespeichert
     # - ratings.sqlite3: 2 neue rating Runs
 
+    if winner_side not in {"left", "right"}:
+        raise ArenaValidationError("winner_side must be 'left' or 'right'")
+    if str(left_it.json_path) != str(left_json) or str(right_it.json_path) != str(right_json):
+        raise ArenaValidationError("Arena pair no longer matches the submitted paths")
+
     # vNext: avg values should come from images.sqlite3 (score MV, keyed by png_path).
     # Fallback to ratings aggregation only if MV row is missing.
     def _avg_from_images(png_path: str):
@@ -171,18 +188,6 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    try:
-        arena_insert_match(
-            ARENA_DB_PATH,
-            left_json=left_json,
-            right_json=right_json,
-            winner_json=winner_json,
-            created_at=now,
-            run=None,
-        )
-    except Exception:
-        pass
-
     def _insert_int_rating(it, rating_int: int):
         # Zweck:
         # - nimmt ein Item, extrahiert view + prompts
@@ -196,7 +201,7 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
         except Exception:
             loras_json_v = "[]"
 
-        insert_or_update_rating(
+        rating_id, run = insert_or_update_rating(
             DB_PATH,
             png_path=str(it.png_path),
             json_path=str(it.json_path),
@@ -214,26 +219,50 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
             pos_prompt=pos_prompt,
             neg_prompt=neg_prompt,
         )
-        # Rohdaten Update: prompt_tokens pro Run schreiben (kein MV)
-        try:
-            write_prompt_tokens_for_latest_run(
-                ratings_db_path=DB_PATH,
-                prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-                json_path=str(it.json_path),
-                model_branch=str(it.model_branch or ""),
-                pos_prompt=str(pos_prompt or ""),
-                neg_prompt=str(neg_prompt or ""),
-                rating=int(rating_int),
-                deleted=0,
-            )
-        except Exception as e:
-            print(f"prompt_tokens write failed after arena rating: {e}")
+        write_prompt_tokens_for_run(
+            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
+            json_path=str(it.json_path),
+            run=int(run),
+            model_branch=str(it.model_branch or ""),
+            pos_prompt=str(pos_prompt or ""),
+            neg_prompt=str(neg_prompt or ""),
+            rating=int(rating_int),
+            deleted=0,
+        )
+        return int(rating_id), int(run), str(it.json_path)
 
-        # Queue Trigger: Worker Catchup
-        try:
-            enqueue_job(MV_QUEUE_DB_PATH, job_type="catchup")
-        except Exception as e:
-            print(f"enqueue mv_job failed after arena rating: {e}")
+    match_id = None
+    inserted_ratings = []
+    try:
+        match_id = arena_insert_match(
+            ARENA_DB_PATH,
+            left_json=left_json,
+            right_json=right_json,
+            winner_json=winner_json,
+            created_at=now,
+            run=None,
+        )
+        inserted_ratings.append(_insert_int_rating(winner_it, winner_target))
+        inserted_ratings.append(_insert_int_rating(loser_it, loser_target))
+    except Exception as exc:
+        for rating_id, run, json_path in reversed(inserted_ratings):
+            try:
+                delete_prompt_tokens_for_run(
+                    prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
+                    json_path=json_path,
+                    run=run,
+                )
+                delete_rating_by_id(DB_PATH, rating_id=rating_id)
+            except Exception:
+                pass
+        if match_id is not None:
+            try:
+                arena_delete_match(ARENA_DB_PATH, match_id=int(match_id))
+            except Exception:
+                pass
+        raise ArenaMutationError("Could not record Arena decision") from exc
 
-    _insert_int_rating(winner_it, winner_target)
-    _insert_int_rating(loser_it, loser_target)
+    try:
+        enqueue_job(MV_QUEUE_DB_PATH, job_type="catchup")
+    except Exception as exc:
+        print(f"enqueue mv_job failed after arena decision: {exc}")

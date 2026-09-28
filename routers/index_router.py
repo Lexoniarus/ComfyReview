@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Form, Query
+from fastapi import APIRouter, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from config import (
@@ -23,7 +23,12 @@ from services.context_filters import (
     normalize_subdir,
     normalize_unrated_flag,
 )
-from services.rating_submission_service import submit_rating
+from services.rating_submission_service import ReviewValidationError, submit_rating
+from services.output_file_service import (
+    InvalidOutputPathError,
+    OutputMutationError,
+    OutputPairNotFoundError,
+)
 from services.review_page_service import build_review_page_context
 from templates import INDEX_HTML
 
@@ -77,28 +82,35 @@ def rate(
     filter_character: Optional[str] = Form(None),
     filter_set_key: Optional[str] = Form(None),
 ):
-    submit_rating(
-        ratings_db_path=DB_PATH,
-        prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-        mv_queue_db_path=MV_QUEUE_DB_PATH,
-        output_root=OUTPUT_ROOT,
-        trash_root=TRASH_ROOT,
-        soft_delete_to_trash=bool(SOFT_DELETE_TO_TRASH),
-        rating=rating,
-        deleted=deleted,
-        delete=delete,
-        combo_key=combo_key,
-        model_branch=model_branch,
-        checkpoint=checkpoint,
-        json_path=json_path,
-        png_path=png_path,
-        sampler=sampler,
-        scheduler=scheduler,
-        steps=steps,
-        cfg=cfg,
-        denoise=denoise,
-        loras_json=loras_json,
-    )
+    try:
+        submit_rating(
+            ratings_db_path=DB_PATH,
+            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
+            mv_queue_db_path=MV_QUEUE_DB_PATH,
+            output_root=OUTPUT_ROOT,
+            trash_root=TRASH_ROOT,
+            soft_delete_to_trash=bool(SOFT_DELETE_TO_TRASH),
+            rating=rating,
+            deleted=deleted,
+            delete=delete,
+            combo_key=combo_key,
+            model_branch=model_branch,
+            checkpoint=checkpoint,
+            json_path=json_path,
+            png_path=png_path,
+            sampler=sampler,
+            scheduler=scheduler,
+            steps=steps,
+            cfg=cfg,
+            denoise=denoise,
+            loras_json=loras_json,
+        )
+    except (InvalidOutputPathError, ReviewValidationError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OutputPairNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OutputMutationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     q_unrated = "1" if normalize_unrated_flag(filter_unrated, default=1) == 1 else "0"
     q_model = normalize_model(str(filter_model or ""))

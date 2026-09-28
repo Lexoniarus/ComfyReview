@@ -5,8 +5,19 @@ from pathlib import Path
 from typing import Iterable, Optional, Tuple
 
 from services.context_filters import extract_character_from_subdir
+from services.output_file_service import (
+    OutputFileService,
+)
 from services.path_relink_service import relink_paths_after_move
-from stores.curation_store import upsert_set_key
+from stores.curation_store import fetch_set_map, upsert_set_key
+
+
+class CurationMutationError(RuntimeError):
+    """Raised when a legacy curation move cannot be completed safely."""
+
+
+class CurationValidationError(ValueError):
+    """Raised when a requested curation set is not configured."""
 
 
 def normalize_set_key(set_key: str, *, allowed: Iterable[str]) -> Optional[str]:
@@ -135,9 +146,22 @@ def _pick_unique_dest_paths(dest_dir: Path, png_name: str) -> Tuple[Path, Path]:
 
 
 def _move_pair(png_path: Path, json_path: Path, dest_png: Path, dest_json: Path) -> None:
+    """Move a PNG/JSON pair and restore the PNG if the sidecar move fails."""
     dest_png.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(png_path), str(dest_png))
-    shutil.move(str(json_path), str(dest_json))
+    png_moved = False
+    try:
+        shutil.move(str(png_path), str(dest_png))
+        png_moved = True
+        shutil.move(str(json_path), str(dest_json))
+    except OSError as exc:
+        if png_moved and dest_png.exists():
+            try:
+                shutil.move(str(dest_png), str(png_path))
+            except OSError as rollback_exc:
+                raise CurationMutationError(
+                    "Curation move failed and PNG rollback also failed"
+                ) from rollback_exc
+        raise CurationMutationError("Could not move the output pair") from exc
 
 
 def assign_image_to_set(
@@ -166,9 +190,18 @@ def assign_image_to_set(
     - keep stable behavior: relink DB paths so existing ratings and views remain valid.
     """
 
-    p = Path(str(png_path))
-    j = Path(str(json_path))
-    sk = normalize_set_key(set_key, allowed=allowed_set_keys)
+    output_files = OutputFileService(
+        output_root=Path(output_root),
+        trash_root=Path(output_root) / "_trash",
+    )
+    pair = output_files.resolve_pair(png_path=str(png_path), json_path=str(json_path))
+    p = pair.png_path
+    j = pair.json_path
+    allowed_set = {str(value).strip() for value in allowed_set_keys if str(value).strip()}
+    raw_set_key = str(set_key or "").strip()
+    if raw_set_key not in {"", "unsorted", *allowed_set}:
+        raise CurationValidationError("Unknown curation set")
+    sk = normalize_set_key(raw_set_key, allowed=allowed_set)
 
     character_root, _ = _derive_character_root(Path(output_root), p)
     dest_dir = _dest_dir_for_set(character_root, sk)
@@ -187,26 +220,52 @@ def assign_image_to_set(
     old_png = str(p)
     old_json = str(j)
 
-    _move_pair(p, j, dest_png, dest_json)
-
     new_png = str(dest_png)
     new_json = str(dest_json)
+    old_set_key = fetch_set_map(curation_db_path, [old_png]).get(old_png)
 
-    relink_paths_after_move(
-        ratings_db_path=ratings_db_path,
-        prompt_tokens_db_path=prompt_tokens_db_path,
-        images_db_path=images_db_path,
-        combo_prompts_db_path=combo_prompts_db_path,
-        arena_db_path=arena_db_path,
-        old_png_path=old_png,
-        old_json_path=old_json,
-        new_png_path=new_png,
-        new_json_path=new_json,
-    )
+    _move_pair(p, j, dest_png, dest_json)
+    try:
+        relink_paths_after_move(
+            ratings_db_path=ratings_db_path,
+            prompt_tokens_db_path=prompt_tokens_db_path,
+            images_db_path=images_db_path,
+            combo_prompts_db_path=combo_prompts_db_path,
+            arena_db_path=arena_db_path,
+            old_png_path=old_png,
+            old_json_path=old_json,
+            new_png_path=new_png,
+            new_json_path=new_json,
+        )
 
-    # mapping is stored on the NEW path, old path must be cleared
-    upsert_set_key(curation_db_path, png_path=old_png, set_key=None)
-    upsert_set_key(curation_db_path, png_path=new_png, set_key=sk)
+        # mapping is stored on the NEW path, old path must be cleared
+        upsert_set_key(curation_db_path, png_path=old_png, set_key=None)
+        upsert_set_key(curation_db_path, png_path=new_png, set_key=sk)
+    except Exception as exc:
+        try:
+            relink_paths_after_move(
+                ratings_db_path=ratings_db_path,
+                prompt_tokens_db_path=prompt_tokens_db_path,
+                images_db_path=images_db_path,
+                combo_prompts_db_path=combo_prompts_db_path,
+                arena_db_path=arena_db_path,
+                old_png_path=new_png,
+                old_json_path=new_json,
+                new_png_path=old_png,
+                new_json_path=old_json,
+            )
+        except Exception:
+            pass
+        try:
+            _move_pair(dest_png, dest_json, p, j)
+        except Exception:
+            pass
+        try:
+            upsert_set_key(curation_db_path, png_path=new_png, set_key=None)
+            upsert_set_key(curation_db_path, png_path=old_png, set_key=old_set_key)
+        except Exception:
+            pass
+        raise CurationMutationError("Could not assign the output pair") from exc
 
     # Optional legacy export copy (currently not required)
     # if sk is not None:

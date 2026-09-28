@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Query
+from fastapi import APIRouter, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from config import (
@@ -22,9 +22,18 @@ from config import (
 )
 
 from services.context_filters import build_gallery_context
-from services.curation_assignment_service import assign_image_to_set
+from services.curation_assignment_service import (
+    CurationMutationError,
+    CurationValidationError,
+    assign_image_to_set,
+)
 from services.gallery_view_service import build_top_pictures_page
-from services.rating_submission_service import submit_rating
+from services.rating_submission_service import ReviewValidationError, submit_rating
+from services.output_file_service import (
+    InvalidOutputPathError,
+    OutputMutationError,
+    OutputPairNotFoundError,
+)
 
 from templates import TOP_PICTURES_HTML
 
@@ -73,20 +82,27 @@ def assign_set(
     subdir: str = Form(""),
     view_set_key: str = Form(""),
 ):
-    assign_image_to_set(
-        curation_db_path=CURATION_DB_PATH,
-        output_root=OUTPUT_ROOT,
-        lora_export_root=LORA_EXPORT_ROOT,
-        allowed_set_keys=CURATION_SET_KEYS,
-        ratings_db_path=DB_PATH,
-        prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-        images_db_path=IMAGES_DB_PATH,
-        combo_prompts_db_path=COMBO_PROMPTS_DB_PATH,
-        arena_db_path=ARENA_DB_PATH,
-        png_path=str(png_path),
-        json_path=str(json_path),
-        set_key=str(set_key),
-    )
+    try:
+        assign_image_to_set(
+            curation_db_path=CURATION_DB_PATH,
+            output_root=OUTPUT_ROOT,
+            lora_export_root=LORA_EXPORT_ROOT,
+            allowed_set_keys=CURATION_SET_KEYS,
+            ratings_db_path=DB_PATH,
+            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
+            images_db_path=IMAGES_DB_PATH,
+            combo_prompts_db_path=COMBO_PROMPTS_DB_PATH,
+            arena_db_path=ARENA_DB_PATH,
+            png_path=str(png_path),
+            json_path=str(json_path),
+            set_key=str(set_key),
+        )
+    except (CurationValidationError, InvalidOutputPathError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OutputPairNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (CurationMutationError, OutputMutationError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return RedirectResponse(
         url=f"/top_pictures?model={model}&mode={mode}&subdir={subdir}&set_key={view_set_key}",
@@ -107,28 +123,35 @@ def top_delete(
     filter_set_key: str = Form(""),
 ):
     # unify delete behavior with /rate submission logic
-    submit_rating(
-        ratings_db_path=DB_PATH,
-        prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-        mv_queue_db_path=MV_QUEUE_DB_PATH,
-        output_root=OUTPUT_ROOT,
-        trash_root=TRASH_ROOT,
-        soft_delete_to_trash=bool(SOFT_DELETE_TO_TRASH),
-        rating=None,
-        deleted=1,
-        delete=1,
-        combo_key=str(combo_key or ""),
-        model_branch=str(model_branch or ""),
-        checkpoint=str(checkpoint or ""),
-        json_path=str(json_path),
-        png_path=str(png_path),
-        sampler=None,
-        scheduler=None,
-        steps=None,
-        cfg=None,
-        denoise=None,
-        loras_json=None,
-    )
+    try:
+        submit_rating(
+            ratings_db_path=DB_PATH,
+            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
+            mv_queue_db_path=MV_QUEUE_DB_PATH,
+            output_root=OUTPUT_ROOT,
+            trash_root=TRASH_ROOT,
+            soft_delete_to_trash=bool(SOFT_DELETE_TO_TRASH),
+            rating=None,
+            deleted=1,
+            delete=1,
+            combo_key=str(combo_key or ""),
+            model_branch=str(model_branch or ""),
+            checkpoint=str(checkpoint or ""),
+            json_path=str(json_path),
+            png_path=str(png_path),
+            sampler=None,
+            scheduler=None,
+            steps=None,
+            cfg=None,
+            denoise=None,
+            loras_json=None,
+        )
+    except (InvalidOutputPathError, ReviewValidationError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OutputPairNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OutputMutationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return RedirectResponse(
         url=(
