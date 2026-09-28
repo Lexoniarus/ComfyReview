@@ -9,6 +9,22 @@ for further Character Chronicles work.
 The refactor must preserve working ComfyReview behavior while replacing
 architectural debt deliberately.
 
+## Safety bridge before Phase 1
+
+The first implementation milestone hardens legacy mutations without changing
+the physical database layout:
+
+- validate output pairs below the configured ComfyUI output root
+- stage deletes reversibly before recording their review tombstone
+- reject invalid Review, Arena and Curation commands explicitly
+- compensate ordinary partial Arena/Curation failures where possible
+- fail projection jobs on rebuild errors and recover abandoned worker jobs at
+  startup
+
+Cross-database crash atomicity remains deferred to the canonical database. The
+safety bridge must not be represented as a replacement for the future Unit of
+Work.
+
 ## Phase 0 – Baseline documentation
 
 Deliverables:
