@@ -5,18 +5,10 @@ from typing import Optional, Tuple, Any
 
 from db_store import insert_or_update_rating
 from meta_view import extract_prompts, extract_view
-from scanner import move_to_trash
-
 from services.rating_service import parse_float, parse_int, read_json_meta
+from services.output_file_service import OutputFileService
 from services.prompt_tokens_service import write_prompt_tokens_for_latest_run
 from stores.mv_jobs_store import enqueue_job
-
-
-def _unlink_quiet(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    except Exception:
-        return
 
 
 def _pressed_delete(*, deleted: Optional[int], delete: Optional[int]) -> bool:
@@ -29,33 +21,6 @@ def _read_meta_for_rating(json_path: str) -> Tuple[dict, str, str]:
     view = extract_view(meta)
     pos_prompt, neg_prompt, _ = extract_prompts(meta)
     return view, str(pos_prompt or ""), str(neg_prompt or "")
-
-
-def _apply_delete_policy(
-    *,
-    pressed_delete: bool,
-    soft_delete_to_trash: bool,
-    output_root: Path,
-    trash_root: Path,
-    png_path: str,
-    json_path: str,
-) -> None:
-    """Apply filesystem delete policy for a delete run."""
-    if not pressed_delete:
-        return
-
-    if bool(soft_delete_to_trash):
-        try:
-            move_to_trash(output_root, trash_root, Path(png_path), Path(json_path))
-            return
-        except Exception:
-            # fall back to hard unlink if move fails
-            _unlink_quiet(Path(png_path))
-            _unlink_quiet(Path(json_path))
-            return
-
-    _unlink_quiet(Path(png_path))
-    _unlink_quiet(Path(json_path))
 
 
 def _resolve_render_params(
@@ -186,7 +151,12 @@ def submit_rating(
     - touch mv worker queue (debounced)
     """
     pressed = _pressed_delete(deleted=deleted, delete=delete)
-    view, pos_prompt, neg_prompt = _read_meta_for_rating(str(json_path))
+    output_files = OutputFileService(
+        output_root=Path(output_root),
+        trash_root=Path(trash_root),
+    )
+    pair = output_files.resolve_pair(png_path=str(png_path), json_path=str(json_path))
+    view, pos_prompt, neg_prompt = _read_meta_for_rating(str(pair.json_path))
 
     deleted_flag = 1 if pressed else 0
     rating_val = None if deleted_flag else (int(rating) if rating is not None else None)
@@ -201,29 +171,35 @@ def submit_rating(
         loras_json=loras_json,
     )
 
-    _write_rating_row(
-        ratings_db_path=ratings_db_path,
-        png_path=str(png_path),
-        json_path=str(json_path),
-        model_branch=str(model_branch or ""),
-        checkpoint=str(checkpoint or ""),
-        combo_key=str(combo_key or ""),
-        rating_val=rating_val,
-        deleted_flag=deleted_flag,
-        steps_v=steps_v,
-        cfg_v=cfg_v,
-        sampler_v=sampler_v,
-        scheduler_v=scheduler_v,
-        denoise_v=denoise_v,
-        loras_json_v=str(loras_json_v or "[]"),
-        pos_prompt=pos_prompt,
-        neg_prompt=neg_prompt,
-    )
+    staged_delete = output_files.stage_delete(pair) if pressed else None
+    try:
+        _write_rating_row(
+            ratings_db_path=ratings_db_path,
+            png_path=str(pair.png_path),
+            json_path=str(pair.json_path),
+            model_branch=str(model_branch or ""),
+            checkpoint=str(checkpoint or ""),
+            combo_key=str(combo_key or ""),
+            rating_val=rating_val,
+            deleted_flag=deleted_flag,
+            steps_v=steps_v,
+            cfg_v=cfg_v,
+            sampler_v=sampler_v,
+            scheduler_v=scheduler_v,
+            denoise_v=denoise_v,
+            loras_json_v=str(loras_json_v or "[]"),
+            pos_prompt=pos_prompt,
+            neg_prompt=neg_prompt,
+        )
+    except Exception:
+        if staged_delete is not None:
+            staged_delete.rollback()
+        raise
 
     _write_prompt_tokens_quiet(
         ratings_db_path=ratings_db_path,
         prompt_tokens_db_path=prompt_tokens_db_path,
-        json_path=str(json_path),
+        json_path=str(pair.json_path),
         model_branch=str(model_branch or ""),
         pos_prompt=pos_prompt,
         neg_prompt=neg_prompt,
@@ -233,14 +209,5 @@ def submit_rating(
 
     _touch_mv_queue_quiet(mv_queue_db_path)
 
-    # Persist the tombstone before touching the filesystem. Otherwise a database
-    # write failure can remove PNG/JSON while every derived view still considers
-    # the image active.
-    _apply_delete_policy(
-        pressed_delete=pressed,
-        soft_delete_to_trash=bool(soft_delete_to_trash),
-        output_root=Path(output_root),
-        trash_root=Path(trash_root),
-        png_path=str(png_path),
-        json_path=str(json_path),
-    )
+    if staged_delete is not None:
+        staged_delete.finalize(preserve_in_trash=bool(soft_delete_to_trash))

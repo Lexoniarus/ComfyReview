@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Query
+from fastapi import APIRouter, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from config import (
@@ -25,6 +25,11 @@ from services.context_filters import build_gallery_context
 from services.curation_assignment_service import assign_image_to_set
 from services.gallery_view_service import build_top_pictures_page
 from services.rating_submission_service import submit_rating
+from services.output_file_service import (
+    InvalidOutputPathError,
+    OutputMutationError,
+    OutputPairNotFoundError,
+)
 
 from templates import TOP_PICTURES_HTML
 
@@ -107,28 +112,35 @@ def top_delete(
     filter_set_key: str = Form(""),
 ):
     # unify delete behavior with /rate submission logic
-    submit_rating(
-        ratings_db_path=DB_PATH,
-        prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-        mv_queue_db_path=MV_QUEUE_DB_PATH,
-        output_root=OUTPUT_ROOT,
-        trash_root=TRASH_ROOT,
-        soft_delete_to_trash=bool(SOFT_DELETE_TO_TRASH),
-        rating=None,
-        deleted=1,
-        delete=1,
-        combo_key=str(combo_key or ""),
-        model_branch=str(model_branch or ""),
-        checkpoint=str(checkpoint or ""),
-        json_path=str(json_path),
-        png_path=str(png_path),
-        sampler=None,
-        scheduler=None,
-        steps=None,
-        cfg=None,
-        denoise=None,
-        loras_json=None,
-    )
+    try:
+        submit_rating(
+            ratings_db_path=DB_PATH,
+            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
+            mv_queue_db_path=MV_QUEUE_DB_PATH,
+            output_root=OUTPUT_ROOT,
+            trash_root=TRASH_ROOT,
+            soft_delete_to_trash=bool(SOFT_DELETE_TO_TRASH),
+            rating=None,
+            deleted=1,
+            delete=1,
+            combo_key=str(combo_key or ""),
+            model_branch=str(model_branch or ""),
+            checkpoint=str(checkpoint or ""),
+            json_path=str(json_path),
+            png_path=str(png_path),
+            sampler=None,
+            scheduler=None,
+            steps=None,
+            cfg=None,
+            denoise=None,
+            loras_json=None,
+        )
+    except InvalidOutputPathError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OutputPairNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except OutputMutationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return RedirectResponse(
         url=(
