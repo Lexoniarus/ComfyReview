@@ -2,20 +2,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from db_store import db, get_rated_map
 from meta_view import extract_prompts, extract_view, preset_text_from_view
 from scanner import scan_output
-
 from services.context_filters import (
     build_dropdown_lists,
     extract_character_from_subdir,
     matches_character_scope,
     matches_set_filter,
     normalize_model,
-    normalize_set_key,
     normalize_scope_subdir,
+    normalize_set_key,
     normalize_unrated_flag,
 )
 from services.file_urls import png_path_to_url
@@ -26,19 +25,22 @@ from stores.curation_store import fetch_set_map
 
 def _filter_items_for_review(
     *,
-    items: List[Any],
-    rated_map: Dict[str, int],
-    set_map: Dict[str, Optional[str]],
+    items: list[Any],
+    rated_map: dict[str, int],
+    set_map: dict[str, str | None],
     model: str,
     subdir: str,
     set_key: str,
     unrated_only: int,
-) -> List[Any]:
-    filtered: List[Any] = []
+) -> list[Any]:
+    filtered: list[Any] = []
     for it in items:
         if model and getattr(it, "model_branch", "") != model:
             continue
-        if not matches_character_scope(item_subdir=str(getattr(it, "subdir", "") or ""), selected_subdir=subdir):
+        if not matches_character_scope(
+            item_subdir=str(getattr(it, "subdir", "") or ""),
+            selected_subdir=subdir,
+        ):
             continue
 
         assigned = set_map.get(str(it.png_path))
@@ -69,7 +71,7 @@ def build_review_page_context(
     model: str,
     subdir: str,
     set_key: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build template context for the main review page (/).
 
     Responsibilities
@@ -85,7 +87,9 @@ def build_review_page_context(
     subdir_n = normalize_scope_subdir(subdir)
     set_key_n = normalize_set_key(set_key)
 
-    items, total, model_list, subdir_list, character_options = _load_review_items(output_root)
+    items, total, model_list, subdir_list, character_options = (
+        _load_review_items(output_root)
+    )
     set_map = _load_set_map_safe(curation_db_path, items)
 
     con = db(ratings_db_path)
@@ -119,13 +123,19 @@ def build_review_page_context(
         it = filtered[0]
         rated_count = int(rated_map.get(str(it.json_path), 0) or 0)
 
-        rating_avg, rating_runs = rating_avg_and_runs_for_json(con, str(it.json_path))
-        last_rating, trend_delta = _fetch_last_and_trend(con, str(it.json_path), int(rating_runs or 0))
+        rating_avg, rating_runs = rating_avg_and_runs_for_json(
+            con, str(it.json_path)
+        )
+        last_rating, trend_delta = _fetch_last_and_trend(
+            con, str(it.json_path), int(rating_runs or 0)
+        )
     finally:
         con.close()
 
     view = extract_view(it.meta)
-    labels = _resolve_labels(playground_db_path, str(view.get("pos_prompt") or ""))
+    labels = _resolve_labels(
+        playground_db_path, str(view.get("pos_prompt") or "")
+    )
 
     return _build_review_context(
         it=it,
@@ -154,14 +164,20 @@ def _load_review_items(output_root: Path):
     return items, total, model_list, subdir_list, character_options
 
 
-def _load_set_map_safe(curation_db_path: Path, items: List[Any]) -> Dict[str, Optional[str]]:
+def _load_set_map_safe(
+    curation_db_path: Path, items: list[Any]
+) -> dict[str, str | None]:
     try:
-        return fetch_set_map(curation_db_path, [str(it.png_path) for it in items])
+        return fetch_set_map(
+            curation_db_path, [str(it.png_path) for it in items]
+        )
     except Exception:
         return {}
 
 
-def _sort_items_for_review_all(items: List[Any], rated_map: Dict[str, int]) -> None:
+def _sort_items_for_review_all(
+    items: list[Any], rated_map: dict[str, int]
+) -> None:
     items.sort(
         key=lambda it2: (
             int(rated_map.get(str(it2.json_path), 0) or 0),
@@ -177,10 +193,10 @@ def _empty_review_context(
     model_n: str,
     subdir_n: str,
     set_key_n: str,
-    model_list: List[str],
-    subdir_list: List[str],
-    character_options: List[Dict[str, str]],
-) -> Dict[str, Any]:
+    model_list: list[str],
+    subdir_list: list[str],
+    character_options: list[dict[str, str]],
+) -> dict[str, Any]:
     return {
         "total": total,
         "idx": 0,
@@ -228,7 +244,9 @@ def _fetch_last_and_trend(con, json_path: str, rating_runs: int):
         (json_path,),
     ).fetchone()
 
-    last_rating = int(last_row[0]) if last_row and last_row[0] is not None else None
+    last_rating = (
+        int(last_row[0]) if last_row and last_row[0] is not None else None
+    )
 
     trend_delta = None
     if rating_runs >= 2:
@@ -245,14 +263,18 @@ def _fetch_last_and_trend(con, json_path: str, rating_runs: int):
             (json_path,),
         ).fetchone()
 
-        prev_rating = int(prev_row[0]) if prev_row and prev_row[0] is not None else None
+        prev_rating = (
+            int(prev_row[0]) if prev_row and prev_row[0] is not None else None
+        )
         if prev_rating is not None and last_rating is not None:
             trend_delta = int(last_rating) - int(prev_rating)
 
     return last_rating, trend_delta
 
 
-def _resolve_labels(playground_db_path: Path, pos_prompt: str) -> Dict[str, Any]:
+def _resolve_labels(
+    playground_db_path: Path, pos_prompt: str
+) -> dict[str, Any]:
     matcher = get_playground_label_matcher(playground_db_path)
     return matcher.resolve(str(pos_prompt or ""), include_lighting=True)
 
@@ -265,21 +287,23 @@ def _build_review_context(
     model_n: str,
     subdir_n: str,
     set_key_n: str,
-    model_list: List[str],
-    subdir_list: List[str],
-    character_options: List[Dict[str, str]],
-    view: Dict[str, Any],
-    labels: Dict[str, Any],
+    model_list: list[str],
+    subdir_list: list[str],
+    character_options: list[dict[str, str]],
+    view: dict[str, Any],
+    labels: dict[str, Any],
     rated_count: int,
     rating_avg: Any,
     rating_runs: Any,
     trend_delta: Any,
     last_rating: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     img_url = png_path_to_url(str(it.png_path))
     meta_pre = json.dumps(it.meta, indent=2, ensure_ascii=False)
 
-    character_name = extract_character_from_subdir(str(getattr(it, "subdir", "") or ""))
+    character_name = extract_character_from_subdir(
+        str(getattr(it, "subdir", "") or "")
+    )
     preset_text = preset_text_from_view(view)
     _, _, prompt_hint = extract_prompts(it.meta)
 

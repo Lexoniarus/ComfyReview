@@ -4,7 +4,6 @@ db_store.py
 meta_view.py
 models.py
 routers/__init__.py
-routers/index_router.py
 routers/playground/__init__.py
 routers/playground/_shared.py
 routers/playground/api.py
@@ -12,7 +11,6 @@ routers/playground/browse.py
 routers/playground/generator.py
 routers/playground/hub.py
 routers/stats_router.py
-routers/top_router.py
 scanner.py
 services/__init__.py
 services/analytics_page_service.py
@@ -32,7 +30,6 @@ services/comfy_client_core/workflows.py
 services/context_filters.py
 services/curation_assignment_service.py
 services/file_urls.py
-services/gallery_view_service.py
 services/mv_worker_core/__init__.py
 services/mv_worker_core/combo_pipeline.py
 services/mv_worker_core/debounce.py
@@ -75,7 +72,6 @@ services/playground_rules_engine/types.py
 services/prompt_tokens_service.py
 services/rating_service.py
 services/rating_submission_service.py
-services/review_page_service.py
 services/scene_resolver.py
 services/ui_state_service.py
 stores/__init__.py
