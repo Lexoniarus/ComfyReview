@@ -1,6 +1,6 @@
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict, Iterable, Optional
 
 
 def init_curation_db(db_path: Path) -> None:
@@ -26,14 +26,16 @@ def init_curation_db(db_path: Path) -> None:
         con.close()
 
 
-def fetch_set_map(db_path: Path, png_paths: Iterable[str]) -> Dict[str, Optional[str]]:
+def fetch_set_map(
+    db_path: Path, png_paths: Iterable[str]
+) -> dict[str, str | None]:
     """Bulk fetch mapping for many png_paths."""
     init_curation_db(db_path)
     paths = [str(p) for p in (png_paths or []) if str(p).strip()]
     if not paths:
         return {}
 
-    out: Dict[str, Optional[str]] = {}
+    out: dict[str, str | None] = {}
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
     try:
@@ -47,13 +49,17 @@ def fetch_set_map(db_path: Path, png_paths: Iterable[str]) -> Dict[str, Optional
                 chunk,
             ).fetchall()
             for r in rows:
-                out[str(r["png_path"])] = (str(r["set_key"]) if r["set_key"] is not None else None)
+                out[str(r["png_path"])] = (
+                    str(r["set_key"]) if r["set_key"] is not None else None
+                )
         return out
     finally:
         con.close()
 
 
-def upsert_set_key(db_path: Path, *, png_path: str, set_key: Optional[str]) -> None:
+def upsert_set_key(
+    db_path: Path, *, png_path: str, set_key: str | None
+) -> None:
     """Set or clear set_key for an image."""
     init_curation_db(db_path)
     p = str(png_path or "").strip()

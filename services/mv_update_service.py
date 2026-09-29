@@ -3,15 +3,16 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from prompt_store import db as prompt_tokens_db
 from prompt_store import tokenize
-
-from stores.images_store import init_images_db, upsert_image, delete_image
-from stores.prompt_ratings_store import init_prompt_ratings_db, upsert_prompt_rating
-
 from services.combo_prompts_service import rebuild_combo_prompts
+from stores.images_store import delete_image, init_images_db, upsert_image
+from stores.prompt_ratings_store import (
+    init_prompt_ratings_db,
+    upsert_prompt_rating,
+)
 
 
 def _max_run_for_json(ratings_db_path: Path, json_path: str) -> int:
@@ -35,9 +36,9 @@ def _update_prompt_tokens_for_run(
     model_branch: str,
     pos_prompt: str,
     neg_prompt: str,
-    rating: Optional[int],
+    rating: int | None,
     deleted: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     con = prompt_tokens_db(prompt_tokens_db_path)
     try:
         con.execute(
@@ -51,16 +52,35 @@ def _update_prompt_tokens_for_run(
         for tok in pos_tokens:
             con.execute(
                 "INSERT INTO tokens(json_path, run, model_branch, scope, token, rating, deleted) VALUES(?,?,?,?,?,?,?)",
-                (str(json_path), int(run), str(model_branch or ""), "pos", str(tok), rating, int(deleted or 0)),
+                (
+                    str(json_path),
+                    int(run),
+                    str(model_branch or ""),
+                    "pos",
+                    str(tok),
+                    rating,
+                    int(deleted or 0),
+                ),
             )
         for tok in neg_tokens:
             con.execute(
                 "INSERT INTO tokens(json_path, run, model_branch, scope, token, rating, deleted) VALUES(?,?,?,?,?,?,?)",
-                (str(json_path), int(run), str(model_branch or ""), "neg", str(tok), rating, int(deleted or 0)),
+                (
+                    str(json_path),
+                    int(run),
+                    str(model_branch or ""),
+                    "neg",
+                    str(tok),
+                    rating,
+                    int(deleted or 0),
+                ),
             )
 
         con.commit()
-        return {"pos_tokens": int(len(pos_tokens)), "neg_tokens": int(len(neg_tokens))}
+        return {
+            "pos_tokens": int(len(pos_tokens)),
+            "neg_tokens": int(len(neg_tokens)),
+        }
     finally:
         con.close()
 
@@ -69,9 +89,9 @@ def _fetch_prompt_stats(
     *,
     prompt_tokens_db_path: Path,
     scope: str,
-    tokens: List[str],
-    model_branch: Optional[str],
-) -> Dict[str, Dict[str, Any]]:
+    tokens: list[str],
+    model_branch: str | None,
+) -> dict[str, dict[str, Any]]:
     toks = [str(t).strip() for t in (tokens or []) if str(t).strip()]
     if not toks:
         return {}
@@ -88,17 +108,19 @@ def _fetch_prompt_stats(
             WHERE scope = ?
               AND token IN ({qmarks})
         """
-        args: List[Any] = [str(scope)] + toks
+        args: list[Any] = [str(scope)] + toks
         if model_branch is not None:
             sql += " AND model_branch = ?"
             args.append(str(model_branch))
         sql += " GROUP BY token"
 
         rows = con.execute(sql, args).fetchall()
-        out: Dict[str, Dict[str, Any]] = {}
+        out: dict[str, dict[str, Any]] = {}
         for r in rows:
             out[str(r["token"])] = {
-                "avg_rating": float(r["avg_rating"]) if r["avg_rating"] is not None else None,
+                "avg_rating": float(r["avg_rating"])
+                if r["avg_rating"] is not None
+                else None,
                 "runs": int(r["runs"] or 0),
             }
         return out
@@ -111,9 +133,9 @@ def _update_prompt_ratings_for_tokens(
     prompt_tokens_db_path: Path,
     prompt_ratings_db_path: Path,
     model_branch: str,
-    pos_tokens: List[str],
-    neg_tokens: List[str],
-) -> Dict[str, Any]:
+    pos_tokens: list[str],
+    neg_tokens: list[str],
+) -> dict[str, Any]:
     init_prompt_ratings_db(prompt_ratings_db_path)
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -169,7 +191,7 @@ def _update_image_row_for_png(
     images_db_path: Path,
     ratings_db_path: Path,
     png_path: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     init_images_db(images_db_path)
 
     con = sqlite3.connect(ratings_db_path)
@@ -206,7 +228,9 @@ def _update_image_row_for_png(
         row = {
             "png_path": str(png_path),
             "json_path": str(latest["json_path"]),
-            "avg_rating": float(avg_row["avg_rating"]) if avg_row["avg_rating"] is not None else None,
+            "avg_rating": float(avg_row["avg_rating"])
+            if avg_row["avg_rating"] is not None
+            else None,
             "runs": int(avg_row["runs"] or 0),
             "rating_count": int(latest["rating_count"] or 0),
             "last_run": int(latest["run"] or 0),
@@ -242,11 +266,11 @@ def update_after_rating_save(
     model_branch: str,
     pos_prompt: str,
     neg_prompt: str,
-    rating: Optional[int],
+    rating: int | None,
     deleted: int,
     max_combos_3: int = 200000,
     rebuild_combos: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Update materialized views after a single rating write.
 
     Ziel

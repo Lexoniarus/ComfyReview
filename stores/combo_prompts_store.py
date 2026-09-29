@@ -2,11 +2,15 @@ import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
-def _ensure_column(con: sqlite3.Connection, *, table: str, col: str, ddl: str) -> None:
-    existing_cols = {r[1] for r in con.execute(f"PRAGMA table_info({table})").fetchall()}
+def _ensure_column(
+    con: sqlite3.Connection, *, table: str, col: str, ddl: str
+) -> None:
+    existing_cols = {
+        r[1] for r in con.execute(f"PRAGMA table_info({table})").fetchall()
+    }
     if col not in existing_cols:
         con.execute(ddl)
 
@@ -26,7 +30,9 @@ def _quarantine_corrupt_db(db_path: Path) -> None:
     if not db_path.exists():
         return
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    target = db_path.with_name(f"{db_path.stem}.corrupt_{stamp}{db_path.suffix}")
+    target = db_path.with_name(
+        f"{db_path.stem}.corrupt_{stamp}{db_path.suffix}"
+    )
     try:
         os.replace(str(db_path), str(target))
     except Exception:
@@ -108,21 +114,86 @@ def init_combo_prompts_db(db_path: Path) -> None:
                 """
             )
 
-            _ensure_column(con, table="combo_prompts", col="combo_avg_rating", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_avg_rating REAL")
-            _ensure_column(con, table="combo_prompts", col="combo_image_count", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_image_count INTEGER")
-            _ensure_column(con, table="combo_prompts", col="combo_total_runs", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_total_runs INTEGER")
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_avg_rating",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_avg_rating REAL",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_image_count",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_image_count INTEGER",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_total_runs",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_total_runs INTEGER",
+            )
 
-            _ensure_column(con, table="combo_prompts", col="combo_pos_avg_rating", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_avg_rating REAL")
-            _ensure_column(con, table="combo_prompts", col="combo_pos_runs", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_runs INTEGER")
-            _ensure_column(con, table="combo_prompts", col="combo_pos_total_tokens", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_total_tokens INTEGER")
-            _ensure_column(con, table="combo_prompts", col="combo_pos_rated_tokens", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_rated_tokens INTEGER")
-            _ensure_column(con, table="combo_prompts", col="combo_pos_coverage", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_coverage REAL")
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_pos_avg_rating",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_avg_rating REAL",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_pos_runs",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_runs INTEGER",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_pos_total_tokens",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_total_tokens INTEGER",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_pos_rated_tokens",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_rated_tokens INTEGER",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_pos_coverage",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_pos_coverage REAL",
+            )
 
-            _ensure_column(con, table="combo_prompts", col="combo_neg_avg_rating", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_avg_rating REAL")
-            _ensure_column(con, table="combo_prompts", col="combo_neg_runs", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_runs INTEGER")
-            _ensure_column(con, table="combo_prompts", col="combo_neg_total_tokens", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_total_tokens INTEGER")
-            _ensure_column(con, table="combo_prompts", col="combo_neg_rated_tokens", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_rated_tokens INTEGER")
-            _ensure_column(con, table="combo_prompts", col="combo_neg_coverage", ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_coverage REAL")
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_neg_avg_rating",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_avg_rating REAL",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_neg_runs",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_runs INTEGER",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_neg_total_tokens",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_total_tokens INTEGER",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_neg_rated_tokens",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_rated_tokens INTEGER",
+            )
+            _ensure_column(
+                con,
+                table="combo_prompts",
+                col="combo_neg_coverage",
+                ddl="ALTER TABLE combo_prompts ADD COLUMN combo_neg_coverage REAL",
+            )
 
             con.execute(
                 """
@@ -138,8 +209,12 @@ def init_combo_prompts_db(db_path: Path) -> None:
                 """
             )
 
-            con.execute("CREATE INDEX IF NOT EXISTS idx_combo_prompts_size_score ON combo_prompts(combo_size, score DESC)")
-            con.execute("CREATE INDEX IF NOT EXISTS idx_combo_best_images_combo ON combo_best_images(combo_key)")
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS idx_combo_prompts_size_score ON combo_prompts(combo_size, score DESC)"
+            )
+            con.execute(
+                "CREATE INDEX IF NOT EXISTS idx_combo_best_images_combo ON combo_best_images(combo_key)"
+            )
             con.commit()
         finally:
             con.close()
@@ -166,7 +241,7 @@ def clear_combo_prompts(db_path: Path) -> None:
         con.close()
 
 
-def upsert_combo_prompt(db_path: Path, row: Dict[str, Any]) -> None:
+def upsert_combo_prompt(db_path: Path, row: dict[str, Any]) -> None:
     init_combo_prompts_db(db_path)
     con = _connect_combo_db(db_path)
     try:
@@ -240,7 +315,7 @@ def upsert_combo_prompt(db_path: Path, row: Dict[str, Any]) -> None:
         con.close()
 
 
-def upsert_combo_best_image(db_path: Path, row: Dict[str, Any]) -> None:
+def upsert_combo_best_image(db_path: Path, row: dict[str, Any]) -> None:
     init_combo_prompts_db(db_path)
     con = _connect_combo_db(db_path)
     try:
@@ -268,7 +343,9 @@ def upsert_combo_best_image(db_path: Path, row: Dict[str, Any]) -> None:
         con.close()
 
 
-def list_top_combo_prompts(db_path: Path, *, combo_size: int, limit: int = 3) -> List[Dict[str, Any]]:
+def list_top_combo_prompts(
+    db_path: Path, *, combo_size: int, limit: int = 3
+) -> list[dict[str, Any]]:
     init_combo_prompts_db(db_path)
     con = _connect_combo_db(db_path)
     con.row_factory = sqlite3.Row
@@ -309,7 +386,9 @@ def list_top_combo_prompts(db_path: Path, *, combo_size: int, limit: int = 3) ->
         con.close()
 
 
-def list_best_images_for_combo(db_path: Path, *, combo_key: str, limit: int = 3) -> List[Dict[str, Any]]:
+def list_best_images_for_combo(
+    db_path: Path, *, combo_key: str, limit: int = 3
+) -> list[dict[str, Any]]:
     init_combo_prompts_db(db_path)
     con = _connect_combo_db(db_path)
     con.row_factory = sqlite3.Row
@@ -329,11 +408,17 @@ def list_best_images_for_combo(db_path: Path, *, combo_key: str, limit: int = 3)
         con.close()
 
 
-def list_top_combo_prompts_with_images(db_path: Path, *, combo_size: int, limit: int = 3) -> List[Dict[str, Any]]:
-    combos = list_top_combo_prompts(db_path, combo_size=int(combo_size), limit=int(limit))
-    out: List[Dict[str, Any]] = []
+def list_top_combo_prompts_with_images(
+    db_path: Path, *, combo_size: int, limit: int = 3
+) -> list[dict[str, Any]]:
+    combos = list_top_combo_prompts(
+        db_path, combo_size=int(combo_size), limit=int(limit)
+    )
+    out: list[dict[str, Any]] = []
     for c in combos:
         c = dict(c)
-        c["best_images"] = list_best_images_for_combo(db_path, combo_key=str(c.get("combo_key")), limit=3)
+        c["best_images"] = list_best_images_for_combo(
+            db_path, combo_key=str(c.get("combo_key")), limit=3
+        )
         out.append(c)
     return out

@@ -3,34 +3,37 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from config import MV_DEBOUNCE_SECONDS
-
+from services.mv_worker_core.combo_pipeline import process_combo_prompts_once
+from services.mv_worker_core.debounce import debounce_wait_for_catchup_job
+from services.mv_worker_core.images_pipeline import process_images_incremental
+from services.mv_worker_core.prompt_ratings_pipeline import (
+    process_prompt_ratings_incremental,
+)
+from services.mv_worker_core.ratings_io import max_queued_job_id, max_rating_id
+from services.mv_worker_core.time_utils import utc_now_str
 from stores.mv_jobs_store import (
-    ensure_schema as ensure_jobs_schema,
-    fetch_next_queued,
+    enqueue_job,
     fetch_job,
-    mark_running,
+    fetch_next_queued,
+    mark_all_queued_done,
     mark_done,
     mark_failed,
-    mark_all_queued_done,
-    enqueue_job,
+    mark_running,
     recover_abandoned_running_jobs,
 )
-
+from stores.mv_jobs_store import (
+    ensure_schema as ensure_jobs_schema,
+)
 from stores.mv_state_store import (
     ensure_schema as ensure_state_schema,
+)
+from stores.mv_state_store import (
     get_state,
     upsert_state,
 )
-
-from services.mv_worker_core.time_utils import utc_now_str
-from services.mv_worker_core.debounce import debounce_wait_for_catchup_job
-from services.mv_worker_core.ratings_io import max_rating_id, max_queued_job_id
-from services.mv_worker_core.prompt_ratings_pipeline import process_prompt_ratings_incremental
-from services.mv_worker_core.images_pipeline import process_images_incremental
-from services.mv_worker_core.combo_pipeline import process_combo_prompts_once
 
 
 def ensure_initial_catchup_job(
@@ -38,7 +41,7 @@ def ensure_initial_catchup_job(
     queue_db_path: Path,
     state_db_path: Path,
     ratings_db_path: Path,
-    aggregators: Tuple[str, ...],
+    aggregators: tuple[str, ...],
 ) -> None:
     try:
         current_max = max_rating_id(ratings_db_path)
@@ -62,7 +65,7 @@ def initialize_worker_state(
     queue_db_path: Path,
     state_db_path: Path,
     ratings_db_path: Path,
-    aggregators: Tuple[str, ...],
+    aggregators: tuple[str, ...],
 ) -> int:
     """Prepare schemas, recover abandoned work, and enqueue one catchup."""
     ensure_jobs_schema(queue_db_path)
@@ -115,7 +118,7 @@ def drain_until_frontier_stable(
     return max(last_frontier, 0)
 
 
-def should_stop(stop_event: Optional[threading.Event]) -> bool:
+def should_stop(stop_event: threading.Event | None) -> bool:
     return bool(stop_event is not None and stop_event.is_set())
 
 
@@ -123,8 +126,8 @@ def wait_for_next_queued_job(
     *,
     queue_db_path: Path,
     poll_seconds: float,
-    stop_event: Optional[threading.Event],
-) -> Optional[Dict[str, Any]]:
+    stop_event: threading.Event | None,
+) -> dict[str, Any] | None:
     """Block until we have a usable queued job or the worker should stop."""
     while True:
         if should_stop(stop_event):
@@ -140,7 +143,7 @@ def wait_for_next_queued_job(
 
 def process_one_job(
     *,
-    job: Dict[str, Any],
+    job: dict[str, Any],
     queue_db_path: Path,
     state_db_path: Path,
     ratings_db_path: Path,
@@ -150,7 +153,7 @@ def process_one_job(
     playground_db_path: Path,
     images_db_path: Path,
     poll_seconds: float,
-    stop_event: Optional[threading.Event],
+    stop_event: threading.Event | None,
 ) -> None:
     """Run exactly one queued job (currently only 'catchup' is used)."""
     job_id = int(job.get("id") or 0)
@@ -195,7 +198,9 @@ def process_one_job(
         mark_done(queue_db_path, job_id)
 
         if queued_snapshot_max_id > 0:
-            mark_all_queued_done(queue_db_path, up_to_job_id=queued_snapshot_max_id)
+            mark_all_queued_done(
+                queue_db_path, up_to_job_id=queued_snapshot_max_id
+            )
 
     except Exception as e:
         mark_failed(queue_db_path, job_id, str(e))
@@ -204,7 +209,9 @@ def process_one_job(
             upsert_state(
                 state_db_path,
                 aggregator_name=a,
-                last_processed_rating_id=int(st.get("last_processed_rating_id") or 0),
+                last_processed_rating_id=int(
+                    st.get("last_processed_rating_id") or 0
+                ),
                 last_run_at=utc_now_str(),
                 last_error=str(e),
             )
@@ -222,9 +229,13 @@ def run_worker_loop(
     playground_db_path: Path,
     images_db_path: Path,
     poll_seconds: float = 0.75,
-    stop_event: Optional[threading.Event] = None,
+    stop_event: threading.Event | None = None,
 ) -> None:
-    aggregators: Tuple[str, ...] = ("prompt_ratings", "combo_prompts", "images")
+    aggregators: tuple[str, ...] = (
+        "prompt_ratings",
+        "combo_prompts",
+        "images",
+    )
 
     initialize_worker_state(
         queue_db_path=queue_db_path,

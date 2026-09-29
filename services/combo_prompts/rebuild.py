@@ -5,20 +5,20 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
-from stores.playground_store import list_items
 from stores.combo_prompts_store import (
-    init_combo_prompts_db,
     clear_combo_prompts,
-    upsert_combo_prompt,
-    upsert_combo_best_image,
+    init_combo_prompts_db,
     list_top_combo_prompts_with_images,
+    upsert_combo_best_image,
+    upsert_combo_prompt,
 )
+from stores.playground_store import list_items
 
-from .token_utils import combo_item_tokens, dedup_keep_order
 from .images_index import build_images_token_index, combo_images_for_tokens
 from .scoring import score_token_block
+from .token_utils import combo_item_tokens, dedup_keep_order
 
 
 def ensure_combo_prompts_db(db_path: Path) -> None:
@@ -34,11 +34,11 @@ def rebuild_combo_prompts(
     model_branch: str = "",
     max_combos_3: int = 200000,
     # Backward compat: older callers may still pass these.
-    prompt_tokens_db_path: Optional[Path] = None,
-    ratings_db_path: Optional[Path] = None,
+    prompt_tokens_db_path: Path | None = None,
+    ratings_db_path: Path | None = None,
     candidate_limit: int = 5000,
     hard_scope: str = "pos",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Atomic rebuild wrapper.
 
     Builds the combo DB into a temp file and swaps atomically.
@@ -81,7 +81,10 @@ def _replace_database_with_retry(
             return
         except OSError as exc:
             last_error = exc
-            is_lock_error = isinstance(exc, PermissionError) or getattr(exc, "winerror", None) == 32
+            is_lock_error = (
+                isinstance(exc, PermissionError)
+                or getattr(exc, "winerror", None) == 32
+            )
             if not is_lock_error or attempt >= int(attempts) - 1:
                 raise
             gc.collect()
@@ -91,14 +94,18 @@ def _replace_database_with_retry(
         raise last_error
 
 
-def get_top_combos_2(db_path: Path, limit: int = 3) -> List[Dict[str, Any]]:
+def get_top_combos_2(db_path: Path, limit: int = 3) -> list[dict[str, Any]]:
     init_combo_prompts_db(db_path)
-    return list_top_combo_prompts_with_images(db_path, combo_size=2, limit=int(limit))
+    return list_top_combo_prompts_with_images(
+        db_path, combo_size=2, limit=int(limit)
+    )
 
 
-def get_top_combos_3(db_path: Path, limit: int = 3) -> List[Dict[str, Any]]:
+def get_top_combos_3(db_path: Path, limit: int = 3) -> list[dict[str, Any]]:
     init_combo_prompts_db(db_path)
-    return list_top_combo_prompts_with_images(db_path, combo_size=3, limit=int(limit))
+    return list_top_combo_prompts_with_images(
+        db_path, combo_size=3, limit=int(limit)
+    )
 
 
 def _rebuild_combo_prompts_into(
@@ -109,14 +116,16 @@ def _rebuild_combo_prompts_into(
     images_db_path: Path,
     model_branch: str = "",
     max_combos_3: int = 200000,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     init_combo_prompts_db(combo_db_path)
     clear_combo_prompts(combo_db_path)
 
-    idx = build_images_token_index(images_db_path=images_db_path, model_branch=str(model_branch or ""))
-    pos_index: Dict[str, Set[str]] = idx["pos_index"]
-    neg_index: Dict[str, Set[str]] = idx["neg_index"]
-    images_by_png: Dict[str, Dict[str, Any]] = idx["images_by_png"]
+    idx = build_images_token_index(
+        images_db_path=images_db_path, model_branch=str(model_branch or "")
+    )
+    pos_index: dict[str, set[str]] = idx["pos_index"]
+    neg_index: dict[str, set[str]] = idx["neg_index"]
+    images_by_png: dict[str, dict[str, Any]] = idx["images_by_png"]
 
     chars, scenes, outfits = _load_combo_sources(playground_db_path)
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -156,7 +165,9 @@ def _rebuild_combo_prompts_into(
     }
 
 
-def _load_combo_sources(playground_db_path: Path) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+def _load_combo_sources(
+    playground_db_path: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     chars = list_items(playground_db_path, kind="character", q="", limit=10000)
     scenes = list_items(playground_db_path, kind="scene", q="", limit=10000)
     outfits = list_items(playground_db_path, kind="outfit", q="", limit=10000)
@@ -167,12 +178,12 @@ def _rebuild_combos_2(
     *,
     combo_db_path: Path,
     prompt_ratings_db_path: Path,
-    pos_index: Dict[str, Set[str]],
-    neg_index: Dict[str, Set[str]],
-    images_by_png: Dict[str, Dict[str, Any]],
+    pos_index: dict[str, set[str]],
+    neg_index: dict[str, set[str]],
+    images_by_png: dict[str, dict[str, Any]],
     model_branch: str,
-    chars: List[Dict[str, Any]],
-    scenes: List[Dict[str, Any]],
+    chars: list[dict[str, Any]],
+    scenes: list[dict[str, Any]],
     now: str,
 ) -> int:
     written = 0
@@ -184,7 +195,7 @@ def _rebuild_combos_2(
             neg_tokens = dedup_keep_order(cneg + sneg)
 
             combo_key = f"character:{int(c['id'])}|scene:{int(s['id'])}"
-            label = f"{c.get('name','')} + {s.get('name','')}"
+            label = f"{c.get('name', '')} + {s.get('name', '')}"
 
             _write_combo_row(
                 combo_db_path=combo_db_path,
@@ -211,13 +222,13 @@ def _rebuild_combos_3(
     *,
     combo_db_path: Path,
     prompt_ratings_db_path: Path,
-    pos_index: Dict[str, Set[str]],
-    neg_index: Dict[str, Set[str]],
-    images_by_png: Dict[str, Dict[str, Any]],
+    pos_index: dict[str, set[str]],
+    neg_index: dict[str, set[str]],
+    images_by_png: dict[str, dict[str, Any]],
     model_branch: str,
-    chars: List[Dict[str, Any]],
-    scenes: List[Dict[str, Any]],
-    outfits: List[Dict[str, Any]],
+    chars: list[dict[str, Any]],
+    scenes: list[dict[str, Any]],
+    outfits: list[dict[str, Any]],
     now: str,
     max_combos_3: int,
 ) -> int:
@@ -239,7 +250,7 @@ def _rebuild_combos_3(
                 neg_tokens = dedup_keep_order(cneg + sneg + oneg)
 
                 combo_key = f"character:{int(c['id'])}|scene:{int(s['id'])}|outfit:{int(o['id'])}"
-                label = f"{c.get('name','')} + {s.get('name','')} + {o.get('name','')}"
+                label = f"{c.get('name', '')} + {s.get('name', '')} + {o.get('name', '')}"
 
                 _write_combo_row(
                     combo_db_path=combo_db_path,
@@ -267,18 +278,18 @@ def _write_combo_row(
     *,
     combo_db_path: Path,
     prompt_ratings_db_path: Path,
-    pos_index: Dict[str, Set[str]],
-    neg_index: Dict[str, Set[str]],
-    images_by_png: Dict[str, Dict[str, Any]],
+    pos_index: dict[str, set[str]],
+    neg_index: dict[str, set[str]],
+    images_by_png: dict[str, dict[str, Any]],
     model_branch: str,
     combo_key: str,
     combo_size: int,
     character_id: int,
     scene_id: int,
-    outfit_id: Optional[int],
+    outfit_id: int | None,
     label: str,
-    pos_tokens: List[str],
-    neg_tokens: List[str],
+    pos_tokens: list[str],
+    neg_tokens: list[str],
     now: str,
 ) -> None:
     pos_stats = score_token_block(
@@ -344,7 +355,9 @@ def _write_combo_row(
     )
 
 
-def _write_combo_best_images(combo_db_path: Path, combo_key: str, best3: List[Dict[str, Any]]) -> None:
+def _write_combo_best_images(
+    combo_db_path: Path, combo_key: str, best3: list[dict[str, Any]]
+) -> None:
     for rank, b in enumerate(best3, start=1):
         upsert_combo_best_image(
             combo_db_path,

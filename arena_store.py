@@ -1,6 +1,5 @@
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
 
 def ensure_schema(db_path: Path) -> None:
@@ -52,7 +51,7 @@ def insert_match(
     right_json: str,
     winner_json: str,
     created_at: str,
-    run: Optional[int] = None,
+    run: int | None = None,
 ) -> int:
     con = sqlite3.connect(str(db_path))
     try:

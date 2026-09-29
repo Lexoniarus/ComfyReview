@@ -3,16 +3,16 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
-from stores.images_store import init_images_db, upsert_image, delete_image
+from stores.images_store import delete_image, init_images_db, upsert_image
 
 
 def rebuild_images(
     *,
     images_db_path: Path,
     ratings_db_path: Path,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
 
     init_images_db(images_db_path)
 
@@ -20,16 +20,23 @@ def rebuild_images(
     con.row_factory = sqlite3.Row
 
     try:
-        cols = {r["name"] for r in con.execute("PRAGMA table_info(ratings)").fetchall()}
+        cols = {
+            r["name"]
+            for r in con.execute("PRAGMA table_info(ratings)").fetchall()
+        }
         has_run = "run" in cols
         order = "ORDER BY run DESC" if has_run else "ORDER BY rowid DESC"
 
-        png_paths = [r["png_path"] for r in con.execute("SELECT DISTINCT png_path FROM ratings").fetchall()]
+        png_paths = [
+            r["png_path"]
+            for r in con.execute(
+                "SELECT DISTINCT png_path FROM ratings"
+            ).fetchall()
+        ]
 
         now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
         for png_path in png_paths:
-
             # Existenzcheck: images MV fuehrt nur existierende Dateien
             try:
                 if not Path(str(png_path)).exists():
@@ -113,7 +120,7 @@ def update_image_for_png(
     images_db_path: Path,
     ratings_db_path: Path,
     png_path: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
 
     init_images_db(images_db_path)
 
@@ -133,7 +140,10 @@ def update_image_for_png(
     con.row_factory = sqlite3.Row
 
     try:
-        cols = {r["name"] for r in con.execute("PRAGMA table_info(ratings)").fetchall()}
+        cols = {
+            r["name"]
+            for r in con.execute("PRAGMA table_info(ratings)").fetchall()
+        }
         has_run = "run" in cols
         order = "ORDER BY run DESC" if has_run else "ORDER BY rowid DESC"
 

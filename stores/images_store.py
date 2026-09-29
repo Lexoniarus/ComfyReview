@@ -1,6 +1,6 @@
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, Optional, List, Iterable, Tuple
+from typing import Any
 
 
 def init_images_db(db_path: Path) -> None:
@@ -34,7 +34,9 @@ def init_images_db(db_path: Path) -> None:
         )
         # Lightweight schema migration (add new columns if table already existed)
         # NOTE: older installs may have created a much smaller images table.
-        existing_cols = {r[1] for r in con.execute("PRAGMA table_info(images)").fetchall()}
+        existing_cols = {
+            r[1] for r in con.execute("PRAGMA table_info(images)").fetchall()
+        }
 
         def _add(col: str, ddl: str) -> None:
             if col not in existing_cols:
@@ -44,7 +46,10 @@ def init_images_db(db_path: Path) -> None:
         _add("json_path", "ALTER TABLE images ADD COLUMN json_path TEXT")
         _add("avg_rating", "ALTER TABLE images ADD COLUMN avg_rating REAL")
         _add("runs", "ALTER TABLE images ADD COLUMN runs INTEGER")
-        _add("rating_count", "ALTER TABLE images ADD COLUMN rating_count INTEGER")
+        _add(
+            "rating_count",
+            "ALTER TABLE images ADD COLUMN rating_count INTEGER",
+        )
         _add("last_run", "ALTER TABLE images ADD COLUMN last_run INTEGER")
         _add("model_branch", "ALTER TABLE images ADD COLUMN model_branch TEXT")
         _add("checkpoint", "ALTER TABLE images ADD COLUMN checkpoint TEXT")
@@ -72,7 +77,7 @@ def delete_image(db_path: Path, *, png_path: str) -> None:
         con.close()
 
 
-def upsert_image(db_path: Path, row: Dict[str, Any]) -> None:
+def upsert_image(db_path: Path, row: dict[str, Any]) -> None:
     con = sqlite3.connect(db_path)
     try:
         con.execute(
@@ -117,11 +122,11 @@ def upsert_image(db_path: Path, row: Dict[str, Any]) -> None:
 
 def fetch_best_images_by_combo_keys(
     db_path: Path,
-    combo_keys: List[str],
+    combo_keys: list[str],
     *,
     model_branch: str = "",
     limit_per: int = 3,
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> dict[str, list[dict[str, Any]]]:
     """Batch: pro combo_key Top-N Images nach avg_rating/runs."""
     # Ensure schema is up to date (older DBs may miss columns like 'combo_key').
     init_images_db(db_path)
@@ -133,7 +138,7 @@ def fetch_best_images_by_combo_keys(
     try:
         placeholders = ",".join(["?"] * len(combo_keys))
         where = f"WHERE combo_key IN ({placeholders})"
-        args: List[Any] = list(combo_keys)
+        args: list[Any] = list(combo_keys)
         if model_branch:
             where += " AND model_branch = ?"
             args.append(model_branch)
@@ -154,7 +159,7 @@ def fetch_best_images_by_combo_keys(
             (*args, int(limit_per)),
         ).fetchall()
 
-        out: Dict[str, List[Dict[str, Any]]] = {}
+        out: dict[str, list[dict[str, Any]]] = {}
         for r in rows:
             out.setdefault(str(r["combo_key"] or ""), []).append(dict(r))
         return out
@@ -166,10 +171,10 @@ def fetch_best_images_by_param_values(
     db_path: Path,
     *,
     feat: str,
-    values: List[Any],
+    values: list[Any],
     model_branch: str = "",
     limit_per: int = 3,
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> dict[str, list[dict[str, Any]]]:
     """Batch: pro Parameterwert (checkpoint/steps/cfg/sampler/scheduler) Top-N Images."""
     # Ensure schema is up to date (older DBs may miss columns like 'checkpoint').
     init_images_db(db_path)
@@ -182,7 +187,7 @@ def fetch_best_images_by_param_values(
     try:
         placeholders = ",".join(["?"] * len(values))
         where = f"WHERE {feat} IN ({placeholders})"
-        args: List[Any] = list(values)
+        args: list[Any] = list(values)
         if model_branch:
             where += " AND model_branch = ?"
             args.append(model_branch)
@@ -207,7 +212,7 @@ def fetch_best_images_by_param_values(
             # If a column is missing despite migrations (custom forks), fail closed.
             return {}
 
-        out: Dict[str, List[Dict[str, Any]]] = {}
+        out: dict[str, list[dict[str, Any]]] = {}
         for r in rows:
             out.setdefault(str(r["value"]), []).append(dict(r))
         return out

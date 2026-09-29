@@ -1,6 +1,6 @@
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
 def _ensure_schema(con: sqlite3.Connection) -> None:
@@ -18,18 +18,29 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         )
         """
     )
-    con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_model ON tokens(model_branch)")
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tokens_model ON tokens(model_branch)"
+    )
     con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_scope ON tokens(scope)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token)")
 
     # Migration: Spalten nachziehen (für bestehende DBs)
-    cols = {row["name"] for row in con.execute("PRAGMA table_info(tokens)").fetchall()}
+    cols = {
+        row["name"]
+        for row in con.execute("PRAGMA table_info(tokens)").fetchall()
+    }
     if "json_path" not in cols:
-        con.execute("ALTER TABLE tokens ADD COLUMN json_path TEXT NOT NULL DEFAULT ''")
+        con.execute(
+            "ALTER TABLE tokens ADD COLUMN json_path TEXT NOT NULL DEFAULT ''"
+        )
     if "run" not in cols:
-        con.execute("ALTER TABLE tokens ADD COLUMN run INTEGER NOT NULL DEFAULT 0")
+        con.execute(
+            "ALTER TABLE tokens ADD COLUMN run INTEGER NOT NULL DEFAULT 0"
+        )
 
-    con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_json ON tokens(json_path)")
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tokens_json ON tokens(json_path)"
+    )
     con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_run ON tokens(run)")
 
 
@@ -41,7 +52,7 @@ def db(path: Path) -> sqlite3.Connection:
     return con
 
 
-def tokenize(text: str) -> List[str]:
+def tokenize(text: str) -> list[str]:
     """
     Tokenisierung ausschließlich per Komma.
     Es wird NICHTS am Inhalt verändert.
@@ -108,11 +119,11 @@ def fetch_token_stats(
     scope: str = "pos",
     min_n: int = 8,
     limit: int = 200,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     con = db(prompt_db_path)
 
     where = "WHERE scope = ?"
-    args: List[Any] = [scope]
+    args: list[Any] = [scope]
     if model:
         where += " AND model_branch = ?"
         args.append(model)
@@ -140,7 +151,7 @@ def fetch_token_stats(
         args + [min_n, limit],
     ).fetchall()
 
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for r in rows:
         out.append(
             {

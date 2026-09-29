@@ -3,11 +3,11 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from stores.prompt_ratings_store import (
-    init_prompt_ratings_db,
     clear_prompt_ratings,
+    init_prompt_ratings_db,
     upsert_prompt_rating,
     upsert_prompt_ratings_bulk,
 )
@@ -17,7 +17,7 @@ def rebuild_prompt_ratings(
     *,
     prompt_tokens_db_path: Path,
     prompt_ratings_db_path: Path,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Rebuild prompt_ratings.sqlite3.
 
     Quelle
@@ -77,9 +77,15 @@ def rebuild_prompt_ratings(
                     "scope": str(r["scope"] or "pos"),
                     "token": str(r["token"] or ""),
                     "model_branch": str(r["model_branch"] or ""),
-                    "avg_rating": float(r["avg_rating"]) if r["avg_rating"] is not None else None,
-                    "mean_score": float(r["mean_score"]) if r["mean_score"] is not None else None,
-                    "lb05": float(r["lb05"]) if r["lb05"] is not None else None,
+                    "avg_rating": float(r["avg_rating"])
+                    if r["avg_rating"] is not None
+                    else None,
+                    "mean_score": float(r["mean_score"])
+                    if r["mean_score"] is not None
+                    else None,
+                    "lb05": float(r["lb05"])
+                    if r["lb05"] is not None
+                    else None,
                     "runs": int(r["runs"] or 0),
                     "last_updated": now,
                 },
@@ -115,9 +121,15 @@ def rebuild_prompt_ratings(
                     "scope": str(r["scope"] or "pos"),
                     "token": str(r["token"] or ""),
                     "model_branch": "",
-                    "avg_rating": float(r["avg_rating"]) if r["avg_rating"] is not None else None,
-                    "mean_score": float(r["mean_score"]) if r["mean_score"] is not None else None,
-                    "lb05": float(r["lb05"]) if r["lb05"] is not None else None,
+                    "avg_rating": float(r["avg_rating"])
+                    if r["avg_rating"] is not None
+                    else None,
+                    "mean_score": float(r["mean_score"])
+                    if r["mean_score"] is not None
+                    else None,
+                    "lb05": float(r["lb05"])
+                    if r["lb05"] is not None
+                    else None,
                     "runs": int(r["runs"] or 0),
                     "last_updated": now,
                 },
@@ -128,12 +140,13 @@ def rebuild_prompt_ratings(
     finally:
         con.close()
 
+
 def update_prompt_ratings_for_runs(
     *,
     prompt_tokens_db_path: Path,
     prompt_ratings_db_path: Path,
-    runs: List[Dict[str, Any]],
-) -> Dict[str, Any]:
+    runs: list[dict[str, Any]],
+) -> dict[str, Any]:
     """Incrementally update prompt_ratings for affected tokens.
 
     runs
@@ -145,18 +158,20 @@ def update_prompt_ratings_for_runs(
     """
     init_prompt_ratings_db(prompt_ratings_db_path)
 
-    def _chunk_list(xs: List[str], n: int = 400) -> List[List[str]]:
+    def _chunk_list(xs: list[str], n: int = 400) -> list[list[str]]:
         return [xs[i : i + n] for i in range(0, len(xs), n)]
 
-    def _collect_touched_tokens() -> tuple[Dict[str, Dict[str, set]], Dict[str, set]]:
+    def _collect_touched_tokens() -> tuple[
+        dict[str, dict[str, set]], dict[str, set]
+    ]:
         """Return tokens touched by the provided (json_path, run) list.
 
         Output
           touched_by_branch[model_branch][scope] -> set(token)
           touched_global[scope] -> set(token)
         """
-        touched_by_branch: Dict[str, Dict[str, set]] = {}
-        touched_global: Dict[str, set] = {"pos": set(), "neg": set()}
+        touched_by_branch: dict[str, dict[str, set]] = {}
+        touched_global: dict[str, set] = {"pos": set(), "neg": set()}
 
         con = sqlite3.connect(prompt_tokens_db_path)
         con.row_factory = sqlite3.Row
@@ -194,8 +209,8 @@ def update_prompt_ratings_for_runs(
         con: sqlite3.Connection,
         *,
         scope: str,
-        tokens: List[str],
-        model_branch: Optional[str],
+        tokens: list[str],
+        model_branch: str | None,
     ) -> list[sqlite3.Row]:
         if not tokens:
             return []
@@ -219,7 +234,7 @@ def update_prompt_ratings_for_runs(
             WHERE scope = ?
               AND token IN ({qmarks})
         """
-        args: List[Any] = [scope] + list(tokens)
+        args: list[Any] = [scope] + list(tokens)
 
         if model_branch is not None:
             sql += " AND model_branch = ?"
@@ -247,7 +262,7 @@ def update_prompt_ratings_for_runs(
                         tokens=chunk,
                         model_branch=str(mb or ""),
                     )
-                    payload: List[Dict[str, Any]] = []
+                    payload: list[dict[str, Any]] = []
                     for row in rows:
                         payload.append(
                             {
@@ -260,12 +275,16 @@ def update_prompt_ratings_for_runs(
                                 "mean_score": float(row["mean_score"])
                                 if row["mean_score"] is not None
                                 else None,
-                                "lb05": float(row["lb05"]) if row["lb05"] is not None else None,
+                                "lb05": float(row["lb05"])
+                                if row["lb05"] is not None
+                                else None,
                                 "runs": int(row["runs"] or 0),
                                 "last_updated": now,
                             }
                         )
-                    written += upsert_prompt_ratings_bulk(prompt_ratings_db_path, payload)
+                    written += upsert_prompt_ratings_bulk(
+                        prompt_ratings_db_path, payload
+                    )
 
         # 2) Aggregation ueber alle Modelle (model_branch = '')
         for scope in ("pos", "neg"):
@@ -277,7 +296,7 @@ def update_prompt_ratings_for_runs(
                     tokens=chunk,
                     model_branch=None,
                 )
-                payload2: List[Dict[str, Any]] = []
+                payload2: list[dict[str, Any]] = []
                 for row in rows:
                     payload2.append(
                         {
@@ -290,12 +309,16 @@ def update_prompt_ratings_for_runs(
                             "mean_score": float(row["mean_score"])
                             if row["mean_score"] is not None
                             else None,
-                            "lb05": float(row["lb05"]) if row["lb05"] is not None else None,
+                            "lb05": float(row["lb05"])
+                            if row["lb05"] is not None
+                            else None,
                             "runs": int(row["runs"] or 0),
                             "last_updated": now,
                         }
                     )
-                written += upsert_prompt_ratings_bulk(prompt_ratings_db_path, payload2)
+                written += upsert_prompt_ratings_bulk(
+                    prompt_ratings_db_path, payload2
+                )
 
     finally:
         con_stats.close()

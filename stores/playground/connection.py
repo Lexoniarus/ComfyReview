@@ -36,9 +36,15 @@ def ensure_schema(con: sqlite3.Connection) -> None:
         )
         """
     )
-    con.execute("CREATE INDEX IF NOT EXISTS idx_pg_kind ON playground_items(kind)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_pg_key ON playground_items(key)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_pg_name ON playground_items(name)")
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pg_kind ON playground_items(kind)"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pg_key ON playground_items(key)"
+    )
+    con.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pg_name ON playground_items(name)"
+    )
 
     con.execute(
         """

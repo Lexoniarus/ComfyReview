@@ -1,30 +1,38 @@
 import json
 import random
+import sqlite3
 from datetime import datetime
 
+from arena_store import (
+    delete_match as arena_delete_match,
+)
+from arena_store import (
+    has_match as arena_has_match,
+)
+from arena_store import (
+    insert_match as arena_insert_match,
+)
 from config import (
     ARENA_DB_PATH,
     DB_PATH,
-    PROMPT_TOKENS_DB_PATH,
-    MV_QUEUE_DB_PATH,
     IMAGES_DB_PATH,
-)
-import sqlite3
-from stores.images_store import init_images_db
-from arena_store import (
-    delete_match as arena_delete_match,
-    has_match as arena_has_match,
-    insert_match as arena_insert_match,
+    MV_QUEUE_DB_PATH,
+    PROMPT_TOKENS_DB_PATH,
 )
 from db_store import db, insert_or_update_rating
-from stores.db_core import delete_rating_by_id
 from meta_view import extract_prompts, extract_view
-from services.rating_service import parse_float, parse_int, rating_avg_and_runs_for_json
-from stores.mv_jobs_store import enqueue_job
 from services.prompt_tokens_service import (
     delete_prompt_tokens_for_run,
     write_prompt_tokens_for_run,
 )
+from services.rating_service import (
+    parse_float,
+    parse_int,
+    rating_avg_and_runs_for_json,
+)
+from stores.db_core import delete_rating_by_id
+from stores.images_store import init_images_db
+from stores.mv_jobs_store import enqueue_job
 
 
 class ArenaValidationError(ValueError):
@@ -33,7 +41,6 @@ class ArenaValidationError(ValueError):
 
 class ArenaMutationError(RuntimeError):
     """Raised when a legacy multi-database Arena mutation fails."""
-
 
 
 def arena_target_ratings(avg_a: float, avg_b: float):
@@ -129,7 +136,9 @@ def pick_arena_pair(items, scored):
     return left_it, right_it, left_avg, right_avg, left_runs, right_runs
 
 
-def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winner_side: str):
+def insert_arena_result(
+    left_it, right_it, left_json: str, right_json: str, winner_side: str
+):
     # Zweck:
     # - schreibt Match in arena.sqlite3
     # - schreibt zwei Ratings in ratings.sqlite3:
@@ -143,8 +152,12 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
 
     if winner_side not in {"left", "right"}:
         raise ArenaValidationError("winner_side must be 'left' or 'right'")
-    if str(left_it.json_path) != str(left_json) or str(right_it.json_path) != str(right_json):
-        raise ArenaValidationError("Arena pair no longer matches the submitted paths")
+    if str(left_it.json_path) != str(left_json) or str(
+        right_it.json_path
+    ) != str(right_json):
+        raise ArenaValidationError(
+            "Arena pair no longer matches the submitted paths"
+        )
 
     # vNext: avg values should come from images.sqlite3 (score MV, keyed by png_path).
     # Fallback to ratings aggregation only if MV row is missing.
@@ -169,15 +182,21 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
     if left_avg is None or right_avg is None:
         con = db(DB_PATH)
         try:
-            left_avg, _ = rating_avg_and_runs_for_json(con, str(left_it.json_path))
-            right_avg, _ = rating_avg_and_runs_for_json(con, str(right_it.json_path))
+            left_avg, _ = rating_avg_and_runs_for_json(
+                con, str(left_it.json_path)
+            )
+            right_avg, _ = rating_avg_and_runs_for_json(
+                con, str(right_it.json_path)
+            )
         finally:
             con.close()
 
     if left_avg is None or right_avg is None:
         return
 
-    winner_target, loser_target = arena_target_ratings(float(left_avg), float(right_avg))
+    winner_target, loser_target = arena_target_ratings(
+        float(left_avg), float(right_avg)
+    )
 
     if winner_side == "left":
         winner_it, loser_it = left_it, right_it
@@ -197,7 +216,9 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
 
         loras_json_v = "[]"
         try:
-            loras_json_v = json.dumps(view.get("loras", []), ensure_ascii=False)
+            loras_json_v = json.dumps(
+                view.get("loras", []), ensure_ascii=False
+            )
         except Exception:
             loras_json_v = "[]"
 
@@ -212,8 +233,12 @@ def insert_arena_result(left_it, right_it, left_json: str, right_json: str, winn
             deleted=0,
             steps=parse_int(view.get("steps")),
             cfg=parse_float(view.get("cfg")),
-            sampler=str(view.get("sampler")) if view.get("sampler") is not None else None,
-            scheduler=str(view.get("scheduler")) if view.get("scheduler") is not None else None,
+            sampler=str(view.get("sampler"))
+            if view.get("sampler") is not None
+            else None,
+            scheduler=str(view.get("scheduler"))
+            if view.get("scheduler") is not None
+            else None,
             denoise=parse_float(view.get("denoise")),
             loras_json=loras_json_v,
             pos_prompt=pos_prompt,

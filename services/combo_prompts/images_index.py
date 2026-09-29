@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any
 
 from config import DB_PATH, MIN_RUNS
-
 from stores.images_store import init_images_db
 from stores.ratings_state_store import fetch_latest_deleted_by_png_paths
 
-from .token_utils import dedup_keep_order, norm_token_keep_case, split_tokens_csv_keep_case
+from .token_utils import (
+    dedup_keep_order,
+    norm_token_keep_case,
+    split_tokens_csv_keep_case,
+)
 
 
-def build_images_token_index(*, images_db_path: Path, model_branch: str = "") -> Dict[str, Any]:
+def build_images_token_index(
+    *, images_db_path: Path, model_branch: str = ""
+) -> dict[str, Any]:
     """Build an in memory token index from images.sqlite3.
 
     Index
@@ -36,7 +41,7 @@ def build_images_token_index(*, images_db_path: Path, model_branch: str = "") ->
             SELECT png_path, json_path, avg_rating, runs, pos_prompt, neg_prompt, model_branch
             FROM images
         """
-        args: List[Any] = []
+        args: list[Any] = []
         if model_branch:
             sql += " WHERE model_branch = ?"
             args.append(str(model_branch))
@@ -49,9 +54,9 @@ def build_images_token_index(*, images_db_path: Path, model_branch: str = "") ->
             model_branch=str(model_branch or ""),
         )
 
-        pos_index: Dict[str, Set[str]] = {}
-        neg_index: Dict[str, Set[str]] = {}
-        images_by_png: Dict[str, Dict[str, Any]] = {}
+        pos_index: dict[str, set[str]] = {}
+        neg_index: dict[str, set[str]] = {}
+        images_by_png: dict[str, dict[str, Any]] = {}
 
         for r in rows:
             png = str(r["png_path"] or "").strip()
@@ -92,8 +97,12 @@ def build_images_token_index(*, images_db_path: Path, model_branch: str = "") ->
 
             images_by_png[png] = img
 
-            pos_tokens = dedup_keep_order(split_tokens_csv_keep_case(img["pos_prompt"]))
-            neg_tokens = dedup_keep_order(split_tokens_csv_keep_case(img["neg_prompt"]))
+            pos_tokens = dedup_keep_order(
+                split_tokens_csv_keep_case(img["pos_prompt"])
+            )
+            neg_tokens = dedup_keep_order(
+                split_tokens_csv_keep_case(img["neg_prompt"])
+            )
 
             for t in pos_tokens:
                 pos_index.setdefault(t, set()).add(png)
@@ -112,20 +121,32 @@ def build_images_token_index(*, images_db_path: Path, model_branch: str = "") ->
 
 def match_pngs_for_combo(
     *,
-    pos_index: Dict[str, Set[str]],
-    neg_index: Dict[str, Set[str]],
-    pos_tokens: List[str],
-    neg_tokens: List[str],
-) -> Set[str]:
+    pos_index: dict[str, set[str]],
+    neg_index: dict[str, set[str]],
+    pos_tokens: list[str],
+    neg_tokens: list[str],
+) -> set[str]:
     """Hard match on image level."""
 
-    pos_tokens = dedup_keep_order([norm_token_keep_case(t) for t in (pos_tokens or []) if norm_token_keep_case(t)])
-    neg_tokens = dedup_keep_order([norm_token_keep_case(t) for t in (neg_tokens or []) if norm_token_keep_case(t)])
+    pos_tokens = dedup_keep_order(
+        [
+            norm_token_keep_case(t)
+            for t in (pos_tokens or [])
+            if norm_token_keep_case(t)
+        ]
+    )
+    neg_tokens = dedup_keep_order(
+        [
+            norm_token_keep_case(t)
+            for t in (neg_tokens or [])
+            if norm_token_keep_case(t)
+        ]
+    )
 
     if not pos_tokens:
         return set()
 
-    sets: List[Set[str]] = []
+    sets: list[set[str]] = []
     for t in pos_tokens:
         s = pos_index.get(t)
         if not s:
@@ -140,7 +161,7 @@ def match_pngs_for_combo(
             return set()
 
     if neg_tokens:
-        nsets: List[Set[str]] = []
+        nsets: list[set[str]] = []
         for t in neg_tokens:
             s = neg_index.get(t)
             if not s:
@@ -158,12 +179,12 @@ def match_pngs_for_combo(
 
 def combo_images_for_tokens(
     *,
-    pos_index: Dict[str, Set[str]],
-    neg_index: Dict[str, Set[str]],
-    images_by_png: Dict[str, Dict[str, Any]],
-    pos_tokens: List[str],
-    neg_tokens: List[str],
-) -> Dict[str, Any]:
+    pos_index: dict[str, set[str]],
+    neg_index: dict[str, set[str]],
+    images_by_png: dict[str, dict[str, Any]],
+    pos_tokens: list[str],
+    neg_tokens: list[str],
+) -> dict[str, Any]:
     """Compute combo image metrics and best images using the in memory image index."""
 
     matched = match_pngs_for_combo(
@@ -173,7 +194,7 @@ def combo_images_for_tokens(
         neg_tokens=neg_tokens,
     )
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for png in matched:
         img = images_by_png.get(png)
         if img:
@@ -181,12 +202,22 @@ def combo_images_for_tokens(
 
     total_runs = sum(int(r.get("runs") or 0) for r in rows)
     combo_avg = (
-        sum(float(r.get("avg_rating") or 0.0) * float(int(r.get("runs") or 0)) for r in rows) / float(total_runs)
+        sum(
+            float(r.get("avg_rating") or 0.0) * float(int(r.get("runs") or 0))
+            for r in rows
+        )
+        / float(total_runs)
         if total_runs > 0
         else None
     )
 
-    rows.sort(key=lambda x: (float(x.get("avg_rating") or -1.0), int(x.get("runs") or 0)), reverse=True)
+    rows.sort(
+        key=lambda x: (
+            float(x.get("avg_rating") or -1.0),
+            int(x.get("runs") or 0),
+        ),
+        reverse=True,
+    )
     best3 = rows[:3]
 
     return {
