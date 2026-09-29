@@ -2,74 +2,16 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from comfyreview.repositories.sqlite import connect_existing
+
 
 def init_images_db(db_path: Path) -> None:
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS images (
-                png_path TEXT PRIMARY KEY,
-                json_path TEXT,
-                avg_rating REAL,
-                runs INTEGER NOT NULL,
-                rating_count INTEGER,
-                last_run INTEGER NOT NULL,
-                model_branch TEXT,
-                checkpoint TEXT,
-                combo_key TEXT,
-                steps INTEGER,
-                cfg REAL,
-                sampler TEXT,
-                scheduler TEXT,
-                denoise REAL,
-                loras_json TEXT,
-                pos_prompt TEXT,
-                neg_prompt TEXT,
-                last_updated TEXT
-            )
-            """
-        )
-        # Lightweight schema migration (add new columns if table already existed)
-        # NOTE: older installs may have created a much smaller images table.
-        existing_cols = {
-            r[1] for r in con.execute("PRAGMA table_info(images)").fetchall()
-        }
-
-        def _add(col: str, ddl: str) -> None:
-            if col not in existing_cols:
-                con.execute(ddl)
-                existing_cols.add(col)
-
-        _add("json_path", "ALTER TABLE images ADD COLUMN json_path TEXT")
-        _add("avg_rating", "ALTER TABLE images ADD COLUMN avg_rating REAL")
-        _add("runs", "ALTER TABLE images ADD COLUMN runs INTEGER")
-        _add(
-            "rating_count",
-            "ALTER TABLE images ADD COLUMN rating_count INTEGER",
-        )
-        _add("last_run", "ALTER TABLE images ADD COLUMN last_run INTEGER")
-        _add("model_branch", "ALTER TABLE images ADD COLUMN model_branch TEXT")
-        _add("checkpoint", "ALTER TABLE images ADD COLUMN checkpoint TEXT")
-        _add("combo_key", "ALTER TABLE images ADD COLUMN combo_key TEXT")
-        _add("steps", "ALTER TABLE images ADD COLUMN steps INTEGER")
-        _add("cfg", "ALTER TABLE images ADD COLUMN cfg REAL")
-        _add("sampler", "ALTER TABLE images ADD COLUMN sampler TEXT")
-        _add("scheduler", "ALTER TABLE images ADD COLUMN scheduler TEXT")
-        _add("denoise", "ALTER TABLE images ADD COLUMN denoise REAL")
-        _add("loras_json", "ALTER TABLE images ADD COLUMN loras_json TEXT")
-        _add("pos_prompt", "ALTER TABLE images ADD COLUMN pos_prompt TEXT")
-        _add("neg_prompt", "ALTER TABLE images ADD COLUMN neg_prompt TEXT")
-        _add("last_updated", "ALTER TABLE images ADD COLUMN last_updated TEXT")
-        con.commit()
-    finally:
-        con.close()
+    """Verify that the startup-managed image database still exists."""
+    connect_existing(db_path).close()
 
 
 def delete_image(db_path: Path, *, png_path: str) -> None:
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.execute("DELETE FROM images WHERE png_path = ?", [png_path])
         con.commit()
@@ -78,7 +20,7 @@ def delete_image(db_path: Path, *, png_path: str) -> None:
 
 
 def upsert_image(db_path: Path, row: dict[str, Any]) -> None:
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.execute(
             """
@@ -129,12 +71,10 @@ def fetch_best_images_by_combo_keys(
 ) -> dict[str, list[dict[str, Any]]]:
     """Batch: pro combo_key Top-N Images nach avg_rating/runs."""
     # Ensure schema is up to date (older DBs may miss columns like 'combo_key').
-    init_images_db(db_path)
     if not combo_keys:
         return {}
 
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         placeholders = ",".join(["?"] * len(combo_keys))
         where = f"WHERE combo_key IN ({placeholders})"
@@ -177,13 +117,11 @@ def fetch_best_images_by_param_values(
 ) -> dict[str, list[dict[str, Any]]]:
     """Batch: pro Parameterwert (checkpoint/steps/cfg/sampler/scheduler) Top-N Images."""
     # Ensure schema is up to date (older DBs may miss columns like 'checkpoint').
-    init_images_db(db_path)
     allowed = {"checkpoint", "steps", "cfg", "sampler", "scheduler"}
     if feat not in allowed or not values:
         return {}
 
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         placeholders = ",".join(["?"] * len(values))
         where = f"WHERE {feat} IN ({placeholders})"

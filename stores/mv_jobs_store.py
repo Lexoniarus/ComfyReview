@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from comfyreview.repositories.sqlite import connect_existing
 
 
 def _utc_now() -> str:
@@ -11,43 +12,13 @@ def _utc_now() -> str:
 
 
 def ensure_schema(db_path: Path) -> None:
-    """Ensure that the legacy projection-job schema exists."""
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS mv_jobs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                job_type TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                touched_at TEXT,
-                status TEXT NOT NULL,
-                error TEXT
-            )
-            """
-        )
-        # Lightweight in-place migration for older DBs.
-        cols = {
-            r[1] for r in con.execute("PRAGMA table_info(mv_jobs)").fetchall()
-        }
-        if "touched_at" not in cols:
-            con.execute("ALTER TABLE mv_jobs ADD COLUMN touched_at TEXT")
-            con.execute(
-                "UPDATE mv_jobs SET touched_at = created_at WHERE touched_at IS NULL"
-            )
-        con.execute(
-            "CREATE INDEX IF NOT EXISTS idx_mv_jobs_status ON mv_jobs(status)"
-        )
-        con.commit()
-    finally:
-        con.close()
+    """Verify that the startup-managed job database still exists."""
+    connect_existing(db_path).close()
 
 
 def enqueue_job(db_path: Path, *, job_type: str = "catchup") -> int:
     """Enqueue a projection job or coalesce an existing catchup job."""
-    ensure_schema(db_path)
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         now = _utc_now()
 
@@ -86,9 +57,7 @@ def enqueue_job(db_path: Path, *, job_type: str = "catchup") -> int:
 
 def fetch_next_queued(db_path: Path) -> dict[str, Any] | None:
     """Return the oldest queued projection job, if one exists."""
-    ensure_schema(db_path)
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         row = con.execute(
             """
@@ -106,9 +75,7 @@ def fetch_next_queued(db_path: Path) -> dict[str, Any] | None:
 
 def fetch_job(db_path: Path, *, job_id: int) -> dict[str, Any] | None:
     """Read a single job row by id."""
-    ensure_schema(db_path)
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         row = con.execute(
             """
@@ -126,7 +93,7 @@ def fetch_job(db_path: Path, *, job_id: int) -> dict[str, Any] | None:
 
 def mark_running(db_path: Path, job_id: int) -> None:
     """Mark one projection job as running."""
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.execute(
             "UPDATE mv_jobs SET status='running', error=NULL WHERE id=?",
@@ -139,7 +106,7 @@ def mark_running(db_path: Path, job_id: int) -> None:
 
 def mark_done(db_path: Path, job_id: int) -> None:
     """Mark one projection job as completed."""
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.execute(
             "UPDATE mv_jobs SET status='done', error=NULL WHERE id=?",
@@ -152,7 +119,7 @@ def mark_done(db_path: Path, job_id: int) -> None:
 
 def mark_failed(db_path: Path, job_id: int, error: str) -> None:
     """Mark one projection job as failed with bounded error details."""
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.execute(
             "UPDATE mv_jobs SET status='failed', error=? WHERE id=?",
@@ -165,7 +132,7 @@ def mark_failed(db_path: Path, job_id: int, error: str) -> None:
 
 def mark_all_queued_done(db_path: Path, *, up_to_job_id: int) -> None:
     """Complete queued jobs through an ID after catchup coalescing."""
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.execute(
             "UPDATE mv_jobs SET status='done', error=NULL WHERE status='queued' AND id <= ?",
@@ -178,8 +145,7 @@ def mark_all_queued_done(db_path: Path, *, up_to_job_id: int) -> None:
 
 def recover_abandoned_running_jobs(db_path: Path) -> int:
     """Mark jobs left running by a previous process as failed."""
-    ensure_schema(db_path)
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         cursor = con.execute(
             """

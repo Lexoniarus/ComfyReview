@@ -20,6 +20,18 @@ _SQL_PREFIXES: Final = (
     "UPDATE ",
     "WITH ",
 )
+_SCHEMA_DDL_PREFIXES: Final = (
+    "ALTER TABLE ",
+    "CREATE INDEX ",
+    "CREATE TABLE ",
+    "CREATE TRIGGER ",
+    "DROP INDEX ",
+    "DROP TABLE ",
+    "DROP TRIGGER ",
+)
+_LEGACY_SCHEMA_ADAPTER: Final = (
+    "comfyreview/repositories/sqlite/legacy_schema.py"
+)
 _EXTERNAL_MODULES: Final = {"httpx", "requests", "urllib", "websocket"}
 
 
@@ -53,6 +65,13 @@ def _is_sql_call(node: ast.Call) -> bool:
     return False
 
 
+def _is_schema_ddl_literal(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+        return False
+    statement = node.value.lstrip().upper()
+    return statement.startswith(_SCHEMA_DDL_PREFIXES)
+
+
 def _relative_path(root: Path, path: Path) -> str:
     return path.resolve().relative_to(root.resolve()).as_posix()
 
@@ -63,6 +82,8 @@ def _rules_for_path(relative_path: str) -> tuple[str, ...]:
     if relative_path.startswith("services/"):
         return ("services",)
     if relative_path.startswith("stores/"):
+        return ("repositories",)
+    if relative_path.startswith("comfyreview/repositories/"):
         return ("repositories",)
     if relative_path.startswith("comfyreview/domain/"):
         return ("core",)
@@ -116,6 +137,20 @@ def _record_sql_violations(
         counts[f"{relative_path}|services.no_sql"] += sql_calls
 
 
+def _record_schema_ddl_violations(
+    counts: Counter[str],
+    relative_path: str,
+    tree: ast.AST,
+) -> None:
+    if relative_path == _LEGACY_SCHEMA_ADAPTER:
+        return
+    ddl_literals = sum(
+        1 for node in ast.walk(tree) if _is_schema_ddl_literal(node)
+    )
+    if ddl_literals:
+        counts[f"{relative_path}|schema.ddl_location"] += ddl_literals
+
+
 def collect_architecture_violations(root: Path) -> Counter[str]:
     """Return architecture violations grouped by file and stable rule name."""
     counts: Counter[str] = Counter()
@@ -123,6 +158,7 @@ def collect_architecture_violations(root: Path) -> Counter[str]:
         root / "routers",
         root / "services",
         root / "stores",
+        root / "comfyreview" / "repositories",
         root / "comfyreview" / "domain",
         root / "comfyreview" / "application",
     )
@@ -142,4 +178,5 @@ def collect_architecture_violations(root: Path) -> Counter[str]:
                 _imported_roots(tree),
             )
             _record_sql_violations(counts, relative_path, boundaries, tree)
+            _record_schema_ddl_violations(counts, relative_path, tree)
     return counts

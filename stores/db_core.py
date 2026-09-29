@@ -1,6 +1,8 @@
 import sqlite3
 from pathlib import Path
 
+from comfyreview.repositories.sqlite import connect_existing
+
 # Was tut es?
 # SQLite Infrastruktur und Write API fuer ratings.
 #
@@ -23,92 +25,7 @@ def db(path: Path) -> sqlite3.Connection:
     #
     # Wo geht es hin?
     # Connection wird an Caller zur Nutzung zurueckgegeben.
-    con = sqlite3.connect(path)
-    con.row_factory = sqlite3.Row
-    _ensure_schema(con)
-    return con
-
-
-def _ensure_schema(con: sqlite3.Connection) -> None:
-    # Was tut es?
-    # Tabelle ratings und Indexe erstellen.
-    # Migrationen fuer fehlende Spalten nachziehen.
-    #
-    # Wo kommt es her?
-    # con ist SQLite Connection.
-    #
-    # Wo geht es hin?
-    # Persistiert in ratings.sqlite3.
-    con.execute(
-        """
-        CREATE TABLE IF NOT EXISTS ratings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            png_path TEXT NOT NULL,
-            json_path TEXT NOT NULL,
-            run INTEGER NOT NULL DEFAULT 1,
-            model_branch TEXT NOT NULL,
-            checkpoint TEXT NOT NULL,
-            combo_key TEXT NOT NULL,
-            rating INTEGER,
-            deleted INTEGER NOT NULL DEFAULT 0,
-            rating_count INTEGER NOT NULL DEFAULT 1,
-
-            steps INTEGER,
-            cfg REAL,
-            sampler TEXT,
-            scheduler TEXT,
-            denoise REAL,
-            loras_json TEXT DEFAULT '',
-
-            pos_prompt TEXT DEFAULT '',
-            neg_prompt TEXT DEFAULT ''
-        )
-        """
-    )
-
-    con.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ratings_json_run ON ratings(json_path, run)"
-    )
-    con.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ratings_model ON ratings(model_branch)"
-    )
-    con.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ratings_combo ON ratings(model_branch, combo_key)"
-    )
-    con.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ratings_deleted ON ratings(deleted)"
-    )
-    con.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ratings_rating ON ratings(rating)"
-    )
-
-    # Migrationen fuer alte DBs
-    cols = {
-        row["name"]
-        for row in con.execute("PRAGMA table_info(ratings)").fetchall()
-    }
-    if "steps" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN steps INTEGER")
-    if "cfg" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN cfg REAL")
-    if "sampler" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN sampler TEXT")
-    if "scheduler" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN scheduler TEXT")
-    if "denoise" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN denoise REAL")
-    if "loras_json" not in cols:
-        con.execute(
-            "ALTER TABLE ratings ADD COLUMN loras_json TEXT DEFAULT ''"
-        )
-    if "pos_prompt" not in cols:
-        con.execute(
-            "ALTER TABLE ratings ADD COLUMN pos_prompt TEXT DEFAULT ''"
-        )
-    if "neg_prompt" not in cols:
-        con.execute(
-            "ALTER TABLE ratings ADD COLUMN neg_prompt TEXT DEFAULT ''"
-        )
+    return connect_existing(path, rows=True)
 
 
 def insert_or_update_rating(

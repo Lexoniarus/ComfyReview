@@ -1,43 +1,24 @@
-import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
 
+from comfyreview.repositories.sqlite import connect_existing
+
 
 def init_curation_db(db_path: Path) -> None:
-    """Create curation DB schema if needed.
-
-    vNext rule:
-    - single label per image (png_path -> set_key)
-    - set_key NULL means "unsorted"
-    """
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS curation (
-              png_path TEXT PRIMARY KEY,
-              set_key  TEXT
-            )
-            """
-        )
-        con.commit()
-    finally:
-        con.close()
+    """Verify that the startup-managed curation database still exists."""
+    connect_existing(db_path).close()
 
 
 def fetch_set_map(
     db_path: Path, png_paths: Iterable[str]
 ) -> dict[str, str | None]:
     """Bulk fetch mapping for many png_paths."""
-    init_curation_db(db_path)
     paths = [str(p) for p in (png_paths or []) if str(p).strip()]
     if not paths:
         return {}
 
     out: dict[str, str | None] = {}
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         # chunk to avoid SQLite parameter limits
         chunk_size = 900
@@ -61,12 +42,11 @@ def upsert_set_key(
     db_path: Path, *, png_path: str, set_key: str | None
 ) -> None:
     """Set or clear set_key for an image."""
-    init_curation_db(db_path)
     p = str(png_path or "").strip()
     if not p:
         return
 
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         if set_key is None or str(set_key).strip() == "":
             con.execute("DELETE FROM curation WHERE png_path = ?", [p])

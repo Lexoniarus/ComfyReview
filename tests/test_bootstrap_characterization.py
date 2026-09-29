@@ -3,22 +3,13 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from arena_store import ensure_schema as ensure_arena_schema
-from prompt_store import db as open_prompt_database
+from comfyreview.repositories.sqlite import LegacySchemaManager
+from comfyreview.settings import load_settings
 from services import mv_worker
 from services.observability import RequestTracingMiddleware
-from stores.combo_prompts_store import init_combo_prompts_db
-from stores.curation_store import init_curation_db
-from stores.db_core import db as open_ratings_database
-from stores.images_store import init_images_db
-from stores.mv_jobs_store import ensure_schema as ensure_jobs_schema
-from stores.mv_state_store import ensure_schema as ensure_state_schema
-from stores.playground.connection import db as open_playground_database
-from stores.prompt_ratings_store import init_prompt_ratings_db
 
 
 def _table_columns(database_path: Path) -> dict[str, tuple[str, ...]]:
@@ -119,30 +110,8 @@ def test_worker_thread_receives_every_legacy_database_path(
 def test_legacy_initializers_produce_the_current_schema_contract(
     tmp_path: Path,
 ) -> None:
-    initializers: dict[str, Callable[[Path], None]] = {
-        "arena": ensure_arena_schema,
-        "combo": init_combo_prompts_db,
-        "curation": init_curation_db,
-        "images": init_images_db,
-        "prompt_ratings": init_prompt_ratings_db,
-    }
-
-    def initialize_ratings(path: Path) -> None:
-        open_ratings_database(path).close()
-
-    def initialize_prompt_tokens(path: Path) -> None:
-        open_prompt_database(path).close()
-
-    def initialize_playground(path: Path) -> None:
-        open_playground_database(path).close()
-
-    initializers.update(
-        {
-            "ratings": initialize_ratings,
-            "prompt_tokens": initialize_prompt_tokens,
-            "playground": initialize_playground,
-        }
-    )
+    settings = load_settings(base_directory=tmp_path, environ={})
+    report = LegacySchemaManager(settings).prepare_startup()
 
     expected_tables = {
         "arena": {"arena_matches"},
@@ -154,12 +123,31 @@ def test_legacy_initializers_produce_the_current_schema_contract(
         "prompt_tokens": {"tokens"},
         "ratings": {"ratings"},
     }
-    for name, initializer in initializers.items():
-        database_path = tmp_path / f"{name}.sqlite3"
-        initializer(database_path)
+    paths = {
+        "arena": settings.arena_database_path,
+        "combo": settings.combo_prompts_database_path,
+        "curation": settings.curation_database_path,
+        "images": settings.images_database_path,
+        "playground": settings.playground_database_path,
+        "prompt_ratings": settings.prompt_ratings_database_path,
+        "prompt_tokens": settings.prompt_tokens_database_path,
+        "ratings": settings.ratings_database_path,
+    }
+    for name, database_path in paths.items():
         assert set(_table_columns(database_path)) == expected_tables[name]
 
-    queue_path = tmp_path / "mv_queue.sqlite3"
-    ensure_jobs_schema(queue_path)
-    ensure_state_schema(queue_path)
-    assert set(_table_columns(queue_path)) == {"mv_jobs", "mv_state"}
+    assert set(_table_columns(settings.worker_queue_database_path)) == {
+        "mv_jobs",
+        "mv_state",
+    }
+    assert set(report.initialized) == {
+        "arena",
+        "combo_prompts",
+        "curation",
+        "images",
+        "mv_queue",
+        "playground",
+        "prompt_ratings",
+        "prompt_tokens",
+        "ratings",
+    }

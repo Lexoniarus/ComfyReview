@@ -10,6 +10,7 @@ from pytest import MonkeyPatch
 import services.mv_worker_core.time_utils as time_utils
 import stores.mv_jobs_store as jobs_store
 import stores.mv_state_store as state_store
+from tests.schema_helpers import initialize_legacy_database
 
 _EXPECTED_TIMESTAMP = "2026-09-28 12:34:56"
 
@@ -27,6 +28,7 @@ def test_job_store_preserves_legacy_timestamp_format(
 ) -> None:
     monkeypatch.setattr(jobs_store, "datetime", _FixedDateTime)
     database_path = tmp_path / "jobs.sqlite3"
+    initialize_legacy_database("mv_queue", database_path)
 
     job_id = jobs_store.enqueue_job(database_path)
     job = jobs_store.fetch_job(database_path, job_id=job_id)
@@ -42,6 +44,7 @@ def test_state_store_preserves_legacy_timestamp_format(
 ) -> None:
     monkeypatch.setattr(state_store, "datetime", _FixedDateTime)
     database_path = tmp_path / "state.sqlite3"
+    initialize_legacy_database("mv_queue", database_path)
 
     state_store.upsert_state(
         database_path,

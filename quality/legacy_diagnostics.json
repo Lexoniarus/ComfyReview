@@ -94,7 +94,6 @@
       "format|templates.py|unformatted": 1,
       "format|tests/conftest.py|unformatted": 1,
       "format|tests/test_comfy_client_patch.py|unformatted": 1,
-      "format|tests/test_mutation_characterization.py|unformatted": 1,
       "format|tests/test_mutation_route_contracts.py|unformatted": 1,
       "format|tests/test_prompt_store_tokenize.py|unformatted": 1,
       "format|tests/test_scope_semantics.py|unformatted": 1
@@ -115,8 +114,6 @@
       "mypy|services/playground_generator_ui/head_form.py|arg-type": 1,
       "mypy|services/playground_rules_engine/checks.py|index": 1,
       "mypy|stores/prompt_tokens_match.py|call-overload": 2,
-      "mypy|tests/test_mutation_characterization.py|arg-type": 1,
-      "mypy|tests/test_mutation_characterization.py|index": 2,
       "mypy|tests/test_prompt_store_tokenize.py|arg-type": 1
     },
     "pyright": {
@@ -132,8 +129,6 @@
       "pyright|services/playground_generator_core/slot_picker.py|reportReturnType": 1,
       "pyright|services/playground_generator_ui/head_form.py|reportArgumentType": 2,
       "pyright|services/playground_rules_engine/checks.py|reportArgumentType": 1,
-      "pyright|tests/test_mutation_characterization.py|reportArgumentType": 1,
-      "pyright|tests/test_mutation_characterization.py|reportOptionalSubscript": 2,
       "pyright|tests/test_prompt_store_tokenize.py|reportArgumentType": 1
     },
     "ruff": {
@@ -338,7 +333,6 @@
       "ruff|stores/ratings_state_store.py|UP035": 3,
       "ruff|templates.py|I001": 1,
       "ruff|tests/conftest.py|I001": 1,
-      "ruff|tests/test_mutation_characterization.py|I001": 1,
       "ruff|tests/test_mutation_route_contracts.py|I001": 1
     }
   }
