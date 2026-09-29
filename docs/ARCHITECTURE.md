@@ -167,9 +167,10 @@ Target rule:
 ```text
 stable image_id / image_uid
         |
+        +-- generation_id -> GenerationRun
+        +-- output_node_id / output_index
         +-- current png_path
-        +-- current json_path
-        +-- generation metadata
+        +-- optional legacy json_path
         +-- reviews
         +-- arena matches
         +-- curation

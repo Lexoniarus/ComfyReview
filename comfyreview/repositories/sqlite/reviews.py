@@ -39,6 +39,7 @@ class SqliteReviewRepository:
                 scope="neg",
                 prompt=record.image.negative_prompt,
             )
+            image_uid = self._generation_uid(record.image)
             generation_id = self._upsert_generation(
                 connection,
                 record,
@@ -49,14 +50,15 @@ class SqliteReviewRepository:
                 connection,
                 record,
                 generation_id=generation_id,
+                image_uid=image_uid,
             )
             prior_deleted = connection.execute(
                 """
                 SELECT id
                 FROM deleted_images
-                WHERE generation_id = ?
+                WHERE image_uid = ?
                 """,
-                (generation_id,),
+                (image_uid,),
             ).fetchone()
             if prior_deleted is not None:
                 self._apply_learning_delta(
@@ -96,16 +98,23 @@ class SqliteReviewRepository:
                 connection.execute(
                     """
                     INSERT INTO deleted_images(
-                        generation_id, png_path, json_path, version, deleted_at
+                        image_uid,
+                        generation_id,
+                        png_path,
+                        json_path,
+                        version,
+                        deleted_at
                     )
-                    VALUES (?, ?, ?, ?, datetime('now'))
-                    ON CONFLICT(generation_id) DO UPDATE SET
+                    VALUES (?, ?, ?, ?, ?, datetime('now'))
+                    ON CONFLICT(image_uid) DO UPDATE SET
+                        generation_id = excluded.generation_id,
                         png_path = excluded.png_path,
                         json_path = excluded.json_path,
                         version = excluded.version,
                         deleted_at = datetime('now')
                     """,
                     (
+                        image_uid,
                         generation_id,
                         str(record.image.pair.png_path),
                         str(record.image.pair.json_path),
@@ -119,8 +128,8 @@ class SqliteReviewRepository:
             else:
                 rating = int(record.rating or 0)
                 connection.execute(
-                    "DELETE FROM deleted_images WHERE generation_id = ?",
-                    (generation_id,),
+                    "DELETE FROM deleted_images WHERE image_uid = ?",
+                    (image_uid,),
                 )
                 if previous is None:
                     cursor = connection.execute(
@@ -425,6 +434,7 @@ class SqliteReviewRepository:
         record: ReviewRecord,
         *,
         generation_id: int,
+        image_uid: str,
     ) -> int:
         image = record.image
         connection.execute(
@@ -432,27 +442,31 @@ class SqliteReviewRepository:
             INSERT INTO images(
                 image_uid,
                 generation_id,
+                output_node_id,
+                output_index,
                 png_path,
                 json_path,
                 last_seen_at
             )
-            VALUES (?, ?, ?, ?, datetime('now'))
-            ON CONFLICT(generation_id) DO UPDATE SET
-                image_uid = excluded.image_uid,
+            VALUES (?, ?, 'legacy_sidecar', 0, ?, ?, datetime('now'))
+            ON CONFLICT(image_uid) DO UPDATE SET
+                generation_id = excluded.generation_id,
+                output_node_id = excluded.output_node_id,
+                output_index = excluded.output_index,
                 png_path = excluded.png_path,
                 json_path = excluded.json_path,
                 last_seen_at = datetime('now')
             """,
             (
-                self._generation_uid(image),
+                image_uid,
                 generation_id,
                 str(image.pair.png_path),
                 str(image.pair.json_path),
             ),
         )
         row = connection.execute(
-            "SELECT id FROM images WHERE generation_id = ?",
-            (generation_id,),
+            "SELECT id FROM images WHERE image_uid = ?",
+            (image_uid,),
         ).fetchone()
         if row is None:
             raise RuntimeError("Live image could not be persisted")

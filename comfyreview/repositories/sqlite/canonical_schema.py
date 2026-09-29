@@ -11,8 +11,9 @@ from uuid import uuid4
 
 from comfyreview.application import CanonicalSchemaReport
 
-SCHEMA_VERSION = 2
-_PREVIOUS_SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
+_PREVIOUS_SCHEMA_VERSION = 2
+_MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
 PRAGMA foreign_keys = ON;
@@ -344,6 +345,27 @@ _REQUIRED_GENERATION_COLUMNS_V2 = {
     "completed_at",
 }
 
+_REQUIRED_OBJECTS_V3 = dict(_REQUIRED_OBJECTS_V2)
+_REQUIRED_IMAGE_COLUMNS_V3 = {
+    "id",
+    "image_uid",
+    "generation_id",
+    "output_node_id",
+    "output_index",
+    "png_path",
+    "json_path",
+    "last_seen_at",
+}
+_REQUIRED_DELETED_IMAGE_COLUMNS_V3 = {
+    "id",
+    "image_uid",
+    "generation_id",
+    "png_path",
+    "json_path",
+    "version",
+    "deleted_at",
+}
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -356,7 +378,7 @@ class CanonicalSchemaManager:
         self._database_path = Path(database_path).resolve()
 
     def prepare_startup(self) -> CanonicalSchemaReport:
-        """Validate or atomically create canonical schema version two."""
+        """Validate or atomically create canonical schema version three."""
         if self._database_path.exists():
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
@@ -379,7 +401,7 @@ class CanonicalSchemaManager:
         self,
         backup_directory: Path | None = None,
     ) -> CanonicalSchemaReport:
-        """Back up and explicitly upgrade schema version one to version two."""
+        """Back up and explicitly upgrade schema version one or two."""
         if not self._database_path.exists():
             self._create_new_database()
             return CanonicalSchemaReport(
@@ -391,21 +413,31 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version != _PREVIOUS_SCHEMA_VERSION:
+        if current_version not in {
+            _MIN_UPGRADE_VERSION,
+            _PREVIOUS_SCHEMA_VERSION,
+        }:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected {_PREVIOUS_SCHEMA_VERSION} "
-                f"or {SCHEMA_VERSION}"
+                f"{current_version}; expected {_MIN_UPGRADE_VERSION}, "
+                f"{_PREVIOUS_SCHEMA_VERSION}, or {SCHEMA_VERSION}"
             )
 
-        self._validate_version_one()
+        if current_version == _MIN_UPGRADE_VERSION:
+            self._validate_version_one()
+        else:
+            self._validate_version_two()
+
         backup_path = self._create_backup(backup_directory)
         try:
-            connection = self._open_read_write()
+            connection = self._open_read_write(foreign_keys=False)
             try:
                 connection.execute("BEGIN IMMEDIATE")
-                self._upgrade_v1_to_v2(connection)
+                if current_version == _MIN_UPGRADE_VERSION:
+                    self._upgrade_v1_to_v2(connection)
+                self._upgrade_v2_to_v3(connection)
                 connection.commit()
+                connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
                 connection.rollback()
                 raise
@@ -418,7 +450,7 @@ class CanonicalSchemaManager:
 
         return CanonicalSchemaReport(
             schema_version=SCHEMA_VERSION,
-            upgraded_from=_PREVIOUS_SCHEMA_VERSION,
+            upgraded_from=current_version,
             backup_path=backup_path,
         )
 
@@ -432,10 +464,16 @@ class CanonicalSchemaManager:
             try:
                 connection.executescript(_SCHEMA_V1_SQL)
                 connection.execute(
-                    f"PRAGMA user_version = {_PREVIOUS_SCHEMA_VERSION}"
+                    f"PRAGMA user_version = {_MIN_UPGRADE_VERSION}"
                 )
+                connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v1_to_v2(connection)
                 connection.commit()
+                connection.execute("PRAGMA foreign_keys = OFF")
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v2_to_v3(connection)
+                connection.commit()
+                connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
                 connection.close()
@@ -447,10 +485,14 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version == _PREVIOUS_SCHEMA_VERSION:
+            if version in {
+                _MIN_UPGRADE_VERSION,
+                _PREVIOUS_SCHEMA_VERSION,
+            }:
                 raise CanonicalSchemaValidationError(
-                    "Canonical schema version 1 requires an explicit upgrade; "
-                    "run `python -m comfyreview canonical-db upgrade`"
+                    f"Canonical schema version {version} requires an "
+                    "explicit upgrade; run "
+                    "`python -m comfyreview canonical-db upgrade`"
                 )
             self._validate_connection(connection)
         finally:
@@ -460,7 +502,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version != _PREVIOUS_SCHEMA_VERSION:
+            if version != _MIN_UPGRADE_VERSION:
                 raise CanonicalSchemaValidationError(
                     "Expected canonical schema version 1 before upgrade"
                 )
@@ -471,8 +513,29 @@ class CanonicalSchemaManager:
             )
             self._validate_metadata_version(
                 connection,
+                _MIN_UPGRADE_VERSION,
+            )
+        finally:
+            connection.close()
+
+    def _validate_version_two(self) -> None:
+        connection = self._open_read_only()
+        try:
+            version = self._schema_version(connection)
+            if version != _PREVIOUS_SCHEMA_VERSION:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 2 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(
+                connection,
+                _REQUIRED_OBJECTS_V2,
+            )
+            self._validate_metadata_version(
+                connection,
                 _PREVIOUS_SCHEMA_VERSION,
             )
+            self._validate_generation_columns(connection)
         finally:
             connection.close()
 
@@ -484,9 +547,10 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V2)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V3)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
+        self._validate_output_identity(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -540,9 +604,134 @@ class CanonicalSchemaManager:
         connection.execute(
             "UPDATE schema_metadata SET value = ? "
             "WHERE key = 'schema_version'",
+            (str(_PREVIOUS_SCHEMA_VERSION),),
+        )
+        connection.execute(
+            f"PRAGMA user_version = {_PREVIOUS_SCHEMA_VERSION}"
+        )
+
+    def _upgrade_v2_to_v3(self, connection: sqlite3.Connection) -> None:
+        views = self._capture_compatibility_views(connection)
+        connection.execute("DROP VIEW ratings")
+        connection.execute("DROP VIEW tokens")
+        connection.execute(
+            """
+            CREATE TABLE images_v3 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_uid TEXT NOT NULL UNIQUE,
+                generation_id INTEGER NOT NULL
+                    REFERENCES generations(id) ON DELETE CASCADE,
+                output_node_id TEXT NOT NULL DEFAULT 'legacy_sidecar',
+                output_index INTEGER NOT NULL DEFAULT 0,
+                png_path TEXT NOT NULL UNIQUE,
+                json_path TEXT UNIQUE,
+                last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (generation_id, output_node_id, output_index)
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO images_v3(
+                id,
+                image_uid,
+                generation_id,
+                output_node_id,
+                output_index,
+                png_path,
+                json_path,
+                last_seen_at
+            )
+            SELECT
+                id,
+                image_uid,
+                generation_id,
+                'legacy_sidecar',
+                0,
+                png_path,
+                json_path,
+                last_seen_at
+            FROM images
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE deleted_images_v3 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_uid TEXT NOT NULL UNIQUE,
+                generation_id INTEGER NOT NULL
+                    REFERENCES generations(id) ON DELETE CASCADE,
+                png_path TEXT NOT NULL,
+                json_path TEXT,
+                version INTEGER NOT NULL UNIQUE,
+                deleted_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO deleted_images_v3(
+                id,
+                image_uid,
+                generation_id,
+                png_path,
+                json_path,
+                version,
+                deleted_at
+            )
+            SELECT
+                deleted.id,
+                generation.generation_uid,
+                deleted.generation_id,
+                deleted.png_path,
+                deleted.json_path,
+                deleted.version,
+                deleted.deleted_at
+            FROM deleted_images AS deleted
+            JOIN generations AS generation
+                ON generation.id = deleted.generation_id
+            """
+        )
+        connection.execute("DROP TABLE deleted_images")
+        connection.execute("DROP TABLE images")
+        connection.execute("ALTER TABLE images_v3 RENAME TO images")
+        connection.execute(
+            "ALTER TABLE deleted_images_v3 RENAME TO deleted_images"
+        )
+        connection.execute(
+            "CREATE INDEX idx_images_generation ON images(generation_id)"
+        )
+        connection.execute(
+            "CREATE INDEX idx_deleted_images_generation "
+            "ON deleted_images(generation_id)"
+        )
+        for name in ("ratings", "tokens"):
+            connection.execute(views[name])
+        connection.execute(
+            "UPDATE schema_metadata SET value = ? "
+            "WHERE key = 'schema_version'",
             (str(SCHEMA_VERSION),),
         )
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    @staticmethod
+    def _capture_compatibility_views(
+        connection: sqlite3.Connection,
+    ) -> dict[str, str]:
+        rows = connection.execute(
+            "SELECT name, sql FROM sqlite_master "
+            "WHERE type = 'view' AND name IN ('ratings', 'tokens')"
+        ).fetchall()
+        views = {
+            str(name): str(sql)
+            for name, sql in rows
+            if sql is not None
+        }
+        if set(views) != {"ratings", "tokens"}:
+            raise CanonicalSchemaValidationError(
+                "Canonical compatibility views are incomplete"
+            )
+        return views
 
     def _read_existing_version(self) -> int:
         connection = self._open_read_only()
@@ -562,7 +751,11 @@ class CanonicalSchemaManager:
                 f"Cannot open canonical database: {error}"
             ) from error
 
-    def _open_read_write(self) -> sqlite3.Connection:
+    def _open_read_write(
+        self,
+        *,
+        foreign_keys: bool = True,
+    ) -> sqlite3.Connection:
         try:
             connection = sqlite3.connect(
                 f"{self._database_path.as_uri()}?mode=rw",
@@ -572,7 +765,9 @@ class CanonicalSchemaManager:
             raise CanonicalSchemaValidationError(
                 f"Cannot open canonical database: {error}"
             ) from error
-        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(
+            "PRAGMA foreign_keys = " + ("ON" if foreign_keys else "OFF")
+        )
         return connection
 
     @staticmethod
@@ -586,6 +781,13 @@ class CanonicalSchemaManager:
         if not integrity or str(integrity[0]).lower() != "ok":
             raise CanonicalSchemaValidationError(
                 "Canonical database integrity_check failed"
+            )
+        foreign_key_issue = connection.execute(
+            "PRAGMA foreign_key_check"
+        ).fetchone()
+        if foreign_key_issue is not None:
+            raise CanonicalSchemaValidationError(
+                "Canonical database foreign_key_check failed"
             )
 
     @staticmethod
@@ -638,6 +840,91 @@ class CanonicalSchemaManager:
                 "Canonical generations table is missing required columns: "
                 + ", ".join(missing)
             )
+
+    @classmethod
+    def _validate_output_identity(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        image_columns = cls._table_column_rows(connection, "images")
+        deleted_columns = cls._table_column_rows(
+            connection,
+            "deleted_images",
+        )
+        missing_images = sorted(
+            _REQUIRED_IMAGE_COLUMNS_V3 - image_columns.keys()
+        )
+        missing_deleted = sorted(
+            _REQUIRED_DELETED_IMAGE_COLUMNS_V3 - deleted_columns.keys()
+        )
+        if missing_images or missing_deleted:
+            missing = missing_images + missing_deleted
+            raise CanonicalSchemaValidationError(
+                "Canonical output tables are missing required columns: "
+                + ", ".join(missing)
+            )
+        if int(image_columns["json_path"][3]) != 0:
+            raise CanonicalSchemaValidationError(
+                "images.json_path must be nullable in schema version 3"
+            )
+        if int(deleted_columns["json_path"][3]) != 0:
+            raise CanonicalSchemaValidationError(
+                "deleted_images.json_path must be nullable in schema "
+                "version 3"
+            )
+
+        unique_indexes = cls._unique_index_columns(connection, "images")
+        if ("generation_id",) in unique_indexes:
+            raise CanonicalSchemaValidationError(
+                "images.generation_id must not be unique"
+            )
+        expected_output_key = (
+            "generation_id",
+            "output_node_id",
+            "output_index",
+        )
+        if expected_output_key not in unique_indexes:
+            raise CanonicalSchemaValidationError(
+                "images is missing its generation output-slot constraint"
+            )
+        deleted_unique = cls._unique_index_columns(
+            connection,
+            "deleted_images",
+        )
+        if ("image_uid",) not in deleted_unique:
+            raise CanonicalSchemaValidationError(
+                "deleted_images.image_uid must be unique"
+            )
+
+    @staticmethod
+    def _table_column_rows(
+        connection: sqlite3.Connection,
+        table: str,
+    ) -> dict[str, tuple[object, ...]]:
+        rows = connection.execute(f"PRAGMA table_info({table})").fetchall()
+        return {str(row[1]): tuple(row) for row in rows}
+
+    @staticmethod
+    def _unique_index_columns(
+        connection: sqlite3.Connection,
+        table: str,
+    ) -> set[tuple[str, ...]]:
+        indexes: set[tuple[str, ...]] = set()
+        for row in connection.execute(
+            f"PRAGMA index_list({table})"
+        ).fetchall():
+            if int(row[2]) != 1:
+                continue
+            index_name = str(row[1]).replace('"', '""')
+            columns = tuple(
+                str(info[2])
+                for info in connection.execute(
+                    f'PRAGMA index_info("{index_name}")'
+                ).fetchall()
+                if info[2] is not None
+            )
+            indexes.add(columns)
+        return indexes
 
     def _create_backup(self, backup_directory: Path | None) -> Path:
         backup_root = Path(

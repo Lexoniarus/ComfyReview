@@ -141,11 +141,13 @@ projection/journal, not as the desired canonical shape.
 
 ## 7. Images and raw metadata
 
-An image record stores normalized generation fields such as:
+A generation run and its output images have separate identities. One
+run may own multiple outputs. An image record stores normalized fields such as:
 
-- stable image/generation ID
-- current PNG/JSON paths
-- prompt IDs
+- stable image ID plus its generation ID
+- current PNG path and optional legacy JSON sidecar path
+- output node ID and output index within the generation
+- prompt IDs through the generation relation
 - checkpoint/model reference
 - seed
 - steps
