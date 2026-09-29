@@ -41,18 +41,24 @@ The existing sidecar-backed runtime remains active for this commit.
 
 ## Slice 2B - sidecar-independent runtime image index
 
-Next:
+Implemented for the main Review runtime:
 
-- make the canonical database the runtime image index
-- add typed image reads by stable `image_uid`
-- allow native ComfyUI outputs with no JSON sidecar to enter Review/Top/Arena
-- keep filesystem PNG/sidecar discovery as a legacy import path
-- stop treating the existence of a matching `.json` file as live-image
-  identity
+- canonical database rows are the first runtime image source
+- stable `image_uid` reads resolve sidecarless canonical PNGs
+- legacy filesystem PNG/sidecar discovery remains a transition fallback
+- Review no longer requires a matching `.json` file for canonical images
+- Top/Worst, Arena and curation remain on transitional legacy contracts until
+  their post-import identity slices
 
 ## Slice 3 - legacy PNG/sidecar importer
 
-Build an explicit offline/import service for existing generated images.
+Slice 3A implements a read-only audit before any write migration. It fingerprints
+the historical files, extracts graph provenance and sampler stages, reports
+metadata conflicts, groups likely batch outputs and detects images already
+registered canonically.
+
+Slice 3B will build the explicit write importer only after the audit report has
+been reviewed.
 
 For every valid PNG/JSON pair:
 

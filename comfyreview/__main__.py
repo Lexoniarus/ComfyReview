@@ -13,6 +13,7 @@ from comfyreview.application import (
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
+from comfyreview.importers import LegacyOutputAuditor
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
@@ -58,6 +59,16 @@ def _parser() -> argparse.ArgumentParser:
     canonical_actions.add_parser("validate")
     canonical_upgrade = canonical_actions.add_parser("upgrade")
     canonical_upgrade.add_argument("--backup-dir", type=Path)
+
+    legacy_output = commands.add_parser("legacy-output")
+    output_actions = legacy_output.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    output_audit = output_actions.add_parser("audit")
+    output_audit.add_argument("--output-root", type=Path)
+    output_audit.add_argument("--database", type=Path)
+    output_audit.add_argument("--report", type=Path)
     return parser
 
 
@@ -113,13 +124,45 @@ def _run_canonical(options: argparse.Namespace) -> int:
     return 0
 
 
+def _run_legacy_output(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    output_root = (
+        options.output_root
+        if options.output_root is not None
+        else settings.output_root
+    )
+    database_path = (
+        options.database
+        if options.database is not None
+        else settings.canonical_database_path
+    )
+    report_path = (
+        options.report
+        if options.report is not None
+        else settings.data_directory / "reports" / "legacy-output-audit.json"
+    )
+    result = LegacyOutputAuditor(
+        output_root=output_root,
+        canonical_database_path=database_path,
+    ).audit(report_path)
+    payload = {
+        "report_path": str(result.report_path),
+        **result.summary,
+        "conflict_fields": result.conflict_fields,
+    }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run a maintenance command and return its stable process exit code."""
     options = _parser().parse_args(arguments)
     try:
         if options.command == "legacy-db":
             return _run_legacy(options)
-        return _run_canonical(options)
+        if options.command == "canonical-db":
+            return _run_canonical(options)
+        return _run_legacy_output(options)
     except LegacySchemaValidationError as error:
         print(_render_legacy(error.report), file=sys.stderr)
         return 2

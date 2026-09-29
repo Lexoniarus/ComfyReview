@@ -30,3 +30,9 @@ certs/
 # OS
 .DS_Store
 Thumbs.db
+
+# local drop-in patch helpers
+apply_step*.py
+resume_step*.py
+step*_payload.json
+step*_hotfix_payload.json
