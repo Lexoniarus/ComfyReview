@@ -42,11 +42,17 @@ class StagedDeletion:
             self.pair.png_path.parent.mkdir(parents=True, exist_ok=True)
             self.pair.json_path.parent.mkdir(parents=True, exist_ok=True)
             if self.staged_pair.png_path.exists():
-                shutil.move(str(self.staged_pair.png_path), str(self.pair.png_path))
+                shutil.move(
+                    str(self.staged_pair.png_path), str(self.pair.png_path)
+                )
             if self.staged_pair.json_path.exists():
-                shutil.move(str(self.staged_pair.json_path), str(self.pair.json_path))
+                shutil.move(
+                    str(self.staged_pair.json_path), str(self.pair.json_path)
+                )
         except OSError as exc:
-            raise OutputMutationError("Could not restore staged output files") from exc
+            raise OutputMutationError(
+                "Could not restore staged output files"
+            ) from exc
 
     def finalize(self, *, preserve_in_trash: bool) -> None:
         """Finish the delete and optionally purge the staged files."""
@@ -77,10 +83,14 @@ class OutputFileService:
             png.relative_to(self._output_root)
             sidecar.relative_to(self._output_root)
         except (OSError, ValueError) as exc:
-            raise InvalidOutputPathError("Output path is outside OUTPUT_ROOT") from exc
+            raise InvalidOutputPathError(
+                "Output path is outside OUTPUT_ROOT"
+            ) from exc
 
         if png.suffix.lower() != ".png" or sidecar.suffix.lower() != ".json":
-            raise InvalidOutputPathError("Expected a PNG and JSON sidecar pair")
+            raise InvalidOutputPathError(
+                "Expected a PNG and JSON sidecar pair"
+            )
         if png.parent != sidecar.parent or png.stem != sidecar.stem:
             raise InvalidOutputPathError("PNG and JSON sidecar do not match")
         if not png.is_file() or not sidecar.is_file():
@@ -111,6 +121,8 @@ class OutputFileService:
                     raise OutputMutationError(
                         "Delete staging failed and PNG rollback also failed"
                     ) from rollback_exc
-            raise OutputMutationError("Could not stage output pair for deletion") from exc
+            raise OutputMutationError(
+                "Could not stage output pair for deletion"
+            ) from exc
 
         return StagedDeletion(pair=pair, staged_pair=staged_pair)

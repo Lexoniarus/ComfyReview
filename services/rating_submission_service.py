@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple, Any
+from typing import Any
 
 from db_store import insert_or_update_rating
 from meta_view import extract_prompts, extract_view
-from services.rating_service import parse_float, parse_int, read_json_meta
 from services.output_file_service import OutputFileService
 from services.prompt_tokens_service import write_prompt_tokens_for_latest_run
+from services.rating_service import parse_float, parse_int, read_json_meta
 from stores.mv_jobs_store import enqueue_job
 
 
@@ -15,11 +15,13 @@ class ReviewValidationError(ValueError):
     """Raised when a review command contains an invalid score or action."""
 
 
-def _pressed_delete(*, deleted: Optional[int], delete: Optional[int]) -> bool:
+def _pressed_delete(*, deleted: int | None, delete: int | None) -> bool:
     return bool(deleted or delete)
 
 
-def _read_meta_for_rating(json_path: str) -> Tuple[dict, str, str]:
+def _read_meta_for_rating(
+    json_path: str,
+) -> tuple[dict[str, Any], str, str]:
     """Read sidecar json and extract view + prompts."""
     meta = read_json_meta(json_path)
     view = extract_view(meta)
@@ -29,22 +31,46 @@ def _read_meta_for_rating(json_path: str) -> Tuple[dict, str, str]:
 
 def _resolve_render_params(
     *,
-    view: dict,
-    sampler: Optional[str],
-    scheduler: Optional[str],
-    steps: Optional[str],
-    cfg: Optional[str],
-    denoise: Optional[str],
-    loras_json: Optional[str],
-) -> Tuple[Optional[int], Optional[float], Optional[float], Optional[str], Optional[str], str]:
+    view: dict[str, Any],
+    sampler: str | None,
+    scheduler: str | None,
+    steps: str | None,
+    cfg: str | None,
+    denoise: str | None,
+    loras_json: str | None,
+) -> tuple[
+    int | None, float | None, float | None, str | None, str | None, str
+]:
     """Resolve params from explicit args first, then fallback to json view."""
-    steps_v = parse_int(steps) if steps is not None else parse_int(view.get("steps"))
-    cfg_v = parse_float(cfg) if cfg is not None else parse_float(view.get("cfg"))
-    denoise_v = parse_float(denoise) if denoise is not None else parse_float(view.get("denoise"))
+    steps_v = (
+        parse_int(steps) if steps is not None else parse_int(view.get("steps"))
+    )
+    cfg_v = (
+        parse_float(cfg) if cfg is not None else parse_float(view.get("cfg"))
+    )
+    denoise_v = (
+        parse_float(denoise)
+        if denoise is not None
+        else parse_float(view.get("denoise"))
+    )
 
-    sampler_v = sampler if sampler is not None else (str(view.get("sampler")) if view.get("sampler") is not None else None)
-    scheduler_v = scheduler if scheduler is not None else (
-        str(view.get("scheduler")) if view.get("scheduler") is not None else None
+    sampler_v = (
+        sampler
+        if sampler is not None
+        else (
+            str(view.get("sampler"))
+            if view.get("sampler") is not None
+            else None
+        )
+    )
+    scheduler_v = (
+        scheduler
+        if scheduler is not None
+        else (
+            str(view.get("scheduler"))
+            if view.get("scheduler") is not None
+            else None
+        )
     )
 
     loras_json_v = loras_json if loras_json is not None else "[]"
@@ -59,13 +85,13 @@ def _write_rating_row(
     model_branch: str,
     checkpoint: str,
     combo_key: str,
-    rating_val: Optional[int],
+    rating_val: int | None,
     deleted_flag: int,
-    steps_v: Optional[int],
-    cfg_v: Optional[float],
-    sampler_v: Optional[str],
-    scheduler_v: Optional[str],
-    denoise_v: Optional[float],
+    steps_v: int | None,
+    cfg_v: float | None,
+    sampler_v: str | None,
+    scheduler_v: str | None,
+    denoise_v: float | None,
     loras_json_v: str,
     pos_prompt: str,
     neg_prompt: str,
@@ -98,7 +124,7 @@ def _write_prompt_tokens_quiet(
     model_branch: str,
     pos_prompt: str,
     neg_prompt: str,
-    rating_val: Optional[int],
+    rating_val: int | None,
     deleted_flag: int,
 ) -> None:
     try:
@@ -125,26 +151,26 @@ def _touch_mv_queue_quiet(mv_queue_db_path: Path) -> None:
 
 def submit_rating(
     *,
-    ratings_db_path,
-    prompt_tokens_db_path,
-    mv_queue_db_path,
-    output_root,
-    trash_root,
+    ratings_db_path: Path,
+    prompt_tokens_db_path: Path,
+    mv_queue_db_path: Path,
+    output_root: Path,
+    trash_root: Path,
     soft_delete_to_trash: bool,
-    rating: Optional[int],
-    deleted: Optional[int],
-    delete: Optional[int],
+    rating: int | None,
+    deleted: int | None,
+    delete: int | None,
     combo_key: str,
     model_branch: str,
     checkpoint: str,
     json_path: str,
     png_path: str,
-    sampler: Optional[str],
-    scheduler: Optional[str],
-    steps: Optional[str],
-    cfg: Optional[str],
-    denoise: Optional[str],
-    loras_json: Optional[str],
+    sampler: str | None,
+    scheduler: str | None,
+    steps: str | None,
+    cfg: str | None,
+    denoise: str | None,
+    loras_json: str | None,
 ) -> None:
     """Persist a rating or delete run.
 
@@ -161,20 +187,26 @@ def submit_rating(
         output_root=Path(output_root),
         trash_root=Path(trash_root),
     )
-    pair = output_files.resolve_pair(png_path=str(png_path), json_path=str(json_path))
+    pair = output_files.resolve_pair(
+        png_path=str(png_path), json_path=str(json_path)
+    )
     view, pos_prompt, neg_prompt = _read_meta_for_rating(str(pair.json_path))
 
     deleted_flag = 1 if pressed else 0
-    rating_val = None if deleted_flag else (int(rating) if rating is not None else None)
+    rating_val = (
+        None if deleted_flag else (int(rating) if rating is not None else None)
+    )
 
-    steps_v, cfg_v, denoise_v, sampler_v, scheduler_v, loras_json_v = _resolve_render_params(
-        view=view,
-        sampler=sampler,
-        scheduler=scheduler,
-        steps=steps,
-        cfg=cfg,
-        denoise=denoise,
-        loras_json=loras_json,
+    steps_v, cfg_v, denoise_v, sampler_v, scheduler_v, loras_json_v = (
+        _resolve_render_params(
+            view=view,
+            sampler=sampler,
+            scheduler=scheduler,
+            steps=steps,
+            cfg=cfg,
+            denoise=denoise,
+            loras_json=loras_json,
+        )
     )
 
     staged_delete = output_files.stage_delete(pair) if pressed else None
