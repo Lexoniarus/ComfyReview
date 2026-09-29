@@ -22,7 +22,7 @@ from comfyreview.bootstrap import (
     build_application_container,
     create_app,
 )
-from comfyreview.providers import LocalOutputImageCatalog
+from comfyreview.providers import CanonicalFirstOutputImageCatalog
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.settings import Settings, load_settings
 
@@ -155,6 +155,9 @@ def test_default_container_wires_canonical_review_runtime(
 
     container = build_application_container(settings)
 
-    assert isinstance(container.output_images, LocalOutputImageCatalog)
+    assert isinstance(
+        container.output_images,
+        CanonicalFirstOutputImageCatalog,
+    )
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.canonical_schema, CanonicalSchemaManager)

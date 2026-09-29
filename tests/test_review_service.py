@@ -39,10 +39,9 @@ class _Resolver:
 
     def resolve(self, reference: OutputImageReference) -> ReviewImage:
         self._scenario.record("resolve")
-        assert reference == OutputImageReference(
-            png_path=self._image.pair.png_path,
-            json_path=self._image.pair.json_path,
-        )
+        assert reference.png_path == self._image.pair.png_path
+        assert reference.json_path == self._image.pair.json_path
+        assert reference.image_uid == self._image.image_uid
         return self._image
 
 
@@ -129,6 +128,7 @@ class _ReviewFixture:
             image=OutputImageReference(
                 png_path=self.image.pair.png_path,
                 json_path=self.image.pair.json_path,
+                image_uid=self.image.image_uid,
             ),
             rating=rating,
             delete=delete,
@@ -139,12 +139,13 @@ def _fixture(
     *,
     fail_at: set[str] | None = None,
     with_prompts: bool = False,
+    sidecarless: bool = False,
 ) -> _ReviewFixture:
     scenario = _Scenario(fail_at=set(fail_at or ()))
     image = ReviewImage(
         pair=OutputPair(
             png_path=Path("output/image.png"),
-            json_path=Path("output/image.json"),
+            json_path=(None if sidecarless else Path("output/image.json")),
         ),
         model_branch="sdxl",
         checkpoint="model.safetensors",
@@ -157,6 +158,9 @@ def _fixture(
         loras_json="[]",
         positive_prompt="hero",
         negative_prompt="blur",
+        image_uid="image-native" if sidecarless else None,
+        generation_uid="generation-native" if sidecarless else None,
+        output_node_id="save" if sidecarless else "legacy_sidecar",
     )
     reviews = _Reviews(scenario)
     staged = _StagedDeletion(scenario)
@@ -355,3 +359,26 @@ def test_review_service_keeps_primary_error_if_legacy_rollback_fails() -> None:
         fixture.service.submit(fixture.command())
 
     assert fixture.scenario.events[-1] == "review_delete"
+
+
+def test_output_reference_accepts_canonical_uid_without_sidecar() -> None:
+    reference = OutputImageReference.from_client_reference(
+        image_uid="image-native",
+        png_path="folder/image.png",
+        json_path="",
+    )
+
+    assert reference == OutputImageReference(
+        png_path=Path("folder/image.png"),
+        json_path=None,
+        image_uid="image-native",
+    )
+
+
+def test_review_service_sidecarless_rating_skips_legacy_projection() -> None:
+    fixture = _fixture(sidecarless=True)
+
+    result = fixture.service.submit(fixture.command())
+
+    assert result.job_id == 0
+    assert fixture.scenario.events == ["resolve", "review_append"]

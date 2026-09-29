@@ -39,10 +39,17 @@ class SqliteReviewRepository:
                 scope="neg",
                 prompt=record.image.negative_prompt,
             )
-            image_uid = self._generation_uid(record.image)
+            generation_uid = (
+                record.image.generation_uid
+                or self._legacy_generation_uid(record.image)
+            )
+            image_uid = record.image.image_uid or self._legacy_image_uid(
+                record.image
+            )
             generation_id = self._upsert_generation(
                 connection,
                 record,
+                generation_uid=generation_uid,
                 positive_prompt_id=positive_prompt_id,
                 negative_prompt_id=negative_prompt_id,
             )
@@ -117,7 +124,7 @@ class SqliteReviewRepository:
                         image_uid,
                         generation_id,
                         str(record.image.pair.png_path),
-                        str(record.image.pair.json_path),
+                        self._path_text(record.image.pair.json_path),
                         version,
                     ),
                 )
@@ -220,6 +227,8 @@ class SqliteReviewRepository:
         record: ReviewRecord,
     ) -> StoredReview:
         image = record.image
+        if image.pair.json_path is None:
+            raise RuntimeError("Legacy review storage requires a JSON sidecar")
         row = connection.execute(
             """
             SELECT COALESCE(MAX(run), 0) AS maximum_run
@@ -368,6 +377,7 @@ class SqliteReviewRepository:
         connection: sqlite3.Connection,
         record: ReviewRecord,
         *,
+        generation_uid: str,
         positive_prompt_id: int,
         negative_prompt_id: int,
     ) -> int:
@@ -405,7 +415,7 @@ class SqliteReviewRepository:
                 negative_prompt_id = excluded.negative_prompt_id
             """,
             (
-                self._generation_uid(image),
+                generation_uid,
                 image.model_branch,
                 image.checkpoint,
                 image.combo_key,
@@ -422,7 +432,7 @@ class SqliteReviewRepository:
         )
         row = connection.execute(
             "SELECT id FROM generations WHERE generation_uid = ?",
-            (self._generation_uid(image),),
+            (generation_uid,),
         ).fetchone()
         if row is None:
             raise RuntimeError("Generation could not be persisted")
@@ -448,7 +458,7 @@ class SqliteReviewRepository:
                 json_path,
                 last_seen_at
             )
-            VALUES (?, ?, 'legacy_sidecar', 0, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(image_uid) DO UPDATE SET
                 generation_id = excluded.generation_id,
                 output_node_id = excluded.output_node_id,
@@ -460,8 +470,10 @@ class SqliteReviewRepository:
             (
                 image_uid,
                 generation_id,
+                image.output_node_id,
+                image.output_index,
                 str(image.pair.png_path),
-                str(image.pair.json_path),
+                self._path_text(image.pair.json_path),
             ),
         )
         row = connection.execute(
@@ -675,10 +687,15 @@ class SqliteReviewRepository:
         )
 
     @staticmethod
-    def _generation_uid(image) -> str:
+    def _legacy_generation_uid(image) -> str:
+        sidecar_key = (
+            image.pair.json_path.stem
+            if image.pair.json_path is not None
+            else image.pair.png_path.stem
+        )
         payload = "\0".join(
             (
-                image.pair.json_path.stem,
+                sidecar_key,
                 image.model_branch,
                 image.checkpoint,
                 image.combo_key,
@@ -693,6 +710,14 @@ class SqliteReviewRepository:
             )
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _legacy_image_uid(image) -> str:
+        return SqliteReviewRepository._legacy_generation_uid(image)
+
+    @staticmethod
+    def _path_text(path: Path | None) -> str | None:
+        return None if path is None else str(path)
 
     @staticmethod
     def _to_milli(value: object) -> int:

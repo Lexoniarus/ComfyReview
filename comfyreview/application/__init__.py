@@ -10,6 +10,8 @@ from comfyreview.application.lifecycle import (
     WorkerRuntime,
 )
 from comfyreview.application.output_images import (
+    CanonicalOutputImageRecord,
+    CanonicalOutputImageSource,
     OutputImageCatalog,
     OutputImageReadModel,
 )
@@ -37,6 +39,8 @@ from comfyreview.application.reviews import (
 )
 
 __all__ = [
+    "CanonicalOutputImageRecord",
+    "CanonicalOutputImageSource",
     "CanonicalSchemaLifecycle",
     "CanonicalSchemaReport",
     "InvalidOutputPathError",

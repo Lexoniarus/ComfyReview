@@ -30,10 +30,11 @@ class OutputMutationError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class OutputImageReference:
-    """Represent an untrusted client reference to one PNG/JSON pair."""
+    """Represent an untrusted reference to one output image."""
 
     png_path: Path
-    json_path: Path
+    json_path: Path | None
+    image_uid: str | None = None
 
     @classmethod
     def from_client_paths(
@@ -42,24 +43,58 @@ class OutputImageReference:
         png_path: str,
         json_path: str,
     ) -> OutputImageReference:
-        """Validate pair syntax before provider resolution."""
-        if not png_path.strip() or not json_path.strip():
+        """Validate one legacy PNG/JSON pair reference."""
+        if not str(png_path or "").strip() or not str(json_path or "").strip():
             raise ReviewValidationError("Output pair paths are required")
+        return cls.from_client_reference(
+            image_uid="",
+            png_path=png_path,
+            json_path=json_path,
+        )
+
+    @classmethod
+    def from_client_reference(
+        cls,
+        *,
+        image_uid: str,
+        png_path: str,
+        json_path: str,
+    ) -> OutputImageReference:
+        """Validate canonical identity or a legacy PNG/JSON pair."""
+        uid = str(image_uid or "").strip() or None
+        if not str(png_path or "").strip():
+            raise ReviewValidationError("Output PNG path is required")
         png = Path(png_path)
-        sidecar = Path(json_path)
-        if png.suffix.lower() != ".png" or sidecar.suffix.lower() != ".json":
-            raise ReviewValidationError("Expected a PNG and JSON sidecar pair")
-        if png.parent != sidecar.parent or png.stem != sidecar.stem:
-            raise ReviewValidationError("PNG and JSON sidecar do not match")
-        return cls(png_path=png, json_path=sidecar)
+        if png.suffix.lower() != ".png":
+            raise ReviewValidationError("Expected a PNG output path")
+
+        sidecar_text = str(json_path or "").strip()
+        sidecar = Path(sidecar_text) if sidecar_text else None
+        if sidecar is not None:
+            if sidecar.suffix.lower() != ".json":
+                raise ReviewValidationError("Expected a JSON sidecar path")
+            if png.parent != sidecar.parent or png.stem != sidecar.stem:
+                raise ReviewValidationError(
+                    "PNG and JSON sidecar do not match"
+                )
+        elif uid is None:
+            raise ReviewValidationError(
+                "image_uid or matching JSON sidecar is required"
+            )
+
+        return cls(
+            png_path=png,
+            json_path=sidecar,
+            image_uid=uid,
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class OutputPair:
-    """Identify one provider-validated PNG/JSON output pair."""
+    """Identify provider-validated output files."""
 
     png_path: Path
-    json_path: Path
+    json_path: Path | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +113,10 @@ class ReviewImage:
     loras_json: str
     positive_prompt: str
     negative_prompt: str
+    image_uid: str | None = None
+    generation_uid: str | None = None
+    output_node_id: str = "legacy_sidecar"
+    output_index: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,7 +169,7 @@ class ReviewResult:
 
 
 class ReviewImageResolver(Protocol):
-    """Resolve client references into authoritative sidecar-backed data."""
+    """Resolve client references into authoritative generation data."""
 
     def resolve(self, reference: OutputImageReference) -> ReviewImage:
         """Return a validated and normalized review image."""
@@ -226,7 +265,10 @@ class ReviewService:
             if command.delete:
                 staged = self._deletions.stage(image.pair)
             stored = self._reviews.append(record)
-            if self._prompts is not None:
+            if (
+                self._prompts is not None
+                and record.image.pair.json_path is not None
+            ):
                 self._prompts.save(self._prompt_projection(record, stored))
         except Exception as error:
             if stored is not None and self._prompts is not None:
@@ -241,7 +283,11 @@ class ReviewService:
                 "Review mutation failed during canonical_write"
             ) from error
 
-        job_id = self._request_projection_catchup()
+        job_id = (
+            self._request_projection_catchup()
+            if image.pair.json_path is not None
+            else 0
+        )
         if staged is not None:
             self._finalize_delete(staged)
 
@@ -270,8 +316,13 @@ class ReviewService:
         stored: StoredReview,
     ) -> PromptProjection:
         image = record.image
+        json_path = image.pair.json_path
+        if json_path is None:
+            raise ReviewMutationError(
+                "Legacy prompt projection requires a JSON sidecar"
+            )
         return PromptProjection(
-            json_path=image.pair.json_path,
+            json_path=json_path,
             run=stored.run,
             model_branch=image.model_branch,
             positive_prompt=image.positive_prompt,

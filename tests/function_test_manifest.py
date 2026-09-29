@@ -5,6 +5,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_review_service.py::"
         "test_output_reference_preserves_a_valid_client_pair"
     ),
+    "comfyreview.application.reviews:OutputImageReference.from_client_reference": (
+        "tests/test_review_service.py::"
+        "test_output_reference_accepts_canonical_uid_without_sidecar"
+    ),
     "comfyreview.application.reviews:ReviewService.submit": (
         "tests/test_review_service.py::"
         "test_review_service_submits_rating_in_order"

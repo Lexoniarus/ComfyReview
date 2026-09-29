@@ -160,15 +160,22 @@
       <img src="{{ img_url }}" alt="preview">
 
       <div class="box jsonPath" style="margin-top:14px;">
-        <div class="small">JSON</div>
-        <div class="small">{{ it.json_path }}</div>
+        <div class="small">Provenienz</div>
+        <div class="small">
+          {% if it.json_path %}
+            {{ it.json_path }}
+          {% else %}
+            kein Sidecar · image_uid {{ it.image_uid }}
+          {% endif %}
+        </div>
       </div>
 
       <form id="rateForm" method="post" action="/rate">
         <input type="hidden" name="combo_key" value="{{ it.combo_key }}">
         <input type="hidden" name="model_branch" value="{{ it.model_branch }}">
         <input type="hidden" name="checkpoint" value="{{ it.checkpoint }}">
-        <input type="hidden" name="json_path" value="{{ it.json_path }}">
+        <input type="hidden" name="image_uid" value="{{ it.image_uid or '' }}">
+        <input type="hidden" name="json_path" value="{{ it.json_path or '' }}">
         <input type="hidden" name="png_path" value="{{ it.png_path }}">
         <input type="hidden" name="sampler" value="{{ view.get('sampler') }}">
         <input type="hidden" name="scheduler" value="{{ view.get('scheduler') }}">
@@ -280,7 +287,7 @@
     function clickDelete(){
       const btn = rateForm.querySelector('button[data-delete="1"]');
       if(!btn) return;
-      const ok = confirm('Wirklich löschen? PNG und JSON werden entfernt, DB Eintrag bleibt als deleted=1.');
+      const ok = confirm('Wirklich löschen? Vorhandene Output-Dateien werden entfernt, DB Eintrag bleibt als deleted=1.');
       if(ok){
         if(window.toast) window.toast("delete");
         btn.click();

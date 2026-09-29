@@ -258,9 +258,12 @@ def insert_arena_result(
         stored = review_repository.append(
             ReviewRecord(image=image, rating=int(rating_int), deleted=False)
         )
+        sidecar_path = image.pair.json_path
+        if sidecar_path is None:
+            raise ArenaValidationError("Legacy Arena requires a JSON sidecar")
         prompt_repository.save(
             PromptProjection(
-                json_path=image.pair.json_path,
+                json_path=sidecar_path,
                 run=stored.run,
                 model_branch=image.model_branch,
                 positive_prompt=image.positive_prompt,

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
 
 from services.context_filters import extract_character_from_subdir
 from services.output_file_service import (
@@ -20,7 +20,7 @@ class CurationValidationError(ValueError):
     """Raised when a requested curation set is not configured."""
 
 
-def normalize_set_key(set_key: str, *, allowed: Iterable[str]) -> Optional[str]:
+def normalize_set_key(set_key: str, *, allowed: Iterable[str]) -> str | None:
     """Normalize a set key.
 
     Returns
@@ -30,7 +30,9 @@ def normalize_set_key(set_key: str, *, allowed: Iterable[str]) -> Optional[str]:
     sk = str(set_key or "").strip()
     if not sk or sk == "unsorted":
         return None
-    allowed_set = set(str(x).strip() for x in (allowed or []) if str(x).strip())
+    allowed_set = set(
+        str(x).strip() for x in (allowed or []) if str(x).strip()
+    )
     return sk if sk in allowed_set else None
 
 
@@ -81,7 +83,9 @@ def _export_copy_to_subtier(
         shutil.copy2(str(json_path), str(dest_dir / json_path.name))
 
 
-def _derive_character_root(output_root: Path, png_path: Path) -> Tuple[Path, str]:
+def _derive_character_root(
+    output_root: Path, png_path: Path
+) -> tuple[Path, str]:
     """Return character root folder and character name.
 
     Expected structure:
@@ -110,7 +114,7 @@ def _derive_character_root(output_root: Path, png_path: Path) -> Tuple[Path, str
     return (png_path.parent, char)
 
 
-def _dest_dir_for_set(character_root: Path, set_key: Optional[str]) -> Path:
+def _dest_dir_for_set(character_root: Path, set_key: str | None) -> Path:
     """Destination directory inside the character folder.
 
     Requirement:
@@ -122,7 +126,9 @@ def _dest_dir_for_set(character_root: Path, set_key: Optional[str]) -> Path:
     return character_root / str(set_key)
 
 
-def _pick_unique_dest_paths(dest_dir: Path, png_name: str) -> Tuple[Path, Path]:
+def _pick_unique_dest_paths(
+    dest_dir: Path, png_name: str
+) -> tuple[Path, Path]:
     """Pick a non-colliding destination pair (png+json).
 
     Keeps base name when possible.
@@ -142,10 +148,15 @@ def _pick_unique_dest_paths(dest_dir: Path, png_name: str) -> Tuple[Path, Path]:
             return dest_png, dest_json
 
     # fallback
-    return (dest_dir / f"{base}_mv999{png_ext}", dest_dir / f"{base}_mv999.json")
+    return (
+        dest_dir / f"{base}_mv999{png_ext}",
+        dest_dir / f"{base}_mv999.json",
+    )
 
 
-def _move_pair(png_path: Path, json_path: Path, dest_png: Path, dest_json: Path) -> None:
+def _move_pair(
+    png_path: Path, json_path: Path, dest_png: Path, dest_json: Path
+) -> None:
     """Move a PNG/JSON pair and restore the PNG if the sidecar move fails."""
     dest_png.parent.mkdir(parents=True, exist_ok=True)
     png_moved = False
@@ -170,11 +181,11 @@ def assign_image_to_set(
     output_root: Path,
     lora_export_root: Path,
     allowed_set_keys: Iterable[str],
-    ratings_db_path: Optional[Path] = None,
-    prompt_tokens_db_path: Optional[Path] = None,
-    images_db_path: Optional[Path] = None,
-    combo_prompts_db_path: Optional[Path] = None,
-    arena_db_path: Optional[Path] = None,
+    ratings_db_path: Path | None = None,
+    prompt_tokens_db_path: Path | None = None,
+    images_db_path: Path | None = None,
+    combo_prompts_db_path: Path | None = None,
+    arena_db_path: Path | None = None,
     png_path: str,
     json_path: str,
     set_key: str,
@@ -194,10 +205,19 @@ def assign_image_to_set(
         output_root=Path(output_root),
         trash_root=Path(output_root) / "_trash",
     )
-    pair = output_files.resolve_pair(png_path=str(png_path), json_path=str(json_path))
+    pair = output_files.resolve_pair(
+        png_path=str(png_path),
+        json_path=str(json_path),
+    )
     p = pair.png_path
     j = pair.json_path
-    allowed_set = {str(value).strip() for value in allowed_set_keys if str(value).strip()}
+    if j is None:
+        raise CurationValidationError(
+            "Legacy curation requires a JSON sidecar"
+        )
+    allowed_set = {
+        str(value).strip() for value in allowed_set_keys if str(value).strip()
+    }
     raw_set_key = str(set_key or "").strip()
     if raw_set_key not in {"", "unsorted", *allowed_set}:
         raise CurationValidationError("Unknown curation set")
@@ -262,10 +282,14 @@ def assign_image_to_set(
             pass
         try:
             upsert_set_key(curation_db_path, png_path=new_png, set_key=None)
-            upsert_set_key(curation_db_path, png_path=old_png, set_key=old_set_key)
+            upsert_set_key(
+                curation_db_path, png_path=old_png, set_key=old_set_key
+            )
         except Exception:
             pass
-        raise CurationMutationError("Could not assign the output pair") from exc
+        raise CurationMutationError(
+            "Could not assign the output pair"
+        ) from exc
 
     # Optional legacy export copy (currently not required)
     # if sk is not None:

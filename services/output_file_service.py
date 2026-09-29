@@ -15,26 +15,35 @@ from comfyreview.application import (
 
 @dataclass
 class StagedDeletion:
-    """A reversible move of an output pair into the configured trash root."""
+    """A reversible move of output files into the configured trash root."""
 
     pair: OutputPair
     staged_pair: OutputPair
     completed: bool = False
 
     def rollback(self) -> None:
-        """Restore both staged files to their original locations."""
+        """Restore staged output files to their original locations."""
         if self.completed:
             return
         try:
             self.pair.png_path.parent.mkdir(parents=True, exist_ok=True)
-            self.pair.json_path.parent.mkdir(parents=True, exist_ok=True)
             if self.staged_pair.png_path.exists():
                 shutil.move(
-                    str(self.staged_pair.png_path), str(self.pair.png_path)
+                    str(self.staged_pair.png_path),
+                    str(self.pair.png_path),
                 )
-            if self.staged_pair.json_path.exists():
+            if (
+                self.pair.json_path is not None
+                and self.staged_pair.json_path is not None
+                and self.staged_pair.json_path.exists()
+            ):
+                self.pair.json_path.parent.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
                 shutil.move(
-                    str(self.staged_pair.json_path), str(self.pair.json_path)
+                    str(self.staged_pair.json_path),
+                    str(self.pair.json_path),
                 )
         except OSError as exc:
             raise OutputMutationError(
@@ -42,28 +51,29 @@ class StagedDeletion:
             ) from exc
 
     def finalize(self, *, preserve_in_trash: bool) -> None:
-        """Finish the delete and optionally purge the staged files."""
+        """Finish deletion and optionally retain staged trash files."""
         self.completed = True
         if preserve_in_trash:
             return
-        for path in (self.staged_pair.png_path, self.staged_pair.json_path):
+        paths = [self.staged_pair.png_path]
+        if self.staged_pair.json_path is not None:
+            paths.append(self.staged_pair.json_path)
+        for path in paths:
             try:
                 path.unlink(missing_ok=True)
             except OSError:
-                # The pair is already outside the live output tree. Keeping a
-                # recoverable trash file is safer than failing after DB commit.
                 continue
 
 
 class OutputFileService:
-    """Validate and mutate PNG/JSON pairs below a configured output root."""
+    """Validate and mutate output files below a configured output root."""
 
     def __init__(self, *, output_root: Path, trash_root: Path) -> None:
         self._output_root = Path(output_root).resolve()
         self._trash_root = Path(trash_root).resolve()
 
     def resolve_pair(self, *, png_path: str, json_path: str) -> OutputPair:
-        """Resolve an existing matching pair and reject paths outside the root."""
+        """Resolve one legacy matching pair below the output root."""
         try:
             png = Path(png_path).resolve(strict=False)
             sidecar = Path(json_path).resolve(strict=False)
@@ -85,31 +95,46 @@ class OutputFileService:
         return OutputPair(png_path=png, json_path=sidecar)
 
     def stage(self, pair: OutputPair) -> StagedDeletion:
-        """Move a pair to a unique trash location and return a rollback handle."""
+        """Stage a PNG and its optional sidecar for reversible deletion."""
         relative_parent = pair.png_path.parent.relative_to(self._output_root)
         destination = self._trash_root / relative_parent
         destination.mkdir(parents=True, exist_ok=True)
         suffix = uuid4().hex
+
+        staged_json = None
+        if pair.json_path is not None:
+            staged_json = destination / f"{pair.json_path.stem}.{suffix}.json"
         staged_pair = OutputPair(
             png_path=destination / f"{pair.png_path.stem}.{suffix}.png",
-            json_path=destination / f"{pair.json_path.stem}.{suffix}.json",
+            json_path=staged_json,
         )
 
         png_moved = False
         try:
             shutil.move(str(pair.png_path), str(staged_pair.png_path))
             png_moved = True
-            shutil.move(str(pair.json_path), str(staged_pair.json_path))
+            if (
+                pair.json_path is not None
+                and pair.json_path.is_file()
+                and staged_pair.json_path is not None
+            ):
+                shutil.move(
+                    str(pair.json_path),
+                    str(staged_pair.json_path),
+                )
         except OSError as exc:
             if png_moved and staged_pair.png_path.exists():
                 try:
-                    shutil.move(str(staged_pair.png_path), str(pair.png_path))
+                    shutil.move(
+                        str(staged_pair.png_path),
+                        str(pair.png_path),
+                    )
                 except OSError as rollback_exc:
                     raise OutputMutationError(
                         "Delete staging failed and PNG rollback also failed"
                     ) from rollback_exc
             raise OutputMutationError(
-                "Could not stage output pair for deletion"
+                "Could not stage output files for deletion"
             ) from exc
 
         return StagedDeletion(pair=pair, staged_pair=staged_pair)

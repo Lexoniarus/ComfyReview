@@ -6,6 +6,9 @@ from comfyreview.repositories.sqlite.canonical_schema import (
 )
 from comfyreview.repositories.sqlite.connection import connect_existing
 from comfyreview.repositories.sqlite.legacy_schema import LegacySchemaManager
+from comfyreview.repositories.sqlite.output_images import (
+    SqliteOutputImageRepository,
+)
 from comfyreview.repositories.sqlite.path_relink import SqlitePathRelinker
 from comfyreview.repositories.sqlite.reviews import (
     LegacyProjectionJobQueue,
@@ -18,6 +21,7 @@ __all__ = [
     "CanonicalSchemaValidationError",
     "LegacyProjectionJobQueue",
     "LegacySchemaManager",
+    "SqliteOutputImageRepository",
     "SqlitePathRelinker",
     "SqlitePromptRepository",
     "SqliteReviewRepository",

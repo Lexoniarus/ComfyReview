@@ -286,3 +286,51 @@ def test_review_adapters_do_not_create_missing_database(
             adapter.delete(tmp_path / "image.json", 1)
 
     assert not database_path.exists()
+
+
+def test_canonical_sidecarless_image_preserves_external_identity(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    repository = SqliteReviewRepository(database_path)
+    record = ReviewRecord(
+        image=ReviewImage(
+            pair=OutputPair(
+                png_path=tmp_path / "native.png",
+                json_path=None,
+            ),
+            model_branch="sdxl",
+            checkpoint="native.safetensors",
+            combo_key="native-combo",
+            steps=30,
+            cfg=5.5,
+            sampler="euler",
+            scheduler="normal",
+            denoise=1.0,
+            loras_json="[]",
+            positive_prompt="hero",
+            negative_prompt="blur",
+            image_uid="image-native",
+            generation_uid="generation-native",
+            output_node_id="save-node",
+            output_index=2,
+        ),
+        rating=9,
+        deleted=False,
+    )
+
+    repository.append(record)
+
+    with sqlite3.connect(database_path) as connection:
+        image = connection.execute(
+            """
+            SELECT image_uid, output_node_id, output_index, json_path
+            FROM images
+            """
+        ).fetchone()
+        generation = connection.execute(
+            "SELECT generation_uid FROM generations"
+        ).fetchone()
+    assert image == ("image-native", "save-node", 2, None)
+    assert generation == ("generation-native",)

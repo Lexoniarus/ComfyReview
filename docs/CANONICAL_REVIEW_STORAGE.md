@@ -24,9 +24,9 @@ A generation may now own multiple `images` rows. Every image has its own stable
 unique, while `generation_id` itself is deliberately not unique.
 
 `images.json_path` is nullable. A JSON sidecar is therefore no longer a
-canonical persistence requirement. The current filesystem catalog and review
-HTTP boundary still require legacy PNG/JSON pairs; removing that runtime
-requirement is the next, separate slice.
+canonical persistence requirement. The main review runtime now reads canonical
+image rows before legacy filesystem discovery, so a registered PNG remains
+reviewable even when no JSON sidecar exists.
 
 Deleted output state is image-scoped as well. `deleted_images` stores the
 `image_uid` and no longer assumes that deleting one output means deleting the
@@ -66,18 +66,33 @@ to version 3 in one backed-up operation.
 
 ## Current review compatibility
 
-The existing sidecar-backed review flow remains operational in Slice 2A. It
-writes its current single legacy output into the new output model using the
-`legacy_sidecar` output slot. Rating and delete learning semantics are
-unchanged, except that delete tombstones are keyed by `image_uid` rather than
-by generation.
+Legacy sidecar-backed review remains operational, while canonical image records
+can now be reviewed through stable `image_uid` even when `json_path` is NULL.
+Canonical identities are preserved through rating/delete mutations instead of
+being re-derived from filenames. Delete tombstones remain image-scoped.
 
 The `ratings` and `tokens` compatibility views remain readable and are rebuilt
 unchanged during the schema migration.
 
 ## Next step
 
-Slice 2B moves live output discovery to a canonical DB-first image index and
-changes the application boundary so a native ComfyUI output can be reviewed
-without a JSON sidecar. Legacy filesystem sidecar discovery remains available
-for import and transition.
+Slice 3 imports the historical PNG/JSON corpus into canonical generation
+provenance, preserving raw sidecars while treating the stored ComfyUI prompt
+graph as historical render truth.
+
+## Canonical-first output runtime
+
+The main review runtime merges two sources:
+
+1. live canonical `images` joined to their `generations` and exact prompts
+2. legacy PNG/JSON discovery for historical files not yet represented in the
+   canonical database
+
+Canonical records win when both sources describe the same PNG. Their stable
+`image_uid` and normalized generation facts are authoritative for rating and
+delete operations. JSON sidecars are optional provenance, not identity.
+
+Sidecarless canonical reviews do not enqueue the transitional legacy
+materialized-view worker. Canonical review state and learning aggregates are
+already updated inside the review transaction, while the legacy worker still
+assumes a JSON path.

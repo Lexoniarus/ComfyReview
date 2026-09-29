@@ -98,3 +98,14 @@ After native generation provenance is verified against real outputs, replace
 sidecars supported only by the legacy importer. The canonical database becomes
 the ComfyReview source of truth; ComfyUI history and PNG metadata are execution
 or portable evidence.
+
+## Slice 2B runtime status
+
+The main review runtime is now canonical-first and sidecar-independent.
+Canonical DB images are merged with unimported legacy sidecar outputs, and
+stable `image_uid` / `generation_uid` values are preserved through review
+mutations. PNG-only deletion is supported.
+
+Top/Worst ranking, Arena and curation still use transitional legacy
+projections/path contracts. Sidecarless canonical outputs are reviewable on the
+main review page but are not yet promoted into those legacy feature pools.

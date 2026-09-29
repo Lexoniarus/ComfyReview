@@ -51,7 +51,7 @@ def _filter_items_for_review(
         ):
             continue
 
-        rated_count = int(rated_map.get(str(it.json_path), 0) or 0)
+        rated_count = _rated_count(it, rated_map)
         rated = 1 if rated_count > 0 else 0
         if unrated_only == 1 and rated == 1:
             continue
@@ -121,14 +121,34 @@ def build_review_page_context(
             )
 
         it = filtered[0]
-        rated_count = int(rated_map.get(str(it.json_path), 0) or 0)
+        rated_count = _rated_count(it, rated_map)
 
-        rating_avg, rating_runs = rating_avg_and_runs_for_json(
-            con, str(it.json_path)
-        )
-        last_rating, trend_delta = _fetch_last_and_trend(
-            con, str(it.json_path), int(rating_runs or 0)
-        )
+        if it.image_uid is not None:
+            rating_avg = (
+                float(it.current_rating)
+                if it.current_rating is not None
+                else None
+            )
+            rating_runs = 1 if it.current_rating is not None else 0
+            last_rating = it.current_rating
+            trend_delta = None
+        else:
+            json_path = it.json_path
+            if json_path is None:
+                rating_avg = None
+                rating_runs = 0
+                last_rating = None
+                trend_delta = None
+            else:
+                rating_avg, rating_runs = rating_avg_and_runs_for_json(
+                    con,
+                    str(json_path),
+                )
+                last_rating, trend_delta = _fetch_last_and_trend(
+                    con,
+                    str(json_path),
+                    int(rating_runs or 0),
+                )
     finally:
         con.close()
 
@@ -183,13 +203,29 @@ def _load_set_map_safe(
         return {}
 
 
+def _rated_count(
+    item: OutputImageReadModel,
+    rated_map: dict[str, int],
+) -> int:
+    if item.image_uid is not None:
+        return 1 if item.current_rating is not None else 0
+    if item.json_path is None:
+        return 0
+    return int(rated_map.get(str(item.json_path), 0) or 0)
+
+
 def _sort_items_for_review_all(
-    items: list[Any], rated_map: dict[str, int]
+    items: list[Any],
+    rated_map: dict[str, int],
 ) -> None:
     items.sort(
-        key=lambda it2: (
-            int(rated_map.get(str(it2.json_path), 0) or 0),
-            str(it2.json_path),
+        key=lambda item: (
+            _rated_count(item, rated_map),
+            str(
+                getattr(item, "image_uid", None)
+                or getattr(item, "json_path", None)
+                or item.png_path
+            ),
         )
     )
 

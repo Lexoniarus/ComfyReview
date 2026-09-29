@@ -65,7 +65,8 @@ def rate(
     combo_key: str = Form(...),
     model_branch: str = Form(...),
     checkpoint: str = Form(...),
-    json_path: str = Form(...),
+    image_uid: str | None = Form(None),
+    json_path: str = Form(""),
     png_path: str = Form(...),
     sampler: str | None = Form(None),
     scheduler: str | None = Form(None),
@@ -95,7 +96,8 @@ def rate(
     )
     try:
         command = SubmitReviewCommand(
-            image=OutputImageReference.from_client_paths(
+            image=OutputImageReference.from_client_reference(
+                image_uid=str(image_uid or ""),
                 png_path=png_path,
                 json_path=json_path,
             ),
