@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Collection
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
 
-from comfyreview.application import LegacySchemaReport, OutputImageReadModel
+from comfyreview.application import (
+    LegacySchemaReport,
+    OutputImageReadModel,
+    ReviewResult,
+    ReviewService,
+    SubmitReviewCommand,
+)
 from comfyreview.bootstrap import (
     ApplicationContainer,
     build_application_container,
@@ -61,6 +68,12 @@ class _EmptyOutputImageCatalog:
         return ()
 
 
+class _RecordingReviewService:
+    def submit(self, command: SubmitReviewCommand) -> ReviewResult:
+        del command
+        return ReviewResult(review_id=1, run=1, deleted=False, job_id=1)
+
+
 def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
     return ApplicationContainer(
@@ -68,6 +81,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         schema_lifecycle=_RecordingSchemaLifecycle(settings, events),
         worker=_RecordingWorker(events),
         output_images=_EmptyOutputImageCatalog(),
+        review_service=cast(ReviewService, _RecordingReviewService()),
     )
 
 
@@ -117,3 +131,4 @@ def test_default_container_wires_local_output_catalog(tmp_path: Path) -> None:
     container = build_application_container(settings)
 
     assert isinstance(container.output_images, LocalOutputImageCatalog)
+    assert isinstance(container.review_service, ReviewService)

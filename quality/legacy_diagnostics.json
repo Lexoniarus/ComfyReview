@@ -86,7 +86,6 @@
       "format|templates.py|unformatted": 1,
       "format|tests/conftest.py|unformatted": 1,
       "format|tests/test_comfy_client_patch.py|unformatted": 1,
-      "format|tests/test_mutation_route_contracts.py|unformatted": 1,
       "format|tests/test_prompt_store_tokenize.py|unformatted": 1,
       "format|tests/test_scope_semantics.py|unformatted": 1
     },
@@ -301,8 +300,7 @@
       "ruff|stores/ratings_state_store.py|UP006": 10,
       "ruff|stores/ratings_state_store.py|UP035": 3,
       "ruff|templates.py|I001": 1,
-      "ruff|tests/conftest.py|I001": 1,
-      "ruff|tests/test_mutation_route_contracts.py|I001": 1
+      "ruff|tests/conftest.py|I001": 1
     }
   }
 }

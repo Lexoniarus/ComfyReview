@@ -4,6 +4,14 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from comfyreview.api import get_application_container
+from comfyreview.application import (
+    InvalidOutputPathError,
+    OutputImageReference,
+    OutputPairNotFoundError,
+    ReviewMutationError,
+    ReviewValidationError,
+    SubmitReviewCommand,
+)
 from config import (
     ARENA_DB_PATH,
     COMBO_PROMPTS_DB_PATH,
@@ -13,13 +21,10 @@ from config import (
     IMAGES_DB_PATH,
     LORA_EXPORT_ROOT,
     MIN_RUNS,
-    MV_QUEUE_DB_PATH,
     OUTPUT_ROOT,
     PLAYGROUND_DB_PATH,
     POOL_LIMIT,
     PROMPT_TOKENS_DB_PATH,
-    SOFT_DELETE_TO_TRASH,
-    TRASH_ROOT,
 )
 from services.context_filters import build_gallery_context
 from services.curation_assignment_service import (
@@ -28,15 +33,7 @@ from services.curation_assignment_service import (
     assign_image_to_set,
 )
 from services.gallery_view_service import build_top_pictures_page
-from services.output_file_service import (
-    InvalidOutputPathError,
-    OutputMutationError,
-    OutputPairNotFoundError,
-)
-from services.rating_submission_service import (
-    ReviewValidationError,
-    submit_rating,
-)
+from services.output_file_service import OutputMutationError
 from templates import TOP_PICTURES_HTML
 
 router = APIRouter()
@@ -117,6 +114,7 @@ def assign_set(
 
 @router.post("/top_delete")
 def top_delete(
+    request: Request,
     json_path: str = Form(...),
     png_path: str = Form(...),
     combo_key: str = Form(""),
@@ -127,35 +125,22 @@ def top_delete(
     filter_mode: str = Form("top"),
     filter_set_key: str = Form(""),
 ):
-    # unify delete behavior with /rate submission logic
+    del combo_key, model_branch, checkpoint
     try:
-        submit_rating(
-            ratings_db_path=DB_PATH,
-            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-            mv_queue_db_path=MV_QUEUE_DB_PATH,
-            output_root=OUTPUT_ROOT,
-            trash_root=TRASH_ROOT,
-            soft_delete_to_trash=bool(SOFT_DELETE_TO_TRASH),
+        command = SubmitReviewCommand(
+            image=OutputImageReference.from_client_paths(
+                png_path=png_path,
+                json_path=json_path,
+            ),
             rating=None,
-            deleted=1,
-            delete=1,
-            combo_key=str(combo_key or ""),
-            model_branch=str(model_branch or ""),
-            checkpoint=str(checkpoint or ""),
-            json_path=str(json_path),
-            png_path=str(png_path),
-            sampler=None,
-            scheduler=None,
-            steps=None,
-            cfg=None,
-            denoise=None,
-            loras_json=None,
+            delete=True,
         )
+        get_application_container(request).review_service.submit(command)
     except (InvalidOutputPathError, ReviewValidationError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OutputPairNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except OutputMutationError as exc:
+    except ReviewMutationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     return RedirectResponse(

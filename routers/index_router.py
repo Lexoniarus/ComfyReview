@@ -4,32 +4,26 @@ from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from comfyreview.api import get_application_container
+from comfyreview.application import (
+    InvalidOutputPathError,
+    OutputImageReference,
+    OutputPairNotFoundError,
+    ReviewMutationError,
+    ReviewValidationError,
+    SubmitReviewCommand,
+)
 from config import (
     CURATION_DB_PATH,
     CURATION_SET_KEYS,
     DB_PATH,
     DEFAULT_UNRATED_ONLY,
-    MV_QUEUE_DB_PATH,
-    OUTPUT_ROOT,
     PLAYGROUND_DB_PATH,
-    PROMPT_TOKENS_DB_PATH,
-    SOFT_DELETE_TO_TRASH,
-    TRASH_ROOT,
 )
 from services.context_filters import (
     normalize_model,
     normalize_set_key,
     normalize_subdir,
     normalize_unrated_flag,
-)
-from services.output_file_service import (
-    InvalidOutputPathError,
-    OutputMutationError,
-    OutputPairNotFoundError,
-)
-from services.rating_submission_service import (
-    ReviewValidationError,
-    submit_rating,
 )
 from services.review_page_service import build_review_page_context
 from templates import INDEX_HTML
@@ -64,6 +58,7 @@ def index(
 
 @router.post("/rate")
 def rate(
+    request: Request,
     rating: int | None = Form(None),
     deleted: int | None = Form(None),
     delete: int | None = Form(None),
@@ -85,34 +80,34 @@ def rate(
     filter_character: str | None = Form(None),
     filter_set_key: str | None = Form(None),
 ):
+    del (
+        combo_key,
+        model_branch,
+        checkpoint,
+        sampler,
+        scheduler,
+        steps,
+        cfg,
+        denoise,
+        loras_json,
+        filter_scope,
+        filter_character,
+    )
     try:
-        submit_rating(
-            ratings_db_path=DB_PATH,
-            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-            mv_queue_db_path=MV_QUEUE_DB_PATH,
-            output_root=OUTPUT_ROOT,
-            trash_root=TRASH_ROOT,
-            soft_delete_to_trash=bool(SOFT_DELETE_TO_TRASH),
+        command = SubmitReviewCommand(
+            image=OutputImageReference.from_client_paths(
+                png_path=png_path,
+                json_path=json_path,
+            ),
             rating=rating,
-            deleted=deleted,
-            delete=delete,
-            combo_key=combo_key,
-            model_branch=model_branch,
-            checkpoint=checkpoint,
-            json_path=json_path,
-            png_path=png_path,
-            sampler=sampler,
-            scheduler=scheduler,
-            steps=steps,
-            cfg=cfg,
-            denoise=denoise,
-            loras_json=loras_json,
+            delete=bool(deleted or delete),
         )
+        get_application_container(request).review_service.submit(command)
     except (InvalidOutputPathError, ReviewValidationError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OutputPairNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except OutputMutationError as exc:
+    except ReviewMutationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     q_unrated = (

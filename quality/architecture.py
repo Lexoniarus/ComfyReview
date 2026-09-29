@@ -124,6 +124,10 @@ def _record_import_violations(
                 counts[f"{relative_path}|output.no_concrete_provider"] += 1
             if imported_root == "scanner":
                 counts[f"{relative_path}|output.no_legacy_scanner"] += 1
+        if "routes" in boundaries and imported_module.startswith(
+            "comfyreview.repositories"
+        ):
+            counts[f"{relative_path}|reviews.no_concrete_adapter"] += 1
 
 
 def _record_sql_violations(

@@ -4,19 +4,29 @@ from pathlib import Path
 import pytest
 
 from comfyreview.application import (
+    OutputImageReference,
     OutputPair,
     ReviewImage,
     ReviewRecord,
+    ReviewService,
+    ReviewValidationError,
+    SubmitReviewCommand,
 )
-from comfyreview.repositories.sqlite import SqliteReviewRepository
+from comfyreview.providers import LocalOutputImageCatalog
+from comfyreview.repositories.sqlite import (
+    LegacyProjectionJobQueue,
+    SqlitePromptRepository,
+    SqliteReviewRepository,
+)
 from models import RatedItem
-from services import arena_service, rating_submission_service
+from services import arena_service
 from services.curation_assignment_service import (
     CurationMutationError,
     CurationValidationError,
     assign_image_to_set,
 )
 from services.mv_worker_core import combo_pipeline, engine
+from services.output_file_service import OutputFileService
 from stores.images_store import upsert_image
 from stores.mv_jobs_store import (
     enqueue_job,
@@ -50,7 +60,28 @@ def _image_row(png_path: Path, json_path: Path, rating: float) -> dict:
     }
 
 
-def test_delete_writes_tombstone_and_removes_pair(tmp_path, monkeypatch):
+def _review_service(
+    *,
+    output_root: Path,
+    ratings_path: Path,
+    prompt_tokens_path: Path,
+    queue_path: Path,
+    preserve_deleted_files: bool,
+) -> ReviewService:
+    return ReviewService(
+        image_resolver=LocalOutputImageCatalog(output_root),
+        reviews=SqliteReviewRepository(ratings_path),
+        prompts=SqlitePromptRepository(prompt_tokens_path),
+        jobs=LegacyProjectionJobQueue(queue_path),
+        deletions=OutputFileService(
+            output_root=output_root,
+            trash_root=output_root / "_trash",
+        ),
+        preserve_deleted_files=preserve_deleted_files,
+    )
+
+
+def test_delete_writes_tombstone_and_removes_pair(tmp_path):
     png_path = tmp_path / "image.png"
     json_path = tmp_path / "image.json"
     png_path.write_bytes(b"png")
@@ -62,33 +93,21 @@ def test_delete_writes_tombstone_and_removes_pair(tmp_path, monkeypatch):
     initialize_legacy_database("prompt_tokens", prompt_tokens_path)
     initialize_legacy_database("mv_queue", queue_path)
 
-    monkeypatch.setattr(
-        rating_submission_service,
-        "_read_meta_for_rating",
-        lambda _path: ({}, "positive", "negative"),
-    )
-
-    rating_submission_service.submit_rating(
-        ratings_db_path=ratings_path,
-        prompt_tokens_db_path=prompt_tokens_path,
-        mv_queue_db_path=queue_path,
+    _review_service(
         output_root=tmp_path,
-        trash_root=tmp_path / "_trash",
-        soft_delete_to_trash=False,
-        rating=None,
-        deleted=1,
-        delete=1,
-        combo_key="combo",
-        model_branch="model",
-        checkpoint="checkpoint",
-        json_path=str(json_path),
-        png_path=str(png_path),
-        sampler=None,
-        scheduler=None,
-        steps=None,
-        cfg=None,
-        denoise=None,
-        loras_json=None,
+        ratings_path=ratings_path,
+        prompt_tokens_path=prompt_tokens_path,
+        queue_path=queue_path,
+        preserve_deleted_files=False,
+    ).submit(
+        SubmitReviewCommand(
+            image=OutputImageReference(
+                png_path=png_path,
+                json_path=json_path,
+            ),
+            rating=None,
+            delete=True,
+        )
     )
 
     assert not png_path.exists()
@@ -105,28 +124,23 @@ def test_review_rejects_score_outside_supported_range(tmp_path):
     png_path.write_bytes(b"png")
     json_path.write_text("{}", encoding="utf-8")
 
-    with pytest.raises(rating_submission_service.ReviewValidationError):
-        rating_submission_service.submit_rating(
-            ratings_db_path=tmp_path / "ratings.sqlite3",
-            prompt_tokens_db_path=tmp_path / "prompt_tokens.sqlite3",
-            mv_queue_db_path=tmp_path / "mv_jobs.sqlite3",
-            output_root=tmp_path,
-            trash_root=tmp_path / "_trash",
-            soft_delete_to_trash=True,
-            rating=11,
-            deleted=None,
-            delete=None,
-            combo_key="combo",
-            model_branch="model",
-            checkpoint="checkpoint",
-            json_path=str(json_path),
-            png_path=str(png_path),
-            sampler=None,
-            scheduler=None,
-            steps=None,
-            cfg=None,
-            denoise=None,
-            loras_json=None,
+    service = _review_service(
+        output_root=tmp_path,
+        ratings_path=tmp_path / "ratings.sqlite3",
+        prompt_tokens_path=tmp_path / "prompt_tokens.sqlite3",
+        queue_path=tmp_path / "mv_jobs.sqlite3",
+        preserve_deleted_files=True,
+    )
+
+    with pytest.raises(ReviewValidationError):
+        service.submit(
+            SubmitReviewCommand(
+                image=OutputImageReference(
+                    png_path=png_path,
+                    json_path=json_path,
+                ),
+                rating=11,
+            )
         )
 
     assert not (tmp_path / "ratings.sqlite3").exists()

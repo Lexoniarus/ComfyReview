@@ -86,6 +86,5 @@ stores/ratings_state_store.py
 templates.py
 tests/conftest.py
 tests/test_comfy_client_patch.py
-tests/test_mutation_route_contracts.py
 tests/test_prompt_store_tokenize.py
 tests/test_scope_semantics.py

@@ -27,6 +27,7 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
         (
             "import sqlite3\n"
             "from comfyreview.providers import LocalOutputImageCatalog\n"
+            "from comfyreview.repositories.sqlite import SqliteReviewRepository\n"
             'connection.execute("SELECT 1")\n'
         ),
     )
@@ -59,6 +60,7 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
         "routers/example.py|routes.no_sql": 1,
         "routers/example.py|routes.no_sqlite": 1,
         "routers/example.py|output.no_concrete_provider": 1,
+        "routers/example.py|reviews.no_concrete_adapter": 1,
         "services/example.py|output.no_legacy_scanner": 1,
         "services/example.py|services.no_global_config": 1,
         "services/example.py|services.no_sql": 1,

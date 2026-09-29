@@ -2,7 +2,17 @@ from pathlib import Path
 
 import pytest
 
-from services import file_urls, rating_submission_service
+from comfyreview.application import (
+    OutputImageReference,
+    PromptProjection,
+    ReviewMutationError,
+    ReviewRecord,
+    ReviewService,
+    StoredReview,
+    SubmitReviewCommand,
+)
+from comfyreview.providers import LocalOutputImageCatalog
+from services import file_urls
 from services.combo_prompts import rebuild
 from services.output_file_service import (
     InvalidOutputPathError,
@@ -12,47 +22,56 @@ from services.output_file_service import (
 from services.playground_hub_service import _attach_urls
 
 
-def test_delete_keeps_files_when_rating_write_fails(tmp_path, monkeypatch):
+class _FailingReviewRepository:
+    def append(self, record: ReviewRecord) -> StoredReview:
+        del record
+        raise OSError("database is read-only")
+
+    def delete(self, review_id: int) -> None:
+        del review_id
+
+
+class _UnusedPromptRepository:
+    def save(self, projection: PromptProjection) -> None:
+        raise AssertionError(projection)
+
+    def delete(self, json_path: Path, run: int) -> None:
+        raise AssertionError(json_path, run)
+
+
+class _UnusedJobQueue:
+    def request_catchup(self) -> int:
+        raise AssertionError("queue must not be called")
+
+
+def test_delete_keeps_files_when_rating_write_fails(tmp_path: Path) -> None:
     png_path = tmp_path / "image.png"
     json_path = tmp_path / "image.json"
     png_path.write_bytes(b"png")
     json_path.write_text("{}", encoding="utf-8")
 
-    monkeypatch.setattr(
-        rating_submission_service,
-        "_read_meta_for_rating",
-        lambda _path: ({}, "", ""),
-    )
-
-    def fail_write(**_kwargs):
-        raise OSError("database is read-only")
-
-    monkeypatch.setattr(
-        rating_submission_service, "_write_rating_row", fail_write
-    )
-
-    with pytest.raises(OSError, match="read-only"):
-        rating_submission_service.submit_rating(
-            ratings_db_path=tmp_path / "ratings.sqlite3",
-            prompt_tokens_db_path=tmp_path / "prompt_tokens.sqlite3",
-            mv_queue_db_path=tmp_path / "mv_jobs.sqlite3",
+    service = ReviewService(
+        image_resolver=LocalOutputImageCatalog(tmp_path),
+        reviews=_FailingReviewRepository(),
+        prompts=_UnusedPromptRepository(),
+        jobs=_UnusedJobQueue(),
+        deletions=OutputFileService(
             output_root=tmp_path,
             trash_root=tmp_path / "_trash",
-            soft_delete_to_trash=False,
-            rating=None,
-            deleted=None,
-            delete=1,
-            combo_key="",
-            model_branch="",
-            checkpoint="",
-            json_path=str(json_path),
-            png_path=str(png_path),
-            sampler=None,
-            scheduler=None,
-            steps=None,
-            cfg=None,
-            denoise=None,
-            loras_json=None,
+        ),
+        preserve_deleted_files=False,
+    )
+
+    with pytest.raises(ReviewMutationError, match="review_write"):
+        service.submit(
+            SubmitReviewCommand(
+                image=OutputImageReference(
+                    png_path=png_path,
+                    json_path=json_path,
+                ),
+                rating=None,
+                delete=True,
+            )
         )
 
     assert png_path.is_file()

@@ -4,8 +4,23 @@ import importlib
 import inspect
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 
-from services.rating_submission_service import submit_rating
+from starlette.requests import Request
+
+from comfyreview.application import (
+    OutputImageReference,
+    ReviewResult,
+    ReviewService,
+    SubmitReviewCommand,
+)
+from comfyreview.providers import LocalOutputImageCatalog
+from comfyreview.repositories.sqlite import (
+    LegacyProjectionJobQueue,
+    SqlitePromptRepository,
+    SqliteReviewRepository,
+)
+from services.output_file_service import OutputFileService
 from tests.schema_helpers import initialize_legacy_database
 
 index_router = importlib.import_module("routers.index_router")
@@ -31,27 +46,25 @@ def _submit_review(
     json_path: Path,
     rating: int,
 ) -> None:
-    submit_rating(
-        ratings_db_path=ratings_path,
-        prompt_tokens_db_path=prompt_tokens_path,
-        mv_queue_db_path=queue_path,
-        output_root=png_path.parent,
-        trash_root=png_path.parent / "_trash",
-        soft_delete_to_trash=True,
-        rating=rating,
-        deleted=None,
-        delete=None,
-        combo_key="combo-from-form",
-        model_branch="model-from-form",
-        checkpoint="checkpoint-from-form",
-        json_path=str(json_path),
-        png_path=str(png_path),
-        sampler=None,
-        scheduler=None,
-        steps=None,
-        cfg=None,
-        denoise=None,
-        loras_json=None,
+    catalog = LocalOutputImageCatalog(png_path.parent)
+    ReviewService(
+        image_resolver=catalog,
+        reviews=SqliteReviewRepository(ratings_path),
+        prompts=SqlitePromptRepository(prompt_tokens_path),
+        jobs=LegacyProjectionJobQueue(queue_path),
+        deletions=OutputFileService(
+            output_root=png_path.parent,
+            trash_root=png_path.parent / "_trash",
+        ),
+        preserve_deleted_files=True,
+    ).submit(
+        SubmitReviewCommand(
+            image=OutputImageReference.from_client_paths(
+                png_path=str(png_path),
+                json_path=str(json_path),
+            ),
+            rating=rating,
+        )
     )
 
 
@@ -71,6 +84,9 @@ def test_review_runs_project_prompts_and_coalesce_catchup(
             "sampler": "euler",
             "scheduler": "normal",
             "denoise": 0.8,
+            "checkpoint": "checkpoint-from-sidecar",
+            "model_branch": "model-from-sidecar",
+            "combo_key": "combo-from-sidecar",
             "pos_prompt": "hero, blue sky",
             "neg_prompt": "blur"
         }""",
@@ -107,9 +123,9 @@ def test_review_runs_project_prompts_and_coalesce_catchup(
         (
             1,
             7,
-            "model-from-form",
-            "checkpoint-from-form",
-            "combo-from-form",
+            "model-from-sidecar",
+            "checkpoint-from-sidecar",
+            "combo-from-sidecar",
             24,
             6.5,
             "euler",
@@ -121,9 +137,9 @@ def test_review_runs_project_prompts_and_coalesce_catchup(
         (
             2,
             9,
-            "model-from-form",
-            "checkpoint-from-form",
-            "combo-from-form",
+            "model-from-sidecar",
+            "checkpoint-from-sidecar",
+            "combo-from-sidecar",
             24,
             6.5,
             "euler",
@@ -165,6 +181,7 @@ def test_review_mutation_routes_keep_form_contracts() -> None:
     )
 
     assert rate_parameters == {
+        "request",
         "rating",
         "deleted",
         "delete",
@@ -187,6 +204,7 @@ def test_review_mutation_routes_keep_form_contracts() -> None:
         "filter_set_key",
     }
     assert top_delete_parameters == {
+        "request",
         "json_path",
         "png_path",
         "combo_key",
@@ -199,11 +217,21 @@ def test_review_mutation_routes_keep_form_contracts() -> None:
     }
 
 
-def test_review_mutation_routes_keep_success_redirects(monkeypatch) -> None:
-    monkeypatch.setattr(index_router, "submit_rating", lambda **_kwargs: None)
-    monkeypatch.setattr(top_router, "submit_rating", lambda **_kwargs: None)
+class _SuccessfulReviewService:
+    def submit(self, command: SubmitReviewCommand) -> ReviewResult:
+        return ReviewResult(1, 1, command.delete, 1)
+
+
+def _request() -> Request:
+    container = SimpleNamespace(review_service=_SuccessfulReviewService())
+    application = SimpleNamespace(state=SimpleNamespace(container=container))
+    return Request({"type": "http", "app": application})
+
+
+def test_review_mutation_routes_keep_success_redirects() -> None:
 
     rate_response = index_router.rate(
+        request=_request(),
         rating=8,
         deleted=None,
         delete=None,
@@ -226,6 +254,7 @@ def test_review_mutation_routes_keep_success_redirects(monkeypatch) -> None:
         filter_set_key="scene",
     )
     top_response = top_router.top_delete(
+        request=_request(),
         json_path="image.json",
         png_path="image.png",
         combo_key="combo",

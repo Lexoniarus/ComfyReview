@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from comfyreview.application import (
     LegacySchemaLifecycle,
     OutputImageCatalog,
+    ReviewService,
     WorkerRuntime,
 )
 from comfyreview.infrastructure import LegacyWorkerRuntime
@@ -21,13 +22,19 @@ from comfyreview.observability import (
     configure_logging,
 )
 from comfyreview.providers import LocalOutputImageCatalog
-from comfyreview.repositories.sqlite import LegacySchemaManager
+from comfyreview.repositories.sqlite import (
+    LegacyProjectionJobQueue,
+    LegacySchemaManager,
+    SqlitePromptRepository,
+    SqliteReviewRepository,
+)
 from comfyreview.settings import Settings, load_settings
 from routers.arena_router import router as arena_router
 from routers.index_router import router as index_router
 from routers.playground import router as playground_router
 from routers.stats_router import router as stats_router
 from routers.top_router import router as top_router
+from services.output_file_service import OutputFileService
 
 
 @dataclass(frozen=True)
@@ -38,6 +45,7 @@ class ApplicationContainer:
     schema_lifecycle: LegacySchemaLifecycle
     worker: WorkerRuntime
     output_images: OutputImageCatalog
+    review_service: ReviewService
 
 
 def _prepare_directories(settings: Settings) -> None:
@@ -69,11 +77,24 @@ def build_application_container(
         images_database_path=configured.images_database_path,
         debounce_seconds=configured.worker_debounce_seconds,
     )
+    output_images = LocalOutputImageCatalog(configured.output_root)
+    review_service = ReviewService(
+        image_resolver=output_images,
+        reviews=SqliteReviewRepository(configured.ratings_database_path),
+        prompts=SqlitePromptRepository(configured.prompt_tokens_database_path),
+        jobs=LegacyProjectionJobQueue(configured.worker_queue_database_path),
+        deletions=OutputFileService(
+            output_root=configured.output_root,
+            trash_root=configured.trash_root,
+        ),
+        preserve_deleted_files=configured.soft_delete_to_trash,
+    )
     return ApplicationContainer(
         settings=configured,
         schema_lifecycle=LegacySchemaManager(configured),
         worker=worker,
-        output_images=LocalOutputImageCatalog(configured.output_root),
+        output_images=output_images,
+        review_service=review_service,
     )
 
 
