@@ -606,9 +606,7 @@ class CanonicalSchemaManager:
             "WHERE key = 'schema_version'",
             (str(_PREVIOUS_SCHEMA_VERSION),),
         )
-        connection.execute(
-            f"PRAGMA user_version = {_PREVIOUS_SCHEMA_VERSION}"
-        )
+        connection.execute(f"PRAGMA user_version = {_PREVIOUS_SCHEMA_VERSION}")
 
     def _upgrade_v2_to_v3(self, connection: sqlite3.Connection) -> None:
         views = self._capture_compatibility_views(connection)
@@ -722,11 +720,7 @@ class CanonicalSchemaManager:
             "SELECT name, sql FROM sqlite_master "
             "WHERE type = 'view' AND name IN ('ratings', 'tokens')"
         ).fetchall()
-        views = {
-            str(name): str(sql)
-            for name, sql in rows
-            if sql is not None
-        }
+        views = {str(name): str(sql) for name, sql in rows if sql is not None}
         if set(views) != {"ratings", "tokens"}:
             raise CanonicalSchemaValidationError(
                 "Canonical compatibility views are incomplete"
@@ -863,14 +857,13 @@ class CanonicalSchemaManager:
                 "Canonical output tables are missing required columns: "
                 + ", ".join(missing)
             )
-        if int(image_columns["json_path"][3]) != 0:
+        if int(str(image_columns["json_path"][3])) != 0:
             raise CanonicalSchemaValidationError(
                 "images.json_path must be nullable in schema version 3"
             )
-        if int(deleted_columns["json_path"][3]) != 0:
+        if int(str(deleted_columns["json_path"][3])) != 0:
             raise CanonicalSchemaValidationError(
-                "deleted_images.json_path must be nullable in schema "
-                "version 3"
+                "deleted_images.json_path must be nullable in schema version 3"
             )
 
         unique_indexes = cls._unique_index_columns(connection, "images")
