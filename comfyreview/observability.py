@@ -1,4 +1,4 @@
-"""Structured logging and request trace propagation for the legacy app."""
+"""Structured logging and request trace propagation for ComfyReview."""
 
 from __future__ import annotations
 

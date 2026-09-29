@@ -37,14 +37,3 @@ COMFYUI_CHECKPOINTS_DIR = SETTINGS.comfyui_checkpoints_directory
 SSL_ENABLED = SETTINGS.ssl_enabled
 SSL_CERTFILE = SETTINGS.ssl_certificate_path
 SSL_KEYFILE = SETTINGS.ssl_key_path
-
-# Preserve legacy import-time directory preparation until create_app owns it.
-for _directory in (
-    OUTPUT_ROOT,
-    DATA_DIR,
-    TRASH_ROOT,
-    LORA_EXPORT_ROOT,
-    WORKFLOWS_DIR,
-    COMFYUI_CHECKPOINTS_DIR,
-):
-    _directory.mkdir(parents=True, exist_ok=True)

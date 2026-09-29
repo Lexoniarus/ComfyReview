@@ -6,10 +6,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from comfyreview.observability import RequestTracingMiddleware
 from comfyreview.repositories.sqlite import LegacySchemaManager
 from comfyreview.settings import load_settings
-from services import mv_worker
-from services.observability import RequestTracingMiddleware
 
 
 def _table_columns(database_path: Path) -> dict[str, tuple[str, ...]]:
@@ -68,52 +67,6 @@ def test_root_app_keeps_public_routes_and_request_tracing() -> None:
         middleware.cls is RequestTracingMiddleware
         for middleware in app.user_middleware
     )
-
-
-def test_worker_thread_receives_every_legacy_database_path(
-    tmp_path: Path,
-    monkeypatch: Any,
-) -> None:
-    captured: dict[str, Any] = {}
-
-    class FakeThread:
-        def __init__(self, **kwargs: Any) -> None:
-            captured.update(kwargs)
-            self.started = False
-
-        def start(self) -> None:
-            self.started = True
-
-    monkeypatch.setattr(mv_worker.threading, "Thread", FakeThread)
-    names = (
-        "queue_db_path",
-        "state_db_path",
-        "ratings_db_path",
-        "prompt_tokens_db_path",
-        "prompt_ratings_db_path",
-        "combo_db_path",
-        "playground_db_path",
-        "images_db_path",
-    )
-    paths = {name: tmp_path / f"{name}.sqlite3" for name in names}
-
-    thread = mv_worker.start_worker_thread(
-        queue_db_path=paths["queue_db_path"],
-        state_db_path=paths["state_db_path"],
-        ratings_db_path=paths["ratings_db_path"],
-        prompt_tokens_db_path=paths["prompt_tokens_db_path"],
-        prompt_ratings_db_path=paths["prompt_ratings_db_path"],
-        combo_db_path=paths["combo_db_path"],
-        playground_db_path=paths["playground_db_path"],
-        images_db_path=paths["images_db_path"],
-    )
-
-    assert isinstance(thread, FakeThread)
-    assert thread.started is True
-    assert captured["target"] is mv_worker.run_worker_loop
-    assert captured["kwargs"] == {**paths, "debounce_seconds": 20}
-    assert captured["daemon"] is True
-    assert captured["name"] == "mv_worker"
 
 
 def test_legacy_initializers_produce_the_current_schema_contract(
