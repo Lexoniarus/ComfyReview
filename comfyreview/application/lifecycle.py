@@ -62,14 +62,16 @@ class LegacySchemaLifecycle(Protocol):
 
 @dataclass(frozen=True)
 class CanonicalSchemaReport:
-    """Describe canonical database startup work."""
+    """Describe canonical database validation or schema work."""
 
     initialized: bool = False
     schema_version: int = 0
+    upgraded_from: int | None = None
+    backup_path: Path | None = None
 
 
 class CanonicalSchemaLifecycle(Protocol):
-    """Own validation and first-time creation of the canonical database."""
+    """Own startup validation and first-time canonical database creation."""
 
     def prepare_startup(self) -> CanonicalSchemaReport:
         """Validate or atomically create the canonical database."""

@@ -62,7 +62,7 @@ def test_canonical_schema_initializes_once_and_exposes_compatibility_views(
     second = manager.prepare_startup()
 
     assert first.initialized is True
-    assert first.schema_version == 1
+    assert first.schema_version == 2
     assert second.initialized is False
     with sqlite3.connect(database_path) as connection:
         objects = dict(
