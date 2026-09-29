@@ -2,6 +2,7 @@ import json
 import random
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 
 from arena_store import (
     delete_match as arena_delete_match,
@@ -12,6 +13,16 @@ from arena_store import (
 from arena_store import (
     insert_match as arena_insert_match,
 )
+from comfyreview.application import (
+    OutputPair,
+    PromptProjection,
+    ReviewImage,
+    ReviewRecord,
+)
+from comfyreview.repositories.sqlite import (
+    SqlitePromptRepository,
+    SqliteReviewRepository,
+)
 from config import (
     ARENA_DB_PATH,
     DB_PATH,
@@ -19,18 +30,13 @@ from config import (
     MV_QUEUE_DB_PATH,
     PROMPT_TOKENS_DB_PATH,
 )
-from db_store import db, insert_or_update_rating
+from db_store import db
 from meta_view import extract_prompts, extract_view
-from services.prompt_tokens_service import (
-    delete_prompt_tokens_for_run,
-    write_prompt_tokens_for_run,
-)
 from services.rating_service import (
     parse_float,
     parse_int,
     rating_avg_and_runs_for_json,
 )
-from stores.db_core import delete_rating_by_id
 from stores.images_store import init_images_db
 from stores.mv_jobs_store import enqueue_job
 
@@ -206,6 +212,8 @@ def insert_arena_result(
         winner_json = right_json
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    review_repository = SqliteReviewRepository(DB_PATH)
+    prompt_repository = SqlitePromptRepository(PROMPT_TOKENS_DB_PATH)
 
     def _insert_int_rating(it, rating_int: int):
         # Zweck:
@@ -222,39 +230,46 @@ def insert_arena_result(
         except Exception:
             loras_json_v = "[]"
 
-        rating_id, run = insert_or_update_rating(
-            DB_PATH,
-            png_path=str(it.png_path),
-            json_path=str(it.json_path),
+        image = ReviewImage(
+            pair=OutputPair(
+                png_path=Path(it.png_path),
+                json_path=Path(it.json_path),
+            ),
             model_branch=str(it.model_branch or ""),
             checkpoint=str(it.checkpoint or ""),
             combo_key=str(getattr(it, "combo_key", "") or ""),
-            rating=int(rating_int),
-            deleted=0,
             steps=parse_int(view.get("steps")),
             cfg=parse_float(view.get("cfg")),
-            sampler=str(view.get("sampler"))
-            if view.get("sampler") is not None
-            else None,
-            scheduler=str(view.get("scheduler"))
-            if view.get("scheduler") is not None
-            else None,
+            sampler=(
+                str(view.get("sampler"))
+                if view.get("sampler") is not None
+                else None
+            ),
+            scheduler=(
+                str(view.get("scheduler"))
+                if view.get("scheduler") is not None
+                else None
+            ),
             denoise=parse_float(view.get("denoise")),
             loras_json=loras_json_v,
-            pos_prompt=pos_prompt,
-            neg_prompt=neg_prompt,
+            positive_prompt=str(pos_prompt or ""),
+            negative_prompt=str(neg_prompt or ""),
         )
-        write_prompt_tokens_for_run(
-            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-            json_path=str(it.json_path),
-            run=int(run),
-            model_branch=str(it.model_branch or ""),
-            pos_prompt=str(pos_prompt or ""),
-            neg_prompt=str(neg_prompt or ""),
-            rating=int(rating_int),
-            deleted=0,
+        stored = review_repository.append(
+            ReviewRecord(image=image, rating=int(rating_int), deleted=False)
         )
-        return int(rating_id), int(run), str(it.json_path)
+        prompt_repository.save(
+            PromptProjection(
+                json_path=image.pair.json_path,
+                run=stored.run,
+                model_branch=image.model_branch,
+                positive_prompt=image.positive_prompt,
+                negative_prompt=image.negative_prompt,
+                rating=int(rating_int),
+                deleted=False,
+            )
+        )
+        return stored.review_id, stored.run, str(it.json_path)
 
     match_id = None
     inserted_ratings = []
@@ -272,12 +287,8 @@ def insert_arena_result(
     except Exception as exc:
         for rating_id, run, json_path in reversed(inserted_ratings):
             try:
-                delete_prompt_tokens_for_run(
-                    prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-                    json_path=json_path,
-                    run=run,
-                )
-                delete_rating_by_id(DB_PATH, rating_id=rating_id)
+                prompt_repository.delete(Path(json_path), run)
+                review_repository.delete(rating_id)
             except Exception:
                 pass
         if match_id is not None:

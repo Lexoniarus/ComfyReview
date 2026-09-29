@@ -3,12 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from db_store import insert_or_update_rating
+from comfyreview.application import (
+    OutputPair,
+    PromptProjection,
+    ReviewImage,
+    ReviewRecord,
+    StoredReview,
+)
+from comfyreview.repositories.sqlite import (
+    LegacyProjectionJobQueue,
+    SqlitePromptRepository,
+    SqliteReviewRepository,
+)
 from meta_view import extract_prompts, extract_view
 from services.output_file_service import OutputFileService
-from services.prompt_tokens_service import write_prompt_tokens_for_latest_run
 from services.rating_service import parse_float, parse_int, read_json_meta
-from stores.mv_jobs_store import enqueue_job
 
 
 class ReviewValidationError(ValueError):
@@ -95,32 +104,37 @@ def _write_rating_row(
     loras_json_v: str,
     pos_prompt: str,
     neg_prompt: str,
-) -> None:
-    insert_or_update_rating(
-        ratings_db_path,
-        png_path=png_path,
-        json_path=json_path,
-        model_branch=model_branch,
-        checkpoint=checkpoint,
-        combo_key=combo_key,
-        rating=rating_val,
-        deleted=deleted_flag,
-        steps=steps_v,
-        cfg=cfg_v,
-        sampler=sampler_v,
-        scheduler=scheduler_v,
-        denoise=denoise_v,
-        loras_json=loras_json_v,
-        pos_prompt=pos_prompt,
-        neg_prompt=neg_prompt,
+) -> StoredReview:
+    return SqliteReviewRepository(ratings_db_path).append(
+        ReviewRecord(
+            image=ReviewImage(
+                pair=OutputPair(
+                    png_path=Path(png_path),
+                    json_path=Path(json_path),
+                ),
+                model_branch=model_branch,
+                checkpoint=checkpoint,
+                combo_key=combo_key,
+                steps=steps_v,
+                cfg=cfg_v,
+                sampler=sampler_v,
+                scheduler=scheduler_v,
+                denoise=denoise_v,
+                loras_json=loras_json_v,
+                positive_prompt=pos_prompt,
+                negative_prompt=neg_prompt,
+            ),
+            rating=rating_val,
+            deleted=bool(deleted_flag),
+        )
     )
 
 
 def _write_prompt_tokens_quiet(
     *,
-    ratings_db_path: Path,
     prompt_tokens_db_path: Path,
     json_path: str,
+    run: int,
     model_branch: str,
     pos_prompt: str,
     neg_prompt: str,
@@ -128,15 +142,16 @@ def _write_prompt_tokens_quiet(
     deleted_flag: int,
 ) -> None:
     try:
-        write_prompt_tokens_for_latest_run(
-            ratings_db_path=ratings_db_path,
-            prompt_tokens_db_path=prompt_tokens_db_path,
-            json_path=str(json_path),
-            model_branch=str(model_branch or ""),
-            pos_prompt=str(pos_prompt or ""),
-            neg_prompt=str(neg_prompt or ""),
-            rating=rating_val,
-            deleted=int(deleted_flag or 0),
+        SqlitePromptRepository(prompt_tokens_db_path).save(
+            PromptProjection(
+                json_path=Path(json_path),
+                run=run,
+                model_branch=str(model_branch or ""),
+                positive_prompt=str(pos_prompt or ""),
+                negative_prompt=str(neg_prompt or ""),
+                rating=rating_val,
+                deleted=bool(deleted_flag),
+            )
         )
     except Exception as e:
         print(f"prompt_tokens write failed after rating save: {e}")
@@ -144,7 +159,7 @@ def _write_prompt_tokens_quiet(
 
 def _touch_mv_queue_quiet(mv_queue_db_path: Path) -> None:
     try:
-        enqueue_job(mv_queue_db_path, job_type="catchup")
+        LegacyProjectionJobQueue(mv_queue_db_path).request_catchup()
     except Exception as e:
         print(f"enqueue mv_job failed after rating save: {e}")
 
@@ -211,7 +226,7 @@ def submit_rating(
 
     staged_delete = output_files.stage_delete(pair) if pressed else None
     try:
-        _write_rating_row(
+        stored_review = _write_rating_row(
             ratings_db_path=ratings_db_path,
             png_path=str(pair.png_path),
             json_path=str(pair.json_path),
@@ -235,9 +250,9 @@ def submit_rating(
         raise
 
     _write_prompt_tokens_quiet(
-        ratings_db_path=ratings_db_path,
         prompt_tokens_db_path=prompt_tokens_db_path,
         json_path=str(pair.json_path),
+        run=stored_review.run,
         model_branch=str(model_branch or ""),
         pos_prompt=pos_prompt,
         neg_prompt=neg_prompt,

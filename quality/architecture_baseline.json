@@ -34,8 +34,6 @@
     "services/pool_service.py|services.no_sqlite": 1,
     "services/prompt_ratings_service.py|services.no_sql": 1,
     "services/prompt_ratings_service.py|services.no_sqlite": 1,
-    "services/prompt_tokens_service.py|services.no_sql": 5,
-    "services/prompt_tokens_service.py|services.no_sqlite": 1,
     "services/rating_service.py|services.no_global_config": 1,
     "services/rating_service.py|services.no_sql": 1,
     "services/review_page_service.py|services.no_sql": 2,

@@ -2,29 +2,30 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
-from stores.mv_state_store import get_state, upsert_state
-
-from services.prompt_tokens_service import write_prompt_tokens_for_run
-from services.prompt_ratings_service import update_prompt_ratings_for_runs
-
-from services.mv_worker_core.time_utils import utc_now_str
+from comfyreview.application import PromptProjection
+from comfyreview.repositories.sqlite import SqlitePromptRepository
 from services.mv_worker_core.ratings_io import fetch_ratings_rows
+from services.mv_worker_core.time_utils import utc_now_str
+from services.prompt_ratings_service import update_prompt_ratings_for_runs
+from stores.mv_state_store import get_state, upsert_state
 
 
 def runs_with_tokens(
     prompt_tokens_db_path: Path,
-    keys: List[tuple[str, int]],
+    keys: list[tuple[str, int]],
     *,
     chunk_size: int = 200,
-) -> Set[tuple[str, int]]:
+) -> set[tuple[str, int]]:
     """Return set of (json_path, run) that already exist in tokens."""
     if not keys:
         return set()
 
     unique = list(
-        dict.fromkeys([(str(jp), int(rn)) for jp, rn in keys if str(jp) and int(rn) > 0])
+        dict.fromkeys(
+            [(str(jp), int(rn)) for jp, rn in keys if str(jp) and int(rn) > 0]
+        )
     )
     if not unique:
         return set()
@@ -32,11 +33,11 @@ def runs_with_tokens(
     con = sqlite3.connect(prompt_tokens_db_path)
     con.row_factory = sqlite3.Row
     try:
-        present: Set[tuple[str, int]] = set()
+        present: set[tuple[str, int]] = set()
         for i in range(0, len(unique), chunk_size):
             chunk = unique[i : i + chunk_size]
             where = " OR ".join(["(json_path = ? AND run = ?)"] * len(chunk))
-            args: List[Any] = []
+            args: list[Any] = []
             for jp, rn in chunk:
                 args.extend([jp, rn])
 
@@ -96,7 +97,7 @@ def process_prompt_ratings_incremental(
         )
         return last
 
-    keys: List[tuple[str, int]] = []
+    keys: list[tuple[str, int]] = []
     for r in rows:
         jp = str(r.get("json_path") or "").strip()
         rn = int(r.get("run") or 0)
@@ -104,9 +105,10 @@ def process_prompt_ratings_incremental(
             keys.append((jp, rn))
 
     present = runs_with_tokens(prompt_tokens_db_path, keys)
+    prompt_repository = SqlitePromptRepository(prompt_tokens_db_path)
 
-    process_rows: List[Dict[str, Any]] = []
-    missing_msg: Optional[str] = None
+    process_rows: list[dict[str, Any]] = []
+    missing_msg: str | None = None
 
     for r in rows:
         rid = int(r.get("id") or 0)
@@ -119,15 +121,19 @@ def process_prompt_ratings_incremental(
 
         if (jp, rn) not in present:
             try:
-                write_prompt_tokens_for_run(
-                    prompt_tokens_db_path=prompt_tokens_db_path,
-                    json_path=jp,
-                    run=rn,
-                    model_branch=str(r.get("model_branch") or ""),
-                    pos_prompt=str(r.get("pos_prompt") or ""),
-                    neg_prompt=str(r.get("neg_prompt") or ""),
-                    rating=(int(r.get("rating")) if r.get("rating") is not None else None),
-                    deleted=int(r.get("deleted") or 0),
+                raw_rating = r.get("rating")
+                prompt_repository.save(
+                    PromptProjection(
+                        json_path=Path(jp),
+                        run=rn,
+                        model_branch=str(r.get("model_branch") or ""),
+                        positive_prompt=str(r.get("pos_prompt") or ""),
+                        negative_prompt=str(r.get("neg_prompt") or ""),
+                        rating=(
+                            int(raw_rating) if raw_rating is not None else None
+                        ),
+                        deleted=bool(r.get("deleted") or 0),
+                    )
                 )
             except Exception as e:
                 missing_msg = (
@@ -136,7 +142,9 @@ def process_prompt_ratings_incremental(
                 )
                 break
 
-            present = runs_with_tokens(prompt_tokens_db_path, [(jp, rn)]) | present
+            present = (
+                runs_with_tokens(prompt_tokens_db_path, [(jp, rn)]) | present
+            )
             if (jp, rn) not in present:
                 missing_msg = (
                     f"missing prompt_tokens for rating_id={rid} json_path={jp} run={rn} "
@@ -158,8 +166,8 @@ def process_prompt_ratings_incremental(
 
     processed_id = int(process_rows[-1].get("id") or last)
 
-    runs: List[Dict[str, Any]] = []
-    seen: Set[tuple[str, int, str]] = set()
+    runs: list[dict[str, Any]] = []
+    seen: set[tuple[str, int, str]] = set()
     for r in process_rows:
         jp = str(r.get("json_path") or "").strip()
         rn = int(r.get("run") or 0)

@@ -3,6 +3,12 @@ from pathlib import Path
 
 import pytest
 
+from comfyreview.application import (
+    OutputPair,
+    ReviewImage,
+    ReviewRecord,
+)
+from comfyreview.repositories.sqlite import SqliteReviewRepository
 from models import RatedItem
 from services import arena_service, rating_submission_service
 from services.curation_assignment_service import (
@@ -11,7 +17,6 @@ from services.curation_assignment_service import (
     assign_image_to_set,
 )
 from services.mv_worker_core import combo_pipeline, engine
-from stores.db_core import insert_or_update_rating
 from stores.images_store import upsert_image
 from stores.mv_jobs_store import (
     enqueue_job,
@@ -285,19 +290,17 @@ def test_arena_compensates_match_and_first_rating_on_failure(
     monkeypatch.setattr(
         arena_service, "PROMPT_TOKENS_DB_PATH", prompt_tokens_path
     )
-    real_insert = arena_service.insert_or_update_rating
+    real_append = SqliteReviewRepository.append
     calls = 0
 
-    def fail_second_rating(*args, **kwargs):
+    def fail_second_rating(repository, record):
         nonlocal calls
         calls += 1
         if calls == 2:
             raise OSError("second rating failed")
-        return real_insert(*args, **kwargs)
+        return real_append(repository, record)
 
-    monkeypatch.setattr(
-        arena_service, "insert_or_update_rating", fail_second_rating
-    )
+    monkeypatch.setattr(SqliteReviewRepository, "append", fail_second_rating)
     left = RatedItem(
         left_png, left_json, "", "model", "checkpoint", "combo", {}
     )
@@ -413,23 +416,28 @@ def test_worker_startup_recovers_abandoned_jobs_and_queues_one_catchup(
     mark_running(queue_path, first_job)
     second_job = enqueue_job(queue_path, job_type="catchup")
     mark_running(queue_path, second_job)
-    insert_or_update_rating(
-        ratings_path,
-        png_path="image.png",
-        json_path="image.json",
-        model_branch="model",
-        checkpoint="checkpoint",
-        combo_key="combo",
-        rating=8,
-        deleted=0,
-        steps=20,
-        cfg=7.0,
-        sampler="sampler",
-        scheduler="scheduler",
-        denoise=1.0,
-        loras_json="[]",
-        pos_prompt="positive",
-        neg_prompt="negative",
+    SqliteReviewRepository(ratings_path).append(
+        ReviewRecord(
+            image=ReviewImage(
+                pair=OutputPair(
+                    png_path=Path("image.png"),
+                    json_path=Path("image.json"),
+                ),
+                model_branch="model",
+                checkpoint="checkpoint",
+                combo_key="combo",
+                steps=20,
+                cfg=7.0,
+                sampler="sampler",
+                scheduler="scheduler",
+                denoise=1.0,
+                loras_json="[]",
+                positive_prompt="positive",
+                negative_prompt="negative",
+            ),
+            rating=8,
+            deleted=False,
+        )
     )
 
     recovered = engine.initialize_worker_state(
