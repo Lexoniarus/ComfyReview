@@ -1,6 +1,7 @@
 # ComfyReview Refactor Plan
 
-Status: active migration plan, 2026-09-29.
+Status: active migration plan; output-image read slice implemented and awaiting
+review, 2026-09-29.
 
 Goal: bring ComfyReview to the same engineering standard as the current
 World Freight Idle codebase before using it as the data/application foundation
@@ -76,9 +77,9 @@ Exit condition:
 
 ## Phase 2 – Package and dependency boundaries
 
-Status: bootstrap foundation implemented on
-`refactor/bootstrap-domain-ports`; feature slices remain pending review and
-implementation.
+Status: bootstrap foundation merged through PR #5. The first feature slice,
+`refactor/output-image-boundary`, is implemented and awaiting review. Remaining
+feature slices are pending.
 
 Implemented bootstrap foundation:
 
@@ -97,6 +98,24 @@ The current bootstrap still wires legacy routers and feature implementations.
 Review, output-image, Arena, curation, ComfyUI generation, prompt/playground and
 projection boundaries move one vertical slice at a time after this milestone.
 
+Implemented output-image read slice:
+
+- application-layer `OutputImageCatalog` port and `OutputImageReadModel`
+- class-owned `LocalOutputImageCatalog` with injected output root
+- recursive PNG/sidecar discovery and legacy metadata normalization behind the
+  provider boundary
+- resolved output-root containment and exclusion of internal trash/export
+  directories
+- explicit catalog injection into Review, Top, Arena GET and Arena POST reads
+- removal of the parallel legacy `scanner.py` implementation
+- architecture checks against direct concrete-provider and legacy-scanner
+  imports in routes/services
+
+This slice is read-only. Paths remain compatibility attributes rather than
+stable image identity. Delete/trash, curation moves, path relinking and browser
+URL mapping remain legacy behavior for their later vertical slices. No database
+schema, migration, persisted `image_id` or dual-write behavior was introduced.
+
 Create the target `comfyreview/` structure and composition root. The package
 name avoids a conflict with the compatible root `app.py` entry point.
 
@@ -110,14 +129,13 @@ Move behavior incrementally behind:
 
 Initial high-value seams:
 
-1. review/rating persistence
-2. image read model
-3. ComfyUI client
-4. output scanner/filesystem
-5. Arena persistence
-6. curation persistence
-7. prompt/playground persistence
-8. MV/background worker
+1. image read model and output discovery (implemented, awaiting review)
+2. review/rating persistence and delete/trash filesystem mutations
+3. Arena persistence
+4. curation persistence and reversible filesystem moves
+5. ComfyUI client
+6. prompt/playground persistence
+7. MV/background worker
 
 Rules:
 

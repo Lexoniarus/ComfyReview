@@ -1,12 +1,13 @@
 # ComfyReview Architecture
 
-Status: active migration with bootstrap foundation implemented, 2026-09-29.
+Status: active migration with bootstrap and output-image read boundaries
+implemented, 2026-09-29.
 
 The current public prototype is functional but still predates many of these
 boundaries. The typed settings, lifecycle ports, central legacy-schema adapter,
-owned worker runtime and FastAPI composition root described below are now
-implemented. Feature-specific services and ports remain target architecture
-until their vertical slices are migrated.
+owned worker runtime, FastAPI composition root and read-only output-image
+catalog described below are now implemented. Other feature-specific services
+and ports remain target architecture until their vertical slices are migrated.
 
 ## 1. Product boundary
 
@@ -46,10 +47,11 @@ Repositories       Providers
 Concrete assembly occurs in one composition root.
 
 The current `comfyreview.bootstrap.create_app()` constructs an
-`ApplicationContainer` with typed settings, a `LegacySchemaLifecycle` adapter
-and a `WorkerRuntime`. Its FastAPI lifespan owns directory preparation, schema
-startup validation, worker start and bounded worker stop. Root `app.py` and
-`main.py` remain compatibility entry points.
+`ApplicationContainer` with typed settings, a `LegacySchemaLifecycle` adapter,
+a `WorkerRuntime` and an `OutputImageCatalog`. Its FastAPI lifespan owns
+directory preparation, schema startup validation, worker start and bounded
+worker stop. The container is available to HTTP routes through application
+state. Root `app.py` and `main.py` remain compatibility entry points.
 
 Target package shape (introduced incrementally after the quality foundation):
 
@@ -79,7 +81,7 @@ comfyreview/
       jobs.py
   providers/
     comfyui.py
-    output_filesystem.py
+    output_images.py
   api/
     routes/
     projections.py
@@ -239,13 +241,27 @@ intent.
 
 ComfyUI output scanning and sidecar parsing are external-input concerns.
 
-The filesystem provider discovers candidate files and reads raw metadata.
-An ingestion service maps validated provider data into domain values and calls
-repositories.
+The read-only part of this boundary is implemented. The application-layer
+`OutputImageCatalog` port returns typed `OutputImageReadModel` values. The
+composition root injects `LocalOutputImageCatalog`, which owns recursive PNG
+discovery, matching JSON-sidecar reads, output-root containment checks and the
+legacy checkpoint/model/combo metadata fallbacks. Missing sidecars are skipped;
+invalid or unreadable sidecars remain visible with empty metadata, preserving
+the established page behavior. Review, Top and Arena reads use this port and no
+longer import the deleted legacy `scanner.py` module.
+
+`png_path` and `json_path` in this read model are compatibility attributes,
+not stable identity. This slice intentionally does not introduce `image_id`,
+database persistence, data migration or dual writes.
 
 Physical file moves for trash/curation/export are explicit provider operations
 coordinated by a service. Persistence updates are committed only after the
 filesystem operation has a known outcome.
+
+Those mutating operations have not yet moved to the new provider architecture.
+Delete/trash still uses `OutputFileService`, curation retains its legacy move
+and path-update flow, and browser URL mapping remains in
+`services/file_urls.py`. Each moves in its corresponding later vertical slice.
 
 ## 10. Transactions
 
@@ -333,6 +349,10 @@ The current legacy exceptions are versioned in
 they may not import SQLite, FastAPI, global configuration, routes, stores or
 legacy services into the core.
 
+Routes and legacy services are additionally prevented from importing concrete
+`comfyreview.providers` implementations or reviving the removed legacy output
+scanner. Only bootstrap wiring knows the local output-image provider.
+
 ## 15. Migration posture
 
 ### Implemented pre-One-DB bootstrap boundary
@@ -357,6 +377,14 @@ behind feature-specific services in a later slice.
 
 This boundary does not provide crash atomicity across multiple SQLite files.
 That remains impossible until the canonical one-database cutover.
+
+### Implemented output-image read boundary
+
+Output discovery is now a replaceable, read-only provider behind an
+application port. The page-read services consume an injected catalog, while
+routes obtain the configured instance from `ApplicationContainer`. This is the
+first feature-specific vertical boundary and deliberately stops before review,
+Arena or curation mutation ownership.
 
 Refactor and data migration are staged:
 
