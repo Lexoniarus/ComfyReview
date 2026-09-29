@@ -1,0 +1,43 @@
+[tool.ruff]
+line-length = 79
+target-version = "py311"
+exclude = [
+    ".git",
+    ".idea",
+    ".pytest_cache",
+    ".venv",
+    "data",
+    "output",
+]
+
+[tool.ruff.lint]
+select = ["B", "E4", "E7", "E9", "F", "I", "UP"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+show_error_codes = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = "(^|/)([.]venv|data|output)/"
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+exclude = [".venv", "data", "output"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers"]
+
+[tool.coverage.run]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

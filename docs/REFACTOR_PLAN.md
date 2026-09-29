@@ -1,6 +1,6 @@
 # ComfyReview Refactor Plan
 
-Status: planning baseline, 2026-09-28.
+Status: active migration plan, 2026-09-28.
 
 Goal: bring ComfyReview to the same engineering standard as the current
 World Freight Idle codebase before using it as the data/application foundation
@@ -41,6 +41,8 @@ Exit condition:
 
 ## Phase 1 – Quality foundation
 
+Status: implemented on `refactor/quality-foundation`, pending review and merge.
+
 Introduce without changing product behavior:
 
 - `pyproject.toml` project rules
@@ -55,6 +57,17 @@ Introduce without changing product behavior:
 
 Define the exact Python-core coverage scope during this phase.
 
+Implemented details:
+
+- pinned development tools in `requirements-dev.txt`
+- a versioned file/diagnostic ratchet that cannot grow
+- AST architecture checks with explicit legacy exceptions
+- a callable-to-test manifest and 100% statement coverage for the current core
+- structured JSON logging and HTTP `X-Request-ID` propagation
+- Python 3.11/3.14 quality CI plus a Windows 3.14 regression job
+- public default port aligned to `8000`; local environment overrides remain
+  supported
+
 Exit condition:
 
 - one repeatable quality command exists
@@ -63,7 +76,8 @@ Exit condition:
 
 ## Phase 2 – Package and dependency boundaries
 
-Create the target `app/` structure and composition root.
+Create the target `comfyreview/` structure and composition root. The package
+name avoids a conflict with the compatible root `app.py` entry point.
 
 Move behavior incrementally behind:
 

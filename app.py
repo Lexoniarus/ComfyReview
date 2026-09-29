@@ -2,26 +2,27 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from config import (
-    OUTPUT_ROOT,
-    MV_QUEUE_DB_PATH,
-    DB_PATH,
-    PROMPT_TOKENS_DB_PATH,
-    PROMPT_RATINGS_DB_PATH,
     COMBO_PROMPTS_DB_PATH,
-    PLAYGROUND_DB_PATH,
+    DB_PATH,
     IMAGES_DB_PATH,
+    MV_QUEUE_DB_PATH,
+    OUTPUT_ROOT,
+    PLAYGROUND_DB_PATH,
+    PROMPT_RATINGS_DB_PATH,
+    PROMPT_TOKENS_DB_PATH,
 )
-
-from routers.stats_router import router as stats_router
-from routers.index_router import router as index_router
-from routers.top_router import router as top_router
 from routers.arena_router import router as arena_router
+from routers.index_router import router as index_router
 from routers.playground import router as playground_router
-
+from routers.stats_router import router as stats_router
+from routers.top_router import router as top_router
 from services.mv_worker import start_worker_thread
+from services.observability import RequestTracingMiddleware, configure_logging
 
+configure_logging()
 
 app = FastAPI(title="Comfy Review")
+app.add_middleware(RequestTracingMiddleware)
 app.mount("/files", StaticFiles(directory=str(OUTPUT_ROOT)), name="files")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -33,7 +34,7 @@ app.include_router(playground_router)
 
 
 @app.on_event("startup")
-def _startup_worker():
+def _startup_worker() -> None:
     # Start persistent MV worker (Queue + Catchup)
     start_worker_thread(
         queue_db_path=MV_QUEUE_DB_PATH,
