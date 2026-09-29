@@ -1,6 +1,12 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.reviews:OutputImageReference.from_client_paths": (
+        "tests/test_review_service.py::test_output_reference_preserves_a_valid_client_pair"
+    ),
+    "comfyreview.application.reviews:ReviewService.submit": (
+        "tests/test_review_service.py::test_review_service_submits_rating_in_order"
+    ),
     "comfyreview.settings:load_settings": (
         "tests/test_settings.py::test_environment_overrides_env_file_without_mutating_process"
     ),
