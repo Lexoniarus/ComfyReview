@@ -97,12 +97,21 @@ def test_worker_thread_receives_every_legacy_database_path(
     )
     paths = {name: tmp_path / f"{name}.sqlite3" for name in names}
 
-    thread = mv_worker.start_worker_thread(**paths)
+    thread = mv_worker.start_worker_thread(
+        queue_db_path=paths["queue_db_path"],
+        state_db_path=paths["state_db_path"],
+        ratings_db_path=paths["ratings_db_path"],
+        prompt_tokens_db_path=paths["prompt_tokens_db_path"],
+        prompt_ratings_db_path=paths["prompt_ratings_db_path"],
+        combo_db_path=paths["combo_db_path"],
+        playground_db_path=paths["playground_db_path"],
+        images_db_path=paths["images_db_path"],
+    )
 
     assert isinstance(thread, FakeThread)
     assert thread.started is True
     assert captured["target"] is mv_worker.run_worker_loop
-    assert captured["kwargs"] == paths
+    assert captured["kwargs"] == {**paths, "debounce_seconds": 20}
     assert captured["daemon"] is True
     assert captured["name"] == "mv_worker"
 

@@ -5,7 +5,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from config import MV_DEBOUNCE_SECONDS
 from services.mv_worker_core.combo_pipeline import process_combo_prompts_once
 from services.mv_worker_core.debounce import debounce_wait_for_catchup_job
 from services.mv_worker_core.images_pipeline import process_images_incremental
@@ -153,6 +152,7 @@ def process_one_job(
     playground_db_path: Path,
     images_db_path: Path,
     poll_seconds: float,
+    debounce_seconds: int,
     stop_event: threading.Event | None,
 ) -> None:
     """Run exactly one queued job (currently only 'catchup' is used)."""
@@ -163,7 +163,7 @@ def process_one_job(
         debounce_wait_for_catchup_job(
             queue_db_path=queue_db_path,
             job_id=job_id,
-            debounce_seconds=int(MV_DEBOUNCE_SECONDS),
+            debounce_seconds=int(debounce_seconds),
             poll_seconds=float(poll_seconds),
             stop_event=stop_event,
         )
@@ -228,6 +228,7 @@ def run_worker_loop(
     combo_db_path: Path,
     playground_db_path: Path,
     images_db_path: Path,
+    debounce_seconds: int,
     poll_seconds: float = 0.75,
     stop_event: threading.Event | None = None,
 ) -> None:
@@ -267,5 +268,6 @@ def run_worker_loop(
             playground_db_path=playground_db_path,
             images_db_path=images_db_path,
             poll_seconds=float(poll_seconds),
+            debounce_seconds=int(debounce_seconds),
             stop_event=stop_event,
         )

@@ -16,6 +16,7 @@ def start_worker_thread(
     combo_db_path: Path,
     playground_db_path: Path,
     images_db_path: Path,
+    debounce_seconds: int = 20,
 ) -> threading.Thread:
     """Start the MV worker thread.
 
@@ -32,6 +33,7 @@ def start_worker_thread(
             combo_db_path=combo_db_path,
             playground_db_path=playground_db_path,
             images_db_path=images_db_path,
+            debounce_seconds=int(debounce_seconds),
         ),
         daemon=True,
         name="mv_worker",

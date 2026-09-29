@@ -480,6 +480,7 @@ def test_worker_marks_job_failed_when_combo_projection_raises(
         playground_db_path=tmp_path / "playground.sqlite3",
         images_db_path=tmp_path / "images.sqlite3",
         poll_seconds=0,
+        debounce_seconds=0,
         stop_event=None,
     )
 
