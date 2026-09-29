@@ -1,6 +1,9 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.settings:load_settings": (
+        "tests/test_settings.py::test_environment_overrides_env_file_without_mutating_process"
+    ),
     "quality.architecture:collect_architecture_violations": (
         "tests/test_architecture.py::test_repository_architecture_does_not_worsen"
     ),

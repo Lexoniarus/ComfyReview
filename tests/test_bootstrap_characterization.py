@@ -7,7 +7,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import config
 from arena_store import ensure_schema as ensure_arena_schema
 from prompt_store import db as open_prompt_database
 from services import mv_worker
@@ -78,24 +77,6 @@ def test_root_app_keeps_public_routes_and_request_tracing() -> None:
         middleware.cls is RequestTracingMiddleware
         for middleware in app.user_middleware
     )
-
-
-def test_env_file_only_fills_unset_environment_values(
-    tmp_path: Path,
-    monkeypatch: Any,
-) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text(
-        "COMFYREVIEW_PORT=9000\nCOMFYREVIEW_HOST='env-file-host'\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("COMFYREVIEW_PORT", "8123")
-    monkeypatch.delenv("COMFYREVIEW_HOST", raising=False)
-
-    config._load_env_file(env_file)
-
-    assert config._env_int("COMFYREVIEW_PORT", 8000) == 8123
-    assert config.os.environ["COMFYREVIEW_HOST"] == "env-file-host"
 
 
 def test_worker_thread_receives_every_legacy_database_path(

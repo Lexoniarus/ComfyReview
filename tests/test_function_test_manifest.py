@@ -22,7 +22,12 @@ def test_discovers_public_core_callables(tmp_path: Path) -> None:
         "def _hidden():\n    return 2\n\n"
         "class Worker:\n"
         "    def run(self):\n        return 3\n"
-        "    def _helper(self):\n        return 4\n",
+        "    def _helper(self):\n        return 4\n\n"
+        "class Boundary(Protocol):\n"
+        "    def send(self):\n        ...\n\n"
+        "class AbstractWorker:\n"
+        "    @abstractmethod\n"
+        "    def execute(self):\n        ...\n",
         encoding="utf-8",
     )
     scope = tmp_path / "scope.txt"
