@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from comfyreview.application import (
+    CanonicalSchemaLifecycle,
     LegacySchemaLifecycle,
     OutputImageCatalog,
     ReviewService,
@@ -23,9 +24,9 @@ from comfyreview.observability import (
 )
 from comfyreview.providers import LocalOutputImageCatalog
 from comfyreview.repositories.sqlite import (
+    CanonicalSchemaManager,
     LegacyProjectionJobQueue,
     LegacySchemaManager,
-    SqlitePromptRepository,
     SqliteReviewRepository,
 )
 from comfyreview.settings import Settings, load_settings
@@ -42,6 +43,7 @@ class ApplicationContainer:
     """Own configured application resources and their lifecycle ports."""
 
     settings: Settings
+    canonical_schema: CanonicalSchemaLifecycle
     schema_lifecycle: LegacySchemaLifecycle
     worker: WorkerRuntime
     output_images: OutputImageCatalog
@@ -69,8 +71,8 @@ def build_application_container(
     worker = LegacyWorkerRuntime(
         queue_database_path=configured.worker_queue_database_path,
         state_database_path=configured.worker_queue_database_path,
-        ratings_database_path=configured.ratings_database_path,
-        prompt_tokens_database_path=configured.prompt_tokens_database_path,
+        ratings_database_path=configured.canonical_database_path,
+        prompt_tokens_database_path=configured.canonical_database_path,
         prompt_ratings_database_path=configured.prompt_ratings_database_path,
         combo_database_path=configured.combo_prompts_database_path,
         playground_database_path=configured.playground_database_path,
@@ -80,8 +82,7 @@ def build_application_container(
     output_images = LocalOutputImageCatalog(configured.output_root)
     review_service = ReviewService(
         image_resolver=output_images,
-        reviews=SqliteReviewRepository(configured.ratings_database_path),
-        prompts=SqlitePromptRepository(configured.prompt_tokens_database_path),
+        reviews=SqliteReviewRepository(configured.canonical_database_path),
         jobs=LegacyProjectionJobQueue(configured.worker_queue_database_path),
         deletions=OutputFileService(
             output_root=configured.output_root,
@@ -89,9 +90,23 @@ def build_application_container(
         ),
         preserve_deleted_files=configured.soft_delete_to_trash,
     )
+    legacy_runtime_settings = replace(
+        configured,
+        ratings_database_path=(
+            configured.data_directory / "_legacy_runtime" / "ratings.sqlite3"
+        ),
+        prompt_tokens_database_path=(
+            configured.data_directory
+            / "_legacy_runtime"
+            / "prompt_tokens.sqlite3"
+        ),
+    )
     return ApplicationContainer(
         settings=configured,
-        schema_lifecycle=LegacySchemaManager(configured),
+        canonical_schema=CanonicalSchemaManager(
+            configured.canonical_database_path
+        ),
+        schema_lifecycle=LegacySchemaManager(legacy_runtime_settings),
         worker=worker,
         output_images=output_images,
         review_service=review_service,
@@ -107,6 +122,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
         _prepare_directories(resources.settings)
+        resources.canonical_schema.prepare_startup()
         resources.schema_lifecycle.prepare_startup()
         resources.worker.start()
         try:

@@ -27,6 +27,7 @@ class Settings:
     output_root: Path
     trash_root: Path
     data_directory: Path
+    canonical_database_path: Path
     templates_directory: Path
     pool_limit: int
     minimum_runs: int
@@ -121,6 +122,11 @@ def load_settings(
 
     output_root = _path(values, "COMFYREVIEW_OUTPUT_ROOT", base / "output")
     data_directory = _path(values, "COMFYREVIEW_DATA_DIR", base / "data")
+    canonical_database_path = _path(
+        values,
+        "COMFYREVIEW_DATABASE",
+        data_directory / "comfyreview.sqlite3",
+    )
     workflows_directory = _path(
         values,
         "COMFYREVIEW_WORKFLOWS_DIR",
@@ -138,6 +144,7 @@ def load_settings(
         output_root=output_root,
         trash_root=output_root / "_trash",
         data_directory=data_directory,
+        canonical_database_path=canonical_database_path,
         templates_directory=base / "templates",
         pool_limit=_integer(values, "COMFYREVIEW_POOL_LIMIT", 128),
         minimum_runs=_integer(values, "COMFYREVIEW_MIN_RUNS", 3),

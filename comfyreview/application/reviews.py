@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -14,7 +13,7 @@ class ReviewValidationError(ValueError):
 
 
 class ReviewMutationError(RuntimeError):
-    """Report a failed review workflow after compensation was attempted."""
+    """Report a failed canonical review mutation."""
 
 
 class InvalidOutputPathError(ValueError):
@@ -43,7 +42,7 @@ class OutputImageReference:
         png_path: str,
         json_path: str,
     ) -> OutputImageReference:
-        """Validate pair syntax without asserting root membership or existence."""
+        """Validate pair syntax before provider resolution."""
         if not png_path.strip() or not json_path.strip():
             raise ReviewValidationError("Output pair paths are required")
         png = Path(png_path)
@@ -65,7 +64,7 @@ class OutputPair:
 
 @dataclass(frozen=True, slots=True)
 class ReviewImage:
-    """Carry authoritative, normalized sidecar data into the review use case."""
+    """Carry normalized generation data into review persistence."""
 
     pair: OutputPair
     model_branch: str
@@ -83,7 +82,7 @@ class ReviewImage:
 
 @dataclass(frozen=True, slots=True)
 class SubmitReviewCommand:
-    """Request either a scored review or a delete tombstone."""
+    """Request either a scored review or a delete observation."""
 
     image: OutputImageReference
     rating: int | None
@@ -92,7 +91,7 @@ class SubmitReviewCommand:
 
 @dataclass(frozen=True, slots=True)
 class ReviewRecord:
-    """Describe the canonical values written to the legacy ratings store."""
+    """Describe one current review mutation for a resolved generation."""
 
     image: ReviewImage
     rating: int | None
@@ -101,7 +100,7 @@ class ReviewRecord:
 
 @dataclass(frozen=True, slots=True)
 class StoredReview:
-    """Identify one persisted legacy review event and its assigned run."""
+    """Identify the current canonical review revision."""
 
     review_id: int
     run: int
@@ -109,7 +108,7 @@ class StoredReview:
 
 @dataclass(frozen=True, slots=True)
 class PromptProjection:
-    """Describe prompt-token rows derived from one persisted review run."""
+    """Legacy compatibility payload retained for old Arena callers."""
 
     json_path: Path
     run: int
@@ -122,7 +121,7 @@ class PromptProjection:
 
 @dataclass(frozen=True, slots=True)
 class ReviewResult:
-    """Return the persisted review identity and queued projection work."""
+    """Return canonical review identity and projection scheduling result."""
 
     review_id: int
     run: int
@@ -139,31 +138,31 @@ class ReviewImageResolver(Protocol):
 
 
 class ReviewRepository(Protocol):
-    """Persist and compensate legacy review events."""
+    """Persist current reviews and their normalized generation facts."""
 
     def append(self, record: ReviewRecord) -> StoredReview:
-        """Append one review event and return its exact ID and run."""
+        """Apply one review mutation and return its canonical revision."""
         ...
 
     def delete(self, review_id: int) -> None:
-        """Delete one review event during compensation."""
+        """Remove one current review for compatibility compensation."""
         ...
 
 
 class PromptRepository(Protocol):
-    """Persist and compensate the legacy prompt-token projection."""
+    """Legacy compatibility port; canonical prompts are generation facts."""
 
     def save(self, projection: PromptProjection) -> None:
-        """Write prompt tokens for one exact review run."""
+        """Accept a legacy request without duplicating token rows."""
         ...
 
     def delete(self, json_path: Path, run: int) -> None:
-        """Delete prompt rows for one compensated review run."""
+        """Accept compensation for a projection that is not persisted."""
         ...
 
 
 class JobQueue(Protocol):
-    """Request coalescing legacy projection catchup work."""
+    """Request coalescing derived-projection catchup work."""
 
     def request_catchup(self) -> int:
         """Request catchup and return the queued or coalesced job ID."""
@@ -174,7 +173,7 @@ class StagedDeletion(Protocol):
     """Control a reversible output-pair deletion."""
 
     def rollback(self) -> None:
-        """Restore the staged pair to its original location."""
+        """Restore both staged files to their original locations."""
         ...
 
     def finalize(self, *, preserve_in_trash: bool) -> None:
@@ -191,17 +190,17 @@ class OutputDeletionManager(Protocol):
 
 
 class ReviewService:
-    """Coordinate review persistence across current legacy boundaries."""
+    """Coordinate canonical review persistence and output deletion."""
 
     def __init__(
         self,
         *,
         image_resolver: ReviewImageResolver,
         reviews: ReviewRepository,
-        prompts: PromptRepository,
         jobs: JobQueue,
         deletions: OutputDeletionManager,
         preserve_deleted_files: bool,
+        prompts: PromptRepository | None = None,
     ) -> None:
         self._image_resolver = image_resolver
         self._reviews = reviews
@@ -212,7 +211,7 @@ class ReviewService:
         self._logger = logging.getLogger("comfyreview.review")
 
     def submit(self, command: SubmitReviewCommand) -> ReviewResult:
-        """Persist one review workflow or compensate all completed steps."""
+        """Apply one review; derived-projection scheduling is best effort."""
         rating = self._validate(command)
         self._logger.info("review.submission_started")
         image = self._image_resolver.resolve(command.image)
@@ -223,36 +222,28 @@ class ReviewService:
         )
         staged: StagedDeletion | None = None
         stored: StoredReview | None = None
-        prompt_attempted = False
-        phase = "delete_stage" if command.delete else "review_write"
         try:
             if command.delete:
                 staged = self._deletions.stage(image.pair)
-                phase = "review_write"
             stored = self._reviews.append(record)
-            projection = self._prompt_projection(record, stored)
-            phase = "prompt_write"
-            prompt_attempted = True
-            self._prompts.save(projection)
-            phase = "queue_enqueue"
-            job_id = self._jobs.request_catchup()
-            if staged is not None:
-                phase = "delete_finalize"
-                staged.finalize(preserve_in_trash=self._preserve_deleted_files)
+            if self._prompts is not None:
+                self._prompts.save(self._prompt_projection(record, stored))
         except Exception as error:
+            if stored is not None and self._prompts is not None:
+                self._try_review_rollback(stored.review_id)
+            if staged is not None:
+                self._try_rollback(staged)
             self._logger.exception(
                 "review.submission_failed",
-                extra={"error_category": phase},
-            )
-            self._compensate(
-                image=image,
-                stored=stored,
-                prompt_attempted=prompt_attempted,
-                staged=staged,
+                extra={"error_category": "canonical_write"},
             )
             raise ReviewMutationError(
-                f"Review mutation failed during {phase}"
+                "Review mutation failed during canonical_write"
             ) from error
+
+        job_id = self._request_projection_catchup()
+        if staged is not None:
+            self._finalize_delete(staged)
 
         self._logger.info(
             "review.submission_completed",
@@ -289,39 +280,41 @@ class ReviewService:
             deleted=record.deleted,
         )
 
-    def _compensate(
-        self,
-        *,
-        image: ReviewImage,
-        stored: StoredReview | None,
-        prompt_attempted: bool,
-        staged: StagedDeletion | None,
-    ) -> None:
-        if prompt_attempted and stored is not None:
-            self._try_compensation(
-                "prompt_delete",
-                lambda: self._prompts.delete(
-                    image.pair.json_path,
-                    stored.run,
-                ),
-            )
-        if stored is not None:
-            self._try_compensation(
-                "review_delete",
-                lambda: self._reviews.delete(stored.review_id),
-            )
-        if staged is not None:
-            self._try_compensation("delete_rollback", staged.rollback)
-
-    def _try_compensation(
-        self,
-        phase: str,
-        operation: Callable[[], None],
-    ) -> None:
+    def _request_projection_catchup(self) -> int:
         try:
-            operation()
+            return self._jobs.request_catchup()
         except Exception:
             self._logger.exception(
-                "review.compensation_failed",
-                extra={"error_category": phase},
+                "review.projection_queue_failed",
+                extra={"error_category": "projection_queue"},
+            )
+            return 0
+
+    def _finalize_delete(self, staged: StagedDeletion) -> None:
+        try:
+            staged.finalize(
+                preserve_in_trash=self._preserve_deleted_files,
+            )
+        except Exception:
+            self._logger.exception(
+                "review.delete_finalize_failed",
+                extra={"error_category": "delete_finalize"},
+            )
+
+    def _try_review_rollback(self, review_id: int) -> None:
+        try:
+            self._reviews.delete(review_id)
+        except Exception:
+            self._logger.exception(
+                "review.compatibility_rollback_failed",
+                extra={"error_category": "compatibility_rollback"},
+            )
+
+    def _try_rollback(self, staged: StagedDeletion) -> None:
+        try:
+            staged.rollback()
+        except Exception:
+            self._logger.exception(
+                "review.delete_rollback_failed",
+                extra={"error_category": "delete_rollback"},
             )

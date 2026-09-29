@@ -16,6 +16,7 @@ def connect_existing(
     if not path.is_file():
         raise FileNotFoundError(f"SQLite database does not exist: {path}")
     connection = sqlite3.connect(f"{path.as_uri()}?mode=rw", uri=True)
+    connection.execute("PRAGMA foreign_keys = ON")
     if rows:
         connection.row_factory = sqlite3.Row
     return connection

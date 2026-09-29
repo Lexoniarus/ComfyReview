@@ -18,6 +18,8 @@ def test_load_settings_uses_documented_defaults_without_writes(
     assert settings.output_root == (tmp_path / "output").resolve()
     assert settings.trash_root == settings.output_root / "_trash"
     assert settings.data_directory == (tmp_path / "data").resolve()
+    expected_database = (tmp_path / "data" / "comfyreview.sqlite3").resolve()
+    assert settings.canonical_database_path == expected_database
     assert settings.pool_limit == 128
     assert settings.minimum_runs == 3
     assert settings.worker_debounce_seconds == 20
@@ -34,6 +36,7 @@ def test_environment_overrides_env_file_without_mutating_process(
     tmp_path: Path,
 ) -> None:
     custom_output = tmp_path / "comfy output"
+    custom_database = tmp_path / "runtime" / "canonical.sqlite3"
     env_file = tmp_path / "settings.env"
     env_file.write_text(
         "\n".join(
@@ -46,6 +49,7 @@ def test_environment_overrides_env_file_without_mutating_process(
                 'COMFYREVIEW_COMFYUI_BASE_URL="http://example.test:8188"',
                 "COMFYREVIEW_OUTPUT_ROOT=ignored-output",
                 "COMFYREVIEW_DATA_DIR=",
+                "COMFYREVIEW_DATABASE=ignored.sqlite3",
                 "COMFYREVIEW_POOL_LIMIT=64",
                 "COMFYREVIEW_MIN_RUNS=5",
                 "COMFYREVIEW_MV_DEBOUNCE_SECONDS=7",
@@ -62,6 +66,7 @@ def test_environment_overrides_env_file_without_mutating_process(
     environment = {
         "COMFYREVIEW_PORT": "8123",
         "COMFYREVIEW_OUTPUT_ROOT": str(custom_output),
+        "COMFYREVIEW_DATABASE": str(custom_database),
         "COMFYREVIEW_RATINGS_DB": "",
     }
     process_environment = dict(os.environ)
@@ -77,10 +82,9 @@ def test_environment_overrides_env_file_without_mutating_process(
     assert settings.comfyui_base_url == "http://example.test:8188"
     assert settings.output_root == custom_output.resolve()
     assert settings.data_directory == (tmp_path / "data").resolve()
-    assert (
-        settings.ratings_database_path
-        == (tmp_path / "ratings.sqlite3").resolve()
-    )
+    assert settings.canonical_database_path == custom_database.resolve()
+    expected_ratings = (tmp_path / "ratings.sqlite3").resolve()
+    assert settings.ratings_database_path == expected_ratings
     assert settings.pool_limit == 64
     assert settings.minimum_runs == 5
     assert settings.worker_debounce_seconds == 7

@@ -10,7 +10,6 @@ import pytest
 from comfyreview.application import (
     OutputImageReference,
     OutputPair,
-    PromptProjection,
     ReviewImage,
     ReviewMutationError,
     ReviewRecord,
@@ -58,22 +57,20 @@ class _Reviews:
         return StoredReview(review_id=17, run=3)
 
     def delete(self, review_id: int) -> None:
-        assert review_id == 17
+        del review_id
         self._scenario.record("review_delete")
 
 
 class _Prompts:
     def __init__(self, scenario: _Scenario) -> None:
         self._scenario = scenario
-        self.projections: list[PromptProjection] = []
 
-    def save(self, projection: PromptProjection) -> None:
-        self.projections.append(projection)
+    def save(self, projection) -> None:
+        assert projection.positive_prompt == "hero"
         self._scenario.record("prompt_save")
 
     def delete(self, json_path: Path, run: int) -> None:
-        assert json_path.name == "image.json"
-        assert run == 3
+        del json_path, run
         self._scenario.record("prompt_delete")
 
 
@@ -119,7 +116,6 @@ class _ReviewFixture:
     scenario: _Scenario
     image: ReviewImage
     reviews: _Reviews
-    prompts: _Prompts
     staged: _StagedDeletion
     service: ReviewService
 
@@ -139,7 +135,11 @@ class _ReviewFixture:
         )
 
 
-def _fixture(*, fail_at: set[str] | None = None) -> _ReviewFixture:
+def _fixture(
+    *,
+    fail_at: set[str] | None = None,
+    with_prompts: bool = False,
+) -> _ReviewFixture:
     scenario = _Scenario(fail_at=set(fail_at or ()))
     image = ReviewImage(
         pair=OutputPair(
@@ -159,21 +159,19 @@ def _fixture(*, fail_at: set[str] | None = None) -> _ReviewFixture:
         negative_prompt="blur",
     )
     reviews = _Reviews(scenario)
-    prompts = _Prompts(scenario)
     staged = _StagedDeletion(scenario)
     service = ReviewService(
         image_resolver=_Resolver(scenario, image),
         reviews=reviews,
-        prompts=prompts,
         jobs=_Jobs(scenario),
         deletions=_Deletions(scenario, staged),
         preserve_deleted_files=True,
+        prompts=_Prompts(scenario) if with_prompts else None,
     )
     return _ReviewFixture(
         scenario=scenario,
         image=image,
         reviews=reviews,
-        prompts=prompts,
         staged=staged,
         service=service,
     )
@@ -222,24 +220,8 @@ def test_review_service_submits_rating_in_order() -> None:
         deleted=False,
         job_id=29,
     )
-    assert fixture.scenario.events == [
-        "resolve",
-        "review_append",
-        "prompt_save",
-        "queue",
-    ]
+    assert fixture.scenario.events == ["resolve", "review_append", "queue"]
     assert fixture.reviews.records[0].rating == 8
-    assert fixture.prompts.projections == [
-        PromptProjection(
-            json_path=Path("output/image.json"),
-            run=3,
-            model_branch="sdxl",
-            positive_prompt="hero",
-            negative_prompt="blur",
-            rating=8,
-            deleted=False,
-        )
-    ]
 
 
 def test_review_service_stages_and_finalizes_delete() -> None:
@@ -254,7 +236,6 @@ def test_review_service_stages_and_finalizes_delete() -> None:
         "resolve",
         "stage",
         "review_append",
-        "prompt_save",
         "queue",
         "finalize",
     ]
@@ -282,82 +263,95 @@ def test_review_service_propagates_resolution_failure() -> None:
 
 
 @pytest.mark.parametrize(
-    ("failure", "failure_phase", "delete", "expected_events"),
+    ("failure", "delete", "expected_events"),
     [
-        ("stage", "delete_stage", True, ["resolve", "stage"]),
+        ("stage", True, ["resolve", "stage"]),
         (
             "review_append",
-            "review_write",
             True,
             ["resolve", "stage", "review_append", "rollback"],
         ),
-        (
-            "prompt_save",
-            "prompt_write",
-            False,
-            [
-                "resolve",
-                "review_append",
-                "prompt_save",
-                "prompt_delete",
-                "review_delete",
-            ],
-        ),
-        (
-            "queue",
-            "queue_enqueue",
-            False,
-            [
-                "resolve",
-                "review_append",
-                "prompt_save",
-                "queue",
-                "prompt_delete",
-                "review_delete",
-            ],
-        ),
-        (
-            "finalize",
-            "delete_finalize",
-            True,
-            [
-                "resolve",
-                "stage",
-                "review_append",
-                "prompt_save",
-                "queue",
-                "finalize",
-                "prompt_delete",
-                "review_delete",
-                "rollback",
-            ],
-        ),
+        ("review_append", False, ["resolve", "review_append"]),
     ],
 )
-def test_review_service_compensates_completed_steps_in_reverse_order(
+def test_review_service_rolls_back_staged_delete_when_canonical_write_fails(
     failure: str,
-    failure_phase: str,
     delete: bool,
     expected_events: list[str],
 ) -> None:
     fixture = _fixture(fail_at={failure})
 
-    with pytest.raises(ReviewMutationError, match=failure_phase):
+    with pytest.raises(ReviewMutationError, match="canonical_write"):
         fixture.service.submit(fixture.command(delete=delete))
 
     assert fixture.scenario.events == expected_events
 
 
-def test_review_service_attempts_every_compensation_after_failures() -> None:
-    fixture = _fixture(
-        fail_at={"queue", "prompt_delete", "review_delete", "rollback"}
-    )
+def test_review_service_keeps_review_when_projection_queue_fails() -> None:
+    fixture = _fixture(fail_at={"queue"})
 
-    with pytest.raises(ReviewMutationError, match="queue_enqueue"):
+    result = fixture.service.submit(fixture.command())
+
+    assert result.job_id == 0
+    assert fixture.scenario.events == ["resolve", "review_append", "queue"]
+    assert len(fixture.reviews.records) == 1
+
+
+def test_review_service_keeps_delete_when_finalize_cleanup_fails() -> None:
+    fixture = _fixture(fail_at={"finalize"})
+
+    result = fixture.service.submit(fixture.command(delete=True))
+
+    assert result.deleted is True
+    assert fixture.scenario.events[-1] == "finalize"
+
+
+def test_review_service_reports_primary_failure_on_rollback_failure() -> None:
+    fixture = _fixture(fail_at={"review_append", "rollback"})
+
+    with pytest.raises(ReviewMutationError, match="canonical_write"):
         fixture.service.submit(fixture.command(delete=True))
 
-    assert fixture.scenario.events[-3:] == [
-        "prompt_delete",
-        "review_delete",
-        "rollback",
+    assert fixture.scenario.events[-1] == "rollback"
+
+
+def test_review_service_supports_legacy_prompt_projection_adapter() -> None:
+    fixture = _fixture(with_prompts=True)
+
+    result = fixture.service.submit(fixture.command())
+
+    assert result.job_id == 29
+    assert fixture.scenario.events == [
+        "resolve",
+        "review_append",
+        "prompt_save",
+        "queue",
     ]
+
+
+def test_review_service_rolls_back_legacy_review_if_prompt_write_fails() -> (
+    None
+):
+    fixture = _fixture(fail_at={"prompt_save"}, with_prompts=True)
+
+    with pytest.raises(ReviewMutationError, match="canonical_write"):
+        fixture.service.submit(fixture.command())
+
+    assert fixture.scenario.events == [
+        "resolve",
+        "review_append",
+        "prompt_save",
+        "review_delete",
+    ]
+
+
+def test_review_service_keeps_primary_error_if_legacy_rollback_fails() -> None:
+    fixture = _fixture(
+        fail_at={"prompt_save", "review_delete"},
+        with_prompts=True,
+    )
+
+    with pytest.raises(ReviewMutationError, match="canonical_write"):
+        fixture.service.submit(fixture.command())
+
+    assert fixture.scenario.events[-1] == "review_delete"

@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from comfyreview.application import (
+    CanonicalSchemaReport,
     LegacySchemaReport,
     OutputImageReadModel,
     ReviewResult,
@@ -22,7 +23,19 @@ from comfyreview.bootstrap import (
     create_app,
 )
 from comfyreview.providers import LocalOutputImageCatalog
+from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.settings import Settings, load_settings
+
+
+class _RecordingCanonicalSchema:
+    def __init__(self, settings: Settings, events: list[str]) -> None:
+        self._settings = settings
+        self._events = events
+
+    def prepare_startup(self) -> CanonicalSchemaReport:
+        assert self._settings.data_directory.is_dir()
+        self._events.append("canonical")
+        return CanonicalSchemaReport(initialized=True, schema_version=1)
 
 
 class _RecordingSchemaLifecycle:
@@ -78,6 +91,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
     return ApplicationContainer(
         settings=settings,
+        canonical_schema=_RecordingCanonicalSchema(settings, events),
         schema_lifecycle=_RecordingSchemaLifecycle(settings, events),
         worker=_RecordingWorker(events),
         output_images=_EmptyOutputImageCatalog(),
@@ -91,18 +105,22 @@ def test_lifespan_prepares_schema_then_owns_worker(tmp_path: Path) -> None:
     application = create_app(container)
 
     assert application.state.container is container
-
     assert not container.settings.output_root.exists()
     assert not container.settings.data_directory.exists()
 
     with TestClient(application):
-        assert events == ["schema", "start"]
+        assert events == ["canonical", "schema", "start"]
         assert container.settings.trash_root.is_dir()
         assert container.settings.lora_export_root.is_dir()
         assert container.settings.workflows_directory.is_dir()
         assert container.settings.comfyui_checkpoints_directory.is_dir()
 
-    assert events == ["schema", "start", "stop:30"]
+    assert events == [
+        "canonical",
+        "schema",
+        "start",
+        "stop:30",
+    ]
 
 
 def test_lifespan_stops_worker_when_application_body_fails(
@@ -115,7 +133,12 @@ def test_lifespan_stops_worker_when_application_body_fails(
         with TestClient(application):
             raise RuntimeError("application failed")
 
-    assert events == ["schema", "start", "stop:30"]
+    assert events == [
+        "canonical",
+        "schema",
+        "start",
+        "stop:30",
+    ]
 
 
 def test_entry_points_and_route_contract_remain_compatible() -> None:
@@ -125,10 +148,13 @@ def test_entry_points_and_route_contract_remain_compatible() -> None:
     assert main_app is root_app
 
 
-def test_default_container_wires_local_output_catalog(tmp_path: Path) -> None:
+def test_default_container_wires_canonical_review_runtime(
+    tmp_path: Path,
+) -> None:
     settings = load_settings(base_directory=tmp_path, environ={})
 
     container = build_application_container(settings)
 
     assert isinstance(container.output_images, LocalOutputImageCatalog)
     assert isinstance(container.review_service, ReviewService)
+    assert isinstance(container.canonical_schema, CanonicalSchemaManager)

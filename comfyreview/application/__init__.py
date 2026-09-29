@@ -1,6 +1,8 @@
 """Application contracts for ComfyReview lifecycle ownership."""
 
 from comfyreview.application.lifecycle import (
+    CanonicalSchemaLifecycle,
+    CanonicalSchemaReport,
     LegacySchemaIssue,
     LegacySchemaLifecycle,
     LegacySchemaReport,
@@ -35,12 +37,14 @@ from comfyreview.application.reviews import (
 )
 
 __all__ = [
+    "CanonicalSchemaLifecycle",
+    "CanonicalSchemaReport",
+    "InvalidOutputPathError",
+    "JobQueue",
     "LegacySchemaIssue",
     "LegacySchemaLifecycle",
     "LegacySchemaReport",
     "LegacySchemaValidationError",
-    "InvalidOutputPathError",
-    "JobQueue",
     "OutputDeletionManager",
     "OutputImageCatalog",
     "OutputImageReadModel",

@@ -5,14 +5,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+from services.images_service import rebuild_images
 from services.mv_worker_core.combo_pipeline import process_combo_prompts_once
 from services.mv_worker_core.debounce import debounce_wait_for_catchup_job
-from services.mv_worker_core.images_pipeline import process_images_incremental
-from services.mv_worker_core.prompt_ratings_pipeline import (
-    process_prompt_ratings_incremental,
-)
 from services.mv_worker_core.ratings_io import max_queued_job_id, max_rating_id
 from services.mv_worker_core.time_utils import utc_now_str
+from services.prompt_ratings_service import rebuild_prompt_ratings
 from stores.mv_jobs_store import (
     enqueue_job,
     fetch_job,
@@ -23,16 +21,9 @@ from stores.mv_jobs_store import (
     mark_running,
     recover_abandoned_running_jobs,
 )
-from stores.mv_jobs_store import (
-    ensure_schema as ensure_jobs_schema,
-)
-from stores.mv_state_store import (
-    ensure_schema as ensure_state_schema,
-)
-from stores.mv_state_store import (
-    get_state,
-    upsert_state,
-)
+from stores.mv_jobs_store import ensure_schema as ensure_jobs_schema
+from stores.mv_state_store import ensure_schema as ensure_state_schema
+from stores.mv_state_store import get_state, upsert_state
 
 
 def ensure_initial_catchup_job(
@@ -42,21 +33,9 @@ def ensure_initial_catchup_job(
     ratings_db_path: Path,
     aggregators: tuple[str, ...],
 ) -> None:
-    try:
-        current_max = max_rating_id(ratings_db_path)
-    except Exception:
-        return
-    if current_max <= 0:
-        return
-
-    behind = False
-    for a in aggregators:
-        st = get_state(state_db_path, aggregator_name=a)
-        if int(st.get("last_processed_rating_id") or 0) < int(current_max):
-            behind = True
-            break
-    if behind:
-        enqueue_job(queue_db_path, job_type="catchup")
+    """Queue one startup rebuild for derived legacy projections."""
+    del state_db_path, ratings_db_path, aggregators
+    enqueue_job(queue_db_path, job_type="catchup")
 
 
 def initialize_worker_state(
@@ -88,33 +67,27 @@ def drain_until_frontier_stable(
     images_db_path: Path,
     max_loops: int = 25,
 ) -> int:
-    """Catch up prompt_ratings and images until ratings frontier is stable."""
-    last_frontier = -1
-    for _ in range(int(max_loops)):
-        frontier = max_rating_id(ratings_db_path)
-        if frontier <= 0:
-            return 0
-
-        process_prompt_ratings_incremental(
-            state_db_path=state_db_path,
-            ratings_db_path=ratings_db_path,
-            prompt_tokens_db_path=prompt_tokens_db_path,
-            prompt_ratings_db_path=prompt_ratings_db_path,
-            up_to_rating_id=frontier,
+    """Rebuild compatibility projections from canonical current-state views."""
+    del max_loops
+    frontier = max_rating_id(ratings_db_path)
+    rebuild_prompt_ratings(
+        prompt_tokens_db_path=prompt_tokens_db_path,
+        prompt_ratings_db_path=prompt_ratings_db_path,
+    )
+    rebuild_images(
+        images_db_path=images_db_path,
+        ratings_db_path=ratings_db_path,
+    )
+    now = utc_now_str()
+    for aggregator_name in ("prompt_ratings", "images"):
+        upsert_state(
+            state_db_path,
+            aggregator_name=aggregator_name,
+            last_processed_rating_id=frontier,
+            last_run_at=now,
+            last_error=None,
         )
-        process_images_incremental(
-            state_db_path=state_db_path,
-            ratings_db_path=ratings_db_path,
-            images_db_path=images_db_path,
-            up_to_rating_id=frontier,
-        )
-
-        new_frontier = max_rating_id(ratings_db_path)
-        if new_frontier == frontier:
-            return frontier
-        last_frontier = new_frontier
-
-    return max(last_frontier, 0)
+    return frontier
 
 
 def should_stop(stop_event: threading.Event | None) -> bool:
@@ -155,7 +128,7 @@ def process_one_job(
     debounce_seconds: int,
     stop_event: threading.Event | None,
 ) -> None:
-    """Run exactly one queued job (currently only 'catchup' is used)."""
+    """Run exactly one queued derived-projection job."""
     job_id = int(job.get("id") or 0)
     job_type = str(job.get("job_type") or "catchup")
 
@@ -174,7 +147,6 @@ def process_one_job(
         return
 
     queued_snapshot_max_id = max_queued_job_id(queue_db_path)
-
     mark_running(queue_db_path, job_id)
 
     try:
@@ -196,24 +168,26 @@ def process_one_job(
         )
 
         mark_done(queue_db_path, job_id)
-
         if queued_snapshot_max_id > 0:
             mark_all_queued_done(
-                queue_db_path, up_to_job_id=queued_snapshot_max_id
+                queue_db_path,
+                up_to_job_id=queued_snapshot_max_id,
             )
-
-    except Exception as e:
-        mark_failed(queue_db_path, job_id, str(e))
-        for a in ("prompt_ratings", "combo_prompts", "images"):
-            st = get_state(state_db_path, aggregator_name=a)
+    except Exception as error:
+        mark_failed(queue_db_path, job_id, str(error))
+        for aggregator_name in ("prompt_ratings", "combo_prompts", "images"):
+            state = get_state(
+                state_db_path,
+                aggregator_name=aggregator_name,
+            )
             upsert_state(
                 state_db_path,
-                aggregator_name=a,
+                aggregator_name=aggregator_name,
                 last_processed_rating_id=int(
-                    st.get("last_processed_rating_id") or 0
+                    state.get("last_processed_rating_id") or 0
                 ),
                 last_run_at=utc_now_str(),
-                last_error=str(e),
+                last_error=str(error),
             )
         time.sleep(float(poll_seconds))
 

@@ -60,6 +60,22 @@ class LegacySchemaLifecycle(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class CanonicalSchemaReport:
+    """Describe canonical database startup work."""
+
+    initialized: bool = False
+    schema_version: int = 0
+
+
+class CanonicalSchemaLifecycle(Protocol):
+    """Own validation and first-time creation of the canonical database."""
+
+    def prepare_startup(self) -> CanonicalSchemaReport:
+        """Validate or atomically create the canonical database."""
+        ...
+
+
 class WorkerRuntime(Protocol):
     """Define ownership of one long-lived background worker."""
 

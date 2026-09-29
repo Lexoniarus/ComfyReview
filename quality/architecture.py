@@ -29,9 +29,10 @@ _SCHEMA_DDL_PREFIXES: Final = (
     "DROP TABLE ",
     "DROP TRIGGER ",
 )
-_LEGACY_SCHEMA_ADAPTER: Final = (
-    "comfyreview/repositories/sqlite/legacy_schema.py"
-)
+_SCHEMA_ADAPTERS: Final = {
+    "comfyreview/repositories/sqlite/canonical_schema.py",
+    "comfyreview/repositories/sqlite/legacy_schema.py",
+}
 _EXTERNAL_MODULES: Final = {"httpx", "requests", "urllib", "websocket"}
 
 
@@ -152,7 +153,7 @@ def _record_schema_ddl_violations(
     relative_path: str,
     tree: ast.AST,
 ) -> None:
-    if relative_path == _LEGACY_SCHEMA_ADAPTER:
+    if relative_path in _SCHEMA_ADAPTERS:
         return
     ddl_literals = sum(
         1 for node in ast.walk(tree) if _is_schema_ddl_literal(node)

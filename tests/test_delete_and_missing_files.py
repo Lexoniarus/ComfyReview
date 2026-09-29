@@ -62,7 +62,7 @@ def test_delete_keeps_files_when_rating_write_fails(tmp_path: Path) -> None:
         preserve_deleted_files=False,
     )
 
-    with pytest.raises(ReviewMutationError, match="review_write"):
+    with pytest.raises(ReviewMutationError, match="canonical_write"):
         service.submit(
             SubmitReviewCommand(
                 image=OutputImageReference(

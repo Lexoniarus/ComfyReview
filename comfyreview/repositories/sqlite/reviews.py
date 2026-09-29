@@ -1,7 +1,8 @@
-"""SQLite adapters for current legacy review persistence boundaries."""
+"""SQLite adapters for canonical review persistence and legacy projections."""
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 
@@ -10,125 +11,742 @@ from comfyreview.application import (
     ReviewRecord,
     StoredReview,
 )
+from comfyreview.domain import parse_prompt_atoms
 from comfyreview.repositories.sqlite.connection import connect_existing
 from stores.mv_jobs_store import enqueue_job
 
 
-def _tokenize(prompt: str) -> tuple[str, ...]:
-    normalized = str(prompt or "").replace("\n", " ")
-    return tuple(
-        part.strip() for part in normalized.split(",") if part.strip()
-    )
-
-
 class SqliteReviewRepository:
-    """Persist review events in the existing legacy ratings database."""
+    """Persist current reviews, generations, atoms, and learning aggregates."""
 
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path)
 
     def append(self, record: ReviewRecord) -> StoredReview:
-        """Append one review event and return its exact ID and run."""
-        image = record.image
+        """Atomically apply one rating replacement or delete observation."""
         connection = connect_existing(self._database_path, rows=True)
         try:
-            row = connection.execute(
-                """
-                SELECT COALESCE(MAX(run), 0) AS maximum_run
-                FROM ratings
-                WHERE json_path = ?
-                """,
-                (str(image.pair.json_path),),
-            ).fetchone()
-            run = int(row["maximum_run"] or 0) + 1
-            cursor = connection.execute(
-                """
-                INSERT INTO ratings(
-                    png_path, json_path, run, model_branch, checkpoint,
-                    combo_key, rating, deleted, rating_count, steps, cfg,
-                    sampler, scheduler, denoise, loras_json, pos_prompt,
-                    neg_prompt
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(image.pair.png_path),
-                    str(image.pair.json_path),
-                    run,
-                    image.model_branch,
-                    image.checkpoint,
-                    image.combo_key,
-                    record.rating,
-                    int(record.deleted),
-                    run,
-                    image.steps,
-                    image.cfg,
-                    image.sampler,
-                    image.scheduler,
-                    image.denoise,
-                    image.loras_json,
-                    image.positive_prompt,
-                    image.negative_prompt,
-                ),
+            if not self._uses_canonical_schema(connection):
+                return self._append_legacy(connection, record)
+            connection.execute("BEGIN IMMEDIATE")
+            positive_prompt_id = self._ensure_prompt(
+                connection,
+                scope="pos",
+                prompt=record.image.positive_prompt,
             )
-            review_id = int(cursor.lastrowid or 0)
+            negative_prompt_id = self._ensure_prompt(
+                connection,
+                scope="neg",
+                prompt=record.image.negative_prompt,
+            )
+            generation_id = self._upsert_generation(
+                connection,
+                record,
+                positive_prompt_id=positive_prompt_id,
+                negative_prompt_id=negative_prompt_id,
+            )
+            image_id = self._upsert_image(
+                connection,
+                record,
+                generation_id=generation_id,
+            )
+            prior_deleted = connection.execute(
+                """
+                SELECT id
+                FROM deleted_images
+                WHERE generation_id = ?
+                """,
+                (generation_id,),
+            ).fetchone()
+            if prior_deleted is not None:
+                self._apply_learning_delta(
+                    connection,
+                    generation_id=generation_id,
+                    rating=0,
+                    deleted=True,
+                    delta=-1,
+                )
+            previous = connection.execute(
+                """
+                SELECT id, rating
+                FROM image_reviews
+                WHERE image_id = ?
+                """,
+                (image_id,),
+            ).fetchone()
+            if previous is not None:
+                self._apply_learning_delta(
+                    connection,
+                    generation_id=generation_id,
+                    rating=int(previous["rating"]),
+                    deleted=False,
+                    delta=-1,
+                )
+
+            version = self._next_version(connection)
+            if record.deleted:
+                review_id = int(previous["id"]) if previous else 0
+                self._apply_learning_delta(
+                    connection,
+                    generation_id=generation_id,
+                    rating=0,
+                    deleted=True,
+                    delta=1,
+                )
+                connection.execute(
+                    """
+                    INSERT INTO deleted_images(
+                        generation_id, png_path, json_path, version, deleted_at
+                    )
+                    VALUES (?, ?, ?, ?, datetime('now'))
+                    ON CONFLICT(generation_id) DO UPDATE SET
+                        png_path = excluded.png_path,
+                        json_path = excluded.json_path,
+                        version = excluded.version,
+                        deleted_at = datetime('now')
+                    """,
+                    (
+                        generation_id,
+                        str(record.image.pair.png_path),
+                        str(record.image.pair.json_path),
+                        version,
+                    ),
+                )
+                connection.execute(
+                    "DELETE FROM images WHERE id = ?",
+                    (image_id,),
+                )
+            else:
+                rating = int(record.rating or 0)
+                connection.execute(
+                    "DELETE FROM deleted_images WHERE generation_id = ?",
+                    (generation_id,),
+                )
+                if previous is None:
+                    cursor = connection.execute(
+                        """
+                        INSERT INTO image_reviews(
+                            image_id, rating, version, updated_at
+                        )
+                        VALUES (?, ?, ?, datetime('now'))
+                        """,
+                        (image_id, rating, version),
+                    )
+                    review_id = int(cursor.lastrowid or 0)
+                else:
+                    review_id = int(previous["id"])
+                    connection.execute(
+                        """
+                        UPDATE image_reviews
+                        SET rating = ?,
+                            version = ?,
+                            updated_at = datetime('now')
+                        WHERE id = ?
+                        """,
+                        (rating, version, review_id),
+                    )
+                self._apply_learning_delta(
+                    connection,
+                    generation_id=generation_id,
+                    rating=rating,
+                    deleted=False,
+                    delta=1,
+                )
+
             connection.commit()
-            return StoredReview(review_id=review_id, run=run)
+            return StoredReview(review_id=review_id, run=version)
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             connection.close()
 
     def delete(self, review_id: int) -> None:
-        """Delete one review event as legacy workflow compensation."""
-        connection = connect_existing(self._database_path)
+        """Remove one current rating and reverse its learning contribution."""
+        connection = connect_existing(self._database_path, rows=True)
         try:
-            connection.execute(
-                "DELETE FROM ratings WHERE id = ?",
+            if not self._uses_canonical_schema(connection):
+                self._delete_legacy(connection, review_id)
+                return
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT review.rating, image.generation_id
+                FROM image_reviews AS review
+                JOIN images AS image ON image.id = review.image_id
+                WHERE review.id = ?
+                """,
                 (int(review_id),),
-            )
+            ).fetchone()
+            if row is not None:
+                self._apply_learning_delta(
+                    connection,
+                    generation_id=int(row["generation_id"]),
+                    rating=int(row["rating"]),
+                    deleted=False,
+                    delta=-1,
+                )
+                connection.execute(
+                    "DELETE FROM image_reviews WHERE id = ?",
+                    (int(review_id),),
+                )
             connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             connection.close()
 
+    @staticmethod
+    def _uses_canonical_schema(connection: sqlite3.Connection) -> bool:
+        row = connection.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'schema_metadata'"
+        ).fetchone()
+        return row is not None
+
+    @staticmethod
+    def _append_legacy(
+        connection: sqlite3.Connection,
+        record: ReviewRecord,
+    ) -> StoredReview:
+        image = record.image
+        row = connection.execute(
+            """
+            SELECT COALESCE(MAX(run), 0) AS maximum_run
+            FROM ratings
+            WHERE json_path = ?
+            """,
+            (str(image.pair.json_path),),
+        ).fetchone()
+        run = int(row["maximum_run"] or 0) + 1
+        cursor = connection.execute(
+            """
+            INSERT INTO ratings(
+                png_path, json_path, run, model_branch, checkpoint,
+                combo_key, rating, deleted, rating_count, steps, cfg,
+                sampler, scheduler, denoise, loras_json, pos_prompt,
+                neg_prompt
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(image.pair.png_path),
+                str(image.pair.json_path),
+                run,
+                image.model_branch,
+                image.checkpoint,
+                image.combo_key,
+                record.rating,
+                int(record.deleted),
+                run,
+                image.steps,
+                image.cfg,
+                image.sampler,
+                image.scheduler,
+                image.denoise,
+                image.loras_json,
+                image.positive_prompt,
+                image.negative_prompt,
+            ),
+        )
+        connection.commit()
+        return StoredReview(
+            review_id=int(cursor.lastrowid or 0),
+            run=run,
+        )
+
+    @staticmethod
+    def _delete_legacy(
+        connection: sqlite3.Connection,
+        review_id: int,
+    ) -> None:
+        connection.execute(
+            "DELETE FROM ratings WHERE id = ?",
+            (int(review_id),),
+        )
+        connection.commit()
+
+    def _ensure_prompt(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        scope: str,
+        prompt: str,
+    ) -> int:
+        prompt_text = str(prompt or "").strip()
+        prompt_hash = hashlib.sha256(
+            f"{scope}\0{prompt_text}".encode()
+        ).hexdigest()
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO prompts(scope, prompt_hash, text)
+            VALUES (?, ?, ?)
+            """,
+            (scope, prompt_hash, prompt_text),
+        )
+        row = connection.execute(
+            """
+            SELECT id, text
+            FROM prompts
+            WHERE scope = ? AND prompt_hash = ?
+            """,
+            (scope, prompt_hash),
+        ).fetchone()
+        if row is None or str(row["text"]) != prompt_text:
+            raise RuntimeError("Prompt identity collision")
+        prompt_id = int(row["id"])
+        membership = connection.execute(
+            """
+            SELECT 1
+            FROM prompt_memberships
+            WHERE prompt_id = ?
+            LIMIT 1
+            """,
+            (prompt_id,),
+        ).fetchone()
+        if membership is None:
+            self._insert_prompt_memberships(
+                connection,
+                prompt_id=prompt_id,
+                prompt=prompt_text,
+            )
+        return prompt_id
+
+    def _insert_prompt_memberships(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        prompt_id: int,
+        prompt: str,
+    ) -> None:
+        for position, atom in enumerate(parse_prompt_atoms(prompt)):
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO prompt_atoms(canonical_text)
+                VALUES (?)
+                """,
+                (atom.text,),
+            )
+            row = connection.execute(
+                "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                (atom.text,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("Prompt atom could not be persisted")
+            connection.execute(
+                """
+                INSERT INTO prompt_memberships(
+                    prompt_id,
+                    atom_id,
+                    position,
+                    weight_milli,
+                    raw_text
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    prompt_id,
+                    int(row["id"]),
+                    position,
+                    atom.weight_milli,
+                    atom.raw_text,
+                ),
+            )
+
+    def _upsert_generation(
+        self,
+        connection: sqlite3.Connection,
+        record: ReviewRecord,
+        *,
+        positive_prompt_id: int,
+        negative_prompt_id: int,
+    ) -> int:
+        image = record.image
+        connection.execute(
+            """
+            INSERT INTO generations(
+                generation_uid,
+                model_branch,
+                checkpoint,
+                combo_key,
+                seed,
+                steps,
+                cfg,
+                sampler,
+                scheduler,
+                denoise,
+                loras_json,
+                positive_prompt_id,
+                negative_prompt_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(generation_uid) DO UPDATE SET
+                model_branch = excluded.model_branch,
+                checkpoint = excluded.checkpoint,
+                combo_key = excluded.combo_key,
+                seed = excluded.seed,
+                steps = excluded.steps,
+                cfg = excluded.cfg,
+                sampler = excluded.sampler,
+                scheduler = excluded.scheduler,
+                denoise = excluded.denoise,
+                loras_json = excluded.loras_json,
+                positive_prompt_id = excluded.positive_prompt_id,
+                negative_prompt_id = excluded.negative_prompt_id
+            """,
+            (
+                self._generation_uid(image),
+                image.model_branch,
+                image.checkpoint,
+                image.combo_key,
+                None,
+                image.steps,
+                image.cfg,
+                image.sampler,
+                image.scheduler,
+                image.denoise,
+                image.loras_json,
+                positive_prompt_id,
+                negative_prompt_id,
+            ),
+        )
+        row = connection.execute(
+            "SELECT id FROM generations WHERE generation_uid = ?",
+            (self._generation_uid(image),),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("Generation could not be persisted")
+        return int(row["id"])
+
+    def _upsert_image(
+        self,
+        connection: sqlite3.Connection,
+        record: ReviewRecord,
+        *,
+        generation_id: int,
+    ) -> int:
+        image = record.image
+        connection.execute(
+            """
+            INSERT INTO images(
+                image_uid,
+                generation_id,
+                png_path,
+                json_path,
+                last_seen_at
+            )
+            VALUES (?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(generation_id) DO UPDATE SET
+                image_uid = excluded.image_uid,
+                png_path = excluded.png_path,
+                json_path = excluded.json_path,
+                last_seen_at = datetime('now')
+            """,
+            (
+                self._generation_uid(image),
+                generation_id,
+                str(image.pair.png_path),
+                str(image.pair.json_path),
+            ),
+        )
+        row = connection.execute(
+            "SELECT id FROM images WHERE generation_id = ?",
+            (generation_id,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("Live image could not be persisted")
+        return int(row["id"])
+
+    def _next_version(self, connection: sqlite3.Connection) -> int:
+        connection.execute(
+            "UPDATE review_clock SET value = value + 1 WHERE singleton_id = 1"
+        )
+        row = connection.execute(
+            "SELECT value FROM review_clock WHERE singleton_id = 1"
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("Review clock is unavailable")
+        return int(row["value"])
+
+    def _apply_learning_delta(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        generation_id: int,
+        rating: int,
+        deleted: bool,
+        delta: int,
+    ) -> None:
+        generation = connection.execute(
+            """
+            SELECT
+                model_branch,
+                checkpoint,
+                sampler,
+                scheduler,
+                steps,
+                cfg,
+                denoise,
+                positive_prompt_id,
+                negative_prompt_id
+            FROM generations
+            WHERE id = ?
+            """,
+            (generation_id,),
+        ).fetchone()
+        if generation is None:
+            raise RuntimeError("Generation missing during learning update")
+        score = 0 if deleted else int(rating)
+        for scope, prompt_id in (
+            ("pos", int(generation["positive_prompt_id"])),
+            ("neg", int(generation["negative_prompt_id"])),
+        ):
+            memberships = connection.execute(
+                """
+                SELECT atom_id, weight_milli
+                FROM prompt_memberships
+                WHERE prompt_id = ?
+                """,
+                (prompt_id,),
+            ).fetchall()
+            for membership in memberships:
+                self._update_atom_stat(
+                    connection,
+                    atom_id=int(membership["atom_id"]),
+                    scope=scope,
+                    model_branch=str(generation["model_branch"] or ""),
+                    weight_milli=int(membership["weight_milli"]),
+                    score=score,
+                    deleted=deleted,
+                    delta=delta,
+                )
+        self._update_render_stat(
+            connection,
+            generation=generation,
+            score=score,
+            deleted=deleted,
+            delta=delta,
+        )
+
+    def _update_atom_stat(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        atom_id: int,
+        scope: str,
+        model_branch: str,
+        weight_milli: int,
+        score: int,
+        deleted: bool,
+        delta: int,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO atom_learning_stats(
+                atom_id,
+                scope,
+                model_branch,
+                weight_milli,
+                sample_count,
+                rating_sum,
+                rating_sq_sum,
+                deleted_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(atom_id, scope, model_branch, weight_milli)
+            DO UPDATE SET
+                sample_count = sample_count + excluded.sample_count,
+                rating_sum = rating_sum + excluded.rating_sum,
+                rating_sq_sum = rating_sq_sum + excluded.rating_sq_sum,
+                deleted_count = deleted_count + excluded.deleted_count
+            """,
+            (
+                atom_id,
+                scope,
+                model_branch,
+                weight_milli,
+                delta,
+                delta * score,
+                delta * score * score,
+                delta if deleted else 0,
+            ),
+        )
+        connection.execute(
+            """
+            DELETE FROM atom_learning_stats
+            WHERE atom_id = ?
+              AND scope = ?
+              AND model_branch = ?
+              AND weight_milli = ?
+              AND sample_count <= 0
+            """,
+            (atom_id, scope, model_branch, weight_milli),
+        )
+
+    def _update_render_stat(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        generation: sqlite3.Row,
+        score: int,
+        deleted: bool,
+        delta: int,
+    ) -> None:
+        sampler = str(generation["sampler"] or "")
+        scheduler = str(generation["scheduler"] or "")
+        steps = int(generation["steps"] or -1)
+        cfg_milli = self._to_milli(generation["cfg"])
+        denoise_milli = self._to_milli(generation["denoise"])
+        key: tuple[str, str, str, str, int, int, int] = (
+            str(generation["model_branch"] or ""),
+            str(generation["checkpoint"] or ""),
+            sampler,
+            scheduler,
+            steps,
+            cfg_milli,
+            denoise_milli,
+        )
+        connection.execute(
+            """
+            INSERT INTO render_learning_stats(
+                model_branch,
+                checkpoint,
+                sampler,
+                scheduler,
+                steps,
+                cfg_milli,
+                denoise_milli,
+                sample_count,
+                rating_sum,
+                rating_sq_sum,
+                deleted_count
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(
+                model_branch,
+                checkpoint,
+                sampler,
+                scheduler,
+                steps,
+                cfg_milli,
+                denoise_milli
+            ) DO UPDATE SET
+                sample_count = sample_count + excluded.sample_count,
+                rating_sum = rating_sum + excluded.rating_sum,
+                rating_sq_sum = rating_sq_sum + excluded.rating_sq_sum,
+                deleted_count = deleted_count + excluded.deleted_count
+            """,
+            (
+                *key,
+                delta,
+                delta * score,
+                delta * score * score,
+                delta if deleted else 0,
+            ),
+        )
+        connection.execute(
+            """
+            DELETE FROM render_learning_stats
+            WHERE model_branch = ?
+              AND checkpoint = ?
+              AND sampler = ?
+              AND scheduler = ?
+              AND steps = ?
+              AND cfg_milli = ?
+              AND denoise_milli = ?
+              AND sample_count <= 0
+            """,
+            key,
+        )
+
+    @staticmethod
+    def _generation_uid(image) -> str:
+        payload = "\0".join(
+            (
+                image.pair.json_path.stem,
+                image.model_branch,
+                image.checkpoint,
+                image.combo_key,
+                str(image.steps),
+                str(image.cfg),
+                str(image.sampler),
+                str(image.scheduler),
+                str(image.denoise),
+                image.loras_json,
+                image.positive_prompt,
+                image.negative_prompt,
+            )
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _to_milli(value: object) -> int:
+        if value is None:
+            return -1
+        text = str(value).strip()
+        if not text:
+            return -1
+        return round(float(text) * 1000)
+
 
 class SqlitePromptRepository:
-    """Persist raw prompt tokens in the current projection database."""
+    """Compatibility adapter for old token tables and canonical token views."""
 
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path)
 
     def save(self, projection: PromptProjection) -> None:
-        """Replace prompt tokens for one exact review run."""
+        """Write only to a physical legacy token table."""
         connection = connect_existing(self._database_path)
         try:
-            self._delete_rows(
-                connection,
-                projection.json_path,
-                projection.run,
-            )
-            self._insert_tokens(
-                connection,
-                projection,
-                "pos",
-                _tokenize(projection.positive_prompt),
-            )
-            self._insert_tokens(
-                connection,
-                projection,
-                "neg",
-                _tokenize(projection.negative_prompt),
-            )
+            if self._tokens_object_type(connection) != "table":
+                return
+            self._delete_rows(connection, projection.json_path, projection.run)
+            for scope, prompt in (
+                ("pos", projection.positive_prompt),
+                ("neg", projection.negative_prompt),
+            ):
+                for token in self._legacy_tokenize(prompt):
+                    connection.execute(
+                        """
+                        INSERT INTO tokens(
+                            json_path, run, model_branch, scope, token,
+                            rating, deleted
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(projection.json_path),
+                            projection.run,
+                            projection.model_branch,
+                            scope,
+                            token,
+                            projection.rating,
+                            int(projection.deleted),
+                        ),
+                    )
             connection.commit()
         finally:
             connection.close()
 
     def delete(self, json_path: Path, run: int) -> None:
-        """Delete prompt rows for one compensated review run."""
+        """Delete only physical legacy token rows."""
         connection = connect_existing(self._database_path)
         try:
+            if self._tokens_object_type(connection) != "table":
+                return
             self._delete_rows(connection, json_path, run)
             connection.commit()
         finally:
             connection.close()
+
+    @staticmethod
+    def _tokens_object_type(connection: sqlite3.Connection) -> str:
+        row = connection.execute(
+            "SELECT type FROM sqlite_master WHERE name = 'tokens'"
+        ).fetchone()
+        return str(row[0]) if row else ""
 
     @staticmethod
     def _delete_rows(
@@ -142,30 +760,11 @@ class SqlitePromptRepository:
         )
 
     @staticmethod
-    def _insert_tokens(
-        connection: sqlite3.Connection,
-        projection: PromptProjection,
-        scope: str,
-        tokens: tuple[str, ...],
-    ) -> None:
-        for token in tokens:
-            connection.execute(
-                """
-                INSERT INTO tokens(
-                    json_path, run, model_branch, scope, token, rating, deleted
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    str(projection.json_path),
-                    projection.run,
-                    projection.model_branch,
-                    scope,
-                    token,
-                    projection.rating,
-                    int(projection.deleted),
-                ),
-            )
+    def _legacy_tokenize(prompt: str) -> tuple[str, ...]:
+        normalized = str(prompt or "").replace("\n", " ")
+        return tuple(
+            part.strip() for part in normalized.split(",") if part.strip()
+        )
 
 
 class LegacyProjectionJobQueue:
@@ -175,5 +774,5 @@ class LegacyProjectionJobQueue:
         self._database_path = Path(database_path)
 
     def request_catchup(self) -> int:
-        """Request one queued or coalesced legacy catchup job."""
+        """Request one queued or coalesced catchup job."""
         return enqueue_job(self._database_path, job_type="catchup")
