@@ -182,6 +182,7 @@ Important settings:
 | `WORKFLOWS_DIR` | `COMFYREVIEW_WORKFLOWS_DIR` | Folder for workflow files |
 | `DEFAULT_WORKFLOW_PATH` | `COMFYREVIEW_DEFAULT_WORKFLOW` | Default workflow used by Playground features |
 | `DATA_DIR` | `COMFYREVIEW_DATA_DIR` | Local runtime data folder |
+| `WORKER_SHUTDOWN_TIMEOUT_SECONDS` | `COMFYREVIEW_WORKER_SHUTDOWN_TIMEOUT_SECONDS` | Maximum wait for orderly worker shutdown (default: 30 seconds) |
 | `SSL_ENABLED` | `COMFYREVIEW_SSL_ENABLED` | Enables local HTTPS when configured |
 
 Example on Windows PowerShell:
@@ -203,6 +204,38 @@ Then open the local app in your browser. By default, the app runs on:
 ```text
 http://127.0.0.1:8000
 ```
+
+At startup, ComfyReview prepares its runtime directories, validates every
+configured legacy SQLite database, initializes database files that are entirely
+missing, and then starts the projection worker. An existing empty, damaged, or
+structurally incompatible database is never repaired implicitly; startup stops
+with a visible error instead.
+
+### Legacy database maintenance
+
+Validate all configured legacy databases without changing them:
+
+```bash
+python -m comfyreview legacy-db validate
+```
+
+Validate only selected databases by repeating `--database`:
+
+```bash
+python -m comfyreview legacy-db validate --database ratings --database arena
+```
+
+Known additive legacy upgrades are explicit and backed up before mutation:
+
+```bash
+python -m comfyreview legacy-db upgrade --backup-dir data/backups
+```
+
+The command returns exit code `0` on success, `2` for an invalid or unsupported
+schema, and `1` for a technical failure. Upgrades restore affected files from
+their backups when an ordinary upgrade or validation step fails. SQLite cannot
+provide crash-atomic commits across several independent database files; the
+later canonical one-database migration remains responsible for that guarantee.
 
 ---
 
@@ -250,13 +283,14 @@ The repository is not intended to contain private image outputs, model files, pe
 
 ```text
 ComfyReview/
+├── comfyreview/              # settings, bootstrap, lifecycle ports/adapters
 ├── app.py
 ├── main.py
 ├── config.py
 ├── scanner.py
 ├── routers/                  # page routes and API endpoints
 ├── services/                 # business logic
-├── stores/                   # SQLite access and persistence helpers
+├── stores/                   # legacy SQLite repositories (schema-free at runtime)
 ├── quality/                  # versioned quality and architecture baselines
 ├── scripts/                  # shared repository automation
 ├── templates/                # HTML templates

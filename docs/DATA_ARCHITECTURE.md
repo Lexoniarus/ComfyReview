@@ -1,6 +1,6 @@
 # ComfyReview Data Architecture
 
-Status: migration direction, not final physical schema, 2026-09-28.
+Status: migration direction with explicit legacy lifecycle, 2026-09-29.
 
 This document records the persistence principles that must be preserved while
 ComfyReview is consolidated from multiple SQLite files into one canonical
@@ -23,6 +23,42 @@ The current repository and historical files show these roles:
 | `mv_jobs.sqlite3` | projection job/cursor state | replace with canonical operational job/projection state |
 
 The target runtime does not preserve one SQLite file per concern.
+
+### Current legacy schema policy
+
+The pre-One-DB runtime now has one technical owner for all legacy DDL:
+`comfyreview.repositories.sqlite.legacy_schema`. Repository calls open existing
+files in SQLite `rw` mode. They neither create database files nor silently add
+tables, indexes, triggers, or columns.
+
+Application startup follows this order:
+
+1. inspect every existing configured database read-only;
+2. abort before mutation if any existing file is empty, corrupt, structurally
+   incompatible, or missing required current objects;
+3. build each entirely missing database in a temporary file;
+4. validate all temporary databases and move them into place;
+5. validate the complete configured legacy set before starting the worker.
+
+Unknown additional tables and columns remain allowed so provenance or newer
+data is not destroyed. Required columns with incompatible SQLite types are
+rejected.
+
+Older known schemas are upgraded only through the explicit command:
+
+```text
+python -m comfyreview legacy-db upgrade [--database NAME] [--backup-dir PATH]
+```
+
+All affected existing files are backed up before the first schema mutation.
+Only known additive legacy changes are applied. The complete selected set is
+validated afterwards, and ordinary failures restore all backed-up files.
+Validation without mutation is exposed by `legacy-db validate`.
+
+These safeguards do not make a collection of SQLite files one transaction. A
+process or machine crash between filesystem replacements can still expose a
+partially advanced multi-file set. Full crash atomicity is deliberately
+deferred to the canonical one-database runtime.
 
 ## 2. Source-of-truth rule
 
