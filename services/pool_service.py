@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
-from config import DB_PATH, IMAGES_DB_PATH, CURATION_DB_PATH, MIN_RUNS, POOL_LIMIT
+from config import (
+    CURATION_DB_PATH,
+    DB_PATH,
+    IMAGES_DB_PATH,
+    MIN_RUNS,
+    POOL_LIMIT,
+)
 from services.context_filters import (
     extract_character_from_subdir as _extract_character_from_subdir,
+)
+from services.context_filters import (
     matches_character_scope,
     matches_set_filter,
 )
@@ -19,20 +28,22 @@ from stores.ratings_state_store import fetch_latest_deleted_by_png_paths
 @dataclass
 class ScoredItem:
     # scanner.Item
-    it: any
+    it: Any
     avg: float
     runs: int
     pos_prompt: str
 
 
-def _fetch_scores_by_png_paths(db_path: Path, png_paths: List[str]) -> Dict[str, Dict[str, object]]:
+def _fetch_scores_by_png_paths(
+    db_path: Path, png_paths: list[str]
+) -> dict[str, dict[str, Any]]:
     """Bulk fetch from images.sqlite3 for given png_paths."""
     init_images_db(db_path)
     paths = [str(p) for p in (png_paths or []) if str(p).strip()]
     if not paths:
         return {}
 
-    out: Dict[str, Dict[str, object]] = {}
+    out: dict[str, dict[str, Any]] = {}
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
     try:
@@ -46,7 +57,9 @@ def _fetch_scores_by_png_paths(db_path: Path, png_paths: List[str]) -> Dict[str,
             ).fetchall()
             for r in rows:
                 out[str(r["png_path"])] = {
-                    "avg": float(r["avg_rating"]) if r["avg_rating"] is not None else None,
+                    "avg": float(r["avg_rating"])
+                    if r["avg_rating"] is not None
+                    else None,
                     "runs": int(r["runs"] or 0),
                     "pos_prompt": str(r["pos_prompt"] or ""),
                 }
@@ -56,14 +69,14 @@ def _fetch_scores_by_png_paths(db_path: Path, png_paths: List[str]) -> Dict[str,
 
 
 def build_ranked_pool(
-    items: List[any],
+    items: list[Any],
     *,
     mode: str = "top",
     set_key: str = "",
     subdir: str = "",
     min_runs: int = MIN_RUNS,
     limit: int = POOL_LIMIT,
-) -> Tuple[List[ScoredItem], Dict[str, Optional[str]]]:
+) -> tuple[list[ScoredItem], dict[str, str | None]]:
     """Return ranked scored items according to vNext rules.
 
     vNext KORREKTUR:
@@ -99,7 +112,7 @@ def build_ranked_pool(
     # ratings.sqlite3 contains the authoritative *latest* deleted state.
     deleted_map = fetch_latest_deleted_by_png_paths(DB_PATH, png_paths)
 
-    scored: List[ScoredItem] = []
+    scored: list[ScoredItem] = []
     for it in items_f:
         p = str(it.png_path)
         if int(deleted_map.get(p, 0) or 0) == 1:
@@ -140,7 +153,7 @@ def build_ranked_pool(
     return scored[: int(limit or POOL_LIMIT)], curation_map
 
 
-def list_characters_from_items(items: Iterable[any]) -> List[str]:
+def list_characters_from_items(items: Iterable[Any]) -> list[str]:
     chars = set()
     for it in items:
         c = _extract_character_from_subdir(getattr(it, "subdir", ""))

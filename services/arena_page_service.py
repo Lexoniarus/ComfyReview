@@ -1,26 +1,30 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from pathlib import Path
+from typing import Any, cast
 
 from arena_store import ensure_schema as ensure_arena_schema
 from scanner import scan_output
-
 from services.arena_service import pick_arena_pair
-from services.context_filters import GalleryContext, build_dropdown_lists, normalize_model
+from services.context_filters import (
+    GalleryContext,
+    build_dropdown_lists,
+    normalize_model,
+)
 from services.gallery_view_service import build_arena_side
-from services.pool_service import build_ranked_pool
 from services.playground_label_service import get_playground_label_matcher
+from services.pool_service import build_ranked_pool
 
 
 def build_arena_page_context(
     *,
-    arena_db_path,
-    output_root,
-    playground_db_path,
+    arena_db_path: Path,
+    output_root: Path,
+    playground_db_path: Path,
     context: GalleryContext,
     min_runs: int,
     pool_limit: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build template context for /arena.
 
     Responsibilities
@@ -36,12 +40,16 @@ def build_arena_page_context(
     ensure_arena_schema(arena_db_path)
 
     items_all = scan_output(output_root)
-    model_list, subdir_list, character_options = build_dropdown_lists(items_all)
+    model_list, subdir_list, character_options = build_dropdown_lists(
+        items_all
+    )
 
     items = items_all
     model = normalize_model(context.model)
     if model:
-        items = [it for it in items if getattr(it, "model_branch", "") == model]
+        items = [
+            it for it in items if getattr(it, "model_branch", "") == model
+        ]
 
     ranked, _ = build_ranked_pool(
         items,
@@ -68,7 +76,9 @@ def build_arena_page_context(
             "set_key": context.set_key,
         }
 
-    left_it, right_it, left_avg, right_avg, left_runs, right_runs = pick_arena_pair(items, scored)
+    left_it, right_it, left_avg, right_avg, left_runs, right_runs = (
+        pick_arena_pair(items, scored)
+    )
 
     if left_it is None or right_it is None:
         return {
@@ -87,8 +97,18 @@ def build_arena_page_context(
     matcher = get_playground_label_matcher(playground_db_path)
 
     return {
-        "left": build_arena_side(it=left_it, avg=float(left_avg), runs=int(left_runs), matcher=matcher),
-        "right": build_arena_side(it=right_it, avg=float(right_avg), runs=int(right_runs), matcher=matcher),
+        "left": build_arena_side(
+            it=left_it,
+            avg=cast(float, left_avg),
+            runs=cast(int, left_runs),
+            matcher=matcher,
+        ),
+        "right": build_arena_side(
+            it=right_it,
+            avg=cast(float, right_avg),
+            runs=cast(int, right_runs),
+            matcher=matcher,
+        ),
         "message": "",
         "model": model,
         "subdir": context.subdir,

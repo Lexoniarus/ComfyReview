@@ -1,6 +1,6 @@
 # ComfyReview Refactor Plan
 
-Status: active migration plan, 2026-09-28.
+Status: active migration plan, 2026-09-29.
 
 Goal: bring ComfyReview to the same engineering standard as the current
 World Freight Idle codebase before using it as the data/application foundation
@@ -41,7 +41,7 @@ Exit condition:
 
 ## Phase 1 – Quality foundation
 
-Status: implemented on `refactor/quality-foundation`, pending review and merge.
+Status: merged into `master` through PR #4.
 
 Introduce without changing product behavior:
 
@@ -75,6 +75,27 @@ Exit condition:
 - no new code may worsen the baseline
 
 ## Phase 2 – Package and dependency boundaries
+
+Status: bootstrap foundation implemented on
+`refactor/bootstrap-domain-ports`; feature slices remain pending review and
+implementation.
+
+Implemented bootstrap foundation:
+
+- `comfyreview/` package with typed, side-effect-free settings
+- application lifecycle ports for legacy schemas and the worker runtime
+- central SQLite legacy-schema adapter and schema-free normal repository opens
+- read-only startup validation and temporary initialization of missing files
+- explicit `legacy-db validate` and backed-up additive `legacy-db upgrade` CLI
+- class-owned worker thread with injected paths/debounce and bounded shutdown
+- `ApplicationContainer` and `create_app()` FastAPI composition root
+- lifespan ownership of directories, schema startup and worker start/stop
+- observability moved into `comfyreview/` without a compatibility wrapper
+- compatible root `app.py`, `main.py`, `python main.py` and `uvicorn app:app`
+
+The current bootstrap still wires legacy routers and feature implementations.
+Review, output-image, Arena, curation, ComfyUI generation, prompt/playground and
+projection boundaries move one vertical slice at a time after this milestone.
 
 Create the target `comfyreview/` structure and composition root. The package
 name avoids a conflict with the compatible root `app.py` entry point.

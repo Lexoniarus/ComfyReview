@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
-from services.observability import (
+from comfyreview.observability import (
     JsonLogFormatter,
     RequestTracingMiddleware,
     configure_logging,

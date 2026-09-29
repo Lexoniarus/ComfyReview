@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from comfyreview.repositories.sqlite import connect_existing
 
 
 def _utc_now() -> str:
@@ -11,30 +12,13 @@ def _utc_now() -> str:
 
 
 def ensure_schema(db_path: Path) -> None:
-    """Ensure that the legacy projection-state schema exists."""
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS mv_state (
-                aggregator_name TEXT PRIMARY KEY,
-                last_processed_rating_id INTEGER NOT NULL DEFAULT 0,
-                last_run_at TEXT,
-                last_error TEXT
-            )
-            """
-        )
-        con.commit()
-    finally:
-        con.close()
+    """Verify that the startup-managed state database still exists."""
+    connect_existing(db_path).close()
 
 
 def get_state(db_path: Path, *, aggregator_name: str) -> dict[str, Any]:
     """Return an aggregator state, creating its initial row when absent."""
-    ensure_schema(db_path)
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         row = con.execute(
             "SELECT * FROM mv_state WHERE aggregator_name=?",
@@ -67,8 +51,7 @@ def upsert_state(
     last_error: str | None = None,
 ) -> None:
     """Insert or update one legacy aggregator state."""
-    ensure_schema(db_path)
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.execute(
             """
@@ -93,9 +76,7 @@ def upsert_state(
 
 def list_states(db_path: Path) -> list[dict[str, Any]]:
     """List all legacy aggregator states in stable name order."""
-    ensure_schema(db_path)
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         rows = con.execute(
             "SELECT aggregator_name, last_processed_rating_id, last_run_at, last_error FROM mv_state ORDER BY aggregator_name ASC"

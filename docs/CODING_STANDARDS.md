@@ -1,6 +1,7 @@
 # ComfyReview Coding Standards
 
-Status: binding target for all new and changed code from 2026-09-28.
+Status: binding target for all new and changed code from 2026-09-28; bootstrap
+foundation implemented 2026-09-29.
 
 The current repository predates this baseline and is not yet fully compliant.
 Existing violations are migration work, not precedent for new code.
@@ -173,6 +174,13 @@ Routes call services. They do not execute SQL or external provider calls.
 - Unsupported schemas fail explicitly; runtime startup does not silently repair
   arbitrary historical layouts.
 - Destructive migration requires backup + explicit offline migration command.
+- Legacy schema DDL exists only in
+  `comfyreview/repositories/sqlite/legacy_schema.py`; architecture tests reject
+  DDL in other Python modules.
+- Normal repositories open existing files in `rw` mode and never create or
+  upgrade schemas as a side effect of a query or mutation.
+- Known additive legacy repair uses `python -m comfyreview legacy-db upgrade`;
+  startup initializes only database files that are completely absent.
 
 ## 7. Canonical data vs derived data
 
@@ -239,6 +247,8 @@ Workers:
 - are idempotent where practical
 - record bounded error details
 - can recover after restart without corrupting canonical data
+- are owned by the application lifespan, prevent double-starts and use a
+  bounded, visible shutdown timeout
 
 Derived-data rebuilds must be safe to repeat.
 

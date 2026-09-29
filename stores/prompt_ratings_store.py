@@ -1,58 +1,16 @@
-import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-def _ensure_columns(con: sqlite3.Connection) -> None:
-    cols = {row[1] for row in con.execute("PRAGMA table_info(prompt_ratings)").fetchall()}
-    # Neue Spalten für UI-Kompatibilität (Prompt Tokens Seite) und lb05 Ranking
-    if "mean_score" not in cols:
-        con.execute("ALTER TABLE prompt_ratings ADD COLUMN mean_score REAL")
-    if "lb05" not in cols:
-        con.execute("ALTER TABLE prompt_ratings ADD COLUMN lb05 REAL")
+from comfyreview.repositories.sqlite import connect_existing
 
 
 def init_prompt_ratings_db(db_path: Path) -> None:
-    """Init prompt_ratings DB.
-
-    Dieses DB File ist eine Materialized View, abgeleitet aus prompt_tokens.sqlite3.
-
-    Key
-      (scope, token, model_branch)
-
-    Wichtig
-      Delete spielt hier KEINE Rolle als Filter.
-      Datenpunkt ist: rating IS NOT NULL oder deleted=1. deleted zaehlt negativ als rating 0.
-    """
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(db_path)
-    try:
-        con.execute(
-            """
-            CREATE TABLE IF NOT EXISTS prompt_ratings (
-                scope TEXT NOT NULL,         -- pos|neg
-                token TEXT NOT NULL,         -- exakt wie in prompt_store.tokenize
-                model_branch TEXT NOT NULL,  -- zB model name oder '' fuer all
-
-                avg_rating REAL,
-                runs INTEGER NOT NULL,
-
-                last_updated TEXT,
-
-                PRIMARY KEY(scope, token, model_branch)
-            )
-            """
-        )
-        con.execute("CREATE INDEX IF NOT EXISTS idx_pr_scope ON prompt_ratings(scope)")
-        con.execute("CREATE INDEX IF NOT EXISTS idx_pr_token ON prompt_ratings(token)")
-        con.execute("CREATE INDEX IF NOT EXISTS idx_pr_model ON prompt_ratings(model_branch)")
-        _ensure_columns(con)
-        con.commit()
-    finally:
-        con.close()
+    """Verify that the startup-managed prompt-rating database exists."""
+    connect_existing(db_path).close()
 
 
 def clear_prompt_ratings(db_path: Path) -> None:
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.execute("DELETE FROM prompt_ratings")
         con.commit()
@@ -60,8 +18,8 @@ def clear_prompt_ratings(db_path: Path) -> None:
         con.close()
 
 
-def upsert_prompt_rating(db_path: Path, row: Dict[str, Any]) -> None:
-    con = sqlite3.connect(db_path)
+def upsert_prompt_rating(db_path: Path, row: dict[str, Any]) -> None:
+    con = connect_existing(db_path)
     try:
         con.execute(
             """
@@ -88,7 +46,6 @@ def upsert_prompt_rating(db_path: Path, row: Dict[str, Any]) -> None:
         con.close()
 
 
-
 # Shared UPSERT statement for single-row and bulk writes.
 _UPSERT_PROMPT_RATING_SQL = """
     INSERT INTO prompt_ratings(
@@ -109,7 +66,9 @@ _UPSERT_PROMPT_RATING_SQL = """
 """
 
 
-def upsert_prompt_ratings_bulk(db_path: Path, rows: List[Dict[str, Any]]) -> int:
+def upsert_prompt_ratings_bulk(
+    db_path: Path, rows: list[dict[str, Any]]
+) -> int:
     """Bulk upsert for prompt_ratings.
 
     Used by the MV worker to update many tokens efficiently.
@@ -118,7 +77,7 @@ def upsert_prompt_ratings_bulk(db_path: Path, rows: List[Dict[str, Any]]) -> int
     if not rows:
         return 0
 
-    con = sqlite3.connect(db_path)
+    con = connect_existing(db_path)
     try:
         con.executemany(_UPSERT_PROMPT_RATING_SQL, rows)
         con.commit()
@@ -132,8 +91,8 @@ def fetch_prompt_rating_map(
     *,
     scope: str,
     model_branch: str = "",
-    tokens: Optional[List[str]] = None,
-) -> Dict[str, Dict[str, Any]]:
+    tokens: list[str] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Return mapping token -> {avg_rating, runs}."""
     scope = str(scope or "pos").strip()
     if scope not in {"pos", "neg"}:
@@ -146,11 +105,10 @@ def fetch_prompt_rating_map(
     # Sonst werden mehrere Branches geladen und im Dict ueber-schrieben.
     mb = str(model_branch or "")
 
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         where = "WHERE scope = ? AND model_branch = ?"
-        args: List[Any] = [scope, mb]
+        args: list[Any] = [scope, mb]
 
         if tokens:
             toks = [str(t).strip() for t in tokens if str(t).strip()]
@@ -168,10 +126,12 @@ def fetch_prompt_rating_map(
             args,
         ).fetchall()
 
-        out: Dict[str, Dict[str, Any]] = {}
+        out: dict[str, dict[str, Any]] = {}
         for r in rows:
             out[str(r["token"])] = {
-                "avg_rating": float(r["avg_rating"]) if r["avg_rating"] is not None else None,
+                "avg_rating": float(r["avg_rating"])
+                if r["avg_rating"] is not None
+                else None,
                 "runs": int(r["runs"] or 0),
             }
         return out
@@ -186,17 +146,16 @@ def fetch_prompt_ratings_stats(
     scope: str = "pos",
     min_n: int = 8,
     limit: int = 200,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Liest Prompt Ratings (Aggregat) für die Prompt Tokens UI.
 
     Liefert kompatibel zu prompt_store.fetch_token_stats():
       token, n, mean_score, lb05
     """
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    con = connect_existing(db_path, rows=True)
     try:
         where = "WHERE scope = ?"
-        args: List[Any] = [scope]
+        args: list[Any] = [scope]
         if model:
             where += " AND model_branch = ?"
             args.append(model)

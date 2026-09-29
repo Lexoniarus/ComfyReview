@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from config import ARENA_DB_PATH, OUTPUT_ROOT, MIN_RUNS, POOL_LIMIT, PLAYGROUND_DB_PATH
 from arena_store import ensure_schema as ensure_arena_schema
+from config import (
+    ARENA_DB_PATH,
+    MIN_RUNS,
+    OUTPUT_ROOT,
+    PLAYGROUND_DB_PATH,
+    POOL_LIMIT,
+)
 from scanner import scan_output
-
 from services.arena_page_service import build_arena_page_context
 from services.arena_service import (
     ArenaMutationError,
@@ -13,7 +18,6 @@ from services.arena_service import (
     insert_arena_result,
 )
 from services.context_filters import build_gallery_context
-
 from templates import ARENA_HTML
 
 router = APIRouter()
@@ -26,7 +30,9 @@ def arena(
     set_key: str = Query(""),
     subdir: str = Query(""),
 ):
-    ctx = build_gallery_context(model=model, subdir=subdir, set_key=set_key, mode=mode)
+    ctx = build_gallery_context(
+        model=model, subdir=subdir, set_key=set_key, mode=mode
+    )
 
     vm = build_arena_page_context(
         arena_db_path=ARENA_DB_PATH,
@@ -85,7 +91,9 @@ def arena_result(
     # - Rating für beide schreiben
     # - Match speichern
     try:
-        insert_arena_result(left_it, right_it, left_json, right_json, winner_side)
+        insert_arena_result(
+            left_it, right_it, left_json, right_json, winner_side
+        )
     except ArenaValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ArenaMutationError as exc:

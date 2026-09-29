@@ -1,10 +1,12 @@
 # ComfyReview Architecture
 
-Status: target architecture / refactor baseline, 2026-09-28.
+Status: active migration with bootstrap foundation implemented, 2026-09-29.
 
-The current public prototype is functional but predates these boundaries. This
-document defines the architecture ComfyReview is being migrated toward. It does
-not claim that the current repository is already compliant.
+The current public prototype is functional but still predates many of these
+boundaries. The typed settings, lifecycle ports, central legacy-schema adapter,
+owned worker runtime and FastAPI composition root described below are now
+implemented. Feature-specific services and ports remain target architecture
+until their vertical slices are migrated.
 
 ## 1. Product boundary
 
@@ -42,6 +44,12 @@ Repositories       Providers
 ```
 
 Concrete assembly occurs in one composition root.
+
+The current `comfyreview.bootstrap.create_app()` constructs an
+`ApplicationContainer` with typed settings, a `LegacySchemaLifecycle` adapter
+and a `WorkerRuntime`. Its FastAPI lifespan owns directory preparation, schema
+startup validation, worker start and bounded worker stop. Root `app.py` and
+`main.py` remain compatibility entry points.
 
 Target package shape (introduced incrementally after the quality foundation):
 
@@ -294,8 +302,8 @@ native ES modules with a shared API client and explicit lifecycle where stateful
 
 Externally visible workflows use structured events and trace IDs.
 
-The current quality foundation provides a standard-library JSON formatter and
-ASGI request middleware in `services/observability.py`. For HTTP requests it:
+The current foundation provides a standard-library JSON formatter and ASGI
+request middleware in `comfyreview/observability.py`. For HTTP requests it:
 
 - accepts a safe caller-provided `X-Request-ID` or generates a UUID
 - returns the effective ID in the response, including controlled errors
@@ -303,8 +311,7 @@ ASGI request middleware in `services/observability.py`. For HTTP requests it:
 - resets context after success or failure
 - records stable request lifecycle events without arbitrary prompt payloads
 
-This module remains a legacy-bootstrap integration point. It moves into the
-`comfyreview` package when the composition root is introduced.
+The composition root installs this middleware for every application instance.
 
 Minimum workflows:
 
@@ -327,6 +334,29 @@ they may not import SQLite, FastAPI, global configuration, routes, stores or
 legacy services into the core.
 
 ## 15. Migration posture
+
+### Implemented pre-One-DB bootstrap boundary
+
+Legacy schema ownership now lives only in
+`comfyreview.repositories.sqlite.legacy_schema`. Normal store calls open an
+existing database in SQLite `rw` mode and cannot create database files or run
+schema DDL. Startup first validates every existing configured database
+read-only. It initializes only files that do not exist at all; an existing
+empty, corrupt, old, or incompatible file aborts startup.
+
+Known additive upgrades are available only through
+`python -m comfyreview legacy-db upgrade`. The command backs up every affected
+existing file before the first mutation, validates the result, and restores the
+backups after an ordinary failure. Validation is available through the sibling
+`validate` command.
+
+The legacy worker is now a class-owned runtime with injected paths, debounce
+and stop event. It prevents concurrent double-starts and reports a bounded
+shutdown timeout. Projection behavior is still legacy-compatible and will move
+behind feature-specific services in a later slice.
+
+This boundary does not provide crash atomicity across multiple SQLite files.
+That remains impossible until the canonical one-database cutover.
 
 Refactor and data migration are staged:
 

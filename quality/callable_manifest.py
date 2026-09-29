@@ -38,9 +38,22 @@ def _public_functions(module_name: str, tree: ast.Module) -> set[str]:
             if not node.name.startswith("_"):
                 callables.add(f"{module_name}:{node.name}")
         elif isinstance(node, ast.ClassDef):
+            is_protocol = any(
+                isinstance(base, ast.Name) and base.id == "Protocol"
+                for base in node.bases
+            )
             for child in node.body:
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if not child.name.startswith("_"):
+                    is_abstract = any(
+                        isinstance(decorator, ast.Name)
+                        and decorator.id == "abstractmethod"
+                        for decorator in child.decorator_list
+                    )
+                    if (
+                        not child.name.startswith("_")
+                        and not is_protocol
+                        and not is_abstract
+                    ):
                         callables.add(
                             f"{module_name}:{node.name}.{child.name}"
                         )

@@ -1,5 +1,6 @@
 quality/architecture.py
 quality/callable_manifest.py
-services/observability.py
+comfyreview/observability.py
+comfyreview/settings.py
 comfyreview/domain
 comfyreview/application

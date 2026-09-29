@@ -34,6 +34,11 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
     _write_module(tmp_path, "stores/example.py", "import requests\n")
     _write_module(
         tmp_path,
+        "stores/schema.py",
+        'DDL = "CREATE TABLE forbidden (id INTEGER)"\n',
+    )
+    _write_module(
+        tmp_path,
         "comfyreview/domain/example.py",
         "from fastapi import Request\n",
     )
@@ -48,6 +53,7 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
         "services/example.py|services.no_sql": 1,
         "services/example.py|services.no_sqlite": 1,
         "stores/example.py|repositories.no_external_calls": 1,
+        "stores/schema.py|schema.ddl_location": 1,
     }
 
 
@@ -84,6 +90,18 @@ def test_application_core_combines_core_and_service_rules(
         "comfyreview/application/example.py|services.no_global_config": 1,
     }
     assert _rules_for_path("unmanaged/example.py") == ()
+
+
+def test_allows_schema_ddl_only_in_central_legacy_adapter(
+    tmp_path: Path,
+) -> None:
+    _write_module(
+        tmp_path,
+        "comfyreview/repositories/sqlite/legacy_schema.py",
+        'DDL = "CREATE TABLE allowed (id INTEGER)"\n',
+    )
+
+    assert collect_architecture_violations(tmp_path) == {}
 
 
 def test_repository_architecture_does_not_worsen() -> None:

@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+
+from comfyreview.repositories.sqlite import connect_existing
 
 # Was tut es?
 # SQLite Infrastruktur und Write API fuer ratings.
@@ -24,73 +25,7 @@ def db(path: Path) -> sqlite3.Connection:
     #
     # Wo geht es hin?
     # Connection wird an Caller zur Nutzung zurueckgegeben.
-    con = sqlite3.connect(path)
-    con.row_factory = sqlite3.Row
-    _ensure_schema(con)
-    return con
-
-
-def _ensure_schema(con: sqlite3.Connection) -> None:
-    # Was tut es?
-    # Tabelle ratings und Indexe erstellen.
-    # Migrationen fuer fehlende Spalten nachziehen.
-    #
-    # Wo kommt es her?
-    # con ist SQLite Connection.
-    #
-    # Wo geht es hin?
-    # Persistiert in ratings.sqlite3.
-    con.execute(
-        """
-        CREATE TABLE IF NOT EXISTS ratings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            png_path TEXT NOT NULL,
-            json_path TEXT NOT NULL,
-            run INTEGER NOT NULL DEFAULT 1,
-            model_branch TEXT NOT NULL,
-            checkpoint TEXT NOT NULL,
-            combo_key TEXT NOT NULL,
-            rating INTEGER,
-            deleted INTEGER NOT NULL DEFAULT 0,
-            rating_count INTEGER NOT NULL DEFAULT 1,
-
-            steps INTEGER,
-            cfg REAL,
-            sampler TEXT,
-            scheduler TEXT,
-            denoise REAL,
-            loras_json TEXT DEFAULT '',
-
-            pos_prompt TEXT DEFAULT '',
-            neg_prompt TEXT DEFAULT ''
-        )
-        """
-    )
-
-    con.execute("CREATE INDEX IF NOT EXISTS idx_ratings_json_run ON ratings(json_path, run)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_ratings_model ON ratings(model_branch)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_ratings_combo ON ratings(model_branch, combo_key)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_ratings_deleted ON ratings(deleted)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_ratings_rating ON ratings(rating)")
-
-    # Migrationen fuer alte DBs
-    cols = {row["name"] for row in con.execute("PRAGMA table_info(ratings)").fetchall()}
-    if "steps" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN steps INTEGER")
-    if "cfg" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN cfg REAL")
-    if "sampler" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN sampler TEXT")
-    if "scheduler" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN scheduler TEXT")
-    if "denoise" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN denoise REAL")
-    if "loras_json" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN loras_json TEXT DEFAULT ''")
-    if "pos_prompt" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN pos_prompt TEXT DEFAULT ''")
-    if "neg_prompt" not in cols:
-        con.execute("ALTER TABLE ratings ADD COLUMN neg_prompt TEXT DEFAULT ''")
+    return connect_existing(path, rows=True)
 
 
 def insert_or_update_rating(
@@ -101,17 +36,17 @@ def insert_or_update_rating(
     model_branch: str,
     checkpoint: str,
     combo_key: str,
-    rating: Optional[int],
+    rating: int | None,
     deleted: int,
-    steps: Optional[int],
-    cfg: Optional[float],
-    sampler: Optional[str],
-    scheduler: Optional[str],
-    denoise: Optional[float],
+    steps: int | None,
+    cfg: float | None,
+    sampler: str | None,
+    scheduler: str | None,
+    denoise: float | None,
     loras_json: str,
     pos_prompt: str,
     neg_prompt: str,
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     # Was tut es?
     # Schreibt einen neuen Run in ratings.
     # run wird als MAX(run)+1 pro json_path gebildet.
@@ -180,7 +115,7 @@ def delete_rating_by_id(db_path: Path, *, rating_id: int) -> None:
         con.close()
 
 
-def get_rated_map(con: sqlite3.Connection) -> Dict[str, int]:
+def get_rated_map(con: sqlite3.Connection) -> dict[str, int]:
     # Was tut es?
     # Liefert je json_path die Anzahl Runs.
     #
@@ -195,7 +130,7 @@ def get_rated_map(con: sqlite3.Connection) -> Dict[str, int]:
     return {str(r["json_path"]): int(r["c"] or 0) for r in rows}
 
 
-def list_models_from_db(db_path: Path) -> List[str]:
+def list_models_from_db(db_path: Path) -> list[str]:
     # Was tut es?
     # Dropdown Werte fuer model_branch.
     #
@@ -205,6 +140,8 @@ def list_models_from_db(db_path: Path) -> List[str]:
     # Wo geht es hin?
     # Filter Dropdown in stats recommendations param_stats prompt_tokens.
     con = db(db_path)
-    rows = con.execute("SELECT DISTINCT model_branch FROM ratings ORDER BY model_branch").fetchall()
+    rows = con.execute(
+        "SELECT DISTINCT model_branch FROM ratings ORDER BY model_branch"
+    ).fetchall()
     con.close()
     return [str(r["model_branch"]) for r in rows if r["model_branch"]]

@@ -1,6 +1,9 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.settings:load_settings": (
+        "tests/test_settings.py::test_environment_overrides_env_file_without_mutating_process"
+    ),
     "quality.architecture:collect_architecture_violations": (
         "tests/test_architecture.py::test_repository_architecture_does_not_worsen"
     ),
@@ -10,16 +13,16 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     "quality.callable_manifest:validate_manifest": (
         "tests/test_function_test_manifest.py::test_reports_invalid_manifest_entries"
     ),
-    "services.observability:JsonLogFormatter.format": (
+    "comfyreview.observability:JsonLogFormatter.format": (
         "tests/test_observability.py::test_json_formatter_uses_approved_fields"
     ),
-    "services.observability:configure_logging": (
+    "comfyreview.observability:configure_logging": (
         "tests/test_observability.py::test_configure_logging_is_idempotent"
     ),
-    "services.observability:get_trace_id": (
+    "comfyreview.observability:get_trace_id": (
         "tests/test_observability.py::test_request_context_is_isolated"
     ),
-    "services.observability:normalize_request_id": (
+    "comfyreview.observability:normalize_request_id": (
         "tests/test_observability.py::test_normalizes_request_ids"
     ),
 }

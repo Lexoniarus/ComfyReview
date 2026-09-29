@@ -1,47 +1,15 @@
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
-
-def _ensure_schema(con: sqlite3.Connection) -> None:
-    con.execute(
-        """
-        CREATE TABLE IF NOT EXISTS tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            json_path TEXT NOT NULL,
-            run INTEGER NOT NULL,
-            model_branch TEXT NOT NULL,
-            scope TEXT NOT NULL,
-            token TEXT NOT NULL,
-            rating INTEGER,
-            deleted INTEGER NOT NULL DEFAULT 0
-        )
-        """
-    )
-    con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_model ON tokens(model_branch)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_scope ON tokens(scope)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token)")
-
-    # Migration: Spalten nachziehen (für bestehende DBs)
-    cols = {row["name"] for row in con.execute("PRAGMA table_info(tokens)").fetchall()}
-    if "json_path" not in cols:
-        con.execute("ALTER TABLE tokens ADD COLUMN json_path TEXT NOT NULL DEFAULT ''")
-    if "run" not in cols:
-        con.execute("ALTER TABLE tokens ADD COLUMN run INTEGER NOT NULL DEFAULT 0")
-
-    con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_json ON tokens(json_path)")
-    con.execute("CREATE INDEX IF NOT EXISTS idx_tokens_run ON tokens(run)")
+from comfyreview.repositories.sqlite import connect_existing
 
 
 def db(path: Path) -> sqlite3.Connection:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(path)
-    con.row_factory = sqlite3.Row
-    _ensure_schema(con)
-    return con
+    return connect_existing(path, rows=True)
 
 
-def tokenize(text: str) -> List[str]:
+def tokenize(text: str) -> list[str]:
     """
     Tokenisierung ausschließlich per Komma.
     Es wird NICHTS am Inhalt verändert.
@@ -66,8 +34,7 @@ def rebuild_prompt_db(ratings_db_path: Path, prompt_db_path: Path) -> None:
     con_out.execute("DELETE FROM tokens")
     con_out.commit()
 
-    con_in = sqlite3.connect(ratings_db_path)
-    con_in.row_factory = sqlite3.Row
+    con_in = connect_existing(ratings_db_path, rows=True)
 
     rows = con_in.execute(
         """
@@ -108,11 +75,11 @@ def fetch_token_stats(
     scope: str = "pos",
     min_n: int = 8,
     limit: int = 200,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     con = db(prompt_db_path)
 
     where = "WHERE scope = ?"
-    args: List[Any] = [scope]
+    args: list[Any] = [scope]
     if model:
         where += " AND model_branch = ?"
         args.append(model)
@@ -140,7 +107,7 @@ def fetch_token_stats(
         args + [min_n, limit],
     ).fetchall()
 
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for r in rows:
         out.append(
             {
