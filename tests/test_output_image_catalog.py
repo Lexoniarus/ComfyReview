@@ -8,6 +8,11 @@ from pathlib import Path
 
 import pytest
 
+from comfyreview.application import (
+    InvalidOutputPathError,
+    OutputImageReference,
+    OutputPairNotFoundError,
+)
 from comfyreview.providers import LocalOutputImageCatalog
 
 
@@ -187,3 +192,138 @@ def test_catalog_rejects_paths_that_resolve_outside_root(
     linked_png.with_suffix(".json").write_text("{}", encoding="utf-8")
 
     assert LocalOutputImageCatalog(output_root).list_images() == ()
+
+
+def test_review_resolution_uses_authoritative_sidecar_metadata(
+    tmp_path: Path,
+) -> None:
+    png_path, json_path = _write_pair(
+        tmp_path,
+        "image.png",
+        {
+            "checkpoint": "server-model.safetensors",
+            "model_branch": "server-branch",
+            "combo_key": "server-combo",
+            "ksampler": {
+                "sampler": "euler",
+                "scheduler": "normal",
+                "steps": "24",
+                "cfg": "6,5",
+                "denoise": "0.8",
+            },
+            "pos_prompt": "hero",
+            "neg_prompt": "blur",
+            "loras": [{"name": "style.safetensors", "sm": 0.7}],
+        },
+    )
+
+    image = LocalOutputImageCatalog(tmp_path).resolve(
+        OutputImageReference(png_path=png_path, json_path=json_path)
+    )
+
+    assert image.checkpoint == "server-model.safetensors"
+    assert image.model_branch == "server-branch"
+    assert image.combo_key == "server-combo"
+    assert (image.steps, image.cfg, image.denoise) == (24, 6.5, 0.8)
+    assert (image.sampler, image.scheduler) == ("euler", "normal")
+    assert (image.positive_prompt, image.negative_prompt) == ("hero", "blur")
+    assert json.loads(image.loras_json) == [
+        {"name": "style.safetensors", "sm": 0.7}
+    ]
+
+
+def test_review_resolution_normalizes_graph_loras_and_invalid_values(
+    tmp_path: Path,
+) -> None:
+    png_path, json_path = _write_pair(
+        tmp_path,
+        "image.png",
+        {
+            "steps": "not-an-int",
+            "cfg": "not-a-float",
+            "loras": object().__class__.__name__,
+            "comfy_prompt_graph": {
+                "lora": {
+                    "class_type": "LoraLoader",
+                    "inputs": {
+                        "lora_name": "graph-style.safetensors",
+                        "strength_model": 0.8,
+                        "strength_clip": 0.6,
+                    },
+                }
+            },
+        },
+    )
+
+    image = LocalOutputImageCatalog(tmp_path).resolve(
+        OutputImageReference(png_path=png_path, json_path=json_path)
+    )
+
+    assert image.steps is None
+    assert image.cfg is None
+    assert json.loads(image.loras_json) == [
+        {"name": "graph-style.safetensors", "sm": 0.8, "sc": 0.6}
+    ]
+
+
+def test_review_resolution_accepts_invalid_sidecar_as_empty_metadata(
+    tmp_path: Path,
+) -> None:
+    png_path = tmp_path / "image.png"
+    json_path = tmp_path / "image.json"
+    png_path.write_bytes(b"png")
+    json_path.write_text("{invalid", encoding="utf-8")
+
+    image = LocalOutputImageCatalog(tmp_path).resolve(
+        OutputImageReference(png_path=png_path, json_path=json_path)
+    )
+
+    assert image.checkpoint == "unknown"
+    assert image.model_branch == "unknown"
+    assert image.positive_prompt == ""
+    assert image.loras_json == "[]"
+
+
+def test_review_resolution_rejects_escape_internal_and_mismatched_paths(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    outside_png, outside_json = _write_pair(tmp_path, "outside/image.png", {})
+    trash_png, trash_json = _write_pair(
+        output_root,
+        "_trash/image.png",
+        {},
+    )
+    valid_png, _valid_json = _write_pair(output_root, "valid.png", {})
+    catalog = LocalOutputImageCatalog(output_root)
+
+    with pytest.raises(InvalidOutputPathError, match="outside"):
+        catalog.resolve(
+            OutputImageReference(
+                png_path=outside_png,
+                json_path=outside_json,
+            )
+        )
+    with pytest.raises(InvalidOutputPathError, match="Invalid"):
+        catalog.resolve(
+            OutputImageReference(png_path=trash_png, json_path=trash_json)
+        )
+    with pytest.raises(InvalidOutputPathError, match="Invalid"):
+        catalog.resolve(
+            OutputImageReference(
+                png_path=valid_png,
+                json_path=valid_png.with_name("other.json"),
+            )
+        )
+
+
+def test_review_resolution_reports_missing_pair(tmp_path: Path) -> None:
+    catalog = LocalOutputImageCatalog(tmp_path)
+
+    with pytest.raises(OutputPairNotFoundError, match="no longer exists"):
+        catalog.resolve(
+            OutputImageReference(
+                png_path=tmp_path / "missing.png",
+                json_path=tmp_path / "missing.json",
+            )
+        )

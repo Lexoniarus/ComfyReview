@@ -5,25 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-
-class InvalidOutputPathError(ValueError):
-    """Raised when a submitted path is not a valid ComfyUI output pair."""
-
-
-class OutputPairNotFoundError(FileNotFoundError):
-    """Raised when a submitted output pair no longer exists."""
-
-
-class OutputMutationError(RuntimeError):
-    """Raised when a filesystem mutation cannot be completed safely."""
-
-
-@dataclass(frozen=True)
-class OutputPair:
-    """Validated PNG and JSON sidecar paths below one output root."""
-
-    png_path: Path
-    json_path: Path
+from comfyreview.application import (
+    InvalidOutputPathError,
+    OutputMutationError,
+    OutputPair,
+    OutputPairNotFoundError,
+)
 
 
 @dataclass
@@ -97,7 +84,7 @@ class OutputFileService:
             raise OutputPairNotFoundError("Output pair no longer exists")
         return OutputPair(png_path=png, json_path=sidecar)
 
-    def stage_delete(self, pair: OutputPair) -> StagedDeletion:
+    def stage(self, pair: OutputPair) -> StagedDeletion:
         """Move a pair to a unique trash location and return a rollback handle."""
         relative_parent = pair.png_path.parent.relative_to(self._output_root)
         destination = self._trash_root / relative_parent

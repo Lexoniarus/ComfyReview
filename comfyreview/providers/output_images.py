@@ -6,7 +6,15 @@ import json
 from pathlib import Path
 from typing import Any, Final
 
-from comfyreview.application.output_images import OutputImageReadModel
+from comfyreview.application import (
+    InvalidOutputPathError,
+    OutputImageReadModel,
+    OutputImageReference,
+    OutputPair,
+    OutputPairNotFoundError,
+    ReviewImage,
+)
+from meta_view import LoRAView, extract_prompts, extract_view
 
 _IGNORED_DIRECTORY_NAMES: Final = {"_lora_export", "_trash"}
 _CHECKPOINT_LOADER_TYPES: Final = {
@@ -45,6 +53,32 @@ class LocalOutputImageCatalog:
         images.sort(key=lambda image: str(image.json_path))
         return tuple(images)
 
+    def resolve(self, reference: OutputImageReference) -> ReviewImage:
+        """Resolve a client reference using current authoritative sidecar data."""
+        resolved_root = self._output_root.resolve()
+        try:
+            png_path = reference.png_path.resolve(strict=False)
+            json_path = reference.json_path.resolve(strict=False)
+            png_path.relative_to(resolved_root)
+            json_path.relative_to(resolved_root)
+        except (OSError, ValueError) as exc:
+            raise InvalidOutputPathError(
+                "Output path is outside OUTPUT_ROOT"
+            ) from exc
+        if (
+            png_path.suffix.lower() != ".png"
+            or json_path.suffix.lower() != ".json"
+            or png_path.parent != json_path.parent
+            or png_path.stem != json_path.stem
+            or self._is_ignored(png_path)
+            or self._is_ignored(json_path)
+        ):
+            raise InvalidOutputPathError("Invalid review output pair")
+        if not png_path.is_file() or not json_path.is_file():
+            raise OutputPairNotFoundError("Output pair no longer exists")
+        read_model = self._build_read_model(png_path, json_path)
+        return self._build_review_image(read_model)
+
     def _is_ignored(self, path: Path) -> bool:
         return bool(
             _IGNORED_DIRECTORY_NAMES & {part.lower() for part in path.parts}
@@ -82,6 +116,72 @@ class LocalOutputImageCatalog:
                 continue
             return payload if isinstance(payload, dict) else {}
         return {}
+
+    def _build_review_image(
+        self,
+        read_model: OutputImageReadModel,
+    ) -> ReviewImage:
+        metadata = read_model.meta
+        view = extract_view(metadata)
+        positive_prompt, negative_prompt, _source = extract_prompts(metadata)
+        parameters = self._sampler_parameters(metadata)
+        return ReviewImage(
+            pair=OutputPair(
+                png_path=read_model.png_path,
+                json_path=read_model.json_path,
+            ),
+            model_branch=read_model.model_branch,
+            checkpoint=read_model.checkpoint,
+            combo_key=read_model.combo_key,
+            steps=self._optional_int(parameters.get("steps")),
+            cfg=self._optional_float(parameters.get("cfg")),
+            sampler=self._optional_text(parameters.get("sampler")),
+            scheduler=self._optional_text(parameters.get("scheduler")),
+            denoise=self._optional_float(parameters.get("denoise")),
+            loras_json=self._serialize_loras(metadata, view),
+            positive_prompt=str(positive_prompt or ""),
+            negative_prompt=str(negative_prompt or ""),
+        )
+
+    def _serialize_loras(
+        self,
+        metadata: dict[str, Any],
+        view: dict[str, Any],
+    ) -> str:
+        loras = view.get("loras") or metadata.get("loras") or []
+        if not isinstance(loras, list):
+            return "[]"
+        normalized = [
+            {"name": item.name, "sm": item.sm, "sc": item.sc}
+            if isinstance(item, LoRAView)
+            else item
+            for item in loras
+        ]
+        try:
+            return json.dumps(normalized, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return "[]"
+
+    def _optional_int(self, value: object) -> int | None:
+        try:
+            return int(str(value).strip()) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    def _optional_float(self, value: object) -> float | None:
+        try:
+            return (
+                float(str(value).strip().replace(",", "."))
+                if value not in (None, "")
+                else None
+            )
+        except (TypeError, ValueError):
+            return None
+
+    def _optional_text(self, value: object) -> str | None:
+        if value in (None, ""):
+            return None
+        return str(value)
 
     def _infer_subdir(self, png_path: Path) -> str:
         try:

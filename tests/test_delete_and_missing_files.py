@@ -176,7 +176,7 @@ def test_delete_staging_restores_png_when_sidecar_move_fails(
     )
 
     with pytest.raises(OutputMutationError, match="Could not stage"):
-        service.stage_delete(pair)
+        service.stage(pair)
 
     assert png_path.is_file()
     assert json_path.is_file()

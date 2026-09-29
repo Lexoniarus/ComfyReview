@@ -224,7 +224,7 @@ def submit_rating(
         )
     )
 
-    staged_delete = output_files.stage_delete(pair) if pressed else None
+    staged_delete = output_files.stage(pair) if pressed else None
     try:
         stored_review = _write_rating_row(
             ratings_db_path=ratings_db_path,

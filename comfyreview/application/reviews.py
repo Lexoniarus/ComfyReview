@@ -17,6 +17,18 @@ class ReviewMutationError(RuntimeError):
     """Report a failed review workflow after compensation was attempted."""
 
 
+class InvalidOutputPathError(ValueError):
+    """Reject a submitted path outside the configured output boundary."""
+
+
+class OutputPairNotFoundError(FileNotFoundError):
+    """Report that a referenced output pair no longer exists."""
+
+
+class OutputMutationError(RuntimeError):
+    """Report a filesystem mutation that could not complete safely."""
+
+
 @dataclass(frozen=True, slots=True)
 class OutputImageReference:
     """Represent an untrusted client reference to one PNG/JSON pair."""
