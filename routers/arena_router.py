@@ -1,15 +1,14 @@
-from fastapi import APIRouter, Form, HTTPException, Query
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from arena_store import ensure_schema as ensure_arena_schema
+from comfyreview.api import get_application_container
 from config import (
     ARENA_DB_PATH,
     MIN_RUNS,
-    OUTPUT_ROOT,
     PLAYGROUND_DB_PATH,
     POOL_LIMIT,
 )
-from scanner import scan_output
 from services.arena_page_service import build_arena_page_context
 from services.arena_service import (
     ArenaMutationError,
@@ -25,6 +24,7 @@ router = APIRouter()
 
 @router.get("/arena", response_class=HTMLResponse)
 def arena(
+    request: Request,
     model: str = Query(""),
     mode: str = Query("top"),
     set_key: str = Query(""),
@@ -36,7 +36,7 @@ def arena(
 
     vm = build_arena_page_context(
         arena_db_path=ARENA_DB_PATH,
-        output_root=OUTPUT_ROOT,
+        output_images=get_application_container(request).output_images,
         playground_db_path=PLAYGROUND_DB_PATH,
         context=ctx,
         min_runs=MIN_RUNS,
@@ -61,6 +61,7 @@ def arena(
 
 @router.post("/arena_result")
 def arena_result(
+    request: Request,
     winner_side: str = Form(...),
     left_json: str = Form(...),
     right_json: str = Form(...),
@@ -73,7 +74,7 @@ def arena_result(
     ensure_arena_schema(ARENA_DB_PATH)
 
     # 2. Aktuelle Items erneut laden
-    items_all = scan_output(OUTPUT_ROOT)
+    items_all = get_application_container(request).output_images.list_images()
 
     # 3. Items anhand json_path wiederfinden
     left_it = find_item_by_json(items_all, left_json)

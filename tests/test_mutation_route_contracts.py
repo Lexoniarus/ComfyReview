@@ -1,16 +1,33 @@
 import importlib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
 from models import RatedItem
 from services.arena_service import ArenaMutationError, ArenaValidationError
 
-
 arena_router = importlib.import_module("routers.arena_router")
 index_router = importlib.import_module("routers.index_router")
 top_router = importlib.import_module("routers.top_router")
+
+
+class _OutputImageCatalog:
+    def __init__(self, items: list[RatedItem]) -> None:
+        self._items = items
+
+    def list_images(self) -> tuple[RatedItem, ...]:
+        return tuple(self._items)
+
+
+def _request_with_images(items: list[RatedItem]) -> Request:
+    container = SimpleNamespace(output_images=_OutputImageCatalog(items))
+    application = SimpleNamespace(
+        state=SimpleNamespace(container=container),
+    )
+    return Request({"type": "http", "app": application})
 
 
 def _review_form(png_path: Path, json_path: Path, *, rating: int = 5) -> dict:
@@ -53,14 +70,18 @@ def test_review_route_returns_400_for_invalid_score(tmp_path, monkeypatch):
     monkeypatch.setattr(index_router, "OUTPUT_ROOT", tmp_path)
     with pytest.raises(HTTPException) as caught:
         _call_review(
-            _review_form(tmp_path / "image.png", tmp_path / "image.json", rating=11)
+            _review_form(
+                tmp_path / "image.png", tmp_path / "image.json", rating=11
+            )
         )
 
     assert caught.value.status_code == 400
     assert caught.value.detail == "rating must be between 1 and 10"
 
 
-def test_review_route_returns_400_for_path_outside_output_root(tmp_path, monkeypatch):
+def test_review_route_returns_400_for_path_outside_output_root(
+    tmp_path, monkeypatch
+):
     output_root = tmp_path / "output"
     output_root.mkdir()
     outside_png = tmp_path / "image.png"
@@ -75,10 +96,14 @@ def test_review_route_returns_400_for_path_outside_output_root(tmp_path, monkeyp
     assert caught.value.status_code == 400
 
 
-def test_review_route_returns_404_for_missing_output_pair(tmp_path, monkeypatch):
+def test_review_route_returns_404_for_missing_output_pair(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(index_router, "OUTPUT_ROOT", tmp_path)
     with pytest.raises(HTTPException) as caught:
-        _call_review(_review_form(tmp_path / "image.png", tmp_path / "image.json"))
+        _call_review(
+            _review_form(tmp_path / "image.png", tmp_path / "image.json")
+        )
 
     assert caught.value.status_code == 404
 
@@ -92,7 +117,9 @@ def test_curation_route_returns_400_for_unknown_set(tmp_path, monkeypatch):
     json_path.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(top_router, "OUTPUT_ROOT", output_root)
     monkeypatch.setattr(top_router, "CURATION_SET_KEYS", ("scene",))
-    monkeypatch.setattr(top_router, "CURATION_DB_PATH", tmp_path / "curation.sqlite3")
+    monkeypatch.setattr(
+        top_router, "CURATION_DB_PATH", tmp_path / "curation.sqlite3"
+    )
 
     with pytest.raises(HTTPException) as caught:
         top_router.assign_set(
@@ -108,11 +135,18 @@ def test_curation_route_returns_400_for_unknown_set(tmp_path, monkeypatch):
     assert caught.value.status_code == 400
 
 
-def test_arena_route_maps_validation_and_mutation_errors(monkeypatch, tmp_path):
-    left = RatedItem(tmp_path / "left.png", tmp_path / "left.json", "", "", "", "", {})
-    right = RatedItem(tmp_path / "right.png", tmp_path / "right.json", "", "", "", "", {})
-    monkeypatch.setattr(arena_router, "ensure_arena_schema", lambda _path: None)
-    monkeypatch.setattr(arena_router, "scan_output", lambda _root: [left, right])
+def test_arena_route_maps_validation_and_mutation_errors(
+    monkeypatch, tmp_path
+):
+    left = RatedItem(
+        tmp_path / "left.png", tmp_path / "left.json", "", "", "", "", {}
+    )
+    right = RatedItem(
+        tmp_path / "right.png", tmp_path / "right.json", "", "", "", "", {}
+    )
+    monkeypatch.setattr(
+        arena_router, "ensure_arena_schema", lambda _path: None
+    )
     monkeypatch.setattr(
         arena_router,
         "insert_arena_result",
@@ -120,6 +154,7 @@ def test_arena_route_maps_validation_and_mutation_errors(monkeypatch, tmp_path):
     )
     with pytest.raises(HTTPException) as caught:
         arena_router.arena_result(
+            request=_request_with_images([left, right]),
             winner_side="invalid",
             left_json=str(left.json_path),
             right_json=str(right.json_path),
@@ -137,6 +172,7 @@ def test_arena_route_maps_validation_and_mutation_errors(monkeypatch, tmp_path):
     )
     with pytest.raises(HTTPException) as caught:
         arena_router.arena_result(
+            request=_request_with_images([left, right]),
             winner_side="left",
             left_json=str(left.json_path),
             right_json=str(right.json_path),

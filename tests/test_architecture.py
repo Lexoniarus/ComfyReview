@@ -24,12 +24,21 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
     _write_module(
         tmp_path,
         "routers/example.py",
-        'import sqlite3\nconnection.execute("SELECT 1")\n',
+        (
+            "import sqlite3\n"
+            "from comfyreview.providers import LocalOutputImageCatalog\n"
+            'connection.execute("SELECT 1")\n'
+        ),
     )
     _write_module(
         tmp_path,
         "services/example.py",
-        'from config import DB_PATH\nimport sqlite3\ndb.execute("DELETE FROM x")\n',
+        (
+            "from config import DB_PATH\n"
+            "import scanner\n"
+            "import sqlite3\n"
+            'db.execute("DELETE FROM x")\n'
+        ),
     )
     _write_module(tmp_path, "stores/example.py", "import requests\n")
     _write_module(
@@ -49,6 +58,8 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
         "comfyreview/domain/example.py|core.no_technical_dependencies": 1,
         "routers/example.py|routes.no_sql": 1,
         "routers/example.py|routes.no_sqlite": 1,
+        "routers/example.py|output.no_concrete_provider": 1,
+        "services/example.py|output.no_legacy_scanner": 1,
         "services/example.py|services.no_global_config": 1,
         "services/example.py|services.no_sql": 1,
         "services/example.py|services.no_sqlite": 1,

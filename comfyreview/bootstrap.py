@@ -10,12 +10,17 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from comfyreview.application import LegacySchemaLifecycle, WorkerRuntime
+from comfyreview.application import (
+    LegacySchemaLifecycle,
+    OutputImageCatalog,
+    WorkerRuntime,
+)
 from comfyreview.infrastructure import LegacyWorkerRuntime
 from comfyreview.observability import (
     RequestTracingMiddleware,
     configure_logging,
 )
+from comfyreview.providers import LocalOutputImageCatalog
 from comfyreview.repositories.sqlite import LegacySchemaManager
 from comfyreview.settings import Settings, load_settings
 from routers.arena_router import router as arena_router
@@ -32,6 +37,7 @@ class ApplicationContainer:
     settings: Settings
     schema_lifecycle: LegacySchemaLifecycle
     worker: WorkerRuntime
+    output_images: OutputImageCatalog
 
 
 def _prepare_directories(settings: Settings) -> None:
@@ -67,6 +73,7 @@ def build_application_container(
         settings=configured,
         schema_lifecycle=LegacySchemaManager(configured),
         worker=worker,
+        output_images=LocalOutputImageCatalog(configured.output_root),
     )
 
 
@@ -90,6 +97,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
 
     configure_logging()
     application = FastAPI(title="Comfy Review", lifespan=lifespan)
+    application.state.container = resources
     application.add_middleware(RequestTracingMiddleware)
     application.mount(
         "/files",

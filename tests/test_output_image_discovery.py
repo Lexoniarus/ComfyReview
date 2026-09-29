@@ -7,7 +7,7 @@ import inspect
 import json
 from pathlib import Path
 
-from scanner import scan_output
+from comfyreview.providers import LocalOutputImageCatalog
 
 arena_router = importlib.import_module("routers.arena_router")
 index_router = importlib.import_module("routers.index_router")
@@ -33,12 +33,12 @@ def _write_pair(
 
 
 def test_scan_output_handles_missing_root_and_sidecar(tmp_path: Path) -> None:
-    assert scan_output(tmp_path / "missing") == []
+    assert LocalOutputImageCatalog(tmp_path / "missing").list_images() == ()
 
     png_path = tmp_path / "without-sidecar.png"
     png_path.write_bytes(b"png")
 
-    assert scan_output(tmp_path) == []
+    assert LocalOutputImageCatalog(tmp_path).list_images() == ()
 
 
 def test_scan_output_reads_bom_and_keeps_invalid_sidecars(
@@ -54,7 +54,7 @@ def test_scan_output_reads_bom_and_keeps_invalid_sidecars(
     invalid_png.write_bytes(b"png")
     invalid_png.with_suffix(".json").write_text("{invalid", encoding="utf-8")
 
-    items = scan_output(tmp_path)
+    items = LocalOutputImageCatalog(tmp_path).list_images()
 
     assert [item.png_path for item in items] == [invalid_png, bom_png]
     assert items[0].meta == {}
@@ -73,7 +73,7 @@ def test_scan_output_ignores_internal_directories_and_collapses_playground_scope
     _write_pair(tmp_path, "_trash/deleted.png", {})
     _write_pair(tmp_path, "sets/_lora_export/exported.png", {})
 
-    items = scan_output(tmp_path)
+    items = LocalOutputImageCatalog(tmp_path).list_images()
 
     assert len(items) == 1
     assert items[0].png_path == nested_png
@@ -92,7 +92,7 @@ def test_scan_output_preserves_direct_metadata_values(tmp_path: Path) -> None:
         },
     )
 
-    [item] = scan_output(tmp_path)
+    [item] = LocalOutputImageCatalog(tmp_path).list_images()
 
     assert item.png_path == png_path
     assert item.json_path == json_path
@@ -131,7 +131,7 @@ def test_scan_output_infers_checkpoint_model_and_combo_from_graph(
         },
     )
 
-    [item] = scan_output(tmp_path)
+    [item] = LocalOutputImageCatalog(tmp_path).list_images()
 
     assert item.checkpoint == "folder/graph-model.safetensors"
     assert item.model_branch == "graph-model"
@@ -151,7 +151,7 @@ def test_scan_output_uses_chosen_line_combo_fallback(tmp_path: Path) -> None:
         },
     )
 
-    [item] = scan_output(tmp_path)
+    [item] = LocalOutputImageCatalog(tmp_path).list_images()
 
     assert item.combo_key == (
         "ckpt=chosen.safetensors"
@@ -168,6 +168,7 @@ def test_output_read_routes_and_form_fields_keep_public_contract() -> None:
         arena_router.arena_result
     ).parameters
     assert tuple(arena_result_parameters) == (
+        "request",
         "winner_side",
         "left_json",
         "right_json",

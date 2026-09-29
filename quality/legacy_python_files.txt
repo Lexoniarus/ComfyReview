@@ -11,7 +11,6 @@ routers/playground/browse.py
 routers/playground/generator.py
 routers/playground/hub.py
 routers/stats_router.py
-scanner.py
 services/__init__.py
 services/analytics_page_service.py
 services/combo_prompts/__init__.py

@@ -4,9 +4,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from comfyreview.application import OutputImageCatalog, OutputImageReadModel
 from db_store import db, get_rated_map
 from meta_view import extract_prompts, extract_view, preset_text_from_view
-from scanner import scan_output
 from services.context_filters import (
     build_dropdown_lists,
     extract_character_from_subdir,
@@ -25,15 +25,15 @@ from stores.curation_store import fetch_set_map
 
 def _filter_items_for_review(
     *,
-    items: list[Any],
+    items: list[OutputImageReadModel],
     rated_map: dict[str, int],
     set_map: dict[str, str | None],
     model: str,
     subdir: str,
     set_key: str,
     unrated_only: int,
-) -> list[Any]:
-    filtered: list[Any] = []
+) -> list[OutputImageReadModel]:
+    filtered: list[OutputImageReadModel] = []
     for it in items:
         if model and getattr(it, "model_branch", "") != model:
             continue
@@ -63,7 +63,7 @@ def _filter_items_for_review(
 
 def build_review_page_context(
     *,
-    output_root: Path,
+    output_images: OutputImageCatalog,
     ratings_db_path: Path,
     playground_db_path: Path,
     curation_db_path: Path,
@@ -88,7 +88,7 @@ def build_review_page_context(
     set_key_n = normalize_set_key(set_key)
 
     items, total, model_list, subdir_list, character_options = (
-        _load_review_items(output_root)
+        _load_review_items(output_images)
     )
     set_map = _load_set_map_safe(curation_db_path, items)
 
@@ -157,15 +157,23 @@ def build_review_page_context(
     )
 
 
-def _load_review_items(output_root: Path):
-    items = scan_output(output_root)
+def _load_review_items(
+    output_images: OutputImageCatalog,
+) -> tuple[
+    list[OutputImageReadModel],
+    int,
+    list[str],
+    list[str],
+    list[dict[str, str]],
+]:
+    items = list(output_images.list_images())
     total = len(items)
     model_list, subdir_list, character_options = build_dropdown_lists(items)
     return items, total, model_list, subdir_list, character_options
 
 
 def _load_set_map_safe(
-    curation_db_path: Path, items: list[Any]
+    curation_db_path: Path, items: list[OutputImageReadModel]
 ) -> dict[str, str | None]:
     try:
         return fetch_set_map(

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Query
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from comfyreview.api import get_application_container
 from config import (
     ARENA_DB_PATH,
     COMBO_PROMPTS_DB_PATH,
@@ -43,6 +44,7 @@ router = APIRouter()
 
 @router.get("/top_pictures", response_class=HTMLResponse)
 def top_pictures(
+    request: Request,
     model: str = Query(""),
     mode: str = Query("top"),
     set_key: str = Query(""),
@@ -53,7 +55,7 @@ def top_pictures(
     )
 
     vm = build_top_pictures_page(
-        output_root=OUTPUT_ROOT,
+        output_images=get_application_container(request).output_images,
         playground_db_path=PLAYGROUND_DB_PATH,
         context=ctx,
         min_runs=MIN_RUNS,

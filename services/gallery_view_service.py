@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+from comfyreview.application import OutputImageCatalog
 from meta_view import extract_view
-from scanner import scan_output
 from services.context_filters import (
     GalleryContext,
     build_dropdown_lists,
@@ -100,15 +101,15 @@ def _card_from_scored_item(
 
 def build_top_pictures_page(
     *,
-    output_root,
-    playground_db_path,
+    output_images: OutputImageCatalog,
+    playground_db_path: Path,
     context: GalleryContext,
     min_runs: int,
     limit: int,
 ) -> dict[str, Any]:
     """Build view data for Top/Worst ranked gallery page."""
 
-    items_all = scan_output(output_root)
+    items_all = list(output_images.list_images())
     model_list, subdir_list, character_options = build_dropdown_lists(
         items_all
     )

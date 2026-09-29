@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Query
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from comfyreview.api import get_application_container
 from config import (
     CURATION_DB_PATH,
     CURATION_SET_KEYS,
@@ -38,13 +39,14 @@ router = APIRouter()
 
 @router.get("/", response_class=HTMLResponse)
 def index(
+    request: Request,
     unrated: int = Query(1 if DEFAULT_UNRATED_ONLY else 0),
     model: str = Query(""),
     subdir: str = Query(""),
     set_key: str = Query(""),
 ):
     ctx = build_review_page_context(
-        output_root=OUTPUT_ROOT,
+        output_images=get_application_container(request).output_images,
         ratings_db_path=DB_PATH,
         playground_db_path=PLAYGROUND_DB_PATH,
         curation_db_path=CURATION_DB_PATH,
