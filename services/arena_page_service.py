@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from arena_store import ensure_schema as ensure_arena_schema
-from scanner import scan_output
+from comfyreview.application import OutputImageCatalog
 from services.arena_service import pick_arena_pair
 from services.context_filters import (
     GalleryContext,
@@ -19,7 +19,7 @@ from services.pool_service import build_ranked_pool
 def build_arena_page_context(
     *,
     arena_db_path: Path,
-    output_root: Path,
+    output_images: OutputImageCatalog,
     playground_db_path: Path,
     context: GalleryContext,
     min_runs: int,
@@ -39,7 +39,7 @@ def build_arena_page_context(
 
     ensure_arena_schema(arena_db_path)
 
-    items_all = scan_output(output_root)
+    items_all = list(output_images.list_images())
     model_list, subdir_list, character_options = build_dropdown_lists(
         items_all
     )

@@ -8,8 +8,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from comfyreview.application import LegacySchemaReport
-from comfyreview.bootstrap import ApplicationContainer, create_app
+from comfyreview.application import LegacySchemaReport, OutputImageReadModel
+from comfyreview.bootstrap import (
+    ApplicationContainer,
+    build_application_container,
+    create_app,
+)
+from comfyreview.providers import LocalOutputImageCatalog
 from comfyreview.settings import Settings, load_settings
 
 
@@ -51,12 +56,18 @@ class _RecordingWorker:
         self._events.append(f"stop:{timeout_seconds:g}")
 
 
+class _EmptyOutputImageCatalog:
+    def list_images(self) -> tuple[OutputImageReadModel, ...]:
+        return ()
+
+
 def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
     return ApplicationContainer(
         settings=settings,
         schema_lifecycle=_RecordingSchemaLifecycle(settings, events),
         worker=_RecordingWorker(events),
+        output_images=_EmptyOutputImageCatalog(),
     )
 
 
@@ -64,6 +75,8 @@ def test_lifespan_prepares_schema_then_owns_worker(tmp_path: Path) -> None:
     events: list[str] = []
     container = _container(tmp_path, events)
     application = create_app(container)
+
+    assert application.state.container is container
 
     assert not container.settings.output_root.exists()
     assert not container.settings.data_directory.exists()
@@ -96,3 +109,11 @@ def test_entry_points_and_route_contract_remain_compatible() -> None:
     from main import app as main_app
 
     assert main_app is root_app
+
+
+def test_default_container_wires_local_output_catalog(tmp_path: Path) -> None:
+    settings = load_settings(base_directory=tmp_path, environ={})
+
+    container = build_application_container(settings)
+
+    assert isinstance(container.output_images, LocalOutputImageCatalog)

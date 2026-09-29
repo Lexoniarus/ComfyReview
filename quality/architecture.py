@@ -39,14 +39,14 @@ def _module_root(module_name: str) -> str:
     return module_name.split(".", 1)[0]
 
 
-def _imported_roots(tree: ast.AST) -> list[str]:
-    roots: list[str] = []
+def _imported_modules(tree: ast.AST) -> list[str]:
+    modules: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            roots.extend(_module_root(alias.name) for alias in node.names)
+            modules.extend(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
-            roots.append(_module_root(node.module))
-    return roots
+            modules.append(node.module)
+    return modules
 
 
 def _is_sql_call(node: ast.Call) -> bool:
@@ -96,9 +96,10 @@ def _record_import_violations(
     counts: Counter[str],
     relative_path: str,
     boundaries: tuple[str, ...],
-    imported_roots: list[str],
+    imported_modules: list[str],
 ) -> None:
-    for imported_root in imported_roots:
+    for imported_module in imported_modules:
+        imported_root = _module_root(imported_module)
         if "routes" in boundaries and imported_root == "sqlite3":
             counts[f"{relative_path}|routes.no_sqlite"] += 1
         if "services" in boundaries and imported_root == "sqlite3":
@@ -118,6 +119,11 @@ def _record_import_violations(
             "stores",
         }:
             counts[f"{relative_path}|core.no_technical_dependencies"] += 1
+        if "routes" in boundaries or "services" in boundaries:
+            if imported_module.startswith("comfyreview.providers"):
+                counts[f"{relative_path}|output.no_concrete_provider"] += 1
+            if imported_root == "scanner":
+                counts[f"{relative_path}|output.no_legacy_scanner"] += 1
 
 
 def _record_sql_violations(
@@ -175,7 +181,7 @@ def collect_architecture_violations(root: Path) -> Counter[str]:
                 counts,
                 relative_path,
                 boundaries,
-                _imported_roots(tree),
+                _imported_modules(tree),
             )
             _record_sql_violations(counts, relative_path, boundaries, tree)
             _record_schema_ddl_violations(counts, relative_path, tree)

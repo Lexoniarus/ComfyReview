@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional
-
-from fastapi import APIRouter, Form, HTTPException, Query
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from comfyreview.api import get_application_container
 from config import (
     CURATION_DB_PATH,
     CURATION_SET_KEYS,
@@ -23,11 +22,14 @@ from services.context_filters import (
     normalize_subdir,
     normalize_unrated_flag,
 )
-from services.rating_submission_service import ReviewValidationError, submit_rating
 from services.output_file_service import (
     InvalidOutputPathError,
     OutputMutationError,
     OutputPairNotFoundError,
+)
+from services.rating_submission_service import (
+    ReviewValidationError,
+    submit_rating,
 )
 from services.review_page_service import build_review_page_context
 from templates import INDEX_HTML
@@ -37,13 +39,14 @@ router = APIRouter()
 
 @router.get("/", response_class=HTMLResponse)
 def index(
+    request: Request,
     unrated: int = Query(1 if DEFAULT_UNRATED_ONLY else 0),
     model: str = Query(""),
     subdir: str = Query(""),
     set_key: str = Query(""),
 ):
     ctx = build_review_page_context(
-        output_root=OUTPUT_ROOT,
+        output_images=get_application_container(request).output_images,
         ratings_db_path=DB_PATH,
         playground_db_path=PLAYGROUND_DB_PATH,
         curation_db_path=CURATION_DB_PATH,
@@ -61,26 +64,26 @@ def index(
 
 @router.post("/rate")
 def rate(
-    rating: Optional[int] = Form(None),
-    deleted: Optional[int] = Form(None),
-    delete: Optional[int] = Form(None),
+    rating: int | None = Form(None),
+    deleted: int | None = Form(None),
+    delete: int | None = Form(None),
     combo_key: str = Form(...),
     model_branch: str = Form(...),
     checkpoint: str = Form(...),
     json_path: str = Form(...),
     png_path: str = Form(...),
-    sampler: Optional[str] = Form(None),
-    scheduler: Optional[str] = Form(None),
-    steps: Optional[str] = Form(None),
-    cfg: Optional[str] = Form(None),
-    denoise: Optional[str] = Form(None),
-    loras_json: Optional[str] = Form(None),
-    filter_unrated: Optional[str] = Form(None),
-    filter_model: Optional[str] = Form(None),
-    filter_subdir: Optional[str] = Form(None),
-    filter_scope: Optional[str] = Form(None),
-    filter_character: Optional[str] = Form(None),
-    filter_set_key: Optional[str] = Form(None),
+    sampler: str | None = Form(None),
+    scheduler: str | None = Form(None),
+    steps: str | None = Form(None),
+    cfg: str | None = Form(None),
+    denoise: str | None = Form(None),
+    loras_json: str | None = Form(None),
+    filter_unrated: str | None = Form(None),
+    filter_model: str | None = Form(None),
+    filter_subdir: str | None = Form(None),
+    filter_scope: str | None = Form(None),
+    filter_character: str | None = Form(None),
+    filter_set_key: str | None = Form(None),
 ):
     try:
         submit_rating(
@@ -112,7 +115,9 @@ def rate(
     except OutputMutationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    q_unrated = "1" if normalize_unrated_flag(filter_unrated, default=1) == 1 else "0"
+    q_unrated = (
+        "1" if normalize_unrated_flag(filter_unrated, default=1) == 1 else "0"
+    )
     q_model = normalize_model(str(filter_model or ""))
     q_subdir = normalize_subdir(str(filter_subdir or ""))
     q_set_key = normalize_set_key(str(filter_set_key or ""))

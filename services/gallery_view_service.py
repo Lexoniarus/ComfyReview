@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
+from comfyreview.application import OutputImageCatalog
 from meta_view import extract_view
-from scanner import scan_output
-
 from services.context_filters import (
     GalleryContext,
     build_dropdown_lists,
@@ -40,16 +40,18 @@ class RankedCard:
     outfit_name: str
     pose_name: str
     expression_name: str
-    modifiers: List[str]
+    modifiers: list[str]
     light_name: str
     assigned_set_key: str
 
 
-def _resolve_card_labels(*, matcher: Any, prompt_text: str) -> Dict[str, Any]:
+def _resolve_card_labels(*, matcher: Any, prompt_text: str) -> dict[str, Any]:
     return matcher.resolve(str(prompt_text or ""), include_lighting=True)
 
 
-def _build_labeled_image_fields(*, it: Any, labels: Dict[str, Any]) -> Dict[str, Any]:
+def _build_labeled_image_fields(
+    *, it: Any, labels: dict[str, Any]
+) -> dict[str, Any]:
     subdir = str(getattr(it, "subdir", "") or "")
     return {
         "img_url": png_path_to_url(str(it.png_path)),
@@ -68,10 +70,14 @@ def _build_labeled_image_fields(*, it: Any, labels: Dict[str, Any]) -> Dict[str,
     }
 
 
-def _card_from_scored_item(scored_item: Any, matcher: Any, *, assigned_set_key: Optional[str]) -> Dict[str, Any]:
+def _card_from_scored_item(
+    scored_item: Any, matcher: Any, *, assigned_set_key: str | None
+) -> dict[str, Any]:
     it = scored_item.it
     view = extract_view(it.meta)
-    labels = _resolve_card_labels(matcher=matcher, prompt_text=str(scored_item.pos_prompt or ""))
+    labels = _resolve_card_labels(
+        matcher=matcher, prompt_text=str(scored_item.pos_prompt or "")
+    )
 
     return {
         **_build_labeled_image_fields(it=it, labels=labels),
@@ -95,21 +101,25 @@ def _card_from_scored_item(scored_item: Any, matcher: Any, *, assigned_set_key: 
 
 def build_top_pictures_page(
     *,
-    output_root,
-    playground_db_path,
+    output_images: OutputImageCatalog,
+    playground_db_path: Path,
     context: GalleryContext,
     min_runs: int,
     limit: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build view data for Top/Worst ranked gallery page."""
 
-    items_all = scan_output(output_root)
-    model_list, subdir_list, character_options = build_dropdown_lists(items_all)
+    items_all = list(output_images.list_images())
+    model_list, subdir_list, character_options = build_dropdown_lists(
+        items_all
+    )
 
     items = items_all
     model = normalize_model(context.model)
     if model:
-        items = [it for it in items if getattr(it, "model_branch", "") == model]
+        items = [
+            it for it in items if getattr(it, "model_branch", "") == model
+        ]
 
     ranked, curation_map = build_ranked_pool(
         items,
@@ -142,9 +152,13 @@ def build_top_pictures_page(
     }
 
 
-def build_arena_side(*, it: Any, avg: float, runs: int, matcher: Any) -> Dict[str, Any]:
+def build_arena_side(
+    *, it: Any, avg: float, runs: int, matcher: Any
+) -> dict[str, Any]:
     view = extract_view(it.meta)
-    labels = _resolve_card_labels(matcher=matcher, prompt_text=str(view.get("pos_prompt") or ""))
+    labels = _resolve_card_labels(
+        matcher=matcher, prompt_text=str(view.get("pos_prompt") or "")
+    )
 
     return {
         **_build_labeled_image_fields(it=it, labels=labels),

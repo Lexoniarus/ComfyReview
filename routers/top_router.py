@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Query
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from comfyreview.api import get_application_container
 from config import (
+    ARENA_DB_PATH,
+    COMBO_PROMPTS_DB_PATH,
     CURATION_DB_PATH,
     CURATION_SET_KEYS,
-    COMBO_PROMPTS_DB_PATH,
     DB_PATH,
-    ARENA_DB_PATH,
     IMAGES_DB_PATH,
     LORA_EXPORT_ROOT,
     MIN_RUNS,
@@ -20,7 +21,6 @@ from config import (
     SOFT_DELETE_TO_TRASH,
     TRASH_ROOT,
 )
-
 from services.context_filters import build_gallery_context
 from services.curation_assignment_service import (
     CurationMutationError,
@@ -28,13 +28,15 @@ from services.curation_assignment_service import (
     assign_image_to_set,
 )
 from services.gallery_view_service import build_top_pictures_page
-from services.rating_submission_service import ReviewValidationError, submit_rating
 from services.output_file_service import (
     InvalidOutputPathError,
     OutputMutationError,
     OutputPairNotFoundError,
 )
-
+from services.rating_submission_service import (
+    ReviewValidationError,
+    submit_rating,
+)
 from templates import TOP_PICTURES_HTML
 
 router = APIRouter()
@@ -42,15 +44,18 @@ router = APIRouter()
 
 @router.get("/top_pictures", response_class=HTMLResponse)
 def top_pictures(
+    request: Request,
     model: str = Query(""),
     mode: str = Query("top"),
     set_key: str = Query(""),
     subdir: str = Query(""),
 ):
-    ctx = build_gallery_context(model=model, subdir=subdir, set_key=set_key, mode=mode)
+    ctx = build_gallery_context(
+        model=model, subdir=subdir, set_key=set_key, mode=mode
+    )
 
     vm = build_top_pictures_page(
-        output_root=OUTPUT_ROOT,
+        output_images=get_application_container(request).output_images,
         playground_db_path=PLAYGROUND_DB_PATH,
         context=ctx,
         min_runs=MIN_RUNS,
