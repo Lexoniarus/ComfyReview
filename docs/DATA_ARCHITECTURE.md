@@ -111,9 +111,12 @@ historical generations. Deleting from the UI archives an item; it does not
 destroy revisions or historical relationships.
 
 `PromptCatalogService` owns catalog use cases through an injected repository;
-SQLite and stable-ID generation remain technical adapters. This service is not
-yet wired into Playground submission, so no temporary generation facade or
-catalog/legacy dual-write exists.
+SQLite and stable-ID generation remain technical adapters. Playground preview
+selection and rendering now consume exact catalog revisions and retain their
+UIDs in each draft. A manual draft edit changes only its rendered snapshot. It
+does not create or mutate a revision. Playground submission is still isolated
+on the legacy path, so no temporary generation facade or catalog/legacy
+dual-write exists.
 
 Legacy prompt migration is explicit:
 

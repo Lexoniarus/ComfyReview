@@ -175,8 +175,12 @@ prompt text becomes immutable revisions while name, tags and notes remain
 mutable component metadata. Repeating the audit/import is idempotent and does
 not remove unused catalog content.
 
-The legacy Playground runtime has not yet been rewired to this catalog. Until
-that later slice, it remains isolated rather than dual-writing both models.
+Playground preview preparation now reads this catalog through
+`PlaygroundService`, applies `PromptSelectionPolicy` and renders concrete
+revision snapshots through `PromptRenderer`. Draft prompt overrides do not
+mutate catalog revisions. The legacy ComfyUI submit remains isolated until the
+native `GenerationService` exists; there is no interim generation facade or
+dual-write.
 
 ## 8.1 Target generation boundaries
 
@@ -219,8 +223,9 @@ The canonical cutover is intentionally not the end of the wider refactor.
 
 - ComfyUI generation still needs versioned blueprints, semantic compilation,
   a technical submit/wait/output provider and native multi-output collection.
-- Playground selection/submission still uses legacy stores; the canonical
-  prompt catalog exists but is not yet its runtime dependency.
+- Playground browse/edit and submission still use legacy paths. Preview
+  selection/rendering uses the canonical catalog; submission remains isolated
+  until it can use the real GenerationService.
 - Prompt/statistics projections and their worker remain transitional.
 - Frontend logic still needs the planned ES-module/API-client cleanup.
 

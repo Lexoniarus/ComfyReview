@@ -420,10 +420,9 @@ audited import input for local testing.
   sidecarless images remain usable in Review, Top/Worst, Arena, Curation and
   Delete
 - Export and dataset-building workflows are not final production pipelines
-- Playground submission, generation and some statistics/projection paths are
-  still on transitional legacy persistence; the canonical revisioned prompt
-  catalog and audited import command are implemented but not yet wired into
-  Playground execution
+- Playground previews now select and render immutable canonical prompt
+  revisions; browse/edit, submission, generation and some statistics/projection
+  paths remain transitional until the native GenerationService cutover
 - Public documentation may lag behind internal workflow experiments
 
 ---
