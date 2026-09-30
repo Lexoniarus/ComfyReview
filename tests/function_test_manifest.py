@@ -1,6 +1,18 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.arena:ArenaService.next_pair": (
+        "tests/test_canonical_ranking_arena.py::"
+        "test_arena_service_selects_forward_then_reverse_pair"
+    ),
+    "comfyreview.application.arena:ArenaService.record_decision": (
+        "tests/test_canonical_ranking_arena.py::"
+        "test_arena_service_records_clamped_target_ratings"
+    ),
+    "comfyreview.application.ranking:RankingService.list_images": (
+        "tests/test_canonical_ranking_arena.py::"
+        "test_ranking_service_filters_and_sorts_canonical_images"
+    ),
     "comfyreview.application.reviews:OutputImageReference.from_client_paths": (
         "tests/test_review_service.py::"
         "test_output_reference_preserves_a_valid_client_pair"

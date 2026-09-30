@@ -207,6 +207,7 @@
           </div>
 
           <form method="post" action="/assign_set" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="hidden" name="image_uid" value="{{ c.image_uid }}">
             <input type="hidden" name="png_path" value="{{ c.png_path }}">
             <input type="hidden" name="json_path" value="{{ c.json_path }}">
             <input type="hidden" name="model" value="{{ model }}">
@@ -227,6 +228,7 @@
           </form>
 
 <form method="post" action="/top_delete" onsubmit="return confirm('wirklich löschen? png+json werden entfernt, db bekommt deleted=1 (neuer run).');">
+  <input type="hidden" name="image_uid" value="{{ c.image_uid }}">
   <input type="hidden" name="json_path" value="{{ c.json_path }}">
   <input type="hidden" name="png_path" value="{{ c.png_path }}">
   <input type="hidden" name="combo_key" value="{{ c.combo_key }}">

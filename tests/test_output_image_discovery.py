@@ -170,8 +170,8 @@ def test_output_read_routes_and_form_fields_keep_public_contract() -> None:
     assert tuple(arena_result_parameters) == (
         "request",
         "winner_side",
-        "left_json",
-        "right_json",
+        "left_image_uid",
+        "right_image_uid",
         "model",
         "subdir",
         "mode",

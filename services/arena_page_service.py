@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
-from arena_store import ensure_schema as ensure_arena_schema
-from comfyreview.application import OutputImageCatalog
-from services.arena_service import pick_arena_pair
+from comfyreview.application import (
+    ArenaQuery,
+    ArenaService,
+    RankingQuery,
+    RankingService,
+)
 from services.context_filters import (
     GalleryContext,
     build_dropdown_lists,
@@ -13,103 +16,36 @@ from services.context_filters import (
 )
 from services.gallery_view_service import build_arena_side
 from services.playground_label_service import get_playground_label_matcher
-from services.pool_service import build_ranked_pool
 
 
 def build_arena_page_context(
     *,
-    arena_db_path: Path,
-    output_images: OutputImageCatalog,
+    ranking_service: RankingService,
+    arena_service: ArenaService,
     playground_db_path: Path,
     context: GalleryContext,
     min_runs: int,
     pool_limit: int,
 ) -> dict[str, Any]:
-    """Build template context for /arena.
-
-    Responsibilities
-    - ensure arena schema
-    - scan filesystem items
-    - build dropdown lists
-    - filter by model
-    - build ranked pool according to vNext rules
-    - pick next arena pair
-    - resolve labels
-    """
-
-    ensure_arena_schema(arena_db_path)
-
-    items_all = list(output_images.list_images())
-    model_list, subdir_list, character_options = build_dropdown_lists(
-        items_all
+    """Build canonical template context for the Arena page."""
+    inventory = ranking_service.list_images(
+        RankingQuery(minimum_ratings=0, limit=1_000_000)
     )
-
-    items = items_all
+    model_list, subdir_list, character_options = build_dropdown_lists(
+        inventory
+    )
     model = normalize_model(context.model)
-    if model:
-        items = [
-            it for it in items if getattr(it, "model_branch", "") == model
-        ]
-
-    ranked, _ = build_ranked_pool(
-        items,
-        mode=context.mode,
-        set_key=context.set_key,
+    query = RankingQuery(
+        model=model,
         subdir=context.subdir,
-        min_runs=min_runs,
+        set_key=context.set_key,
+        mode=context.mode,
+        minimum_ratings=min_runs,
         limit=pool_limit,
     )
-
-    scored = [(x.it, x.avg, x.runs) for x in ranked]
-
-    if len(scored) < 2:
-        return {
-            "left": None,
-            "right": None,
-            "message": f"Nicht genug Kandidaten. Du brauchst mindestens 2 Bilder mit je mindestens {int(min_runs)} Bewertungen.",
-            "model": model,
-            "subdir": context.subdir,
-            "model_list": model_list,
-            "subdir_list": subdir_list,
-            "mode": context.mode,
-            "character_options": character_options,
-            "set_key": context.set_key,
-        }
-
-    left_it, right_it, left_avg, right_avg, left_runs, right_runs = (
-        pick_arena_pair(items, scored)
-    )
-
-    if left_it is None or right_it is None:
-        return {
-            "left": None,
-            "right": None,
-            "message": "Keine neuen Paarungen mehr offen für diesen Pool.",
-            "model": model,
-            "subdir": context.subdir,
-            "model_list": model_list,
-            "subdir_list": subdir_list,
-            "mode": context.mode,
-            "character_options": character_options,
-            "set_key": context.set_key,
-        }
-
-    matcher = get_playground_label_matcher(playground_db_path)
-
-    return {
-        "left": build_arena_side(
-            it=left_it,
-            avg=cast(float, left_avg),
-            runs=cast(int, left_runs),
-            matcher=matcher,
-        ),
-        "right": build_arena_side(
-            it=right_it,
-            avg=cast(float, right_avg),
-            runs=cast(int, right_runs),
-            matcher=matcher,
-        ),
-        "message": "",
+    candidates = ranking_service.list_images(query)
+    pair = arena_service.next_pair(ArenaQuery(query))
+    base = {
         "model": model,
         "subdir": context.subdir,
         "model_list": model_list,
@@ -117,4 +53,29 @@ def build_arena_page_context(
         "mode": context.mode,
         "character_options": character_options,
         "set_key": context.set_key,
+    }
+    if len(candidates) < 2:
+        return {
+            **base,
+            "left": None,
+            "right": None,
+            "message": (
+                "Nicht genug Kandidaten. Du brauchst mindestens 2 Bilder "
+                f"mit je mindestens {int(min_runs)} Bewertungen."
+            ),
+        }
+    if pair is None:
+        return {
+            **base,
+            "left": None,
+            "right": None,
+            "message": "Keine neuen Paarungen mehr offen für diesen Pool.",
+        }
+
+    matcher = get_playground_label_matcher(playground_db_path)
+    return {
+        **base,
+        "left": build_arena_side(pair.left, matcher),
+        "right": build_arena_side(pair.right, matcher),
+        "message": "",
     }

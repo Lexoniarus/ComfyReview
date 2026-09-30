@@ -1,21 +1,14 @@
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from arena_store import ensure_schema as ensure_arena_schema
 from comfyreview.api import get_application_container
-from config import (
-    ARENA_DB_PATH,
-    MIN_RUNS,
-    PLAYGROUND_DB_PATH,
-    POOL_LIMIT,
-)
-from services.arena_page_service import build_arena_page_context
-from services.arena_service import (
+from comfyreview.application import (
     ArenaMutationError,
     ArenaValidationError,
-    find_item_by_json,
-    insert_arena_result,
+    RecordArenaDecisionCommand,
 )
+from config import MIN_RUNS, PLAYGROUND_DB_PATH, POOL_LIMIT
+from services.arena_page_service import build_arena_page_context
 from services.context_filters import build_gallery_context
 from templates import ARENA_HTML
 
@@ -35,8 +28,8 @@ def arena(
     )
 
     vm = build_arena_page_context(
-        arena_db_path=ARENA_DB_PATH,
-        output_images=get_application_container(request).output_images,
+        ranking_service=get_application_container(request).ranking_service,
+        arena_service=get_application_container(request).arena_service,
         playground_db_path=PLAYGROUND_DB_PATH,
         context=ctx,
         min_runs=MIN_RUNS,
@@ -63,44 +56,26 @@ def arena(
 def arena_result(
     request: Request,
     winner_side: str = Form(...),
-    left_json: str = Form(...),
-    right_json: str = Form(...),
+    left_image_uid: str = Form(...),
+    right_image_uid: str = Form(...),
     model: str = Form(""),
     subdir: str = Form(""),
     mode: str = Form("top"),
     set_key: str = Form(""),
 ):
-    # 1. Sicherstellen Arena-DB existiert
-    ensure_arena_schema(ARENA_DB_PATH)
-
-    # 2. Aktuelle Items erneut laden
-    items_all = get_application_container(request).output_images.list_images()
-
-    # 3. Items anhand json_path wiederfinden
-    left_it = find_item_by_json(items_all, left_json)
-    right_it = find_item_by_json(items_all, right_json)
-
-    # Wenn Item nicht mehr existiert → zurück zur Arena
-    if left_it is None or right_it is None:
-        return RedirectResponse(
-            url=f"/arena?model={model}&mode={mode}&subdir={subdir}&set_key={set_key}",
-            status_code=303,
-        )
-
-    # 4. Arena-Logik:
-    # - Gewinner berechnen
-    # - Rating für beide schreiben
-    # - Match speichern
     try:
-        insert_arena_result(
-            left_it, right_it, left_json, right_json, winner_side
+        get_application_container(request).arena_service.record_decision(
+            RecordArenaDecisionCommand(
+                left_image_uid=left_image_uid,
+                right_image_uid=right_image_uid,
+                winner_side=winner_side,
+            )
         )
     except ArenaValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ArenaMutationError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # 5. Redirect zurück zur Arena
     return RedirectResponse(
         url=f"/arena?model={model}&mode={mode}&subdir={subdir}&set_key={set_key}",
         status_code=303,

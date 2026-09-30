@@ -11,9 +11,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from comfyreview.application import (
+    ArenaService,
     CanonicalSchemaLifecycle,
     LegacySchemaLifecycle,
     OutputImageCatalog,
+    RankingService,
     ReviewService,
     WorkerRuntime,
 )
@@ -30,7 +32,9 @@ from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     LegacyProjectionJobQueue,
     LegacySchemaManager,
+    SqliteArenaRepository,
     SqliteOutputImageRepository,
+    SqliteRankingRepository,
     SqliteReviewRepository,
 )
 from comfyreview.settings import Settings, load_settings
@@ -52,6 +56,8 @@ class ApplicationContainer:
     worker: WorkerRuntime
     output_images: OutputImageCatalog
     review_service: ReviewService
+    ranking_service: RankingService
+    arena_service: ArenaService
 
 
 def _prepare_directories(settings: Settings) -> None:
@@ -101,6 +107,13 @@ def build_application_container(
         ),
         preserve_deleted_files=configured.soft_delete_to_trash,
     )
+    ranking_service = RankingService(
+        SqliteRankingRepository(
+            configured.canonical_database_path,
+            output_root=configured.output_root,
+            allowed_set_keys=configured.curation_set_keys,
+        )
+    )
     legacy_runtime_settings = replace(
         configured,
         ratings_database_path=(
@@ -121,6 +134,13 @@ def build_application_container(
         worker=worker,
         output_images=output_images,
         review_service=review_service,
+        ranking_service=ranking_service,
+        arena_service=ArenaService(
+            rankings=ranking_service,
+            repository=SqliteArenaRepository(
+                configured.canonical_database_path
+            ),
+        ),
     )
 
 

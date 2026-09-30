@@ -1,5 +1,9 @@
 """SQLite persistence adapters."""
 
+from comfyreview.repositories.sqlite.canonical_features import (
+    SqliteArenaRepository,
+    SqliteRankingRepository,
+)
 from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
@@ -25,6 +29,8 @@ __all__ = [
     "LegacyProjectionJobQueue",
     "LegacySchemaManager",
     "SqliteOutputImageRepository",
+    "SqliteArenaRepository",
+    "SqliteRankingRepository",
     "SqlitePathRelinker",
     "SqlitePromptRepository",
     "SqliteReviewRepository",

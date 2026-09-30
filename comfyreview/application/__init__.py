@@ -1,5 +1,17 @@
 """Application contracts for ComfyReview lifecycle ownership."""
 
+from comfyreview.application.arena import (
+    ArenaCompetitor,
+    ArenaDecision,
+    ArenaMutationError,
+    ArenaPair,
+    ArenaQuery,
+    ArenaRepository,
+    ArenaResult,
+    ArenaService,
+    ArenaValidationError,
+    RecordArenaDecisionCommand,
+)
 from comfyreview.application.lifecycle import (
     CanonicalSchemaLifecycle,
     CanonicalSchemaReport,
@@ -14,6 +26,12 @@ from comfyreview.application.output_images import (
     CanonicalOutputImageSource,
     OutputImageCatalog,
     OutputImageReadModel,
+)
+from comfyreview.application.ranking import (
+    RankedImage,
+    RankingQuery,
+    RankingRepository,
+    RankingService,
 )
 from comfyreview.application.reviews import (
     InvalidOutputPathError,
@@ -39,6 +57,15 @@ from comfyreview.application.reviews import (
 )
 
 __all__ = [
+    "ArenaCompetitor",
+    "ArenaDecision",
+    "ArenaMutationError",
+    "ArenaPair",
+    "ArenaQuery",
+    "ArenaRepository",
+    "ArenaResult",
+    "ArenaService",
+    "ArenaValidationError",
     "CanonicalOutputImageRecord",
     "CanonicalOutputImageSource",
     "CanonicalSchemaLifecycle",
@@ -58,6 +85,11 @@ __all__ = [
     "OutputPairNotFoundError",
     "PromptProjection",
     "PromptRepository",
+    "RankedImage",
+    "RankingQuery",
+    "RankingRepository",
+    "RankingService",
+    "RecordArenaDecisionCommand",
     "ReviewImage",
     "ReviewImageResolver",
     "ReviewMutationError",

@@ -163,8 +163,8 @@
     </div>
 
     <form id="arenaForm" method="post" action="/arena_result">
-      <input type="hidden" name="left_json" value="{{ left.json_path }}">
-      <input type="hidden" name="right_json" value="{{ right.json_path }}">
+      <input type="hidden" name="left_image_uid" value="{{ left.image_uid }}">
+      <input type="hidden" name="right_image_uid" value="{{ right.image_uid }}">
       <input type="hidden" name="model" value="{{ model }}">
       <input type="hidden" name="subdir" value="{{ subdir }}">
       <input type="hidden" name="mode" value="{{ mode }}">

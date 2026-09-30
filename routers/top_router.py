@@ -52,7 +52,7 @@ def top_pictures(
     )
 
     vm = build_top_pictures_page(
-        output_images=get_application_container(request).output_images,
+        ranking_service=get_application_container(request).ranking_service,
         playground_db_path=PLAYGROUND_DB_PATH,
         context=ctx,
         min_runs=MIN_RUNS,

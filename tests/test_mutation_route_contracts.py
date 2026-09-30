@@ -12,6 +12,9 @@ from fastapi import HTTPException
 from starlette.requests import Request
 
 from comfyreview.application import (
+    ArenaMutationError,
+    ArenaResult,
+    ArenaValidationError,
     InvalidOutputPathError,
     OutputPairNotFoundError,
     ReviewMutationError,
@@ -27,7 +30,6 @@ from comfyreview.repositories.sqlite import (
     SqliteReviewRepository,
 )
 from models import RatedItem
-from services.arena_service import ArenaMutationError, ArenaValidationError
 from services.output_file_service import OutputFileService
 from tests.schema_helpers import initialize_legacy_database
 
@@ -59,14 +61,35 @@ class _RouteReviewService:
         )
 
 
+class _RouteArenaService:
+    def __init__(self, error: Exception | None = None) -> None:
+        self._error = error
+
+    def record_decision(self, command):
+        if self._error is not None:
+            raise self._error
+        return ArenaResult(
+            match_uid="match",
+            winner_image_uid=(
+                command.left_image_uid
+                if command.winner_side == "left"
+                else command.right_image_uid
+            ),
+            winner_rating=10,
+            loser_rating=1,
+        )
+
+
 def _request(
     *,
     items: list[RatedItem] | None = None,
     review_service: object | None = None,
+    arena_service: object | None = None,
 ) -> Request:
     container = SimpleNamespace(
         output_images=_OutputImageCatalog(items or []),
         review_service=review_service or _RouteReviewService(),
+        arena_service=arena_service or _RouteArenaService(),
     )
     application = SimpleNamespace(
         state=SimpleNamespace(container=container),
@@ -275,34 +298,17 @@ def test_arena_route_maps_validation_and_mutation_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    left = RatedItem(
-        tmp_path / "left.png", tmp_path / "left.json", "", "", "", "", {}
-    )
-    right = RatedItem(
-        tmp_path / "right.png",
-        tmp_path / "right.json",
-        "",
-        "",
-        "",
-        "",
-        {},
-    )
-    monkeypatch.setattr(
-        arena_router,
-        "ensure_arena_schema",
-        lambda _path: None,
-    )
-    monkeypatch.setattr(
-        arena_router,
-        "insert_arena_result",
-        lambda *_args: (_ for _ in ()).throw(ArenaValidationError("invalid")),
-    )
+    del monkeypatch, tmp_path
     with pytest.raises(HTTPException) as caught:
         arena_router.arena_result(
-            request=_request(items=[left, right]),
+            request=_request(
+                arena_service=_RouteArenaService(
+                    ArenaValidationError("invalid")
+                )
+            ),
             winner_side="invalid",
-            left_json=str(left.json_path),
-            right_json=str(right.json_path),
+            left_image_uid="left",
+            right_image_uid="right",
             model="",
             subdir="",
             mode="top",
@@ -310,17 +316,14 @@ def test_arena_route_maps_validation_and_mutation_errors(
         )
     assert caught.value.status_code == 400
 
-    monkeypatch.setattr(
-        arena_router,
-        "insert_arena_result",
-        lambda *_args: (_ for _ in ()).throw(ArenaMutationError("failed")),
-    )
     with pytest.raises(HTTPException) as caught:
         arena_router.arena_result(
-            request=_request(items=[left, right]),
+            request=_request(
+                arena_service=_RouteArenaService(ArenaMutationError("failed"))
+            ),
             winner_side="left",
-            left_json=str(left.json_path),
-            right_json=str(right.json_path),
+            left_image_uid="left",
+            right_image_uid="right",
             model="",
             subdir="",
             mode="top",
