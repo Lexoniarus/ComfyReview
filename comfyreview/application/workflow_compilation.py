@@ -6,9 +6,10 @@ import hashlib
 import json
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
-from comfyreview.application.generation import GenerationRequest
+if TYPE_CHECKING:
+    from comfyreview.application.generation import GenerationRequest
 
 _PROMPT_ROLES = {"positive_prompt", "negative_prompt"}
 _SAMPLER_ROLES = {"base_sampler", "refiner_sampler", "detail_sampler"}

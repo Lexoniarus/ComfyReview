@@ -25,6 +25,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_application.py::"
         "test_playground_service_prepares_draft_without_generation_submission"
     ),
+    "comfyreview.application.generation:GenerationService.submit": (
+        "tests/test_generation_service.py::"
+        "test_generation_service_submits_without_open_external_transaction"
+    ),
+    "comfyreview.application.generation:GenerationService.wait": (
+        "tests/test_generation_service.py::"
+        "test_generation_service_wait_maps_external_state"
+    ),
     "comfyreview.application.playground:PromptRenderer.render": (
         "tests/test_playground_application.py::"
         "test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate"

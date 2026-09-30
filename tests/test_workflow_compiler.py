@@ -72,6 +72,8 @@ def _request() -> GenerationRequest:
         ),
         blueprint_uid="portrait",
         blueprint_version=3,
+        model_branch="sdxl",
+        combo_key="character:1|scene:2",
         checkpoint="model.safetensors",
         sampler_stages=(
             GenerationSamplerSettings(
