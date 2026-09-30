@@ -39,17 +39,10 @@ class SqliteReviewRepository:
                 scope="neg",
                 prompt=record.image.negative_prompt,
             )
-            generation_uid = (
-                record.image.generation_uid
-                or self._legacy_generation_uid(record.image)
-            )
-            image_uid = record.image.image_uid or self._legacy_image_uid(
-                record.image
-            )
             generation_id = self._upsert_generation(
                 connection,
                 record,
-                generation_uid=generation_uid,
+                generation_uid=record.image.generation_uid,
                 positive_prompt_id=positive_prompt_id,
                 negative_prompt_id=negative_prompt_id,
             )
@@ -57,7 +50,7 @@ class SqliteReviewRepository:
                 connection,
                 record,
                 generation_id=generation_id,
-                image_uid=image_uid,
+                image_uid=record.image.image_uid,
             )
             return self._append_canonical_event(
                 connection,
@@ -617,35 +610,6 @@ class SqliteReviewRepository:
             """,
             key,
         )
-
-    @staticmethod
-    def _legacy_generation_uid(image) -> str:
-        sidecar_key = (
-            image.pair.json_path.stem
-            if image.pair.json_path is not None
-            else image.pair.png_path.stem
-        )
-        payload = "\0".join(
-            (
-                sidecar_key,
-                image.model_branch,
-                image.checkpoint,
-                image.combo_key,
-                str(image.steps),
-                str(image.cfg),
-                str(image.sampler),
-                str(image.scheduler),
-                str(image.denoise),
-                image.loras_json,
-                image.positive_prompt,
-                image.negative_prompt,
-            )
-        )
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-    @staticmethod
-    def _legacy_image_uid(image) -> str:
-        return SqliteReviewRepository._legacy_generation_uid(image)
 
     @staticmethod
     def _path_text(path: Path | None) -> str | None:

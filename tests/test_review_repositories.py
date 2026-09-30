@@ -46,6 +46,8 @@ def _review_record(
             loras_json='[{"name":"style"}]',
             positive_prompt="(hero:1.25), blue sky",
             negative_prompt="blur",
+            image_uid="image",
+            generation_uid="generation",
         ),
         rating=rating,
         deleted=deleted,

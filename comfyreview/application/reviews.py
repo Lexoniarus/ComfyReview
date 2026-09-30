@@ -67,8 +67,8 @@ class ReviewImage:
     loras_json: str
     positive_prompt: str
     negative_prompt: str
-    image_uid: str | None = None
-    generation_uid: str | None = None
+    image_uid: str
+    generation_uid: str
     output_node_id: str = "legacy_sidecar"
     output_index: int = 0
 
