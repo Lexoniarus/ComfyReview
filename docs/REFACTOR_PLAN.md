@@ -184,26 +184,34 @@ Runtime imports and their reports/backups are deliberately outside Git.
 - the old ComfyUI submit remains isolated until the real GenerationService is
   implemented and wired in Slice M.
 
+### F. Legacy projection audit
+
+The usage audit is recorded in `docs/PROJECTION_AUDIT.md`. Image ranking,
+prompt performance, prompt-token statistics, combo statistics,
+recommendations and best-image lookup can all be replaced by canonical
+repository queries with bounded deterministic aggregation. No replacement
+materialized worker is currently justified. `mv_jobs` and `mv_state` therefore
+exist only until the canonical query cutover removes their final consumers.
+
 ## Remaining slice order
 
 The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-1. evaluate every legacy projection as direct query, SQL view, materialization
-   or deletion;
-2. remove remaining multi-database runtime dependencies;
-3. introduce versioned `WorkflowBlueprint` and the semantic
+1. remove remaining multi-database runtime dependencies using the projection
+   audit decisions;
+2. introduce versioned `WorkflowBlueprint` and the semantic
    `WorkflowCompiler`;
-4. introduce the technical `ComfyUiProvider` for compiled graphs only;
-5. implement `GenerationService` and its canonical asynchronous lifecycle;
-6. collect native multi-output results and assign real output indices only
+3. introduce the technical `ComfyUiProvider` for compiled graphs only;
+4. implement `GenerationService` and its canonical asynchronous lifecycle;
+5. collect native multi-output results and assign real output indices only
     from returned ComfyUI outputs;
-7. apply explicit output policy and migrate to standard `SaveImage`;
-8. wire Playground to the real generation port and delete obsolete legacy
+6. apply explicit output policy and migrate to standard `SaveImage`;
+7. wire Playground to the real generation port and delete obsolete legacy
     clients, stores, workers and compatibility paths;
-9. migrate browser behavior to ES modules and the shared API client;
-10. run the complete architecture, data, browser, quality and documentation
+8. migrate browser behavior to ES modules and the shared API client;
+9. run the complete architecture, data, browser, quality and documentation
     acceptance before opening a new pull request.
 
 Each intermediate commit runs focused tests and static checks for changed

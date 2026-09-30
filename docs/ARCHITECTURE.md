@@ -234,6 +234,12 @@ dataset is first evaluated for replacement by a direct query or canonical SQL
 view. A new idempotent worker is introduced only for a projection whose
 materialization is demonstrably necessary.
 
+The completed audit is recorded in `docs/PROJECTION_AUDIT.md`. It found no
+current projection requiring replacement materialization: canonical repository
+queries are the chosen cutover for rankings, prompt statistics, observed
+composition statistics, recommendations and best-image lookup. The legacy
+worker/jobs/cursors are scheduled for deletion after those readers move.
+
 Legacy sources may be read by explicit migration tools. They must not become a
 second writable truth for an already cut-over feature.
 
