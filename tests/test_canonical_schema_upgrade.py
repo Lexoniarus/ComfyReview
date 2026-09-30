@@ -162,11 +162,25 @@ def _create_version_three_database(path: Path) -> None:
         connection.close()
 
 
+def _create_version_four_database(path: Path) -> None:
+    _create_version_three_database(path)
+    manager = CanonicalSchemaManager(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute("BEGIN IMMEDIATE")
+        manager._upgrade_v3_to_v4(connection)
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def test_old_versions_require_explicit_upgrade(tmp_path: Path) -> None:
     for version, factory in (
         (1, _create_version_one_database),
         (2, _create_version_two_database),
         (3, _create_version_three_database),
+        (4, _create_version_four_database),
     ):
         database_path = tmp_path / f"v{version}.sqlite3"
         factory(database_path)
@@ -186,13 +200,13 @@ def test_version_two_upgrade_preserves_output_identity_and_reviews(
 
     report = CanonicalSchemaManager(database_path).upgrade(backup_root)
 
-    assert report.schema_version == 4
+    assert report.schema_version == 5
     assert report.upgraded_from == 2
     assert report.backup_path is not None
     assert report.backup_path.is_file()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (4,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (5,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         live = connection.execute(
             """
@@ -292,10 +306,10 @@ def test_version_one_can_upgrade_directly_to_current_schema(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 4
+    assert report.schema_version == 5
     assert report.upgraded_from == 1
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (4,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (5,)
         row = connection.execute(
             """
             SELECT generation_uid, source, status, seed
@@ -320,7 +334,7 @@ def test_version_three_upgrade_preserves_ids_and_replaces_writable_state(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 4
+    assert report.schema_version == 5
     assert report.upgraded_from == 3
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -340,6 +354,47 @@ def test_version_three_upgrade_preserves_ids_and_replaces_writable_state(
         }
         with pytest.raises(sqlite3.OperationalError):
             connection.execute("DELETE FROM image_reviews WHERE image_id = 10")
+
+
+def test_version_four_upgrade_adds_revisioned_prompt_catalog(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    _create_version_four_database(database_path)
+
+    report = CanonicalSchemaManager(database_path).upgrade(
+        tmp_path / "backups"
+    )
+
+    assert report.schema_version == 5
+    assert report.upgraded_from == 4
+    with sqlite3.connect(database_path) as connection:
+        objects = dict(
+            connection.execute(
+                "SELECT name, type FROM sqlite_master WHERE name IN "
+                "('prompt_revisions', 'prompt_compositions', "
+                "'prompt_composition_revisions', "
+                "'legacy_prompt_component_sources')"
+            ).fetchall()
+        )
+        assert objects == {
+            "legacy_prompt_component_sources": "table",
+            "prompt_composition_revisions": "table",
+            "prompt_compositions": "table",
+            "prompt_revisions": "table",
+        }
+        component_columns = {
+            row[1]
+            for row in connection.execute(
+                "PRAGMA table_info(prompt_components)"
+            )
+        }
+        generation_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(generations)")
+        }
+        assert "archived_at" in component_columns
+        assert "prompt_composition_id" in generation_columns
 
 
 def test_upgrade_rolls_back_without_unnecessary_backup_restore(
@@ -402,8 +457,8 @@ def test_canonical_database_cli_validates_and_upgrades(
         == 0
     )
     output = capsys.readouterr().out
-    assert '"schema_version": 4' in output
+    assert '"schema_version": 5' in output
     assert '"upgraded_from": 2' in output
 
     assert main(["canonical-db", "validate"]) == 0
-    assert '"schema_version": 4' in capsys.readouterr().out
+    assert '"schema_version": 5' in capsys.readouterr().out

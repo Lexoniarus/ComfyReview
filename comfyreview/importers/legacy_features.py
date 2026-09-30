@@ -61,7 +61,7 @@ class LegacyFeatureImportResult:
 
 
 class SqliteLegacyFeatureMigration:
-    """Audit immutable legacy facts and import them into schema version four."""
+    """Audit immutable legacy facts for canonical feature import."""
 
     def __init__(
         self,

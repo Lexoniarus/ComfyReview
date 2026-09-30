@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from comfyreview.application import CanonicalSchemaReport
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -389,6 +389,35 @@ _REQUIRED_REVIEW_EVENT_COLUMNS_V4 = {
     "created_at",
 }
 
+_REQUIRED_OBJECTS_V5 = {
+    **_REQUIRED_OBJECTS_V4,
+    "legacy_prompt_component_sources": "table",
+    "prompt_composition_revisions": "table",
+    "prompt_compositions": "table",
+    "prompt_revisions": "table",
+}
+_REQUIRED_PROMPT_COMPONENT_COLUMNS_V5 = {
+    "id",
+    "kind",
+    "component_key",
+    "name",
+    "tags",
+    "notes",
+    "archived_at",
+    "created_at",
+    "updated_at",
+}
+_REQUIRED_PROMPT_REVISION_COLUMNS_V5 = {
+    "id",
+    "revision_uid",
+    "component_id",
+    "revision_number",
+    "positive_text",
+    "negative_text",
+    "content_hash",
+    "created_at",
+}
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -401,7 +430,7 @@ class CanonicalSchemaManager:
         self._database_path = Path(database_path).resolve()
 
     def prepare_startup(self) -> CanonicalSchemaReport:
-        """Validate or atomically create canonical schema version four."""
+        """Validate or atomically create canonical schema version five."""
         if self._database_path.exists():
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
@@ -436,18 +465,20 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3}:
+        if current_version not in {1, 2, 3, 4}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1, 2, 3, or {SCHEMA_VERSION}"
+                f"{current_version}; expected 1, 2, 3, 4, or {SCHEMA_VERSION}"
             )
 
         if current_version == _MIN_UPGRADE_VERSION:
             self._validate_version_one()
         elif current_version == 2:
             self._validate_version_two()
-        else:
+        elif current_version == 3:
             self._validate_version_three()
+        else:
+            self._validate_version_four()
 
         backup_path = self._create_backup(backup_directory)
         committed = False
@@ -459,7 +490,9 @@ class CanonicalSchemaManager:
                     self._upgrade_v1_to_v2(connection)
                 if current_version <= 2:
                     self._upgrade_v2_to_v3(connection)
-                self._upgrade_v3_to_v4(connection)
+                if current_version <= 3:
+                    self._upgrade_v3_to_v4(connection)
+                self._upgrade_v4_to_v5(connection)
                 connection.commit()
                 committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
@@ -502,6 +535,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v3_to_v4(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v4_to_v5(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -514,7 +550,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3}:
+            if version in {1, 2, 3, 4}:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -581,6 +617,22 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_four(self) -> None:
+        connection = self._open_read_only()
+        try:
+            version = self._schema_version(connection)
+            if version != 4:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 4 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V4)
+            self._validate_metadata_version(connection, 4)
+            self._validate_generation_columns(connection)
+            self._validate_output_identity_v4(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -589,10 +641,11 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V4)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V5)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v4(connection)
+        self._validate_prompt_catalog_v5(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -946,9 +999,75 @@ class CanonicalSchemaManager:
         connection.execute(
             "UPDATE schema_metadata SET value = ? "
             "WHERE key = 'schema_version'",
-            (str(SCHEMA_VERSION),),
+            ("4",),
         )
-        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        connection.execute("PRAGMA user_version = 4")
+
+    @staticmethod
+    def _upgrade_v4_to_v5(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "ALTER TABLE prompt_components ADD COLUMN archived_at TEXT"
+        )
+        connection.execute(
+            """
+            CREATE TABLE prompt_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                revision_uid TEXT NOT NULL UNIQUE,
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                revision_number INTEGER NOT NULL,
+                positive_text TEXT NOT NULL DEFAULT '',
+                negative_text TEXT NOT NULL DEFAULT '',
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (component_id, revision_number),
+                UNIQUE (component_id, content_hash)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE prompt_compositions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                composition_uid TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE prompt_composition_revisions (
+                composition_id INTEGER NOT NULL
+                    REFERENCES prompt_compositions(id) ON DELETE CASCADE,
+                revision_id INTEGER NOT NULL REFERENCES prompt_revisions(id),
+                slot TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                PRIMARY KEY (composition_id, slot, position),
+                UNIQUE (composition_id, revision_id, slot)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE legacy_prompt_component_sources (
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                source TEXT NOT NULL,
+                source_key TEXT NOT NULL,
+                PRIMARY KEY (source, source_key),
+                UNIQUE (component_id, source)
+            )
+            """
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN prompt_composition_id "
+            "INTEGER REFERENCES prompt_compositions(id)"
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '5' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 5")
 
     @staticmethod
     def _create_review_views(connection: sqlite3.Connection) -> None:
@@ -1265,6 +1384,49 @@ class CanonicalSchemaManager:
                     "review_events is missing canonical identity constraints"
                 )
 
+    @classmethod
+    def _validate_prompt_catalog_v5(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        component_columns = cls._table_column_rows(
+            connection,
+            "prompt_components",
+        )
+        revision_columns = cls._table_column_rows(
+            connection,
+            "prompt_revisions",
+        )
+        generation_columns = cls._table_column_rows(
+            connection,
+            "generations",
+        )
+        missing = sorted(
+            (_REQUIRED_PROMPT_COMPONENT_COLUMNS_V5 - component_columns.keys())
+            | (_REQUIRED_PROMPT_REVISION_COLUMNS_V5 - revision_columns.keys())
+        )
+        if "prompt_composition_id" not in generation_columns:
+            missing.append("generations.prompt_composition_id")
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical prompt catalog is missing required columns: "
+                + ", ".join(missing)
+            )
+
+        revision_indexes = cls._unique_index_columns(
+            connection,
+            "prompt_revisions",
+        )
+        for expected in (
+            ("revision_uid",),
+            ("component_id", "revision_number"),
+            ("component_id", "content_hash"),
+        ):
+            if expected not in revision_indexes:
+                raise CanonicalSchemaValidationError(
+                    "prompt_revisions is missing immutable identity constraints"
+                )
+
     def _is_valid_version(self, version: int) -> bool:
         try:
             if version == 1:
@@ -1273,6 +1435,8 @@ class CanonicalSchemaManager:
                 self._validate_version_two()
             elif version == 3:
                 self._validate_version_three()
+            elif version == 4:
+                self._validate_version_four()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):
