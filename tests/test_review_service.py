@@ -58,19 +58,6 @@ class _Reviews:
         self._scenario.record("review_delete")
 
 
-class _Prompts:
-    def __init__(self, scenario: _Scenario) -> None:
-        self._scenario = scenario
-
-    def save(self, projection) -> None:
-        assert projection.positive_prompt == "hero"
-        self._scenario.record("prompt_save")
-
-    def delete(self, json_path: Path, run: int) -> None:
-        del json_path, run
-        self._scenario.record("prompt_delete")
-
-
 class _Jobs:
     def __init__(self, scenario: _Scenario) -> None:
         self._scenario = scenario
@@ -132,7 +119,6 @@ class _ReviewFixture:
 def _fixture(
     *,
     fail_at: set[str] | None = None,
-    with_prompts: bool = False,
     sidecarless: bool = False,
 ) -> _ReviewFixture:
     scenario = _Scenario(fail_at=set(fail_at or ()))
@@ -164,7 +150,6 @@ def _fixture(
         jobs=_Jobs(scenario),
         deletions=_Deletions(scenario, staged),
         preserve_deleted_files=True,
-        prompts=_Prompts(scenario) if with_prompts else None,
     )
     return _ReviewFixture(
         scenario=scenario,
@@ -284,48 +269,6 @@ def test_review_service_reports_primary_failure_on_rollback_failure() -> None:
         fixture.service.submit(fixture.command(delete=True))
 
     assert fixture.scenario.events[-1] == "rollback"
-
-
-def test_review_service_supports_legacy_prompt_projection_adapter() -> None:
-    fixture = _fixture(with_prompts=True)
-
-    result = fixture.service.submit(fixture.command())
-
-    assert result.job_id == 29
-    assert fixture.scenario.events == [
-        "resolve",
-        "review_append",
-        "prompt_save",
-        "queue",
-    ]
-
-
-def test_review_service_rolls_back_legacy_review_if_prompt_write_fails() -> (
-    None
-):
-    fixture = _fixture(fail_at={"prompt_save"}, with_prompts=True)
-
-    with pytest.raises(ReviewMutationError, match="canonical_write"):
-        fixture.service.submit(fixture.command())
-
-    assert fixture.scenario.events == [
-        "resolve",
-        "review_append",
-        "prompt_save",
-        "review_delete",
-    ]
-
-
-def test_review_service_keeps_primary_error_if_legacy_rollback_fails() -> None:
-    fixture = _fixture(
-        fail_at={"prompt_save", "review_delete"},
-        with_prompts=True,
-    )
-
-    with pytest.raises(ReviewMutationError, match="canonical_write"):
-        fixture.service.submit(fixture.command())
-
-    assert fixture.scenario.events[-1] == "review_delete"
 
 
 def test_output_reference_accepts_canonical_uid() -> None:

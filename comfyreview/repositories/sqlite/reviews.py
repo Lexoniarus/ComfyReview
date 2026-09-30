@@ -41,11 +41,6 @@ class SqliteReviewRepository:
         finally:
             connection.close()
 
-    def delete(self, review_id: int) -> None:
-        """Reject deletion because canonical review history is append-only."""
-        del review_id
-        raise RuntimeError("Canonical review events are append-only")
-
     @staticmethod
     def _resolve_image_identity(
         connection: sqlite3.Connection,

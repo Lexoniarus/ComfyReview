@@ -137,22 +137,6 @@ class ReviewRepository(Protocol):
         """Apply one review mutation and return its canonical revision."""
         ...
 
-    def delete(self, review_id: int) -> None:
-        """Remove one current review for compatibility compensation."""
-        ...
-
-
-class PromptRepository(Protocol):
-    """Legacy compatibility port; canonical prompts are generation facts."""
-
-    def save(self, projection: PromptProjection) -> None:
-        """Accept a legacy request without duplicating token rows."""
-        ...
-
-    def delete(self, json_path: Path, run: int) -> None:
-        """Accept compensation for a projection that is not persisted."""
-        ...
-
 
 class JobQueue(Protocol):
     """Request coalescing derived-projection catchup work."""
@@ -193,11 +177,9 @@ class ReviewService:
         jobs: JobQueue,
         deletions: OutputDeletionManager,
         preserve_deleted_files: bool,
-        prompts: PromptRepository | None = None,
     ) -> None:
         self._image_resolver = image_resolver
         self._reviews = reviews
-        self._prompts = prompts
         self._jobs = jobs
         self._deletions = deletions
         self._preserve_deleted_files = preserve_deleted_files
@@ -219,14 +201,7 @@ class ReviewService:
             if command.delete:
                 staged = self._deletions.stage(image.pair)
             stored = self._reviews.append(record)
-            if (
-                self._prompts is not None
-                and record.image.pair.json_path is not None
-            ):
-                self._prompts.save(self._prompt_projection(record, stored))
         except Exception as error:
-            if stored is not None and self._prompts is not None:
-                self._try_review_rollback(stored.review_id)
             if staged is not None:
                 self._try_rollback(staged)
             self._logger.exception(
@@ -264,24 +239,6 @@ class ReviewService:
             raise ReviewValidationError("rating must be between 1 and 10")
         return command.rating
 
-    @staticmethod
-    def _prompt_projection(
-        record: ReviewRecord,
-        stored: StoredReview,
-    ) -> PromptProjection:
-        image = record.image
-        json_path = image.pair.json_path
-        assert json_path is not None, "projection requires a JSON sidecar"
-        return PromptProjection(
-            json_path=json_path,
-            run=stored.run,
-            model_branch=image.model_branch,
-            positive_prompt=image.positive_prompt,
-            negative_prompt=image.negative_prompt,
-            rating=record.rating,
-            deleted=record.deleted,
-        )
-
     def _request_projection_catchup(self) -> int:
         try:
             return self._jobs.request_catchup()
@@ -301,15 +258,6 @@ class ReviewService:
             self._logger.exception(
                 "review.delete_finalize_failed",
                 extra={"error_category": "delete_finalize"},
-            )
-
-    def _try_review_rollback(self, review_id: int) -> None:
-        try:
-            self._reviews.delete(review_id)
-        except Exception:
-            self._logger.exception(
-                "review.compatibility_rollback_failed",
-                extra={"error_category": "compatibility_rollback"},
             )
 
     def _try_rollback(self, staged: StagedDeletion) -> None:

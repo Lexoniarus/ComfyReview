@@ -5,7 +5,6 @@ import pytest
 from comfyreview.application import (
     OutputImageReference,
     OutputPair,
-    PromptProjection,
     ReviewImage,
     ReviewMutationError,
     ReviewRecord,
@@ -27,17 +26,6 @@ class _FailingReviewRepository:
     def append(self, record: ReviewRecord) -> StoredReview:
         del record
         raise OSError("database is read-only")
-
-    def delete(self, review_id: int) -> None:
-        del review_id
-
-
-class _UnusedPromptRepository:
-    def save(self, projection: PromptProjection) -> None:
-        raise AssertionError(projection)
-
-    def delete(self, json_path: Path, run: int) -> None:
-        raise AssertionError(json_path, run)
 
 
 class _UnusedJobQueue:
@@ -79,7 +67,6 @@ def test_delete_keeps_files_when_rating_write_fails(tmp_path: Path) -> None:
     service = ReviewService(
         image_resolver=_ImageResolver(png_path, json_path),
         reviews=_FailingReviewRepository(),
-        prompts=_UnusedPromptRepository(),
         jobs=_UnusedJobQueue(),
         deletions=OutputFileService(
             output_root=tmp_path,

@@ -322,30 +322,6 @@ def test_reappearing_generation_replaces_delete_evidence(
     assert stats == [(1, 9.0, 0)]
 
 
-def test_review_repository_rejects_canonical_event_deletion(
-    tmp_path: Path,
-) -> None:
-    database_path = tmp_path / "comfyreview.sqlite3"
-    CanonicalSchemaManager(database_path).prepare_startup()
-    _seed_review_target(database_path, tmp_path / "image.json")
-    repository = SqliteReviewRepository(database_path)
-    stored = repository.append(_review_record(tmp_path / "image.json", 6))
-
-    with pytest.raises(RuntimeError, match="append-only"):
-        repository.delete(stored.review_id)
-
-    with sqlite3.connect(database_path) as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM image_reviews"
-        ).fetchone() == (1,)
-        assert connection.execute(
-            "SELECT COUNT(*) FROM atom_learning_stats"
-        ).fetchone() == (3,)
-        assert connection.execute(
-            "SELECT COUNT(*) FROM render_learning_stats"
-        ).fetchone() == (1,)
-
-
 def test_review_repository_rejects_writable_legacy_review_state(
     tmp_path: Path,
 ) -> None:
