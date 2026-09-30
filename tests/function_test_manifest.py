@@ -85,6 +85,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_review_service.py::"
         "test_review_service_submits_rating_in_order"
     ),
+    "comfyreview.application.workflow_compilation:WorkflowCompiler.compile": (
+        "tests/test_workflow_compiler.py::"
+        "test_workflow_compiler_uses_only_explicit_roles_and_preserves_blueprint"
+    ),
     "comfyreview.domain.prompts:parse_prompt_atoms": (
         "tests/test_prompt_atoms.py::"
         "test_parse_prompt_atoms_separates_text_and_explicit_weight"

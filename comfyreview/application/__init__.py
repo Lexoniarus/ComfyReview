@@ -32,9 +32,11 @@ from comfyreview.application.curation import (
     StagedCurationMove,
 )
 from comfyreview.application.generation import (
+    GenerationOutputPolicy,
     GenerationPort,
     GenerationPromptSnapshot,
     GenerationRequest,
+    GenerationSamplerSettings,
     GenerationSubmission,
 )
 from comfyreview.application.lifecycle import (
@@ -104,6 +106,17 @@ from comfyreview.application.reviews import (
     StoredReview,
     SubmitReviewCommand,
 )
+from comfyreview.application.workflow_compilation import (
+    CompiledOutputBinding,
+    CompiledSamplerStage,
+    CompiledWorkflow,
+    WorkflowBlueprint,
+    WorkflowBlueprintRepository,
+    WorkflowCompilationError,
+    WorkflowCompiler,
+    WorkflowInputBinding,
+    WorkflowOutputBinding,
+)
 
 __all__ = [
     "AssignCurationCommand",
@@ -133,9 +146,14 @@ __all__ = [
     "CurationService",
     "CurationValidationError",
     "GenerationPort",
+    "GenerationOutputPolicy",
     "GenerationPromptSnapshot",
     "GenerationRequest",
+    "GenerationSamplerSettings",
     "GenerationSubmission",
+    "CompiledOutputBinding",
+    "CompiledSamplerStage",
+    "CompiledWorkflow",
     "InvalidOutputPathError",
     "LegacySchemaIssue",
     "LegacySchemaLifecycle",
@@ -188,6 +206,12 @@ __all__ = [
     "StagedCurationMove",
     "SubmitReviewCommand",
     "UpdatePromptComponentMetadataCommand",
+    "WorkflowBlueprint",
+    "WorkflowBlueprintRepository",
+    "WorkflowCompilationError",
+    "WorkflowCompiler",
+    "WorkflowInputBinding",
+    "WorkflowOutputBinding",
     "imported_prompt_component_uid",
     "prompt_revision_identity",
 ]

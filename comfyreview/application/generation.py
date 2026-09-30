@@ -16,18 +16,38 @@ class GenerationPromptSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationSamplerSettings:
+    """Describe one explicitly named sampler stage in a generation request."""
+
+    role: str
+    seed: int
+    steps: int
+    cfg: float
+    sampler: str
+    scheduler: str
+    denoise: float
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationOutputPolicy:
+    """Carry output naming intent decided before workflow compilation."""
+
+    output_subdirectory: str
+    filename_prefix: str
+    expected_roles: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationRequest:
     """Describe one prepared generation without workflow implementation."""
 
     prompt: GenerationPromptSnapshot
+    blueprint_uid: str
+    blueprint_version: int | None
     checkpoint: str | None
-    sampler: str | None
-    scheduler: str | None
-    seed: int
-    steps: int | None
-    cfg: float | None
-    denoise: float | None
-    output_subdirectory: str
+    sampler_stages: tuple[GenerationSamplerSettings, ...]
+    output_policy: GenerationOutputPolicy
+    reference_image: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
