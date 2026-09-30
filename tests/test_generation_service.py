@@ -192,6 +192,10 @@ class _Outputs:
             raise self.error
         return ()
 
+    def outputs_complete(self, generation_uid):
+        assert generation_uid == "generation-1"
+        return False
+
 
 def _service(
     *,

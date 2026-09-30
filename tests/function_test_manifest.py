@@ -69,9 +69,17 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_generation_service.py::"
         "test_generation_service_wait_maps_external_state"
     ),
+    "comfyreview.application.generation_reconciliation:GenerationReconciliationService.reconcile": (
+        "tests/test_generation_reconciliation.py::"
+        "test_reconciliation_completes_from_already_persisted_outputs"
+    ),
     "comfyreview.application.generation_outputs:GenerationOutputCollector.collect": (
         "tests/test_generation_outputs.py::"
         "test_output_collector_maps_expected_nodes_and_actual_batch_indexes"
+    ),
+    "comfyreview.application.generation_outputs:GenerationOutputCollector.outputs_complete": (
+        "tests/test_generation_outputs.py::"
+        "test_output_collector_reports_prior_atomic_collection"
     ),
     "comfyreview.application.generation_outputs:generation_output_identity": (
         "tests/test_generation_outputs.py::"

@@ -75,6 +75,9 @@ from comfyreview.application.generation_outputs import (
     UnexpectedGenerationOutputError,
     generation_output_identity,
 )
+from comfyreview.application.generation_reconciliation import (
+    GenerationReconciliationService,
+)
 from comfyreview.application.lifecycle import (
     CanonicalSchemaLifecycle,
     CanonicalSchemaReport,
@@ -220,6 +223,7 @@ __all__ = [
     "GenerationPromptSnapshot",
     "GenerationRecord",
     "GenerationReconciliationRequired",
+    "GenerationReconciliationService",
     "GenerationRepository",
     "GenerationOutputRepository",
     "GenerationOutputSource",

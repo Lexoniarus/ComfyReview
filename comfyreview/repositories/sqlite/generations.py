@@ -152,7 +152,7 @@ class SqliteGenerationRepository:
         return self._transition(
             generation_uid,
             "submitted",
-            ("submitting",),
+            ("submitting", "reconciliation_required"),
             prompt_id=prompt_id,
             timestamp_column="submitted_at",
         )
@@ -162,7 +162,7 @@ class SqliteGenerationRepository:
         return self._transition(
             generation_uid,
             "running",
-            ("submitted", "running"),
+            ("submitted", "running", "reconciliation_required"),
             timestamp_column="started_at",
         )
 
@@ -171,7 +171,7 @@ class SqliteGenerationRepository:
         return self._transition(
             generation_uid,
             "completed",
-            ("submitted", "running"),
+            ("submitted", "running", "reconciliation_required"),
             timestamp_column="completed_at",
         )
 
@@ -184,7 +184,13 @@ class SqliteGenerationRepository:
         return self._transition(
             generation_uid,
             "failed",
-            ("prepared", "submitting", "submitted", "running"),
+            (
+                "prepared",
+                "submitting",
+                "submitted",
+                "running",
+                "reconciliation_required",
+            ),
             reason=reason,
         )
 
@@ -198,7 +204,12 @@ class SqliteGenerationRepository:
         return self._transition(
             generation_uid,
             "reconciliation_required",
-            ("submitting", "submitted", "running"),
+            (
+                "submitting",
+                "submitted",
+                "running",
+                "reconciliation_required",
+            ),
             prompt_id=prompt_id,
             reason=reason,
         )

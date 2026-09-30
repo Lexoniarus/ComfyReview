@@ -175,6 +175,26 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
     assert repository.mark_running("generation-native").status == "running"
     assert repository.mark_completed("generation-native").status == "completed"
 
+    repository.prepare(
+        PreparedGeneration("generation-reconcile", request, compiled)
+    )
+    repository.mark_submitting("generation-reconcile")
+    ambiguous = repository.mark_reconciliation_required(
+        "generation-reconcile",
+        None,
+        "submit_timeout",
+    )
+    assert ambiguous.prompt_id is None
+    assigned = repository.mark_reconciliation_required(
+        "generation-reconcile",
+        "prompt-2",
+        "operator_prompt_id_assigned",
+    )
+    assert assigned.prompt_id == "prompt-2"
+    assert (
+        repository.mark_completed("generation-reconcile").status == "completed"
+    )
+
     with sqlite3.connect(database_path) as connection:
         generation = connection.execute(
             """
@@ -196,7 +216,10 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
         1,
     )
     assert json.loads(generation[4])["revision_uids"] == [revision_uid]
-    assert stages == [("base_sampler", "sampler", 0)]
+    assert stages == [
+        ("base_sampler", "sampler", 0),
+        ("base_sampler", "sampler", 0),
+    ]
     assert memberships == 3
 
 

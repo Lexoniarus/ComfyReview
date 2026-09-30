@@ -17,6 +17,7 @@ from comfyreview.application import (
     CanonicalSchemaLifecycle,
     CurationService,
     GenerationOutputCollector,
+    GenerationReconciliationService,
     GenerationService,
     OutputImageCatalog,
     PlaygroundGenerationPolicy,
@@ -85,6 +86,7 @@ class ApplicationContainer:
     playground_hub: PlaygroundHubService
     playground_discovery: PlaygroundDiscoveryService
     generation_service: GenerationService
+    generation_reconciliation: GenerationReconciliationService
     prompt_catalog_service: PromptCatalogService
     prompt_catalog_views: PromptCatalogViewService
     prompt_labels: PromptLabelService
@@ -172,6 +174,13 @@ def build_application_container(
         outputs=generation_output_collector,
         identities=UuidGenerationIdentitySource(),
     )
+    generation_reconciliation = GenerationReconciliationService(
+        generations=SqliteGenerationRepository(
+            configured.canonical_database_path
+        ),
+        comfyui=comfyui_provider,
+        outputs=generation_output_collector,
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -197,6 +206,7 @@ def build_application_container(
             / "comfy_discovery_cache.json",
         ),
         generation_service=generation_service,
+        generation_reconciliation=generation_reconciliation,
         prompt_catalog_service=prompt_catalog_service,
         prompt_catalog_views=PromptCatalogViewService(prompt_catalog_service),
         prompt_labels=PromptLabelService(prompt_catalog_service),

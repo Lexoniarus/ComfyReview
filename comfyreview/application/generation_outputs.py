@@ -78,6 +78,10 @@ class GenerationOutputRepository(Protocol):
         """Idempotently persist every collected output in one transaction."""
         ...
 
+    def outputs_complete(self, generation_uid: str) -> bool:
+        """Return whether all expected role/node bindings have outputs."""
+        ...
+
 
 def generation_output_identity(
     generation_uid: str,
@@ -135,6 +139,10 @@ class GenerationOutputCollector:
                 )
             )
         return self._repository.save_outputs(generation_uid, tuple(outputs))
+
+    def outputs_complete(self, generation_uid: str) -> bool:
+        """Return whether a prior atomic collection stored every binding."""
+        return self._repository.outputs_complete(generation_uid)
 
     @staticmethod
     def _roles_by_node(

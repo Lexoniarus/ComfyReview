@@ -72,6 +72,10 @@ class _Repository:
         self.saved = outputs
         return outputs
 
+    def outputs_complete(self, generation_uid):
+        assert generation_uid == "generation-1"
+        return self.saved is not None
+
 
 def _descriptor(
     node_id: str, index: int, filename: str
@@ -166,6 +170,28 @@ def test_generation_output_identity_does_not_depend_on_path() -> None:
     assert generation_output_identity("generation", "save", 2, "hash") == (
         generation_output_identity("generation", "save", 2, "hash")
     )
+
+
+def test_output_collector_reports_prior_atomic_collection() -> None:
+    repository = _Repository((CompiledOutputBinding("primary", "save"),))
+    collector = GenerationOutputCollector(
+        comfyui=_ComfyUi(()),
+        source=_Source(),
+        repository=repository,
+    )
+
+    assert collector.outputs_complete("generation-1") is False
+    repository.saved = (
+        GenerationOutput(
+            "image-1",
+            "primary",
+            "save",
+            0,
+            Path("output/image.png"),
+            "hash",
+        ),
+    )
+    assert collector.outputs_complete("generation-1") is True
     assert generation_output_identity("generation", "save", 2, "hash") != (
         generation_output_identity("generation", "save", 3, "hash")
     )
@@ -240,6 +266,7 @@ def test_sqlite_output_repository_is_idempotent_and_detects_conflicts(
     )
     assert repository.save_outputs("generation-1", (output,)) == (output,)
     assert repository.save_outputs("generation-1", (output,)) == (output,)
+    assert repository.outputs_complete("generation-1") is True
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT output_role, content_hash FROM images"
@@ -268,3 +295,36 @@ def test_sqlite_output_repository_rejects_invalid_binding_payload(
         SqliteGenerationOutputRepository(database_path).expected_bindings(
             "generation-1"
         )
+
+
+def test_sqlite_output_repository_requires_every_expected_node(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _generation(
+        database_path,
+        {
+            "output_bindings": [
+                {"role": "primary", "node_id": "save-a"},
+                {"role": "detail", "node_id": "save-b"},
+            ]
+        },
+    )
+    repository = SqliteGenerationOutputRepository(database_path)
+
+    assert repository.outputs_complete("generation-1") is False
+    repository.save_outputs(
+        "generation-1",
+        (
+            GenerationOutput(
+                "image-1",
+                "primary",
+                "save-a",
+                0,
+                tmp_path / "image.png",
+                "hash",
+            ),
+        ),
+    )
+    assert repository.outputs_complete("generation-1") is False

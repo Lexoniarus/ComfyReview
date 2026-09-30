@@ -105,3 +105,31 @@ class SqliteGenerationOutputRepository:
             raise
         finally:
             connection.close()
+
+    def outputs_complete(self, generation_uid: str) -> bool:
+        """Return whether every compiled output binding has a saved image."""
+        expected = {
+            (binding.role, binding.node_id)
+            for binding in self.expected_bindings(generation_uid)
+        }
+        if not expected:
+            return False
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                """
+                SELECT image.output_role, image.output_node_id
+                FROM images AS image
+                JOIN generations AS generation
+                  ON generation.id = image.generation_id
+                WHERE generation.generation_uid = ?
+                """,
+                (generation_uid,),
+            ).fetchall()
+            persisted = {
+                (str(row["output_role"]), str(row["output_node_id"]))
+                for row in rows
+            }
+            return expected <= persisted
+        finally:
+            connection.close()

@@ -180,6 +180,10 @@ class GenerationOutputCollection(Protocol):
         """Collect every expected output for one completed generation."""
         ...
 
+    def outputs_complete(self, generation_uid: str) -> bool:
+        """Return whether every expected output node is persisted."""
+        ...
+
 
 class GenerationService:
     """Coordinate compilation, short persistence and external submission."""

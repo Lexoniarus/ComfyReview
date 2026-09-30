@@ -15,6 +15,7 @@ from comfyreview.application import (
     CanonicalSchemaReport,
     CurationImage,
     CurationService,
+    GenerationReconciliationService,
     GenerationService,
     OutputImageReadModel,
     PlaygroundService,
@@ -109,6 +110,10 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         playground_hub=cast(PlaygroundHubService, object()),
         playground_discovery=cast(PlaygroundDiscoveryService, object()),
         generation_service=cast(GenerationService, object()),
+        generation_reconciliation=cast(
+            GenerationReconciliationService,
+            object(),
+        ),
         prompt_catalog_service=cast(PromptCatalogService, object()),
         prompt_catalog_views=cast(PromptCatalogViewService, object()),
         prompt_labels=cast(PromptLabelService, object()),
@@ -194,6 +199,10 @@ def test_default_container_wires_canonical_review_runtime(
         PlaygroundDiscoveryService,
     )
     assert isinstance(container.generation_service, GenerationService)
+    assert isinstance(
+        container.generation_reconciliation,
+        GenerationReconciliationService,
+    )
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.prompt_catalog_service, PromptCatalogService)
     assert isinstance(container.prompt_catalog_views, PromptCatalogViewService)
