@@ -10,7 +10,10 @@ from comfyreview.providers.legacy_output_import import (
     LocalLegacyOutputImportSource,
 )
 from comfyreview.providers.output_images import CanonicalOutputImageCatalog
-from comfyreview.providers.prompt_identities import UuidPromptIdentitySource
+from comfyreview.providers.prompt_identities import (
+    UuidGenerationIdentitySource,
+    UuidPromptIdentitySource,
+)
 
 __all__ = [
     "CanonicalOutputImageCatalog",
@@ -19,5 +22,6 @@ __all__ = [
     "JsonHttpResponse",
     "NativeComfyUiProvider",
     "UrlLibJsonTransport",
+    "UuidGenerationIdentitySource",
     "UuidPromptIdentitySource",
 ]

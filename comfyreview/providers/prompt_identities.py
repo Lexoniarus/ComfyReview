@@ -9,3 +9,11 @@ class UuidPromptIdentitySource:
     def new_component_uid(self) -> str:
         """Return one opaque component UID."""
         return f"prompt-component-{uuid4()}"
+
+
+class UuidGenerationIdentitySource:
+    """Create opaque UUID-backed generation identities."""
+
+    def new_generation_uid(self) -> str:
+        """Return one canonical generation UID."""
+        return f"generation-{uuid4()}"

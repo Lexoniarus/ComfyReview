@@ -15,6 +15,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaLifecycle,
     CurationService,
+    GenerationService,
     LegacySchemaLifecycle,
     OutputImageCatalog,
     PlaygroundService,
@@ -23,6 +24,7 @@ from comfyreview.application import (
     PromptSelectionPolicy,
     RankingService,
     ReviewService,
+    WorkflowCompiler,
 )
 from comfyreview.observability import (
     RequestTracingMiddleware,
@@ -31,14 +33,19 @@ from comfyreview.observability import (
 from comfyreview.providers import (
     CanonicalOutputImageCatalog,
     LocalCurationFileManager,
+    NativeComfyUiProvider,
+    UrlLibJsonTransport,
+    UuidGenerationIdentitySource,
     UuidPromptIdentitySource,
 )
+from comfyreview.repositories.filesystem import JsonWorkflowBlueprintRepository
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     LegacySchemaManager,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
     SqliteCurationRepository,
+    SqliteGenerationRepository,
     SqliteOutputImageRepository,
     SqlitePromptCatalogRepository,
     SqliteRankingRepository,
@@ -67,6 +74,7 @@ class ApplicationContainer:
     analytics_service: AnalyticsService
     analytics_pages: AnalyticsPageService
     playground_hub: PlaygroundHubService
+    generation_service: GenerationService
     prompt_catalog_service: PromptCatalogService
     playground_service: PlaygroundService
     review_service: ReviewService
@@ -144,6 +152,19 @@ def build_application_container(
             analytics=analytics_service,
             image_url=existing_png_path_to_url,
             default_max_attempts=configured.default_max_tries,
+        ),
+        generation_service=GenerationService(
+            blueprints=JsonWorkflowBlueprintRepository(
+                configured.workflows_directory
+            ),
+            compiler=WorkflowCompiler(),
+            generations=SqliteGenerationRepository(
+                configured.canonical_database_path
+            ),
+            comfyui=NativeComfyUiProvider(
+                UrlLibJsonTransport(configured.comfyui_base_url)
+            ),
+            identities=UuidGenerationIdentitySource(),
         ),
         prompt_catalog_service=prompt_catalog_service,
         playground_service=PlaygroundService(

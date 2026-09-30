@@ -11,6 +11,9 @@ from comfyreview.repositories.sqlite.connection import (
     connect_read_only,
 )
 from comfyreview.repositories.sqlite.curation import SqliteCurationRepository
+from comfyreview.repositories.sqlite.generations import (
+    SqliteGenerationRepository,
+)
 from comfyreview.repositories.sqlite.legacy_schema import LegacySchemaManager
 from comfyreview.repositories.sqlite.output_images import (
     SqliteOutputImageRepository,
@@ -30,6 +33,7 @@ __all__ = [
     "SqlitePromptCatalogRepository",
     "SqliteArenaRepository",
     "SqliteCurationRepository",
+    "SqliteGenerationRepository",
     "SqliteRankingRepository",
     "SqliteReviewRepository",
     "connect_existing",
