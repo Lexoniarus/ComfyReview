@@ -20,6 +20,10 @@ from comfyreview.importers import (
     LegacyOutputImporter,
     LegacyOutputImportRecoveryError,
     LegacyOutputImportValidationError,
+    LegacyPromptAuditor,
+    LegacyPromptImporter,
+    LegacyPromptImportRecoveryError,
+    LegacyPromptImportValidationError,
     SqliteLegacyFeatureMigration,
 )
 from comfyreview.providers import LocalLegacyOutputImportSource
@@ -95,6 +99,21 @@ def _parser() -> argparse.ArgumentParser:
     feature_import = feature_actions.add_parser("import")
     feature_import.add_argument("--report", type=Path)
     feature_import.add_argument("--backup-dir", type=Path)
+
+    legacy_prompts = commands.add_parser("legacy-prompts")
+    prompt_actions = legacy_prompts.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    prompt_audit = prompt_actions.add_parser("audit")
+    prompt_audit.add_argument("--source", type=Path)
+    prompt_audit.add_argument("--database", type=Path)
+    prompt_audit.add_argument("--report", type=Path)
+    prompt_import = prompt_actions.add_parser("import")
+    prompt_import.add_argument("--source", type=Path)
+    prompt_import.add_argument("--database", type=Path)
+    prompt_import.add_argument("--report", type=Path)
+    prompt_import.add_argument("--backup-dir", type=Path)
     return parser
 
 
@@ -281,6 +300,40 @@ def _run_legacy_features(options: argparse.Namespace) -> int:
     return 0
 
 
+def _run_legacy_prompts(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    source_path = options.source or settings.playground_database_path
+    canonical_path = options.database or settings.canonical_database_path
+    report_path = options.report or (
+        settings.data_directory / "reports" / "legacy-prompt-audit.json"
+    )
+    if options.action == "audit":
+        audit_result = LegacyPromptAuditor(
+            source_database_path=source_path,
+            canonical_database_path=canonical_path,
+        ).audit(report_path)
+        payload = {
+            "report_path": str(audit_result.report_path),
+            "items": audit_result.item_count,
+        }
+    else:
+        import_result = LegacyPromptImporter(
+            source_database_path=source_path,
+            canonical_database_path=canonical_path,
+        ).import_report(
+            report_path,
+            backup_directory=options.backup_dir,
+        )
+        payload = {
+            "backup_path": str(import_result.backup_path),
+            "created_components": import_result.created_components,
+            "created_revisions": import_result.created_revisions,
+            "updated_components": import_result.updated_components,
+        }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run a maintenance command and return its stable process exit code."""
     options = _parser().parse_args(arguments)
@@ -291,6 +344,8 @@ def main(arguments: list[str] | None = None) -> int:
             return _run_canonical(options)
         if options.command == "legacy-features":
             return _run_legacy_features(options)
+        if options.command == "legacy-prompts":
+            return _run_legacy_prompts(options)
         return _run_legacy_output(options)
     except LegacySchemaValidationError as error:
         print(_render_legacy(error.report), file=sys.stderr)
@@ -308,6 +363,12 @@ def main(arguments: list[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
     except LegacyFeatureImportRecoveryError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    except LegacyPromptImportValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except LegacyPromptImportRecoveryError as error:
         print(str(error), file=sys.stderr)
         return 1
     except (OSError, sqlite3.DatabaseError, ValueError) as error:

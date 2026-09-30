@@ -23,6 +23,14 @@ from comfyreview.importers.legacy_outputs import (
     LegacyOutputAuditor,
     LegacyOutputAuditResult,
 )
+from comfyreview.importers.legacy_prompts import (
+    LegacyPromptAuditor,
+    LegacyPromptAuditResult,
+    LegacyPromptImporter,
+    LegacyPromptImportRecoveryError,
+    LegacyPromptImportResult,
+    LegacyPromptImportValidationError,
+)
 
 __all__ = [
     "LegacyFeatureAuditResult",
@@ -40,6 +48,12 @@ __all__ = [
     "LegacyOutputImportResult",
     "LegacyOutputImportSource",
     "LegacyOutputImportValidationError",
+    "LegacyPromptAuditor",
+    "LegacyPromptAuditResult",
+    "LegacyPromptImporter",
+    "LegacyPromptImportResult",
+    "LegacyPromptImportRecoveryError",
+    "LegacyPromptImportValidationError",
     "LegacySamplerStageImport",
     "SqliteLegacyFeatureMigration",
 ]
