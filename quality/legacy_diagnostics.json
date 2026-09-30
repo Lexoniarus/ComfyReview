@@ -7,7 +7,6 @@
       "format|routers/playground/__init__.py|unformatted": 1,
       "format|routers/playground/hub.py|unformatted": 1,
       "format|services/__init__.py|unformatted": 1,
-      "format|services/context_filters.py|unformatted": 1,
       "format|services/playground_common/empty_placeholders.py|unformatted": 1,
       "format|services/playground_generator_ui/drafts.py|unformatted": 1,
       "format|services/playground_generator_ui/state.py|unformatted": 1,
@@ -26,9 +25,6 @@
     "ruff": {
       "ruff|routers/__init__.py|I001": 1,
       "ruff|routers/playground/__init__.py|I001": 1,
-      "ruff|services/context_filters.py|UP006": 6,
-      "ruff|services/context_filters.py|UP035": 4,
-      "ruff|services/context_filters.py|UP045": 4,
       "ruff|services/playground_common/empty_placeholders.py|UP006": 5,
       "ruff|services/playground_common/empty_placeholders.py|UP035": 2,
       "ruff|services/playground_generator_ui/drafts.py|UP006": 8,

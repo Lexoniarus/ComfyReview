@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import cast
 
 from comfyreview.application import (
@@ -72,6 +73,8 @@ def test_review_page_reads_images_from_catalog() -> None:
         model="",
         subdir="",
         set_key="",
+        output_root=Path("output"),
+        allowed_set_keys=("pose",),
     )
 
     assert catalog.calls == 1

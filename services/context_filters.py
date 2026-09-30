@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Tuple
-
-from config import CURATION_SET_KEYS, OUTPUT_ROOT
+from pathlib import Path
+from typing import Any
 
 _EMPTY_CHARACTER_NAMES = {"empty"}
-_ALLOWED_SET_KEYS = {str(x).strip() for x in (CURATION_SET_KEYS or []) if str(x).strip()}
 
 
 @dataclass(frozen=True)
@@ -38,7 +36,7 @@ def normalize_model(value: str) -> str:
     return "" if v.lower() == "all" else v
 
 
-def _split_path_parts(value: str) -> List[str]:
+def _split_path_parts(value: str) -> list[str]:
     s = str(value or "").replace("\\", "/").strip("/")
     return [p for p in s.split("/") if p]
 
@@ -80,7 +78,9 @@ def normalize_mode(value: str, *, default: str = "top") -> str:
     return v if v in {"top", "worst"} else str(default).strip().lower()
 
 
-def normalize_unrated_flag(value: int | str | None, *, default: int = 1) -> int:
+def normalize_unrated_flag(
+    value: int | str | None, *, default: int = 1
+) -> int:
     if value is None:
         return int(default)
     try:
@@ -118,14 +118,19 @@ def matches_character_scope(*, item_subdir: str, selected_subdir: str) -> bool:
     return not is_empty_character_subdir(item)
 
 
-def infer_set_key_from_png_path(png_path: str) -> Optional[str]:
+def infer_set_key_from_png_path(
+    png_path: str,
+    *,
+    output_root: Path,
+    allowed_set_keys: tuple[str, ...],
+) -> str | None:
     """Infer the effective curation set from the real physical PNG path.
 
     This is a conservative fallback used only when the curation mapping for the current
     path is missing. Scope/subdir is intentionally NOT used here.
     """
     parts = _split_path_parts(png_path)
-    root_parts = _split_path_parts(str(OUTPUT_ROOT))
+    root_parts = _split_path_parts(str(output_root))
 
     rel_parts = parts
     if root_parts and len(parts) >= len(root_parts):
@@ -140,10 +145,17 @@ def infer_set_key_from_png_path(png_path: str) -> Optional[str]:
         return None
 
     candidate = str(rel_parts[2]).strip()
-    return candidate if candidate in _ALLOWED_SET_KEYS else None
+    allowed = {value.strip() for value in allowed_set_keys if value.strip()}
+    return candidate if candidate in allowed else None
 
 
-def resolve_assigned_set_key(*, png_path: str, assigned_set_key: Optional[str]) -> Optional[str]:
+def resolve_assigned_set_key(
+    *,
+    png_path: str,
+    assigned_set_key: str | None,
+    output_root: Path,
+    allowed_set_keys: tuple[str, ...],
+) -> str | None:
     """Return the effective single-set assignment for one image.
 
     Priority:
@@ -153,10 +165,21 @@ def resolve_assigned_set_key(*, png_path: str, assigned_set_key: Optional[str]) 
     sk = normalize_set_key(str(assigned_set_key or ""))
     if sk and sk != "unsorted":
         return sk
-    return infer_set_key_from_png_path(str(png_path or ""))
+    return infer_set_key_from_png_path(
+        str(png_path or ""),
+        output_root=output_root,
+        allowed_set_keys=allowed_set_keys,
+    )
 
 
-def matches_set_filter(*, selected_set_key: str, assigned_set_key: Optional[str], png_path: str) -> bool:
+def matches_set_filter(
+    *,
+    selected_set_key: str,
+    assigned_set_key: str | None,
+    png_path: str,
+    output_root: Path,
+    allowed_set_keys: tuple[str, ...],
+) -> bool:
     """Set filter semantics on the same image inventory.
 
     - selected_set_key=''        -> all sets + unsorted
@@ -167,13 +190,20 @@ def matches_set_filter(*, selected_set_key: str, assigned_set_key: Optional[str]
     if not selected:
         return True
 
-    effective = resolve_assigned_set_key(png_path=str(png_path or ""), assigned_set_key=assigned_set_key)
+    effective = resolve_assigned_set_key(
+        png_path=str(png_path or ""),
+        assigned_set_key=assigned_set_key,
+        output_root=output_root,
+        allowed_set_keys=allowed_set_keys,
+    )
     if selected == "unsorted":
         return not effective
     return effective == selected
 
 
-def build_dropdown_lists(items: Iterable[Any]) -> Tuple[List[str], List[str], List[Dict[str, str]]]:
+def build_dropdown_lists(
+    items: list[Any] | tuple[Any, ...],
+) -> tuple[list[str], list[str], list[dict[str, str]]]:
     """Build dropdown lists used across pages.
 
     Returns
@@ -181,13 +211,30 @@ def build_dropdown_lists(items: Iterable[Any]) -> Tuple[List[str], List[str], Li
     subdir_list
     character_options
     """
-    model_list = sorted({getattr(it, "model_branch", "") for it in items if getattr(it, "model_branch", "")})
-    subdir_list = sorted({normalize_scope_subdir(getattr(it, "subdir", "")) for it in items if getattr(it, "subdir", "")})
-    character_options = [{"value": sd, "label": extract_character_from_subdir(sd)} for sd in subdir_list]
+    model_list = sorted(
+        {
+            getattr(it, "model_branch", "")
+            for it in items
+            if getattr(it, "model_branch", "")
+        }
+    )
+    subdir_list = sorted(
+        {
+            normalize_scope_subdir(getattr(it, "subdir", ""))
+            for it in items
+            if getattr(it, "subdir", "")
+        }
+    )
+    character_options = [
+        {"value": sd, "label": extract_character_from_subdir(sd)}
+        for sd in subdir_list
+    ]
     return model_list, subdir_list, character_options
 
 
-def build_gallery_context(*, model: str, subdir: str, set_key: str, mode: str) -> GalleryContext:
+def build_gallery_context(
+    *, model: str, subdir: str, set_key: str, mode: str
+) -> GalleryContext:
     return GalleryContext(
         model=normalize_model(model),
         subdir=normalize_scope_subdir(subdir),

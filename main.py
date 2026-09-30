@@ -1,13 +1,20 @@
 import uvicorn
 
 from app import app
-from config import APP_HOST, APP_PORT, SSL_CERTFILE, SSL_ENABLED, SSL_KEYFILE
+from comfyreview.settings import load_settings
 
 if __name__ == "__main__":
+    settings = load_settings()
     uvicorn.run(
         app,
-        host=APP_HOST,
-        port=APP_PORT,
-        ssl_certfile=str(SSL_CERTFILE) if SSL_ENABLED else None,
-        ssl_keyfile=str(SSL_KEYFILE) if SSL_ENABLED else None,
+        host=settings.app_host,
+        port=settings.app_port,
+        ssl_certfile=(
+            str(settings.ssl_certificate_path)
+            if settings.ssl_enabled
+            else None
+        ),
+        ssl_keyfile=(
+            str(settings.ssl_key_path) if settings.ssl_enabled else None
+        ),
     )

@@ -9,9 +9,6 @@ from fastapi.templating import Jinja2Templates
 
 from comfyreview.api.dependencies import get_application_container
 from comfyreview.application import GenerationDefaults, PlaygroundService
-from config import (
-    DEFAULT_MAX_TRIES,
-)
 from services.playground_generator_ui_service import (
     build_form_from_state,
     build_head_state_from_post,
@@ -69,7 +66,12 @@ def playground_generator_page(request: Request):
         )
     )
 
-    form = build_form_from_state(saved=saved, defaults=defaults)
+    container = get_application_container(request)
+    form = build_form_from_state(
+        saved=saved,
+        defaults=defaults,
+        default_max_attempts=container.settings.default_max_tries,
+    )
 
     preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH)
     for draft in preview:
@@ -86,7 +88,7 @@ def playground_generator_page(request: Request):
         name="playground_generator.html",
         context={
             "request": request,
-            "default_max_tries": DEFAULT_MAX_TRIES,
+            "default_max_tries": container.settings.default_max_tries,
             "form": form,
             "error": None,
             "enqueue": None,
@@ -190,7 +192,7 @@ def playground_generator_run(
     include_modifier: int | None = Form(None),
     gen_seed: str | None = Form(None),
     comfy_seed: str | None = Form(None),
-    max_tries: int = Form(DEFAULT_MAX_TRIES),
+    max_tries: int | None = Form(None),
     batch_runs: int | None = Form(None),
     checkpoint_name: str | None = Form(None),
     sampler_name: str | None = Form(None),
@@ -235,7 +237,11 @@ def playground_generator_run(
         include_modifier=include_modifier,
         gen_seed=gen_seed,
         comfy_seed=comfy_seed,
-        max_tries=max_tries,
+        max_tries=(
+            get_application_container(request).settings.default_max_tries
+            if max_tries is None
+            else max_tries
+        ),
         batch_runs=batch_runs,
         checkpoint_name=checkpoint_name,
         sampler_name=sampler_name,
@@ -280,6 +286,9 @@ def playground_generator_run(
             playground_service=(
                 get_application_container(request).playground_service
             ),
+            default_max_attempts=get_application_container(
+                request
+            ).settings.default_max_tries,
             render_defaults=_render_defaults(
                 get_application_container(request).workflow_defaults.load(
                     "default-character",
@@ -413,6 +422,7 @@ def _handle_preview_generate(
     characters: list,
     discovery: Any,
     playground_service: PlaygroundService,
+    default_max_attempts: int,
     render_defaults: dict[str, str],
 ) -> RedirectResponse:
     head = build_head_state_from_post(**head_kwargs)
@@ -424,7 +434,7 @@ def _handle_preview_generate(
         discovery=discovery,
         playground_service=playground_service,
         render_defaults=render_defaults,
-        default_max_attempts=DEFAULT_MAX_TRIES,
+        default_max_attempts=default_max_attempts,
     )
     save_preview_state(GENERATOR_PREVIEW_STATE_PATH, drafts)
     return _redirect_generator()
@@ -444,6 +454,9 @@ def _handle_submit_preview(
     )
     clear_preview_state(GENERATOR_PREVIEW_STATE_PATH)
 
+    default_max_attempts = get_application_container(
+        request
+    ).settings.default_max_tries
     form = _reload_form_from_head(
         _render_defaults(
             get_application_container(request).workflow_defaults.load(
@@ -451,6 +464,7 @@ def _handle_submit_preview(
                 1,
             )
         ),
+        default_max_attempts=default_max_attempts,
     )
 
     return templates.TemplateResponse(
@@ -458,7 +472,7 @@ def _handle_submit_preview(
         name="playground_generator.html",
         context={
             "request": request,
-            "default_max_tries": DEFAULT_MAX_TRIES,
+            "default_max_tries": default_max_attempts,
             "form": form,
             "error": error,
             "enqueue": enqueue_info,
@@ -477,9 +491,17 @@ def _handle_submit_preview(
     )
 
 
-def _reload_form_from_head(defaults: dict[str, str]) -> dict:
+def _reload_form_from_head(
+    defaults: dict[str, str],
+    *,
+    default_max_attempts: int,
+) -> dict:
     saved = load_head_state(GENERATOR_STATE_PATH)
-    return build_form_from_state(saved=saved, defaults=defaults)
+    return build_form_from_state(
+        saved=saved,
+        defaults=defaults,
+        default_max_attempts=default_max_attempts,
+    )
 
 
 def _render_defaults(defaults: GenerationDefaults) -> dict[str, str]:

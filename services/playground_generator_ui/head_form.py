@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from config import DEFAULT_MAX_TRIES
-
 
 def character_name_from_id(
     characters: list[dict[str, Any]], character_id: str | None
@@ -18,7 +16,10 @@ def character_name_from_id(
 
 
 def build_form_from_state(
-    *, saved: dict[str, Any], defaults: dict[str, str]
+    *,
+    saved: dict[str, Any],
+    defaults: dict[str, str],
+    default_max_attempts: int,
 ) -> dict[str, Any]:
     """Build the generator page form model from saved state and workflow defaults."""
 
@@ -35,7 +36,7 @@ def build_form_from_state(
         "include_modifier": bool(saved.get("include_modifier", True)),
         "gen_seed": str(saved.get("gen_seed", "")),
         "comfy_seed": str(saved.get("comfy_seed", "")),
-        "max_tries": int(saved.get("max_tries", DEFAULT_MAX_TRIES)),
+        "max_tries": int(saved.get("max_tries", default_max_attempts)),
         "batch_runs": str(saved.get("batch_runs", "")),
         "checkpoint_name": str(
             saved.get("checkpoint_name", defaults.get("checkpoint_name", ""))

@@ -12,7 +12,6 @@ from comfyreview.application import (
     ReviewValidationError,
     SubmitReviewCommand,
 )
-from config import CURATION_SET_KEYS, DEFAULT_UNRATED_ONLY
 from services.context_filters import (
     normalize_model,
     normalize_set_key,
@@ -28,24 +27,36 @@ router = APIRouter()
 @router.get("/", response_class=HTMLResponse)
 def index(
     request: Request,
-    unrated: int = Query(1 if DEFAULT_UNRATED_ONLY else 0),
+    unrated: int | None = Query(None),
     model: str = Query(""),
     subdir: str = Query(""),
     set_key: str = Query(""),
 ):
+    container = get_application_container(request)
+    unrated_value = (
+        int(container.settings.default_unrated_only)
+        if unrated is None
+        else unrated
+    )
     ctx = build_review_page_context(
-        output_images=get_application_container(request).output_images,
-        prompt_labels=get_application_container(request).prompt_labels,
-        image_url=get_application_container(request).file_urls.to_url,
-        unrated=unrated,
+        output_images=container.output_images,
+        prompt_labels=container.prompt_labels,
+        image_url=container.file_urls.to_url,
+        unrated=unrated_value,
         model=model,
         subdir=subdir,
         set_key=set_key,
+        output_root=container.settings.output_root,
+        allowed_set_keys=container.settings.curation_set_keys,
     )
 
     return INDEX_HTML.render(
         **ctx,
-        set_key_list=["", "unsorted", *list(CURATION_SET_KEYS)],
+        set_key_list=[
+            "",
+            "unsorted",
+            *list(container.settings.curation_set_keys),
+        ],
     )
 
 

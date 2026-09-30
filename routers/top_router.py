@@ -15,11 +15,6 @@ from comfyreview.application import (
     ReviewValidationError,
     SubmitReviewCommand,
 )
-from config import (
-    CURATION_SET_KEYS,
-    MIN_RUNS,
-    POOL_LIMIT,
-)
 from services.context_filters import build_gallery_context
 from services.gallery_view_service import build_top_pictures_page
 from services.output_file_service import OutputMutationError
@@ -40,13 +35,14 @@ def top_pictures(
         model=model, subdir=subdir, set_key=set_key, mode=mode
     )
 
+    container = get_application_container(request)
     vm = build_top_pictures_page(
-        ranking_service=get_application_container(request).ranking_service,
-        prompt_labels=get_application_container(request).prompt_labels,
-        image_url=get_application_container(request).file_urls.to_url,
+        ranking_service=container.ranking_service,
+        prompt_labels=container.prompt_labels,
+        image_url=container.file_urls.to_url,
         context=ctx,
-        min_runs=MIN_RUNS,
-        limit=POOL_LIMIT,
+        min_runs=container.settings.minimum_runs,
+        limit=container.settings.pool_limit,
     )
 
     return TOP_PICTURES_HTML.render(
@@ -58,9 +54,9 @@ def top_pictures(
         mode=vm["mode"],
         character_options=vm["character_options"],
         set_key=vm["set_key"],
-        set_keys=CURATION_SET_KEYS,
-        pool_limit=POOL_LIMIT,
-        min_runs=MIN_RUNS,
+        set_keys=container.settings.curation_set_keys,
+        pool_limit=container.settings.pool_limit,
+        min_runs=container.settings.minimum_runs,
     )
 
 

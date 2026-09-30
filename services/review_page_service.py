@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from comfyreview.application import OutputImageCatalog, OutputImageReadModel
@@ -30,6 +31,8 @@ def _filter_items_for_review(
     subdir: str,
     set_key: str,
     unrated_only: int,
+    output_root: Path,
+    allowed_set_keys: tuple[str, ...],
 ) -> list[OutputImageReadModel]:
     filtered: list[OutputImageReadModel] = []
     for it in items:
@@ -45,6 +48,8 @@ def _filter_items_for_review(
             selected_set_key=set_key,
             assigned_set_key=it.assigned_set_key,
             png_path=str(it.png_path),
+            output_root=output_root,
+            allowed_set_keys=allowed_set_keys,
         ):
             continue
 
@@ -67,6 +72,8 @@ def build_review_page_context(
     model: str,
     subdir: str,
     set_key: str,
+    output_root: Path,
+    allowed_set_keys: tuple[str, ...],
 ) -> dict[str, Any]:
     """Build template context for the main review page (/).
 
@@ -92,6 +99,8 @@ def build_review_page_context(
         subdir=subdir_n,
         set_key=set_key_n,
         unrated_only=unrated_flag,
+        output_root=output_root,
+        allowed_set_keys=allowed_set_keys,
     )
     if unrated_flag == 0:
         _sort_items_for_review_all(filtered)
