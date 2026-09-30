@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from comfyreview.application import OutputImageReference
 from comfyreview.providers import (
     CanonicalFirstOutputImageCatalog,
@@ -13,6 +15,7 @@ from comfyreview.providers import (
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteOutputImageRepository,
+    connect_read_only,
 )
 
 
@@ -105,6 +108,20 @@ def test_repository_reads_sidecarless_canonical_image(tmp_path: Path) -> None:
     assert record.generation_uid == "generation-native"
     assert record.json_path is None
     assert repository.get_live_image("image-native") == record
+
+
+def test_canonical_read_connection_rejects_writes(tmp_path: Path) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+
+    connection = connect_read_only(database_path)
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            connection.execute(
+                "INSERT INTO review_clock(singleton_id, value) VALUES (2, 0)"
+            )
+    finally:
+        connection.close()
 
 
 def test_canonical_first_catalog_lists_and_resolves_without_sidecar(

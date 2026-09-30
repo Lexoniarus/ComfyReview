@@ -4,7 +4,10 @@ from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
 )
-from comfyreview.repositories.sqlite.connection import connect_existing
+from comfyreview.repositories.sqlite.connection import (
+    connect_existing,
+    connect_read_only,
+)
 from comfyreview.repositories.sqlite.legacy_schema import LegacySchemaManager
 from comfyreview.repositories.sqlite.output_images import (
     SqliteOutputImageRepository,
@@ -26,4 +29,5 @@ __all__ = [
     "SqlitePromptRepository",
     "SqliteReviewRepository",
     "connect_existing",
+    "connect_read_only",
 ]

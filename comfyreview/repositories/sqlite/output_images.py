@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from comfyreview.application import CanonicalOutputImageRecord
-from comfyreview.repositories.sqlite.connection import connect_existing
+from comfyreview.repositories.sqlite.connection import connect_read_only
 
 _SELECT_LIVE_IMAGES = """
 SELECT
@@ -53,7 +53,7 @@ class SqliteOutputImageRepository:
 
     def list_live_images(self) -> tuple[CanonicalOutputImageRecord, ...]:
         """Return all live canonical images in stable database order."""
-        connection = connect_existing(self._database_path, rows=True)
+        connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
                 _SELECT_LIVE_IMAGES + " ORDER BY image.id"
@@ -67,7 +67,7 @@ class SqliteOutputImageRepository:
         image_uid: str,
     ) -> CanonicalOutputImageRecord | None:
         """Return one live canonical image by stable UID."""
-        connection = connect_existing(self._database_path, rows=True)
+        connection = connect_read_only(self._database_path, rows=True)
         try:
             row = connection.execute(
                 _SELECT_LIVE_IMAGES + " WHERE image.image_uid = ?",
