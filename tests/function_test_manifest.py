@@ -173,6 +173,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_settings.py::"
         "test_environment_overrides_env_file_without_mutating_process"
     ),
+    "comfyreview.settings:load_legacy_migration_settings": (
+        "tests/test_settings.py::"
+        "test_legacy_migration_settings_are_loaded_separately"
+    ),
     "quality.architecture:collect_architecture_violations": (
         "tests/test_architecture.py::"
         "test_repository_architecture_does_not_worsen"

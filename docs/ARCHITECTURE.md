@@ -1,9 +1,8 @@
 # ComfyReview Architecture
 
-Status: canonical Review, Ranking, Arena and Curation cutover plus the
-revisioned prompt-catalog boundary are implemented on the active refactor
-branch, 2026-09-30. Generation, Playground submission and parts of the
-statistics/projection pipeline remain transitional.
+Status: canonical Review, Ranking, Arena, Curation, Prompt Catalog, analytics
+and native Generation are implemented on the active refactor branch,
+2026-09-30. The frontend and final service-boundary cleanup remain open.
 
 ## 1. Product boundary
 
@@ -32,11 +31,12 @@ application services coordinate them without holding a SQLite write
 transaction open.
 
 `comfyreview.bootstrap.create_app()` is the composition root. Its
-`ApplicationContainer` owns typed settings, canonical and legacy schema
-lifecycles, the transitional worker runtime, the canonical output catalog and
-the Review, Ranking, Arena and Curation services. The FastAPI lifespan prepares
-directories, validates supported schemas, starts the worker and performs a
-bounded stop. Root `app.py` and `main.py` remain compatible entry points.
+`ApplicationContainer` owns runtime-only typed settings, the canonical schema
+lifecycle, output catalog and application services. The FastAPI lifespan
+prepares runtime directories and validates or initializes only the supported
+canonical schema. Root `app.py` and `main.py` remain compatible entry points.
+Legacy database paths live in a separate `LegacyMigrationSettings` object used
+only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
@@ -61,8 +61,8 @@ results are projections derived from canonical facts. The old `image_reviews`
 and `deleted_images` names exist only as read-only compatibility views. No
 repository writes a second current-review truth.
 
-The following legacy databases remain available only where an unmigrated
-feature still needs them or as read-only import sources:
+The following legacy databases remain available only as explicit historical
+audit/import sources or for the `legacy-db` maintenance command:
 
 ```text
 ratings.sqlite3          arena.sqlite3
@@ -204,8 +204,8 @@ indices are assigned only when ComfyUI outputs are collected.
 
 ## 9. Schema lifecycle
 
-Runtime startup validates supported canonical and transitional legacy schemas;
-it never upgrades an unsupported database silently. Canonical v3 through v6
+Runtime startup validates only the supported canonical schema; it never
+upgrades an unsupported database silently. Canonical v3 through v6
 changes are available only through `python -m comfyreview canonical-db
 upgrade` and are backed up. The v3-to-v4 step migrates writable legacy review
 state into events, projects delete tombstones and replaces old tables with
@@ -221,10 +221,9 @@ claim crash atomicity across several SQLite files.
 
 The canonical cutover is intentionally not the end of the wider refactor.
 
-- Playground browse/edit still uses transitional legacy catalog routes, while
-  preview and submission use canonical revisions and the native generation
-  lifecycle.
-- Prompt/statistics projections and their worker remain transitional.
+- Remaining older `services/*` modules require a final usage and responsibility
+  audit; active HTTP/view preparation stays, obsolete compatibility facades do
+  not.
 - Frontend logic still needs the planned ES-module/API-client cleanup.
 
 Existing projection workers are not migration targets by default. Each derived
@@ -236,7 +235,7 @@ The completed audit is recorded in `docs/PROJECTION_AUDIT.md`. It found no
 current projection requiring replacement materialization: canonical repository
 queries are the chosen cutover for rankings, prompt statistics, observed
 composition statistics, recommendations and best-image lookup. The legacy
-worker/jobs/cursors are scheduled for deletion after those readers move.
+worker/jobs/cursors and their runtime have been removed.
 
 Legacy sources may be read by explicit migration tools. They must not become a
 second writable truth for an already cut-over feature.

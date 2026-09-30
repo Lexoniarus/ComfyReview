@@ -13,14 +13,22 @@ from comfyreview.__main__ import main
 from comfyreview.application import LegacySchemaValidationError
 from comfyreview.repositories.sqlite import LegacySchemaManager
 from comfyreview.repositories.sqlite.connection import connect_existing
-from comfyreview.settings import Settings, load_settings
+from comfyreview.settings import (
+    LegacyMigrationSettings,
+    load_legacy_migration_settings,
+)
 
 
-def _settings(tmp_path: Path) -> Settings:
-    return load_settings(base_directory=tmp_path, environ={})
+def _settings(tmp_path: Path) -> LegacyMigrationSettings:
+    return load_legacy_migration_settings(
+        base_directory=tmp_path,
+        environ={},
+    )
 
 
-def _database_paths(settings: Settings) -> tuple[Path, ...]:
+def _database_paths(
+    settings: LegacyMigrationSettings,
+) -> tuple[Path, ...]:
     return (
         settings.ratings_database_path,
         settings.prompt_tokens_database_path,

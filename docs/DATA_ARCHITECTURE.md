@@ -191,18 +191,19 @@ Reports, backups and runtime databases are local artifacts ignored by Git.
 | `ratings.sqlite3` | read-only review import source; not Review runtime truth |
 | `arena.sqlite3` | read-only Arena import source; not Arena runtime truth |
 | `curation.sqlite3` | read-only Curation import source; not Curation runtime truth |
-| `images.sqlite3` | rebuildable/verification projection for transitional features |
-| `prompt_tokens.sqlite3` | legacy prompt projection; redesign instead of blind copy |
-| `prompt_ratings.sqlite3` | transitional derived prompt statistics |
-| `combo_prompts.sqlite3` | transitional eager combination projection |
-| `playground.sqlite3` | audited prompt import source and isolated transitional Playground runtime until Slice E/M wiring |
-| `mv_jobs.sqlite3` | transitional worker/job state |
+| `images.sqlite3` | historical feature-import evidence only |
+| `prompt_tokens.sqlite3` | historical projection retained only for explicit maintenance |
+| `prompt_ratings.sqlite3` | historical derived statistics retained only for explicit maintenance |
+| `combo_prompts.sqlite3` | historical eager projection retained only for explicit maintenance |
+| `playground.sqlite3` | audited prompt-import source only |
+| `mv_jobs.sqlite3` | historical worker/job database; no runtime consumer |
 
 Legacy DDL remains centralized in
-`comfyreview.repositories.sqlite.legacy_schema`. Normal legacy repositories
-open existing files in `rw` mode and do not create schemas. Only entirely
-missing files can be initialized during startup; invalid existing files abort.
-Known additive changes require `python -m comfyreview legacy-db upgrade`.
+`comfyreview.repositories.sqlite.legacy_schema`. Legacy paths are loaded through
+`LegacyMigrationSettings`, which is not part of the application container.
+Normal runtime startup neither opens nor initializes these files. Known
+additive changes require the explicit `python -m comfyreview legacy-db upgrade`
+command.
 
 ## 10. Remaining canonical design
 

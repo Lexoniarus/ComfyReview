@@ -195,17 +195,13 @@ Then open the local app in your browser. By default, the app runs on:
 http://127.0.0.1:8000
 ```
 
-At startup, ComfyReview prepares its runtime directories, validates every
-configured legacy SQLite database, initializes database files that are entirely
-missing, and then starts the projection worker. An existing empty, damaged, or
-structurally incompatible database is never repaired implicitly; startup stops
-with a visible error instead.
+At startup, ComfyReview prepares its runtime directories and validates or
+initializes only the canonical `comfyreview.sqlite3` database. Legacy SQLite
+files are not runtime dependencies and no projection worker is started.
 
-The Review, Top/Worst, Arena and Curation paths now use the canonical
-`comfyreview.sqlite3` schema-v5 database. Images are addressed by stable UIDs;
-their current PNG and optional sidecar paths are mutable attributes. Other
-features are still being migrated, so the legacy database validation and worker
-remain part of startup for now.
+Review, Top/Worst, Arena, Curation, the Prompt Catalog, analytics and native
+Generation use the canonical database. Images are addressed by stable UIDs;
+their current PNG and optional sidecar paths are mutable attributes.
 
 ### Canonical database and audited imports
 
@@ -258,7 +254,9 @@ Known additive legacy upgrades are explicit and backed up before mutation:
 python -m comfyreview legacy-db upgrade --backup-dir data/backups
 ```
 
-The command returns exit code `0` on success, `2` for an invalid or unsupported
+These commands load a separate offline `LegacyMigrationSettings`; the normal
+application container has no legacy database paths. The command returns exit
+code `0` on success, `2` for an invalid or unsupported
 schema, and `1` for a technical failure. Upgrades restore affected files from
 their backups when an ordinary upgrade or validation step fails. SQLite cannot
 provide crash-atomic commits across several independent database files.
@@ -300,8 +298,8 @@ ComfyReview is designed as a local tool.
   local files
 - Reviews, Arena matches and Curation assignments use one canonical SQLite
   database
-- Remaining legacy databases are transitional inputs for features that have
-  not yet completed their cutover
+- Legacy databases are explicit historical audit/import or maintenance inputs,
+  never runtime authorities
 - Runtime state and generated databases are intentionally ignored by Git
 - ComfyUI integration expects a local or user-controlled ComfyUI instance
 - No cloud service is required for the core review workflow
@@ -319,8 +317,7 @@ ComfyReview/
 ├── main.py
 ├── config.py
 ├── routers/                  # page routes and API endpoints
-├── services/                 # remaining transitional feature logic
-├── stores/                   # remaining legacy repositories
+├── services/                 # HTTP/view composition awaiting final audit
 ├── quality/                  # versioned quality and architecture baselines
 ├── scripts/                  # shared repository automation
 ├── templates/                # HTML templates

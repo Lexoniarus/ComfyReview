@@ -8,7 +8,7 @@ from typing import Any
 
 from comfyreview.observability import RequestTracingMiddleware
 from comfyreview.repositories.sqlite import LegacySchemaManager
-from comfyreview.settings import load_settings
+from comfyreview.settings import load_legacy_migration_settings
 
 
 def _table_columns(database_path: Path) -> dict[str, tuple[str, ...]]:
@@ -72,7 +72,10 @@ def test_root_app_keeps_public_routes_and_request_tracing() -> None:
 def test_legacy_initializers_produce_the_current_schema_contract(
     tmp_path: Path,
 ) -> None:
-    settings = load_settings(base_directory=tmp_path, environ={})
+    settings = load_legacy_migration_settings(
+        base_directory=tmp_path,
+        environ={},
+    )
     report = LegacySchemaManager(settings).prepare_startup()
 
     expected_tables = {

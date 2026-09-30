@@ -37,7 +37,7 @@ from comfyreview.repositories.sqlite import (
 from comfyreview.repositories.sqlite.legacy_output_import import (
     SqliteLegacyOutputImportRepository,
 )
-from comfyreview.settings import load_settings
+from comfyreview.settings import load_legacy_migration_settings, load_settings
 
 _DATABASE_NAMES = (
     "ratings",
@@ -157,7 +157,7 @@ def _render_canonical(report: CanonicalSchemaReport) -> str:
 
 
 def _run_legacy(options: argparse.Namespace) -> int:
-    manager = LegacySchemaManager(load_settings())
+    manager = LegacySchemaManager(load_legacy_migration_settings())
     if options.action == "validate":
         report = manager.validate(options.databases)
     else:
@@ -262,6 +262,7 @@ def _run_legacy_output_import(options: argparse.Namespace) -> int:
 
 def _run_legacy_features(options: argparse.Namespace) -> int:
     settings = load_settings()
+    legacy = load_legacy_migration_settings()
     report_path = (
         options.report
         if options.report is not None
@@ -269,10 +270,10 @@ def _run_legacy_features(options: argparse.Namespace) -> int:
     )
     migration = SqliteLegacyFeatureMigration(
         canonical_database_path=settings.canonical_database_path,
-        ratings_database_path=settings.ratings_database_path,
-        arena_database_path=settings.arena_database_path,
-        curation_database_path=settings.curation_database_path,
-        images_projection_database_path=settings.images_database_path,
+        ratings_database_path=legacy.ratings_database_path,
+        arena_database_path=legacy.arena_database_path,
+        curation_database_path=legacy.curation_database_path,
+        images_projection_database_path=legacy.images_database_path,
         observer=_CliFeatureImportObserver(),
     )
     if options.action == "audit":
@@ -313,7 +314,8 @@ def _run_legacy_features(options: argparse.Namespace) -> int:
 
 def _run_legacy_prompts(options: argparse.Namespace) -> int:
     settings = load_settings()
-    source_path = options.source or settings.playground_database_path
+    legacy = load_legacy_migration_settings()
+    source_path = options.source or legacy.playground_database_path
     canonical_path = options.database or settings.canonical_database_path
     report_path = options.report or (
         settings.data_directory / "reports" / "legacy-prompt-audit.json"

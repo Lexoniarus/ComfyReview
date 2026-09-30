@@ -15,7 +15,7 @@ from comfyreview.application import (
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
-from comfyreview.settings import Settings
+from comfyreview.settings import LegacyMigrationSettings
 
 
 @dataclass(frozen=True)
@@ -630,7 +630,9 @@ _DEFINITIONS = {
 }
 
 
-def _targets(settings: Settings) -> tuple[_DatabaseTarget, ...]:
+def _targets(
+    settings: LegacyMigrationSettings,
+) -> tuple[_DatabaseTarget, ...]:
     paths = {
         "ratings": settings.ratings_database_path,
         "prompt_tokens": settings.prompt_tokens_database_path,
@@ -824,7 +826,7 @@ class LegacySchemaManager:
 
     def __init__(
         self,
-        settings: Settings,
+        settings: LegacyMigrationSettings,
         *,
         startup_database_names: Collection[str] | None = None,
     ) -> None:

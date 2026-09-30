@@ -19,7 +19,7 @@ _CURATION_SET_KEYS = (
 
 @dataclass(frozen=True)
 class Settings:
-    """Contain every environment-derived ComfyReview setting."""
+    """Contain environment-derived settings required by the live runtime."""
 
     base_directory: Path
     app_host: str
@@ -31,17 +31,8 @@ class Settings:
     templates_directory: Path
     pool_limit: int
     minimum_runs: int
-    curation_database_path: Path
     lora_export_root: Path
     curation_set_keys: tuple[str, ...]
-    worker_queue_database_path: Path
-    ratings_database_path: Path
-    prompt_tokens_database_path: Path
-    arena_database_path: Path
-    playground_database_path: Path
-    combo_prompts_database_path: Path
-    images_database_path: Path
-    prompt_ratings_database_path: Path
     default_max_tries: int
     default_unrated_only: bool
     soft_delete_to_trash: bool
@@ -51,6 +42,22 @@ class Settings:
     ssl_enabled: bool
     ssl_certificate_path: Path
     ssl_key_path: Path
+
+
+@dataclass(frozen=True)
+class LegacyMigrationSettings:
+    """Contain database paths used only by explicit legacy maintenance."""
+
+    data_directory: Path
+    ratings_database_path: Path
+    prompt_tokens_database_path: Path
+    arena_database_path: Path
+    curation_database_path: Path
+    playground_database_path: Path
+    combo_prompts_database_path: Path
+    images_database_path: Path
+    prompt_ratings_database_path: Path
+    worker_queue_database_path: Path
 
 
 def _read_env_file(path: Path) -> dict[str, str]:
@@ -95,6 +102,26 @@ def _path(values: Mapping[str, str], name: str, default: Path) -> Path:
     return Path(value).expanduser().resolve()
 
 
+def _base_path(base_directory: Path | None) -> Path:
+    """Resolve the configuration base without changing process state."""
+    if base_directory is not None:
+        return Path(base_directory).resolve()
+    return Path(__file__).resolve().parents[1]
+
+
+def _configuration_values(
+    *,
+    base: Path,
+    environ: Mapping[str, str] | None,
+    env_file: Path | None,
+) -> dict[str, str]:
+    """Merge defaults-file values with the selected environment mapping."""
+    file_path = Path(env_file) if env_file is not None else base / ".env"
+    values = _read_env_file(file_path)
+    values.update(dict(os.environ if environ is None else environ))
+    return values
+
+
 def load_settings(
     *,
     base_directory: Path | None = None,
@@ -102,14 +129,12 @@ def load_settings(
     env_file: Path | None = None,
 ) -> Settings:
     """Load typed settings without mutating process environment or files."""
-    base = (
-        Path(base_directory).resolve()
-        if base_directory is not None
-        else Path(__file__).resolve().parents[1]
+    base = _base_path(base_directory)
+    values = _configuration_values(
+        base=base,
+        environ=environ,
+        env_file=env_file,
     )
-    file_path = Path(env_file) if env_file is not None else base / ".env"
-    values = _read_env_file(file_path)
-    values.update(dict(os.environ if environ is None else environ))
 
     output_root = _path(values, "COMFYREVIEW_OUTPUT_ROOT", base / "output")
     data_directory = _path(values, "COMFYREVIEW_DATA_DIR", base / "data")
@@ -123,11 +148,6 @@ def load_settings(
         "COMFYREVIEW_WORKFLOWS_DIR",
         data_directory / "workflows",
     )
-    prompt_tokens_path = _path(
-        values,
-        "COMFYREVIEW_PROMPT_TOKENS_DB",
-        base / "prompt_tokens.sqlite3",
-    )
     return Settings(
         base_directory=base,
         app_host=values.get("COMFYREVIEW_HOST", "127.0.0.1"),
@@ -139,53 +159,12 @@ def load_settings(
         templates_directory=base / "templates",
         pool_limit=_integer(values, "COMFYREVIEW_POOL_LIMIT", 128),
         minimum_runs=_integer(values, "COMFYREVIEW_MIN_RUNS", 3),
-        curation_database_path=_path(
-            values,
-            "COMFYREVIEW_CURATION_DB",
-            data_directory / "curation.sqlite3",
-        ),
         lora_export_root=_path(
             values,
             "COMFYREVIEW_LORA_EXPORT_ROOT",
             output_root / "_lora_export",
         ),
         curation_set_keys=_CURATION_SET_KEYS,
-        worker_queue_database_path=_path(
-            values,
-            "COMFYREVIEW_MV_QUEUE_DB",
-            data_directory / "mv_jobs.sqlite3",
-        ),
-        ratings_database_path=_path(
-            values,
-            "COMFYREVIEW_RATINGS_DB",
-            base / "ratings.sqlite3",
-        ),
-        prompt_tokens_database_path=prompt_tokens_path,
-        arena_database_path=_path(
-            values,
-            "COMFYREVIEW_ARENA_DB",
-            base / "arena.sqlite3",
-        ),
-        playground_database_path=_path(
-            values,
-            "COMFYREVIEW_PLAYGROUND_DB",
-            data_directory / "playground.sqlite3",
-        ),
-        combo_prompts_database_path=_path(
-            values,
-            "COMFYREVIEW_COMBO_DB",
-            data_directory / "combo_prompts.sqlite3",
-        ),
-        images_database_path=_path(
-            values,
-            "COMFYREVIEW_IMAGES_DB",
-            data_directory / "images.sqlite3",
-        ),
-        prompt_ratings_database_path=_path(
-            values,
-            "COMFYREVIEW_PROMPT_RATINGS_DB",
-            data_directory / "prompt_ratings.sqlite3",
-        ),
         default_max_tries=_integer(
             values,
             "COMFYREVIEW_DEFAULT_MAX_TRIES",
@@ -221,5 +200,69 @@ def load_settings(
             values,
             "COMFYREVIEW_SSL_KEYFILE",
             base / "certs" / "server-key.pem",
+        ),
+    )
+
+
+def load_legacy_migration_settings(
+    *,
+    base_directory: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+    env_file: Path | None = None,
+) -> LegacyMigrationSettings:
+    """Load paths used exclusively by explicit legacy maintenance commands."""
+    base = _base_path(base_directory)
+    values = _configuration_values(
+        base=base,
+        environ=environ,
+        env_file=env_file,
+    )
+    data_directory = _path(values, "COMFYREVIEW_DATA_DIR", base / "data")
+    return LegacyMigrationSettings(
+        data_directory=data_directory,
+        ratings_database_path=_path(
+            values,
+            "COMFYREVIEW_RATINGS_DB",
+            base / "ratings.sqlite3",
+        ),
+        prompt_tokens_database_path=_path(
+            values,
+            "COMFYREVIEW_PROMPT_TOKENS_DB",
+            base / "prompt_tokens.sqlite3",
+        ),
+        arena_database_path=_path(
+            values,
+            "COMFYREVIEW_ARENA_DB",
+            base / "arena.sqlite3",
+        ),
+        curation_database_path=_path(
+            values,
+            "COMFYREVIEW_CURATION_DB",
+            data_directory / "curation.sqlite3",
+        ),
+        playground_database_path=_path(
+            values,
+            "COMFYREVIEW_PLAYGROUND_DB",
+            data_directory / "playground.sqlite3",
+        ),
+        combo_prompts_database_path=_path(
+            values,
+            "COMFYREVIEW_COMBO_DB",
+            data_directory / "combo_prompts.sqlite3",
+        ),
+        images_database_path=_path(
+            values,
+            "COMFYREVIEW_IMAGES_DB",
+            data_directory / "images.sqlite3",
+        ),
+        prompt_ratings_database_path=_path(
+            values,
+            "COMFYREVIEW_PROMPT_RATINGS_DB",
+            data_directory / "prompt_ratings.sqlite3",
+        ),
+        worker_queue_database_path=_path(
+            values,
+            "COMFYREVIEW_MV_QUEUE_DB",
+            data_directory / "mv_jobs.sqlite3",
         ),
     )
