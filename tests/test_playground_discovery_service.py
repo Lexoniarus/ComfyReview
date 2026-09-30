@@ -10,6 +10,7 @@ from comfyreview.application import (
     ComfyUiConnectionError,
     ComfyUiProvider,
 )
+from comfyreview.repositories.filesystem import JsonComfyUiCapabilityCache
 from services.playground_discovery_service import PlaygroundDiscoveryService
 
 
@@ -28,7 +29,7 @@ def _service(
 ) -> PlaygroundDiscoveryService:
     return PlaygroundDiscoveryService(
         cast(ComfyUiProvider, provider),
-        cache_path,
+        JsonComfyUiCapabilityCache(cache_path),
     )
 
 
@@ -80,15 +81,23 @@ def test_playground_discovery_falls_back_to_clean_cached_lists(
 
 def test_playground_discovery_ignores_cache_write_failure(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
-    service = _service(
-        _Provider(ComfyUiCapabilities((), ("euler",), (), ())),
-        tmp_path / "capabilities.json",
-    )
-    monkeypatch.setattr(
-        "services.playground_discovery_service.save_json_state",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("readonly")),
+    del tmp_path
+
+    class _ReadOnlyCache:
+        def load(self):
+            return {}
+
+        def save(self, capabilities):
+            del capabilities
+            raise OSError("readonly")
+
+    service = PlaygroundDiscoveryService(
+        cast(
+            ComfyUiProvider,
+            _Provider(ComfyUiCapabilities((), ("euler",), (), ())),
+        ),
+        _ReadOnlyCache(),
     )
 
     assert service.discover().samplers == ["euler"]

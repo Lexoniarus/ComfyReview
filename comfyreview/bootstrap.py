@@ -46,6 +46,7 @@ from comfyreview.providers import (
     UuidPromptIdentitySource,
 )
 from comfyreview.repositories.filesystem import (
+    JsonComfyUiCapabilityCache,
     JsonWorkflowBlueprintRepository,
     PlaygroundGeneratorStateRepository,
 )
@@ -209,9 +210,11 @@ def build_application_container(
         ),
         playground_discovery=PlaygroundDiscoveryService(
             comfyui_provider,
-            configured.data_directory
-            / "ui_state"
-            / "comfy_discovery_cache.json",
+            JsonComfyUiCapabilityCache(
+                configured.data_directory
+                / "ui_state"
+                / "comfy_discovery_cache.json"
+            ),
         ),
         playground_ui_state=PlaygroundGeneratorStateRepository(
             head_path=(

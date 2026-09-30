@@ -12,7 +12,6 @@ from comfyreview.application import (
     PromptSelectionCommand,
 )
 from services.playground_common.empty_placeholders import filter_random_items
-from services.ui_state_service import safe_int
 
 from .types import DiscoveryLists
 
@@ -303,7 +302,7 @@ def _parse_preview_head_spec(
         default_step=0.05,
     )
 
-    gen_seed_base = safe_int(str(head.get("gen_seed") or "").strip())
+    gen_seed_base = _safe_int_or_none(head.get("gen_seed"))
 
     # Build final per-run sequences for steps/cfg.
     # Priority:

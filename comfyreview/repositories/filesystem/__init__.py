@@ -8,6 +8,10 @@ from comfyreview.repositories.filesystem.workflow_blueprints import (
 )
 
 __all__ = [
+    "JsonComfyUiCapabilityCache",
     "JsonWorkflowBlueprintRepository",
     "PlaygroundGeneratorStateRepository",
 ]
+from comfyreview.repositories.filesystem.capability_cache import (
+    JsonComfyUiCapabilityCache,
+)

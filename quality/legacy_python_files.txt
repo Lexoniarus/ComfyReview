@@ -7,7 +7,6 @@ services/playground_common/empty_placeholders.py
 services/playground_generator_ui/__init__.py
 services/playground_generator_ui/drafts.py
 services/playground_generator_ui/types.py
-services/ui_state_service.py
 templates.py
 tests/conftest.py
 tests/test_prompt_store_tokenize.py

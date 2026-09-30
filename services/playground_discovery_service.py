@@ -2,19 +2,35 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Mapping
+from typing import Protocol
 
 from comfyreview.application import ComfyUiError, ComfyUiProvider
 from services.playground_generator_ui.types import DiscoveryLists
-from services.ui_state_service import load_json_state, save_json_state
+
+
+class ComfyUiCapabilityCache(Protocol):
+    """Store the last usable technical capability response."""
+
+    def load(self) -> Mapping[str, object]:
+        """Return cached capability values."""
+        ...
+
+    def save(self, capabilities: Mapping[str, object]) -> None:
+        """Persist capability values."""
+        ...
 
 
 class PlaygroundDiscoveryService:
     """Serve native ComfyUI enum capabilities with a local fallback cache."""
 
-    def __init__(self, provider: ComfyUiProvider, cache_path: Path) -> None:
+    def __init__(
+        self,
+        provider: ComfyUiProvider,
+        cache: ComfyUiCapabilityCache,
+    ) -> None:
         self._provider = provider
-        self._cache_path = Path(cache_path)
+        self._cache = cache
 
     def discover(self) -> DiscoveryLists:
         """Return live capabilities or the last valid cached enum lists."""
@@ -33,7 +49,7 @@ class PlaygroundDiscoveryService:
         return self._cached()
 
     def _cached(self) -> DiscoveryLists:
-        raw = load_json_state(self._cache_path)
+        raw = self._cache.load()
         return DiscoveryLists(
             checkpoints=self._strings(raw.get("checkpoints")),
             samplers=self._strings(raw.get("samplers")),
@@ -42,13 +58,12 @@ class PlaygroundDiscoveryService:
 
     def _save(self, result: DiscoveryLists) -> None:
         try:
-            save_json_state(
-                self._cache_path,
+            self._cache.save(
                 {
                     "checkpoints": result.checkpoints,
                     "samplers": result.samplers,
                     "schedulers": result.schedulers,
-                },
+                }
             )
         except OSError:
             return
