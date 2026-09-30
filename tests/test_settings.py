@@ -22,8 +22,6 @@ def test_load_settings_uses_documented_defaults_without_writes(
     assert settings.canonical_database_path == expected_database
     assert settings.pool_limit == 128
     assert settings.minimum_runs == 3
-    assert settings.worker_debounce_seconds == 20
-    assert settings.worker_shutdown_timeout_seconds == 30.0
     assert settings.default_unrated_only is False
     assert settings.soft_delete_to_trash is False
     assert settings.ssl_enabled is False
@@ -51,8 +49,6 @@ def test_environment_overrides_env_file_without_mutating_process(
                 "COMFYREVIEW_DATABASE=ignored.sqlite3",
                 "COMFYREVIEW_POOL_LIMIT=64",
                 "COMFYREVIEW_MIN_RUNS=5",
-                "COMFYREVIEW_MV_DEBOUNCE_SECONDS=7",
-                "COMFYREVIEW_WORKER_SHUTDOWN_TIMEOUT_SECONDS=4.5",
                 "COMFYREVIEW_DEFAULT_MAX_TRIES=12",
                 "COMFYREVIEW_DEFAULT_UNRATED_ONLY=yes",
                 "COMFYREVIEW_SOFT_DELETE_TO_TRASH=off",
@@ -85,8 +81,6 @@ def test_environment_overrides_env_file_without_mutating_process(
     assert settings.ratings_database_path == expected_ratings
     assert settings.pool_limit == 64
     assert settings.minimum_runs == 5
-    assert settings.worker_debounce_seconds == 7
-    assert settings.worker_shutdown_timeout_seconds == 4.5
     assert settings.default_max_tries == 12
     assert settings.default_unrated_only is True
     assert settings.soft_delete_to_trash is False

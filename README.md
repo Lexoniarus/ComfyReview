@@ -163,7 +163,6 @@ Important settings:
 | `COMFYUI_BASE_URL` | `COMFYREVIEW_COMFYUI_BASE_URL` | Local ComfyUI API URL |
 | `WORKFLOWS_DIR` | `COMFYREVIEW_WORKFLOWS_DIR` | Folder for workflow files |
 | `DATA_DIR` | `COMFYREVIEW_DATA_DIR` | Local runtime data folder |
-| `WORKER_SHUTDOWN_TIMEOUT_SECONDS` | `COMFYREVIEW_WORKER_SHUTDOWN_TIMEOUT_SECONDS` | Maximum wait for orderly worker shutdown (default: 30 seconds) |
 | `SSL_ENABLED` | `COMFYREVIEW_SSL_ENABLED` | Enables local HTTPS when configured |
 
 Example on Windows PowerShell:

@@ -31,8 +31,6 @@ class Settings:
     templates_directory: Path
     pool_limit: int
     minimum_runs: int
-    worker_debounce_seconds: int
-    worker_shutdown_timeout_seconds: float
     curation_database_path: Path
     lora_export_root: Path
     curation_set_keys: tuple[str, ...]
@@ -81,11 +79,6 @@ def _read_env_file(path: Path) -> dict[str, str]:
 def _integer(values: Mapping[str, str], name: str, default: int) -> int:
     value = values.get(name)
     return default if value is None or not value.strip() else int(value)
-
-
-def _floating(values: Mapping[str, str], name: str, default: float) -> float:
-    value = values.get(name)
-    return default if value is None or not value.strip() else float(value)
 
 
 def _boolean(values: Mapping[str, str], name: str, default: bool) -> bool:
@@ -146,16 +139,6 @@ def load_settings(
         templates_directory=base / "templates",
         pool_limit=_integer(values, "COMFYREVIEW_POOL_LIMIT", 128),
         minimum_runs=_integer(values, "COMFYREVIEW_MIN_RUNS", 3),
-        worker_debounce_seconds=_integer(
-            values,
-            "COMFYREVIEW_MV_DEBOUNCE_SECONDS",
-            20,
-        ),
-        worker_shutdown_timeout_seconds=_floating(
-            values,
-            "COMFYREVIEW_WORKER_SHUTDOWN_TIMEOUT_SECONDS",
-            30.0,
-        ),
         curation_database_path=_path(
             values,
             "COMFYREVIEW_CURATION_DB",
