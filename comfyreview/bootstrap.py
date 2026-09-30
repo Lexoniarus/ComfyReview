@@ -19,7 +19,9 @@ from comfyreview.application import (
     GenerationService,
     LegacySchemaLifecycle,
     OutputImageCatalog,
+    PlaygroundGenerationPolicy,
     PlaygroundService,
+    PlaygroundSubmissionService,
     PromptCatalogService,
     PromptRenderer,
     PromptSelectionPolicy,
@@ -78,9 +80,9 @@ class ApplicationContainer:
     analytics_pages: AnalyticsPageService
     playground_hub: PlaygroundHubService
     generation_service: GenerationService
-    generation_output_collector: GenerationOutputCollector
     prompt_catalog_service: PromptCatalogService
     playground_service: PlaygroundService
+    playground_submission_service: PlaygroundSubmissionService
     review_service: ReviewService
     ranking_service: RankingService
     arena_service: ArenaService
@@ -146,6 +148,18 @@ def build_application_container(
             configured.canonical_database_path
         ),
     )
+    generation_service = GenerationService(
+        blueprints=JsonWorkflowBlueprintRepository(
+            configured.workflows_directory
+        ),
+        compiler=WorkflowCompiler(),
+        generations=SqliteGenerationRepository(
+            configured.canonical_database_path
+        ),
+        comfyui=comfyui_provider,
+        outputs=generation_output_collector,
+        identities=UuidGenerationIdentitySource(),
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -167,24 +181,20 @@ def build_application_container(
             image_url=existing_png_path_to_url,
             default_max_attempts=configured.default_max_tries,
         ),
-        generation_service=GenerationService(
-            blueprints=JsonWorkflowBlueprintRepository(
-                configured.workflows_directory
-            ),
-            compiler=WorkflowCompiler(),
-            generations=SqliteGenerationRepository(
-                configured.canonical_database_path
-            ),
-            comfyui=comfyui_provider,
-            outputs=generation_output_collector,
-            identities=UuidGenerationIdentitySource(),
-        ),
-        generation_output_collector=generation_output_collector,
+        generation_service=generation_service,
         prompt_catalog_service=prompt_catalog_service,
         playground_service=PlaygroundService(
             catalog=prompt_catalog_service,
             selection_policy=PromptSelectionPolicy(),
             renderer=PromptRenderer(),
+        ),
+        playground_submission_service=PlaygroundSubmissionService(
+            generation=generation_service,
+            policy=PlaygroundGenerationPolicy(
+                blueprint_uid="default-character",
+                blueprint_version=1,
+                expected_output_roles=("primary",),
+            ),
         ),
         review_service=review_service,
         ranking_service=ranking_service,

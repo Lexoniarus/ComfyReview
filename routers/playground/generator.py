@@ -434,7 +434,12 @@ def _handle_submit_preview(
     if not preview:
         return _redirect_generator()
 
-    enqueue_info, error = submit_preview_drafts(preview)
+    enqueue_info, error = submit_preview_drafts(
+        preview,
+        service=(
+            get_application_container(request).playground_submission_service
+        ),
+    )
     clear_preview_state(GENERATOR_PREVIEW_STATE_PATH)
 
     form = _reload_form_from_head(dropdowns)

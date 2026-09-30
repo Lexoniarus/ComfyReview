@@ -1,71 +1,110 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from collections.abc import Mapping, Sequence
 
-from services.comfy_client import ComfyClient
+from comfyreview.application import (
+    GenerationSamplerSettings,
+    PlaygroundGenerationDraft,
+    PlaygroundSubmissionFailure,
+    PlaygroundSubmissionService,
+    RenderedPrompt,
+)
+
+
+def preview_draft_from_state(
+    state: Mapping[str, object],
+) -> PlaygroundGenerationDraft:
+    """Translate one server-owned preview state record into a typed draft."""
+    selection = state.get("selection")
+    if not isinstance(selection, Mapping):
+        raise ValueError("selection is required")
+    revision_uids = tuple(
+        revision_uid
+        for value in selection.values()
+        if isinstance(value, Mapping)
+        and (revision_uid := str(value.get("revision_uid") or "").strip())
+    )
+    return PlaygroundGenerationDraft(
+        draft_uid=_text(state, "draft_id"),
+        character_name=_text(state, "character_name"),
+        prompt=RenderedPrompt(
+            positive_text=_text(state, "prompt_positive"),
+            negative_text=_text(state, "prompt_negative"),
+            notes="",
+            revision_uids=revision_uids,
+            draft_overridden=True,
+        ),
+        checkpoint=_text(state, "checkpoint"),
+        sampler=GenerationSamplerSettings(
+            role="base_sampler",
+            seed=_integer(state, "seed"),
+            steps=_integer(state, "steps"),
+            cfg=_floating(state, "cfg"),
+            sampler=_text(state, "sampler"),
+            scheduler=_text(state, "scheduler"),
+            denoise=_floating(state, "denoise"),
+        ),
+        output_subdirectory=_text(state, "subdir"),
+    )
+
+
+def _text(state: Mapping[str, object], key: str) -> str:
+    value = str(state.get(key) or "").strip()
+    if not value:
+        raise ValueError(f"{key} is required")
+    return value
+
+
+def _integer(state: Mapping[str, object], key: str) -> int:
+    try:
+        return int(str(state[key]))
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"{key} must be an integer") from error
+
+
+def _floating(state: Mapping[str, object], key: str) -> float:
+    try:
+        return float(str(state[key]))
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"{key} must be numeric") from error
 
 
 def submit_preview_drafts(
-    drafts: List[Dict[str, Any]],
+    drafts: Sequence[Mapping[str, object]],
     *,
-    client: Optional[ComfyClient] = None,
-) -> Tuple[str, Optional[str]]:
-    """Enqueue all drafts to ComfyUI.
-
-    Returns
-    enqueue_info, error
-    """
+    service: PlaygroundSubmissionService,
+) -> tuple[str, str | None]:
+    """Submit typed preview drafts and format the existing UI response."""
 
     if not drafts:
         return "queued: 0/0", None
 
-    c = client or ComfyClient()
-
-    responses: List[Any] = []
-    errors: List[str] = []
-
-    for d in drafts:
-        did = str(d.get("draft_id") or "").strip() or "draft"
+    parsed: list[PlaygroundGenerationDraft] = []
+    parsing_failures: list[PlaygroundSubmissionFailure] = []
+    for state in drafts:
+        draft_uid = str(state.get("draft_id") or "").strip() or "draft"
         try:
-            resp = c.enqueue_from_playground(
-                character_name=str(d.get("character_name") or ""),
-                positive_prompt=str(d.get("prompt_positive") or ""),
-                negative_prompt=str(d.get("prompt_negative") or ""),
-                checkpoint=d.get("checkpoint"),
-                seed=d.get("seed"),
-                steps=d.get("steps"),
-                cfg=d.get("cfg"),
-                denoise=d.get("denoise"),
-                sampler=d.get("sampler"),
-                scheduler=d.get("scheduler"),
-                subdir=str(d.get("subdir") or "playground"),
+            parsed.append(preview_draft_from_state(state))
+        except ValueError as caught:
+            parsing_failures.append(
+                PlaygroundSubmissionFailure(draft_uid, str(caught))
             )
-            responses.append(resp)
 
-            if not getattr(resp, "ok", False):
-                msg = getattr(resp, "error", "") or str(getattr(resp, "response_json", {}) or {})
-                errors.append(f"{did}: {getattr(resp, 'status_code', 0)} {msg}")
-
-        except Exception as e:
-            responses.append({"ok": False, "status_code": 0, "error": str(e)})
-            errors.append(f"{did}: {str(e)}")
-
+    batch = service.submit(tuple(parsed))
+    failures = (*parsing_failures, *batch.failures)
     total = len(drafts)
-    ok_count = sum(
-        1
-        for r in responses
-        if (r.get("ok", False) if isinstance(r, dict) else getattr(r, "ok", False))
+    submission_ids = ", ".join(
+        submission.generation_uid for submission in batch.submissions
     )
-    fail_count = total - ok_count
-
-    enqueue_info = f"queued: {ok_count}/{total}"
-    if fail_count > 0:
-        enqueue_info += f" | failed: {fail_count}"
-
-    error = None
-    if errors:
-        head = errors[:5]
-        tail = " ..." if len(errors) > 5 else ""
-        error = " | ".join(head) + tail
-
-    return enqueue_info, error
+    enqueue_info = f"queued: {len(batch.submissions)}/{total}"
+    if failures:
+        enqueue_info += f" | failed: {len(failures)}"
+    if submission_ids:
+        enqueue_info += f" | generations: {submission_ids}"
+    errors = [
+        f"{failure.draft_uid}: {failure.message}" for failure in failures
+    ]
+    error_message = " | ".join(errors[:5]) if errors else None
+    if len(errors) > 5:
+        error_message = f"{error_message} ..."
+    return enqueue_info, error_message

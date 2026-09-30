@@ -99,6 +99,13 @@ from comfyreview.application.playground import (
     PromptSelectionPolicy,
     RenderedPrompt,
 )
+from comfyreview.application.playground_generation import (
+    PlaygroundGenerationDraft,
+    PlaygroundGenerationPolicy,
+    PlaygroundSubmissionBatch,
+    PlaygroundSubmissionFailure,
+    PlaygroundSubmissionService,
+)
 from comfyreview.application.prompt_catalog import (
     CreatePromptComponentCommand,
     NewPromptComponent,
@@ -229,7 +236,12 @@ __all__ = [
     "OutputPair",
     "OutputPairNotFoundError",
     "PlaygroundDraft",
+    "PlaygroundGenerationDraft",
+    "PlaygroundGenerationPolicy",
     "PlaygroundService",
+    "PlaygroundSubmissionBatch",
+    "PlaygroundSubmissionFailure",
+    "PlaygroundSubmissionService",
     "PreparedGeneration",
     "PromptCatalogReader",
     "PromptDraftOverrides",
