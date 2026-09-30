@@ -1,6 +1,18 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.playground:PlaygroundService.prepare_draft": (
+        "tests/test_playground_application.py::"
+        "test_playground_service_prepares_draft_without_generation_submission"
+    ),
+    "comfyreview.application.playground:PromptRenderer.render": (
+        "tests/test_playground_application.py::"
+        "test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate"
+    ),
+    "comfyreview.application.playground:PromptSelectionPolicy.select": (
+        "tests/test_playground_application.py::"
+        "test_prompt_selection_policy_selects_reproducible_compatible_revisions"
+    ),
     "comfyreview.application.prompt_catalog:PromptCatalogService.add_revision": (
         "tests/test_prompt_catalog.py::"
         "test_prompt_catalog_service_appends_immutable_revision"
