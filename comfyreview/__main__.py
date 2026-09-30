@@ -14,10 +14,13 @@ from comfyreview.application import (
     LegacySchemaValidationError,
 )
 from comfyreview.importers import (
+    LegacyFeatureImportRecoveryError,
+    LegacyFeatureImportValidationError,
     LegacyOutputAuditor,
     LegacyOutputImporter,
     LegacyOutputImportRecoveryError,
     LegacyOutputImportValidationError,
+    SqliteLegacyFeatureMigration,
 )
 from comfyreview.providers import LocalLegacyOutputImportSource
 from comfyreview.repositories.sqlite import (
@@ -81,6 +84,17 @@ def _parser() -> argparse.ArgumentParser:
     output_import = output_actions.add_parser("import")
     output_import.add_argument("--report", type=Path)
     output_import.add_argument("--backup-dir", type=Path)
+
+    legacy_features = commands.add_parser("legacy-features")
+    feature_actions = legacy_features.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    feature_audit = feature_actions.add_parser("audit")
+    feature_audit.add_argument("--report", type=Path)
+    feature_import = feature_actions.add_parser("import")
+    feature_import.add_argument("--report", type=Path)
+    feature_import.add_argument("--backup-dir", type=Path)
     return parser
 
 
@@ -177,6 +191,15 @@ class _CliImportObserver:
         print(json.dumps(payload, sort_keys=True), file=sys.stderr)
 
 
+class _CliFeatureImportObserver:
+    def backup_created(self, backup_path: Path) -> None:
+        payload = {
+            "event": "legacy_feature_import.backup_created",
+            "backup_path": str(backup_path),
+        }
+        print(json.dumps(payload, sort_keys=True), file=sys.stderr)
+
+
 def _run_legacy_output_import(options: argparse.Namespace) -> int:
     settings = load_settings()
     report_path = (
@@ -207,6 +230,57 @@ def _run_legacy_output_import(options: argparse.Namespace) -> int:
     return 0
 
 
+def _run_legacy_features(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    report_path = (
+        options.report
+        if options.report is not None
+        else settings.data_directory / "reports" / "legacy-feature-audit.json"
+    )
+    migration = SqliteLegacyFeatureMigration(
+        canonical_database_path=settings.canonical_database_path,
+        ratings_database_path=settings.ratings_database_path,
+        arena_database_path=settings.arena_database_path,
+        curation_database_path=settings.curation_database_path,
+        images_projection_database_path=settings.images_database_path,
+        observer=_CliFeatureImportObserver(),
+    )
+    if options.action == "audit":
+        audit_result = migration.audit(report_path)
+        print(
+            json.dumps(
+                {
+                    "report_path": str(audit_result.report_path),
+                    **audit_result.summary,
+                },
+                sort_keys=True,
+            )
+        )
+        return 2 if audit_result.summary["conflicts"] else 0
+    import_result = migration.import_audit(
+        report_path,
+        backup_directory=options.backup_dir,
+    )
+    print(
+        json.dumps(
+            {
+                "backup_path": str(import_result.backup_path),
+                "rating_events": import_result.rating_events,
+                "deduplicated_ratings": (import_result.deduplicated_ratings),
+                "arena_matches": import_result.arena_matches,
+                "curation_assignments": import_result.curation_assignments,
+                "orphan_ratings": import_result.orphan_ratings,
+                "orphan_arena_matches": (import_result.orphan_arena_matches),
+                "orphan_curation_assignments": (
+                    import_result.orphan_curation_assignments
+                ),
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run a maintenance command and return its stable process exit code."""
     options = _parser().parse_args(arguments)
@@ -215,6 +289,8 @@ def main(arguments: list[str] | None = None) -> int:
             return _run_legacy(options)
         if options.command == "canonical-db":
             return _run_canonical(options)
+        if options.command == "legacy-features":
+            return _run_legacy_features(options)
         return _run_legacy_output(options)
     except LegacySchemaValidationError as error:
         print(_render_legacy(error.report), file=sys.stderr)
@@ -226,6 +302,12 @@ def main(arguments: list[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
     except LegacyOutputImportRecoveryError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    except LegacyFeatureImportValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except LegacyFeatureImportRecoveryError as error:
         print(str(error), file=sys.stderr)
         return 1
     except (OSError, sqlite3.DatabaseError, ValueError) as error:

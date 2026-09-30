@@ -1,5 +1,13 @@
 """Explicit offline import and audit adapters."""
 
+from comfyreview.importers.legacy_features import (
+    LegacyFeatureAuditResult,
+    LegacyFeatureImportObserver,
+    LegacyFeatureImportRecoveryError,
+    LegacyFeatureImportResult,
+    LegacyFeatureImportValidationError,
+    SqliteLegacyFeatureMigration,
+)
 from comfyreview.importers.legacy_models import (
     LegacyImageImport,
     LegacyOutputImportObserver,
@@ -17,6 +25,11 @@ from comfyreview.importers.legacy_outputs import (
 )
 
 __all__ = [
+    "LegacyFeatureAuditResult",
+    "LegacyFeatureImportObserver",
+    "LegacyFeatureImportRecoveryError",
+    "LegacyFeatureImportResult",
+    "LegacyFeatureImportValidationError",
     "LegacyImageImport",
     "LegacyOutputAuditResult",
     "LegacyOutputAuditor",
@@ -28,4 +41,5 @@ __all__ = [
     "LegacyOutputImportSource",
     "LegacyOutputImportValidationError",
     "LegacySamplerStageImport",
+    "SqliteLegacyFeatureMigration",
 ]
