@@ -1,8 +1,9 @@
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+"""Canonical SQLite queries and pure calculations for combo reports."""
 
-from stores.db_core import db
-from stores.rating_rules import (
+from pathlib import Path
+from typing import Any
+
+from comfyreview.application.rating_evidence import (
     DELETE_WEIGHT_DEFAULT,
     SUCCESS_THRESHOLD_DEFAULT,
     _bayes_lb05,
@@ -11,15 +12,7 @@ from stores.rating_rules import (
     _rating_weight_for_run,
     _sigmoid,
 )
-
-# Was tut es?
-# Combo Aggregationen und Empfehlungen.
-#
-# Wo kommt es her?
-# Liest aus ratings.sqlite3 Tabelle ratings.
-#
-# Wo geht es hin?
-# Output geht an Router Layer stats_router.py und wird in stats.html und recommendations.html gerendert.
+from comfyreview.repositories.sqlite.connection import connect_read_only
 
 
 def fetch_combo_stats(
@@ -30,19 +23,12 @@ def fetch_combo_stats(
     limit: int = 200,
     success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
     delete_weight: int = DELETE_WEIGHT_DEFAULT,
-) -> List[Dict[str, Any]]:
-    # Was tut es?
-    # Aggregiert pro model_branch checkpoint combo_key.
-    #
-    # Wo kommt es her?
-    # ratings.sqlite3 Tabelle ratings.
-    #
-    # Wo geht es hin?
-    # stats.html Tabellen und recommendations stable Liste.
-    con = db(db_path)
+) -> list[dict[str, Any]]:
+    """Aggregate review evidence by model, checkpoint, and combo key."""
+    con = connect_read_only(db_path, rows=True)
 
     where = ""
-    args: List[Any] = []
+    args: list[Any] = []
     if model:
         where = "WHERE model_branch = ?"
         args.append(model)
@@ -57,7 +43,7 @@ def fetch_combo_stats(
     ).fetchall()
     con.close()
 
-    agg: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    agg: dict[tuple[str, str, str], dict[str, Any]] = {}
     for r in rows:
         mb = str(r["model_branch"])
         ckpt = str(r["checkpoint"] or "")
@@ -86,19 +72,21 @@ def fetch_combo_stats(
 
         x["n"] += 1
 
-        # Delete Runs sind Fail Evidenz aus DB, kein Rating
+        # Deletes contribute failure evidence but no rating value.
         if deleted == 1:
             x["deletes"] += 1
-            x["delete_fail_w"] += _delete_weight_for_run(run, int(delete_weight))
+            x["delete_fail_w"] += _delete_weight_for_run(
+                run, int(delete_weight)
+            )
             continue
 
-        # avg_rating wird nur aus rating Runs gebildet
+        # Average ratings include only explicit rating observations.
         if rating is not None:
             w = _rating_weight_for_run(run)
             x["avg_sum"] += float(rating) * float(w)
             x["avg_cnt"] += int(w)
 
-        # success fail Evidenz aus den Regeln
+        # The review evidence policy determines success and failure.
         cls = _classify(
             run=run,
             rating=rating,
@@ -110,7 +98,7 @@ def fetch_combo_stats(
         elif cls is False:
             x["fail"] += _rating_weight_for_run(run)
 
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for x in agg.values():
         n = int(x["n"])
         if n < int(min_n):
@@ -120,10 +108,18 @@ def fetch_combo_stats(
         fail = int(x["fail"])
         fail_w = int(fail + x["delete_fail_w"])
 
-        # exp_success_rate und stability_lb05 sind DB abgeleitete Kennzahlen
-        exp_success = (success + 1) / (success + fail_w + 2) if (success + fail_w) >= 0 else 0.0
+        # Both values are derived statistics, not canonical facts.
+        exp_success = (
+            (success + 1) / (success + fail_w + 2)
+            if (success + fail_w) >= 0
+            else 0.0
+        )
         lb05 = _bayes_lb05(float(success), float(fail_w))
-        avg_rating = float(x["avg_sum"] / x["avg_cnt"]) if int(x["avg_cnt"]) > 0 else 0.0
+        avg_rating = (
+            float(x["avg_sum"] / x["avg_cnt"])
+            if int(x["avg_cnt"]) > 0
+            else 0.0
+        )
 
         out.append(
             {
@@ -140,15 +136,18 @@ def fetch_combo_stats(
             }
         )
 
-    out.sort(key=lambda x: (x["stability_lb05"], x["exp_success_rate"], x["n"]), reverse=True)
+    out.sort(
+        key=lambda x: (x["stability_lb05"], x["exp_success_rate"], x["n"]),
+        reverse=True,
+    )
     return out[: int(limit)]
 
 
-def _load_combo_prediction_rows(db_path: Path, *, model: str) -> List[Any]:
+def _load_combo_prediction_rows(db_path: Path, *, model: str) -> list[Any]:
     """Load rating rows needed for combo prediction."""
-    con = db(db_path)
+    con = connect_read_only(db_path, rows=True)
     where = ""
-    args: List[Any] = []
+    args: list[Any] = []
     if model:
         where = "WHERE model_branch = ?"
         args.append(model)
@@ -166,11 +165,11 @@ def _load_combo_prediction_rows(db_path: Path, *, model: str) -> List[Any]:
 
 
 def _combo_base_logit(
-    rows: List[Any],
+    rows: list[Any],
     *,
     success_threshold: int,
     delete_weight: int,
-) -> Tuple[int, int, int, int, float, float]:
+) -> tuple[int, int, int, int, float, float]:
     """Compute base logit and base summary for all rows.
 
     Returns (base_n, base_success_w, base_fail_w_no_delete, base_deletes, base_p, base_logit)
@@ -192,7 +191,9 @@ def _combo_base_logit(
 
         if deleted == 1:
             base_deletes += 1
-            base_delete_fail_w += _delete_weight_for_run(run, int(delete_weight))
+            base_delete_fail_w += _delete_weight_for_run(
+                run, int(delete_weight)
+            )
             continue
 
         cls = _classify(
@@ -215,11 +216,11 @@ def _combo_base_logit(
 
 
 def _combo_add_feat_obs(
-    d: Dict[Any, Dict[str, Any]],
+    d: dict[Any, dict[str, Any]],
     *,
     key: Any,
     run: int,
-    rating: Optional[int],
+    rating: int | None,
     deleted: int,
     success_threshold: int,
     delete_weight: int,
@@ -250,17 +251,22 @@ def _combo_add_feat_obs(
 
 
 def _combo_feature_deltas(
-    rows: List[Any],
+    rows: list[Any],
     *,
     base_logit: float,
     min_n: int,
     success_threshold: int,
     delete_weight: int,
-) -> Dict[str, Dict[Any, Dict[str, Any]]]:
+) -> dict[str, dict[Any, dict[str, Any]]]:
     """Compute delta logits per feature value."""
     import math
 
-    feats: Dict[str, Dict[Any, Dict[str, Any]]] = {"steps": {}, "cfg": {}, "sampler": {}, "scheduler": {}}
+    feats: dict[str, dict[Any, dict[str, Any]]] = {
+        "steps": {},
+        "cfg": {},
+        "sampler": {},
+        "scheduler": {},
+    }
 
     for r in rows:
         run = int(r["run"] or 1)
@@ -303,7 +309,12 @@ def _combo_feature_deltas(
             delete_weight=delete_weight,
         )
 
-    deltas: Dict[str, Dict[Any, Dict[str, Any]]] = {"steps": {}, "cfg": {}, "sampler": {}, "scheduler": {}}
+    deltas: dict[str, dict[Any, dict[str, Any]]] = {
+        "steps": {},
+        "cfg": {},
+        "sampler": {},
+        "scheduler": {},
+    }
     for feat_name, d in feats.items():
         for value, x in d.items():
             if int(x["n"]) < int(min_n):
@@ -313,29 +324,33 @@ def _combo_feature_deltas(
             b = float(fail_w2 + 1)
             p = float(a / (a + b))
             logit = math.log(max(1e-9, p) / max(1e-9, 1.0 - p))
-            deltas[feat_name][value] = {"n": int(x["n"]), "p": p, "delta": float(logit - base_logit)}
+            deltas[feat_name][value] = {
+                "n": int(x["n"]),
+                "p": p,
+                "delta": float(logit - base_logit),
+            }
 
     return deltas
 
 
 def _combo_prediction_candidates(
     *,
-    deltas: Dict[str, Dict[Any, Dict[str, Any]]],
+    deltas: dict[str, dict[Any, dict[str, Any]]],
     base_logit: float,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Build prediction candidates via Cartesian product over feature deltas."""
     all_steps = list(deltas["steps"].keys()) or []
     all_cfg = list(deltas["cfg"].keys()) or []
     all_sampler = list(deltas["sampler"].keys()) or []
     all_sched = list(deltas["scheduler"].keys()) or []
 
-    cand: List[Dict[str, Any]] = []
+    cand: list[dict[str, Any]] = []
     for s in all_steps:
         for c in all_cfg:
             for sa in all_sampler:
                 for sc in all_sched:
                     logit = float(base_logit)
-                    support: List[int] = []
+                    support: list[int] = []
 
                     if s in deltas["steps"]:
                         logit += float(deltas["steps"][s]["delta"])
@@ -363,11 +378,13 @@ def _combo_prediction_candidates(
                             "support_min": support_min,
                         }
                     )
-    cand.sort(key=lambda x: (x["pred_success"], x["support_min"]), reverse=True)
+    cand.sort(
+        key=lambda x: (x["pred_success"], x["support_min"]), reverse=True
+    )
     return cand
 
 
-def fetch_combo_predictions(
+def _fetch_combo_predictions(
     db_path: Path,
     *,
     model: str = "",
@@ -375,15 +392,16 @@ def fetch_combo_predictions(
     limit: int = 200,
     success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
     delete_weight: int = DELETE_WEIGHT_DEFAULT,
-) -> Dict[str, Any]:
-    """Approx suggestions over additive log-odds effects per parameter.
-
-    Output renders in recommendations.html (approx block).
-    """
+) -> dict[str, Any]:
+    """Estimate combinations from additive per-parameter log-odds."""
     rows = _load_combo_prediction_rows(db_path, model=model)
 
-    base_n, base_success, base_fail, base_deletes, base_p, base_logit = _combo_base_logit(
-        rows, success_threshold=success_threshold, delete_weight=delete_weight
+    base_n, base_success, base_fail, base_deletes, base_p, base_logit = (
+        _combo_base_logit(
+            rows,
+            success_threshold=success_threshold,
+            delete_weight=delete_weight,
+        )
     )
 
     deltas = _combo_feature_deltas(
@@ -397,14 +415,28 @@ def fetch_combo_predictions(
     has_any_delta = any(bool(deltas[k]) for k in deltas)
     if not has_any_delta:
         return {
-            "base": {"n": base_n, "succ": base_success, "fail": base_fail, "deletes": base_deletes, "exp": base_p},
+            "base": {
+                "n": base_n,
+                "succ": base_success,
+                "fail": base_fail,
+                "deletes": base_deletes,
+                "exp": base_p,
+            },
             "rows": [],
             "notes": "Noch nicht genug Daten fuer Approx.",
         }
 
-    cand = _combo_prediction_candidates(deltas=deltas, base_logit=float(base_logit))
+    cand = _combo_prediction_candidates(
+        deltas=deltas, base_logit=float(base_logit)
+    )
     return {
-        "base": {"n": base_n, "succ": base_success, "fail": base_fail, "deletes": base_deletes, "exp": base_p},
+        "base": {
+            "n": base_n,
+            "succ": base_success,
+            "fail": base_fail,
+            "deletes": base_deletes,
+            "exp": base_p,
+        },
         "rows": cand[: int(limit)],
         "notes": "Approx basiert auf additiven Log Odds Effekten je Parameter und ignoriert Interaktionen.",
     }
@@ -421,16 +453,8 @@ def fetch_recommendations(
     min_lb: float = 0.55,
     approx_min_n: int = 10,
     approx_limit: int = 100,
-) -> Dict[str, Any]:
-    # Was tut es?
-    # Liefert stable Liste plus approx Block.
-    #
-    # Wo kommt es her?
-    # Stable kommt aus fetch_combo_stats, also ratings.sqlite3.
-    # Approx kommt aus fetch_combo_predictions, also ratings.sqlite3.
-    #
-    # Wo geht es hin?
-    # recommendations.html.
+) -> dict[str, Any]:
+    """Return stable observations and approximate recommendations."""
     stable_rows = fetch_combo_stats(
         db_path,
         model=model,
@@ -440,13 +464,18 @@ def fetch_recommendations(
         delete_weight=delete_weight,
     )
 
-    stable = [r for r in stable_rows if float(r["stability_lb05"]) >= float(min_lb)]
-    stable.sort(key=lambda x: (x["stability_lb05"], x["exp_success_rate"], x["n"]), reverse=True)
+    stable = [
+        r for r in stable_rows if float(r["stability_lb05"]) >= float(min_lb)
+    ]
+    stable.sort(
+        key=lambda x: (x["stability_lb05"], x["exp_success_rate"], x["n"]),
+        reverse=True,
+    )
     stable = stable[: int(limit)]
 
-    avoid: List[Dict[str, Any]] = []
+    avoid: list[dict[str, Any]] = []
 
-    approx = fetch_combo_predictions(
+    approx = _fetch_combo_predictions(
         db_path,
         model=model,
         min_n=int(approx_min_n),

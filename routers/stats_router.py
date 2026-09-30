@@ -2,9 +2,12 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
 from comfyreview.api import get_application_container
-from db_store import DELETE_WEIGHT_DEFAULT, SUCCESS_THRESHOLD_DEFAULT
+from comfyreview.application.rating_evidence import (
+    DELETE_WEIGHT_DEFAULT,
+    SUCCESS_THRESHOLD_DEFAULT,
+)
 
-# Jinja Templates für die Analytics-Seiten
+# Jinja templates for the analytics pages.
 from templates import PARAM_HTML, PROMPT_HTML, RECO_HTML, STATS_HTML
 
 # Router wird in app.py registriert

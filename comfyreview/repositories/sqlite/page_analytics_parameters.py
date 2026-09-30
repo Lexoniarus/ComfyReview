@@ -1,8 +1,9 @@
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+"""Canonical SQLite queries and pure calculations for parameter reports."""
 
-from stores.db_core import db
-from stores.rating_rules import (
+from pathlib import Path
+from typing import Any
+
+from comfyreview.application.rating_evidence import (
     DELETE_WEIGHT_DEFAULT,
     SUCCESS_THRESHOLD_DEFAULT,
     _bayes_lb05,
@@ -10,28 +11,19 @@ from stores.rating_rules import (
     _delete_weight_for_run,
     _rating_weight_for_run,
 )
-
-# Was tut es?
-# Parameter Aggregationen ueber alle Runs:
-# - param_stats: Auswertung pro Feature Value (checkpoint steps cfg sampler scheduler)
-# - best_cases: je checkpoint die besten Feature Auspraegungen
-# - checkpoint lists und stats by checkpoint
-#
-# Wo kommt es her?
-# Liest aus ratings.sqlite3 Tabelle ratings.
-#
-# Wo geht es hin?
-# param_stats.html und ggf. stats.html, plus Dropdowns in mehreren Seiten.
+from comfyreview.repositories.sqlite.connection import connect_read_only
 
 
-def _load_ratings_rows_for_best_cases(db_path: Path, *, model: str) -> List[Any]:
+def _load_ratings_rows_for_best_cases(
+    db_path: Path, *, model: str
+) -> list[Any]:
     """Load rating rows needed for best-case calculations.
 
     Reads from ratings.sqlite3 (table ratings) and returns sqlite3.Row objects.
     """
-    con = db(db_path)
+    con = connect_read_only(db_path, rows=True)
     where = ""
-    args: List[Any] = []
+    args: list[Any] = []
     if model:
         where = "WHERE model_branch = ?"
         args.append(model)
@@ -59,12 +51,12 @@ def _cfg_bin_value(cfg_v: Any, *, cfg_bin: float) -> Any:
 
 
 def _best_case_add_obs(
-    agg: Dict[Tuple[str, str, Any], Dict[str, Any]],
+    agg: dict[tuple[str, str, Any], dict[str, Any]],
     *,
     checkpoint: str,
     feat: str,
     value: Any,
-    rating: Optional[int],
+    rating: int | None,
     deleted: int,
     success_threshold: int,
 ) -> None:
@@ -104,10 +96,10 @@ def _best_case_add_obs(
 
 
 def _best_case_finalize_row(
-    x: Dict[str, Any],
+    x: dict[str, Any],
     *,
     delete_weight: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Finalize one aggregated row by computing stability and averages."""
     succ = int(x["success"])
     fail = int(x["fail"])
@@ -118,7 +110,9 @@ def _best_case_finalize_row(
     if int(x["avg_rating_cnt"]) > 0:
         avg = float(x["avg_rating_sum"]) / float(x["avg_rating_cnt"])
 
-    exp_success = (float(succ) + 1.0) / (float(succ) + float(weighted_fail) + 2.0)
+    exp_success = (float(succ) + 1.0) / (
+        float(succ) + float(weighted_fail) + 2.0
+    )
     lb05 = _bayes_lb05(float(succ), float(weighted_fail))
 
     out = dict(x)
@@ -130,14 +124,18 @@ def _best_case_finalize_row(
 
 
 def _best_pick_for_checkpoint(
-    finalized: List[Dict[str, Any]],
+    finalized: list[dict[str, Any]],
     *,
     checkpoint: str,
     feat: str,
     min_n: int,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Pick best value for a checkpoint and feature from finalized rows."""
-    candidates = [r for r in finalized if r["checkpoint"] == checkpoint and r["feat"] == feat]
+    candidates = [
+        r
+        for r in finalized
+        if r["checkpoint"] == checkpoint and r["feat"] == feat
+    ]
     if not candidates:
         return None
 
@@ -164,29 +162,46 @@ def _best_pick_for_checkpoint(
 
 
 def _build_best_cases(
-    finalized: List[Dict[str, Any]],
+    finalized: list[dict[str, Any]],
     *,
     min_n: int,
     limit: int,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Build best_cases list for param_stats.html."""
-    checkpoint_stats: Dict[str, Dict[str, Any]] = {}
+    checkpoint_stats: dict[str, dict[str, Any]] = {}
     for r in finalized:
         if r["feat"] == "checkpoint":
             checkpoint_stats[str(r["checkpoint"])] = r
 
-    best_cases: List[Dict[str, Any]] = []
+    best_cases: list[dict[str, Any]] = []
     for ckpt in sorted(checkpoint_stats.keys()):
         cp = checkpoint_stats.get(ckpt) or {}
 
-        p_steps = _best_pick_for_checkpoint(finalized, checkpoint=ckpt, feat="steps", min_n=min_n)
-        p_cfg = _best_pick_for_checkpoint(finalized, checkpoint=ckpt, feat="cfg", min_n=min_n)
-        p_sampler = _best_pick_for_checkpoint(finalized, checkpoint=ckpt, feat="sampler", min_n=min_n)
-        p_sched = _best_pick_for_checkpoint(finalized, checkpoint=ckpt, feat="scheduler", min_n=min_n)
+        p_steps = _best_pick_for_checkpoint(
+            finalized, checkpoint=ckpt, feat="steps", min_n=min_n
+        )
+        p_cfg = _best_pick_for_checkpoint(
+            finalized, checkpoint=ckpt, feat="cfg", min_n=min_n
+        )
+        p_sampler = _best_pick_for_checkpoint(
+            finalized, checkpoint=ckpt, feat="sampler", min_n=min_n
+        )
+        p_sched = _best_pick_for_checkpoint(
+            finalized, checkpoint=ckpt, feat="scheduler", min_n=min_n
+        )
 
-        picks = {"steps": p_steps, "cfg": p_cfg, "sampler": p_sampler, "scheduler": p_sched}
+        picks = {
+            "steps": p_steps,
+            "cfg": p_cfg,
+            "sampler": p_sampler,
+            "scheduler": p_sched,
+        }
 
-        lbs = [float(p["stability_lb05"]) for p in (p_steps, p_cfg, p_sampler, p_sched) if p is not None]
+        lbs = [
+            float(p["stability_lb05"])
+            for p in (p_steps, p_cfg, p_sampler, p_sched)
+            if p is not None
+        ]
         reco_score = float(sum(lbs) / max(1, len(lbs)))
 
         best_cases.append(
@@ -225,14 +240,14 @@ def fetch_calculated_best_cases(
     delete_weight: int = DELETE_WEIGHT_DEFAULT,
     cfg_bin: float = 0.1,
     limit: int = 200,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Compute best-case parameter picks per checkpoint.
 
     Output feeds the best cases section in param_stats.html.
     """
     rows = _load_ratings_rows_for_best_cases(db_path, model=model)
 
-    agg: Dict[Tuple[str, str, Any], Dict[str, Any]] = {}
+    agg: dict[tuple[str, str, Any], dict[str, Any]] = {}
 
     for r in rows:
         ckpt = str(r["checkpoint"] or "unknown")
@@ -292,7 +307,10 @@ def fetch_calculated_best_cases(
             success_threshold=success_threshold,
         )
 
-    finalized = [_best_case_finalize_row(v, delete_weight=delete_weight) for v in agg.values()]
+    finalized = [
+        _best_case_finalize_row(v, delete_weight=delete_weight)
+        for v in agg.values()
+    ]
     return _build_best_cases(finalized, min_n=min_n, limit=limit)
 
 
@@ -300,23 +318,15 @@ def _load_param_rows(
     db_path: Path,
     *,
     model: str = "",
-    checkpoint: str = "",
-) -> List[Any]:
+) -> list[Any]:
     """Load rating rows used for param stats."""
-    con = db(db_path)
+    con = connect_read_only(db_path, rows=True)
 
-    where_parts: List[str] = []
-    args: List[Any] = []
-
+    where = ""
+    args: list[Any] = []
     if model:
-        where_parts.append("model_branch = ?")
+        where = "WHERE model_branch = ?"
         args.append(model)
-
-    if checkpoint:
-        where_parts.append("checkpoint = ?")
-        args.append(checkpoint)
-
-    where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
 
     rows = con.execute(
         f"""
@@ -330,13 +340,17 @@ def _load_param_rows(
     return rows
 
 
-def _iter_param_feats(rows: List[Any]) -> List[Tuple[str, Any, int, Optional[int], int]]:
+def _iter_param_feats(
+    rows: list[Any],
+) -> list[tuple[str, Any, int, int | None, int]]:
     """Expand rating rows into (feat, value, run, rating, deleted) tuples."""
-    feats: List[Tuple[str, Any, int, Optional[int], int]] = []
+    feats: list[tuple[str, Any, int, int | None, int]] = []
     for r in rows:
         run = int(r["run"] or 1)
         deleted = int(r["deleted"] or 0)
-        feats.append(("checkpoint", r["checkpoint"], run, r["rating"], deleted))
+        feats.append(
+            ("checkpoint", r["checkpoint"], run, r["rating"], deleted)
+        )
         feats.append(("steps", r["steps"], run, r["rating"], deleted))
         feats.append(("cfg", r["cfg_bin"], run, r["rating"], deleted))
         feats.append(("sampler", r["sampler"], run, r["rating"], deleted))
@@ -345,12 +359,12 @@ def _iter_param_feats(rows: List[Any]) -> List[Tuple[str, Any, int, Optional[int
 
 
 def _param_stats_add_obs(
-    agg: Dict[Tuple[str, Any], Dict[str, Any]],
+    agg: dict[tuple[str, Any], dict[str, Any]],
     *,
     feat: str,
     val: Any,
     run: int,
-    rating: Optional[int],
+    rating: int | None,
     deleted: int,
     success_threshold: int,
     delete_weight: int,
@@ -378,7 +392,9 @@ def _param_stats_add_obs(
 
     if int(deleted or 0) == 1:
         x["deletes"] += 1
-        x["delete_fail_w"] += _delete_weight_for_run(int(run), int(delete_weight))
+        x["delete_fail_w"] += _delete_weight_for_run(
+            int(run), int(delete_weight)
+        )
         return
 
     if rating is not None:
@@ -386,7 +402,12 @@ def _param_stats_add_obs(
         x["avg_rating"] += float(rating) * float(w)
         x["avg_cnt"] += int(w)
 
-    cls = _classify(run=int(run), rating=rating, deleted=deleted, base_pass_min=int(success_threshold))
+    cls = _classify(
+        run=int(run),
+        rating=rating,
+        deleted=deleted,
+        base_pass_min=int(success_threshold),
+    )
     if cls is True:
         x["success_raw"] += 1
         x["success"] += _rating_weight_for_run(int(run))
@@ -396,12 +417,12 @@ def _param_stats_add_obs(
 
 
 def _finalize_param_stats(
-    agg: Dict[Tuple[str, Any], Dict[str, Any]],
+    agg: dict[tuple[str, Any], dict[str, Any]],
     *,
     min_n: int,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Finalize aggregated param stats rows."""
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for x in agg.values():
         n = int(x["n"])
         if n < int(min_n):
@@ -412,9 +433,17 @@ def _finalize_param_stats(
         fail = int(x["fail"])
         fail_w = int(fail + x["delete_fail_w"])
 
-        exp_success = (success + 1) / (success + fail_w + 2) if (success + fail_w) >= 0 else 0.0
+        exp_success = (
+            (success + 1) / (success + fail_w + 2)
+            if (success + fail_w) >= 0
+            else 0.0
+        )
         lb05 = _bayes_lb05(float(success), float(fail_w))
-        avg_rating = float(x["avg_rating"] / x["avg_cnt"]) if int(x["avg_cnt"]) > 0 else 0.0
+        avg_rating = (
+            float(x["avg_rating"] / x["avg_cnt"])
+            if int(x["avg_cnt"]) > 0
+            else 0.0
+        )
 
         success_per_n = float(success) / float(n) if n > 0 else 0.0
         fail_per_n = float(fail_w) / float(n) if n > 0 else 0.0
@@ -436,7 +465,15 @@ def _finalize_param_stats(
                 "stability_lb05": float(lb05),
             }
         )
-    out.sort(key=lambda r: (r["feat"], r["stability_lb05"], r["exp_success_rate"], r["n"]), reverse=True)
+    out.sort(
+        key=lambda r: (
+            r["feat"],
+            r["stability_lb05"],
+            r["exp_success_rate"],
+            r["n"],
+        ),
+        reverse=True,
+    )
     return out
 
 
@@ -447,12 +484,12 @@ def fetch_param_stats(
     min_n: int = 10,
     success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
     delete_weight: int = DELETE_WEIGHT_DEFAULT,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Aggregate parameter stats across all ratings runs."""
     rows = _load_param_rows(db_path, model=model)
     feats = _iter_param_feats(rows)
 
-    agg: Dict[Tuple[str, Any], Dict[str, Any]] = {}
+    agg: dict[tuple[str, Any], dict[str, Any]] = {}
     for feat, val, run, rating, deleted in feats:
         _param_stats_add_obs(
             agg,
@@ -466,106 +503,3 @@ def fetch_param_stats(
         )
 
     return _finalize_param_stats(agg, min_n=min_n)
-
-
-def list_checkpoints_from_db(db_path: Path, *, model: str = "") -> List[str]:
-    # Was tut es?
-    # Dropdown checkpoints Liste.
-    #
-    # Wo kommt es her?
-    # ratings.sqlite3 Tabelle ratings.
-    #
-    # Wo geht es hin?
-    # param_stats.html Dropdown Filter.
-    con = db(db_path)
-    where = ""
-    args: List[Any] = []
-    if model:
-        where = "WHERE model_branch = ?"
-        args.append(model)
-
-    rows = con.execute(
-        f"""
-        SELECT DISTINCT checkpoint
-        FROM ratings
-        {where}
-        ORDER BY checkpoint
-        """,
-        args,
-    ).fetchall()
-    con.close()
-
-    out = []
-    for r in rows:
-        v = str(r["checkpoint"] or "").strip()
-        if v:
-            out.append(v)
-    return out
-
-
-def _finalize_param_stats_simple(
-    agg: Dict[Tuple[str, Any], Dict[str, Any]],
-    *,
-    min_n: int,
-) -> List[Dict[str, Any]]:
-    """Finalize param stats without raw counters (used for by-checkpoint view)."""
-    out: List[Dict[str, Any]] = []
-    for x in agg.values():
-        n = int(x["n"])
-        if n < int(min_n):
-            continue
-
-        deletes = int(x["deletes"])
-        success = int(x["success"])
-        fail = int(x["fail"])
-        fail_w = int(fail + x["delete_fail_w"])
-
-        exp_success = (success + 1) / (success + fail_w + 2) if (success + fail_w) >= 0 else 0.0
-        lb05 = _bayes_lb05(float(success), float(fail_w))
-        avg_rating = float(x["avg_rating"] / x["avg_cnt"]) if int(x["avg_cnt"]) > 0 else 0.0
-
-        out.append(
-            {
-                "feat": x["feat"],
-                "value": x["value"],
-                "n": n,
-                "success": success,
-                "fail": fail_w,
-                "deletes": deletes,
-                "avg_rating": avg_rating,
-                "exp_success_rate": float(exp_success),
-                "stability_lb05": float(lb05),
-            }
-        )
-    out.sort(key=lambda r: (r["feat"], r["stability_lb05"], r["exp_success_rate"], r["n"]), reverse=True)
-    return out
-
-
-def fetch_param_stats_by_checkpoint(
-    db_path: Path,
-    *,
-    model: str = "",
-    checkpoint: str = "",
-    min_n: int = 1,
-    success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
-    delete_weight: int = DELETE_WEIGHT_DEFAULT,
-) -> List[Dict[str, Any]]:
-    """Param stats for one checkpoint (optional model filter)."""
-    rows = _load_param_rows(db_path, model=model, checkpoint=checkpoint)
-    feats = _iter_param_feats(rows)
-
-    agg: Dict[Tuple[str, Any], Dict[str, Any]] = {}
-    for feat, val, run, rating, deleted in feats:
-        _param_stats_add_obs(
-            agg,
-            feat=feat,
-            val=val,
-            run=run,
-            rating=rating,
-            deleted=deleted,
-            success_threshold=success_threshold,
-            delete_weight=delete_weight,
-        )
-
-    return _finalize_param_stats_simple(agg, min_n=min_n)
-

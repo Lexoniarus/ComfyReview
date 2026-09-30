@@ -2,6 +2,8 @@
 
 from comfyreview.application.analytics import (
     AnalyticsImage,
+    AnalyticsReportRepository,
+    AnalyticsReportService,
     AnalyticsRepository,
     AnalyticsService,
     ObservedPromptCombination,
@@ -169,6 +171,8 @@ __all__ = [
     "AssignCurationCommand",
     "AnalyticsImage",
     "AnalyticsRepository",
+    "AnalyticsReportRepository",
+    "AnalyticsReportService",
     "AnalyticsService",
     "ArenaCompetitor",
     "ArenaDecision",

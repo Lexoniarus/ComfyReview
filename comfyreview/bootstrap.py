@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from comfyreview.application import (
+    AnalyticsReportService,
     AnalyticsService,
     ArenaService,
     CanonicalSchemaLifecycle,
@@ -45,6 +46,7 @@ from comfyreview.providers import (
 from comfyreview.repositories.filesystem import JsonWorkflowBlueprintRepository
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
+    SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
     SqliteCurationRepository,
@@ -78,6 +80,7 @@ class ApplicationContainer:
     canonical_schema: CanonicalSchemaLifecycle
     output_images: OutputImageCatalog
     analytics_service: AnalyticsService
+    analytics_reports: AnalyticsReportService
     analytics_pages: AnalyticsPageService
     playground_hub: PlaygroundHubService
     playground_discovery: PlaygroundDiscoveryService
@@ -143,6 +146,9 @@ def build_application_container(
     analytics_service = AnalyticsService(
         SqliteAnalyticsRepository(configured.canonical_database_path)
     )
+    analytics_reports = AnalyticsReportService(
+        SqliteAnalyticsReportRepository(configured.canonical_database_path)
+    )
     comfyui_provider = NativeComfyUiProvider(
         UrlLibJsonTransport(configured.comfyui_base_url)
     )
@@ -173,9 +179,10 @@ def build_application_container(
         ),
         output_images=output_images,
         analytics_service=analytics_service,
+        analytics_reports=analytics_reports,
         analytics_pages=AnalyticsPageService(
-            database_path=configured.canonical_database_path,
             analytics=analytics_service,
+            reports=analytics_reports,
             image_url=existing_png_path_to_url,
         ),
         playground_hub=PlaygroundHubService(

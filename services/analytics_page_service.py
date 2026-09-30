@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
-from comfyreview.application import AnalyticsImage, AnalyticsService
-from db_store import (
+from comfyreview.application import (
+    AnalyticsImage,
+    AnalyticsReportService,
+    AnalyticsService,
+)
+from comfyreview.application.rating_evidence import (
     DELETE_WEIGHT_DEFAULT,
     SUCCESS_THRESHOLD_DEFAULT,
-    fetch_calculated_best_cases,
-    fetch_combo_stats,
-    fetch_param_stats,
-    fetch_recommendations,
-    list_models_from_db,
 )
 from services.context_filters import normalize_model
 
@@ -27,12 +25,12 @@ class AnalyticsPageService:
     def __init__(
         self,
         *,
-        database_path: Path,
         analytics: AnalyticsService,
+        reports: AnalyticsReportService,
         image_url: ImageUrlResolver,
     ) -> None:
-        self._database_path = Path(database_path)
         self._analytics = analytics
+        self._reports = reports
         self._image_url = image_url
 
     def stats_context(
@@ -46,10 +44,9 @@ class AnalyticsPageService:
     ) -> dict[str, Any]:
         """Build the observed combo-statistics page model."""
         normalized_model = normalize_model(model)
-        rows = fetch_combo_stats(
-            self._database_path,
+        rows = self._reports.combo_statistics(
             model=normalized_model,
-            min_n=int(min_n),
+            minimum_samples=int(min_n),
             limit=int(limit),
             success_threshold=int(success_threshold),
             delete_weight=int(delete_weight),
@@ -79,16 +76,15 @@ class AnalyticsPageService:
     ) -> dict[str, Any]:
         """Build recommendations from observed canonical review facts."""
         normalized_model = normalize_model(model)
-        report = fetch_recommendations(
-            self._database_path,
+        report = self._reports.recommendations(
             model=normalized_model,
-            min_n=int(min_n),
+            minimum_samples=int(min_n),
             limit=int(limit),
             success_threshold=int(success_threshold),
             delete_weight=int(delete_weight),
-            min_lb=float(minimum_lower_bound),
-            approx_min_n=int(approximate_minimum_samples),
-            approx_limit=int(approximate_limit),
+            minimum_lower_bound=float(minimum_lower_bound),
+            approximate_minimum_samples=int(approximate_minimum_samples),
+            approximate_limit=int(approximate_limit),
         )
         approximate = report.get("approx")
         if not isinstance(approximate, dict):
@@ -118,28 +114,25 @@ class AnalyticsPageService:
     ) -> dict[str, Any]:
         """Build render-parameter statistics and canonical image examples."""
         normalized_model = normalize_model(model)
-        rows = fetch_param_stats(
-            self._database_path,
+        rows = self._reports.parameter_statistics(
             model=normalized_model,
-            min_n=int(min_n),
+            minimum_samples=int(min_n),
             success_threshold=int(success_threshold),
             delete_weight=int(delete_weight),
         )
         sections = self._parameter_sections(rows, normalized_model)
         return {
             "stats": sections,
-            "best": fetch_calculated_best_cases(
-                self._database_path,
+            "best": self._reports.calculated_best_cases(
                 model=normalized_model,
-                min_n=int(min_n),
+                minimum_samples=int(min_n),
                 success_threshold=int(success_threshold),
                 delete_weight=int(delete_weight),
                 limit=200,
             ),
-            "best_tested": fetch_combo_stats(
-                self._database_path,
+            "best_tested": self._reports.combo_statistics(
                 model=normalized_model,
-                min_n=int(min_n),
+                minimum_samples=int(min_n),
                 limit=200,
                 success_threshold=int(success_threshold),
                 delete_weight=int(delete_weight),
@@ -185,7 +178,7 @@ class AnalyticsPageService:
         }
 
     def _models(self) -> list[str]:
-        return list_models_from_db(self._database_path)
+        return list(self._reports.list_models())
 
     def _attach_combo_images(
         self,

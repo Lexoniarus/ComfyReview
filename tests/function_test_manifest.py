@@ -1,6 +1,26 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.analytics:AnalyticsReportService.combo_statistics": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_report_service_normalizes_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsReportService.recommendations": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_report_service_normalizes_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsReportService.parameter_statistics": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_report_service_normalizes_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsReportService.calculated_best_cases": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_report_service_normalizes_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsReportService.list_models": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_report_service_normalizes_queries"
+    ),
     "comfyreview.application.analytics:AnalyticsService.best_images_for_combos": (
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_normalizes_canonical_queries"

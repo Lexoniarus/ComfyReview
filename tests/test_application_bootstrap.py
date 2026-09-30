@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from comfyreview.application import (
+    AnalyticsReportService,
     AnalyticsService,
     ArenaService,
     CanonicalSchemaReport,
@@ -103,6 +104,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         canonical_schema=_RecordingCanonicalSchema(settings, events),
         output_images=_EmptyOutputImageCatalog(),
         analytics_service=cast(AnalyticsService, object()),
+        analytics_reports=cast(AnalyticsReportService, object()),
         analytics_pages=cast(AnalyticsPageService, object()),
         playground_hub=cast(PlaygroundHubService, object()),
         playground_discovery=cast(PlaygroundDiscoveryService, object()),
@@ -184,6 +186,7 @@ def test_default_container_wires_canonical_review_runtime(
     )
     assert isinstance(container.workflow_defaults, WorkflowDefaultsService)
     assert isinstance(container.analytics_service, AnalyticsService)
+    assert isinstance(container.analytics_reports, AnalyticsReportService)
     assert isinstance(container.analytics_pages, AnalyticsPageService)
     assert isinstance(container.playground_hub, PlaygroundHubService)
     assert isinstance(

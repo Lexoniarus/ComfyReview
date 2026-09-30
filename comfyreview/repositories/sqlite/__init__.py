@@ -1,6 +1,9 @@
 """SQLite persistence adapters."""
 
 from comfyreview.repositories.sqlite.analytics import SqliteAnalyticsRepository
+from comfyreview.repositories.sqlite.analytics_reports import (
+    SqliteAnalyticsReportRepository,
+)
 from comfyreview.repositories.sqlite.arena import SqliteArenaRepository
 from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
@@ -29,6 +32,7 @@ from comfyreview.repositories.sqlite.reviews import SqliteReviewRepository
 
 __all__ = [
     "SqliteAnalyticsRepository",
+    "SqliteAnalyticsReportRepository",
     "CanonicalSchemaManager",
     "CanonicalSchemaValidationError",
     "LegacySchemaManager",

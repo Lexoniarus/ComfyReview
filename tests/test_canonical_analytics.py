@@ -9,6 +9,7 @@ import pytest
 
 from comfyreview.application import (
     AnalyticsImage,
+    AnalyticsReportService,
     AnalyticsService,
     ObservedPromptCombination,
     PromptMatchPreview,
@@ -16,6 +17,7 @@ from comfyreview.application import (
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
+    SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
 )
 
@@ -57,6 +59,31 @@ class _AnalyticsRepository:
     def latest_review_sequence(self):
         self.calls.append(("frontier", None))
         return 9
+
+
+class _AnalyticsReportRepository:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def combo_statistics(self, **values):
+        self.calls.append(("combos", values))
+        return [{"combo_key": "character:1|scene:2"}]
+
+    def recommendations(self, **values):
+        self.calls.append(("recommendations", values))
+        return {"stable": [], "avoid": [], "approx": {}}
+
+    def parameter_statistics(self, **values):
+        self.calls.append(("parameters", values))
+        return [{"feat": "steps", "value": 20}]
+
+    def calculated_best_cases(self, **values):
+        self.calls.append(("best-cases", values))
+        return [{"checkpoint": "model.safetensors"}]
+
+    def list_models(self):
+        self.calls.append(("models", None))
+        return ("sdxl",)
 
 
 def test_analytics_service_normalizes_canonical_queries() -> None:
@@ -166,6 +193,100 @@ def test_analytics_service_normalizes_selected_tokens_and_matches() -> None:
                 },
             ),
         ),
+    ]
+
+
+def test_analytics_report_service_normalizes_queries() -> None:
+    repository = _AnalyticsReportRepository()
+    service = AnalyticsReportService(repository)
+
+    assert (
+        service.combo_statistics(
+            model=" sdxl ",
+            minimum_samples=-1,
+            limit=-2,
+            success_threshold=4,
+            delete_weight=5,
+        )[0]["combo_key"]
+        == "character:1|scene:2"
+    )
+    assert (
+        service.recommendations(
+            model=" sdxl ",
+            minimum_samples=-1,
+            limit=-2,
+            success_threshold=4,
+            delete_weight=5,
+            minimum_lower_bound=0.5,
+            approximate_minimum_samples=-3,
+            approximate_limit=-4,
+        )["stable"]
+        == []
+    )
+    assert (
+        service.parameter_statistics(
+            model=" sdxl ",
+            minimum_samples=-1,
+            success_threshold=4,
+            delete_weight=5,
+        )[0]["feat"]
+        == "steps"
+    )
+    assert (
+        service.calculated_best_cases(
+            model=" sdxl ",
+            minimum_samples=-1,
+            success_threshold=4,
+            delete_weight=5,
+            limit=-2,
+        )[0]["checkpoint"]
+        == "model.safetensors"
+    )
+    assert service.list_models() == ("sdxl",)
+    assert repository.calls == [
+        (
+            "combos",
+            {
+                "model": "sdxl",
+                "min_n": 0,
+                "limit": 0,
+                "success_threshold": 4,
+                "delete_weight": 5,
+            },
+        ),
+        (
+            "recommendations",
+            {
+                "model": "sdxl",
+                "min_n": 0,
+                "limit": 0,
+                "success_threshold": 4,
+                "delete_weight": 5,
+                "min_lb": 0.5,
+                "approx_min_n": 0,
+                "approx_limit": 0,
+            },
+        ),
+        (
+            "parameters",
+            {
+                "model": "sdxl",
+                "min_n": 0,
+                "success_threshold": 4,
+                "delete_weight": 5,
+            },
+        ),
+        (
+            "best-cases",
+            {
+                "model": "sdxl",
+                "min_n": 0,
+                "success_threshold": 4,
+                "delete_weight": 5,
+                "limit": 0,
+            },
+        ),
+        ("models", None),
     ]
 
 
@@ -328,3 +449,55 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
             model_branch="",
             limit_per_value=1,
         )
+
+
+def test_sqlite_analytics_reports_query_canonical_compatibility_views(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _insert_analytics_fixture(database_path, tmp_path)
+    repository = SqliteAnalyticsReportRepository(database_path)
+
+    combo_rows = repository.combo_statistics(
+        model="sdxl",
+        min_n=1,
+        limit=10,
+        success_threshold=4,
+        delete_weight=5,
+    )
+    recommendations = repository.recommendations(
+        model="sdxl",
+        min_n=1,
+        limit=10,
+        success_threshold=4,
+        delete_weight=5,
+        min_lb=-1.0,
+        approx_min_n=1,
+        approx_limit=10,
+    )
+    parameters = repository.parameter_statistics(
+        model="sdxl",
+        min_n=1,
+        success_threshold=4,
+        delete_weight=5,
+    )
+    best_cases = repository.calculated_best_cases(
+        model="sdxl",
+        min_n=1,
+        success_threshold=4,
+        delete_weight=5,
+        limit=10,
+    )
+
+    assert combo_rows[0]["combo_key"] == ("character:1|scene:2|outfit:3")
+    assert recommendations["stable"][0]["avg_rating"] == 8.0
+    assert {row["feat"] for row in parameters} == {
+        "checkpoint",
+        "steps",
+        "cfg",
+        "sampler",
+        "scheduler",
+    }
+    assert best_cases[0]["checkpoint"] == "model.safetensors"
+    assert repository.list_models() == ("sdxl",)

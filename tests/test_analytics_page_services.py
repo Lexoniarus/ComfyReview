@@ -7,6 +7,7 @@ from typing import cast
 
 from comfyreview.application import (
     AnalyticsImage,
+    AnalyticsReportService,
     AnalyticsService,
     ObservedPromptCombination,
     PromptTokenStatistic,
@@ -56,6 +57,30 @@ class _Analytics:
         return 42
 
 
+class _Reports:
+    def combo_statistics(self, **values):
+        del values
+        return [{"combo_key": "character:1|scene:2"}]
+
+    def recommendations(self, **values):
+        del values
+        return {"stable": ["yes"], "avoid": ["no"]}
+
+    def parameter_statistics(self, **values):
+        del values
+        return [
+            {"feat": "steps", "value": "20"},
+            {"feat": "unknown", "value": "ignored"},
+        ]
+
+    def calculated_best_cases(self, **values):
+        del values
+        return ["best"]
+
+    def list_models(self):
+        return ("sdxl",)
+
+
 def _analytics(tmp_path: Path) -> tuple[_Analytics, AnalyticsImage]:
     image = AnalyticsImage(
         png_path=tmp_path / "image.png",
@@ -68,25 +93,11 @@ def _analytics(tmp_path: Path) -> tuple[_Analytics, AnalyticsImage]:
 
 def test_analytics_pages_build_combo_and_recommendation_contexts(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     analytics, _ = _analytics(tmp_path)
-    combo_row = {"combo_key": "character:1|scene:2"}
-    monkeypatch.setattr(
-        "services.analytics_page_service.fetch_combo_stats",
-        lambda *args, **kwargs: [combo_row],
-    )
-    monkeypatch.setattr(
-        "services.analytics_page_service.fetch_recommendations",
-        lambda *args, **kwargs: {"stable": ["yes"], "avoid": ["no"]},
-    )
-    monkeypatch.setattr(
-        "services.analytics_page_service.list_models_from_db",
-        lambda path: ["sdxl"],
-    )
     service = AnalyticsPageService(
-        database_path=tmp_path / "canonical.sqlite3",
         analytics=cast(AnalyticsService, analytics),
+        reports=cast(AnalyticsReportService, _Reports()),
         image_url=lambda path: f"url:{Path(path).name}",
     )
 
@@ -107,31 +118,11 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
 
 def test_analytics_pages_build_parameter_and_token_contexts(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
     analytics, _ = _analytics(tmp_path)
-    monkeypatch.setattr(
-        "services.analytics_page_service.fetch_param_stats",
-        lambda *args, **kwargs: [
-            {"feat": "steps", "value": "20"},
-            {"feat": "unknown", "value": "ignored"},
-        ],
-    )
-    monkeypatch.setattr(
-        "services.analytics_page_service.fetch_calculated_best_cases",
-        lambda *args, **kwargs: ["best"],
-    )
-    monkeypatch.setattr(
-        "services.analytics_page_service.fetch_combo_stats",
-        lambda *args, **kwargs: ["tested"],
-    )
-    monkeypatch.setattr(
-        "services.analytics_page_service.list_models_from_db",
-        lambda path: [],
-    )
     service = AnalyticsPageService(
-        database_path=tmp_path / "canonical.sqlite3",
         analytics=cast(AnalyticsService, analytics),
+        reports=cast(AnalyticsReportService, _Reports()),
         image_url=lambda path: "" if "missing" in path else "url:image.png",
     )
 
@@ -143,7 +134,7 @@ def test_analytics_pages_build_parameter_and_token_contexts(
     )
     assert steps["rows"][0]["best_images"][0]["url"] == "url:image.png"
     assert parameters["best"] == ["best"]
-    assert parameters["best_tested"] == ["tested"]
+    assert parameters["best_tested"] == [{"combo_key": "character:1|scene:2"}]
     assert tokens["scope"] == "pos"
     assert tokens["rows"] == [
         {"token": "hero", "n": 4, "mean_score": 8.5, "lb05": 7.25}

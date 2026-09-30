@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +123,64 @@ class AnalyticsRepository(Protocol):
 
     def latest_review_sequence(self) -> int:
         """Return the current canonical review frontier."""
+        ...
+
+
+class AnalyticsReportRepository(Protocol):
+    """Build legacy-compatible report rows from canonical SQLite facts."""
+
+    def combo_statistics(
+        self,
+        *,
+        model: str,
+        min_n: int,
+        limit: int,
+        success_threshold: int,
+        delete_weight: int,
+    ) -> list[dict[str, Any]]:
+        """Return observed combination statistics."""
+        ...
+
+    def recommendations(
+        self,
+        *,
+        model: str,
+        min_n: int,
+        limit: int,
+        success_threshold: int,
+        delete_weight: int,
+        min_lb: float,
+        approx_min_n: int,
+        approx_limit: int,
+    ) -> dict[str, Any]:
+        """Return stable and approximate recommendations."""
+        ...
+
+    def parameter_statistics(
+        self,
+        *,
+        model: str,
+        min_n: int,
+        success_threshold: int,
+        delete_weight: int,
+    ) -> list[dict[str, Any]]:
+        """Return render-parameter statistics."""
+        ...
+
+    def calculated_best_cases(
+        self,
+        *,
+        model: str,
+        min_n: int,
+        success_threshold: int,
+        delete_weight: int,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Return calculated best render configurations."""
+        ...
+
+    def list_models(self) -> tuple[str, ...]:
+        """Return canonical model branches represented by generations."""
         ...
 
 
@@ -274,3 +332,90 @@ class AnalyticsService:
                 value for raw in values if (value := str(raw).strip())
             )
         )
+
+
+class AnalyticsReportService:
+    """Validate and expose canonical analytics report use cases."""
+
+    def __init__(self, repository: AnalyticsReportRepository) -> None:
+        self._repository = repository
+
+    def combo_statistics(
+        self,
+        *,
+        model: str,
+        minimum_samples: int,
+        limit: int,
+        success_threshold: int,
+        delete_weight: int,
+    ) -> list[dict[str, Any]]:
+        """Return normalized observed-combination report rows."""
+        return self._repository.combo_statistics(
+            model=str(model or "").strip(),
+            min_n=max(int(minimum_samples), 0),
+            limit=max(int(limit), 0),
+            success_threshold=int(success_threshold),
+            delete_weight=int(delete_weight),
+        )
+
+    def recommendations(
+        self,
+        *,
+        model: str,
+        minimum_samples: int,
+        limit: int,
+        success_threshold: int,
+        delete_weight: int,
+        minimum_lower_bound: float,
+        approximate_minimum_samples: int,
+        approximate_limit: int,
+    ) -> dict[str, Any]:
+        """Return normalized stable and approximate recommendations."""
+        return self._repository.recommendations(
+            model=str(model or "").strip(),
+            min_n=max(int(minimum_samples), 0),
+            limit=max(int(limit), 0),
+            success_threshold=int(success_threshold),
+            delete_weight=int(delete_weight),
+            min_lb=float(minimum_lower_bound),
+            approx_min_n=max(int(approximate_minimum_samples), 0),
+            approx_limit=max(int(approximate_limit), 0),
+        )
+
+    def parameter_statistics(
+        self,
+        *,
+        model: str,
+        minimum_samples: int,
+        success_threshold: int,
+        delete_weight: int,
+    ) -> list[dict[str, Any]]:
+        """Return normalized render-parameter report rows."""
+        return self._repository.parameter_statistics(
+            model=str(model or "").strip(),
+            min_n=max(int(minimum_samples), 0),
+            success_threshold=int(success_threshold),
+            delete_weight=int(delete_weight),
+        )
+
+    def calculated_best_cases(
+        self,
+        *,
+        model: str,
+        minimum_samples: int,
+        success_threshold: int,
+        delete_weight: int,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Return normalized best render configurations."""
+        return self._repository.calculated_best_cases(
+            model=str(model or "").strip(),
+            min_n=max(int(minimum_samples), 0),
+            success_threshold=int(success_threshold),
+            delete_weight=int(delete_weight),
+            limit=max(int(limit), 0),
+        )
+
+    def list_models(self) -> tuple[str, ...]:
+        """Return model branches available to analytics filters."""
+        return self._repository.list_models()
