@@ -47,7 +47,6 @@ class Settings:
     default_max_tries: int
     default_unrated_only: bool
     soft_delete_to_trash: bool
-    playground_rules_enabled: bool
     comfyui_base_url: str
     workflows_directory: Path
     comfyui_checkpoints_directory: Path
@@ -217,11 +216,6 @@ def load_settings(
         soft_delete_to_trash=_boolean(
             values,
             "COMFYREVIEW_SOFT_DELETE_TO_TRASH",
-            False,
-        ),
-        playground_rules_enabled=_boolean(
-            values,
-            "COMFYREVIEW_PLAYGROUND_RULES_ENABLED",
             False,
         ),
         comfyui_base_url=values.get(

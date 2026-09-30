@@ -26,7 +26,6 @@ def test_load_settings_uses_documented_defaults_without_writes(
     assert settings.worker_shutdown_timeout_seconds == 30.0
     assert settings.default_unrated_only is False
     assert settings.soft_delete_to_trash is False
-    assert settings.playground_rules_enabled is False
     assert settings.ssl_enabled is False
     assert not settings.output_root.exists()
     assert not settings.data_directory.exists()
@@ -57,7 +56,6 @@ def test_environment_overrides_env_file_without_mutating_process(
                 "COMFYREVIEW_DEFAULT_MAX_TRIES=12",
                 "COMFYREVIEW_DEFAULT_UNRATED_ONLY=yes",
                 "COMFYREVIEW_SOFT_DELETE_TO_TRASH=off",
-                "COMFYREVIEW_PLAYGROUND_RULES_ENABLED=1",
                 "COMFYREVIEW_SSL_ENABLED=true",
             )
         ),
@@ -92,7 +90,6 @@ def test_environment_overrides_env_file_without_mutating_process(
     assert settings.default_max_tries == 12
     assert settings.default_unrated_only is True
     assert settings.soft_delete_to_trash is False
-    assert settings.playground_rules_enabled is True
     assert settings.ssl_enabled is True
     assert dict(os.environ) == process_environment
 

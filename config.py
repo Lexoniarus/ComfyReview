@@ -30,7 +30,6 @@ PROMPT_RATINGS_DB_PATH = SETTINGS.prompt_ratings_database_path
 DEFAULT_MAX_TRIES = SETTINGS.default_max_tries
 DEFAULT_UNRATED_ONLY = SETTINGS.default_unrated_only
 SOFT_DELETE_TO_TRASH = SETTINGS.soft_delete_to_trash
-PLAYGROUND_RULES_ENABLED = SETTINGS.playground_rules_enabled
 COMFYUI_BASE_URL = SETTINGS.comfyui_base_url
 WORKFLOWS_DIR = SETTINGS.workflows_directory
 COMFYUI_CHECKPOINTS_DIR = SETTINGS.comfyui_checkpoints_directory
