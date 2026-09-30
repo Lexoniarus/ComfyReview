@@ -1,43 +1,40 @@
 # routers/playground/generator.py
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Form
-from fastapi.responses import RedirectResponse
-from fastapi.responses import JSONResponse
-from fastapi.templating import Jinja2Templates
+from typing import Any
 
-from typing import Optional, Any
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 
 from config import (
     DEFAULT_MAX_TRIES,
 )
-
-from ._shared import (
-    GENERATOR_STATE_PATH,
-    GENERATOR_PREVIEW_STATE_PATH,
-    COMFY_DISCOVERY_CACHE_PATH,
-    png_path_to_url,
-)
-
-from services.ui_state_service import safe_int
 from services.file_urls import file_url_exists
 from services.playground_generator_ui_service import (
-    load_playground_dropdown_items,
-    discover_comfy_lists,
-    load_head_state,
-    save_head_state,
-    load_preview_state,
-    save_preview_state,
-    clear_preview_state,
-    character_name_from_id,
-    workflow_render_defaults,
     build_form_from_state,
     build_head_state_from_post,
-    remove_draft,
-    update_draft,
-    enrich_preview_with_best_pictures,
+    character_name_from_id,
+    clear_preview_state,
+    discover_comfy_lists,
     generate_preview_drafts,
+    load_head_state,
+    load_playground_dropdown_items,
+    load_preview_state,
+    remove_draft,
+    save_head_state,
+    save_preview_state,
     submit_preview_drafts,
+    update_draft,
+    workflow_render_defaults,
+)
+from services.ui_state_service import safe_int
+
+from ._shared import (
+    COMFY_DISCOVERY_CACHE_PATH,
+    GENERATOR_PREVIEW_STATE_PATH,
+    GENERATOR_STATE_PATH,
+    png_path_to_url,
 )
 
 router = APIRouter()
@@ -48,14 +45,14 @@ templates = Jinja2Templates(directory="templates")
 def playground_generator_apply_combo(
     character_id: int = Form(...),
     scene_id: int = Form(...),
-    outfit_id: Optional[str] = Form(None),
+    outfit_id: str | None = Form(None),
 ) -> RedirectResponse:
     saved = load_head_state(GENERATOR_STATE_PATH)
 
     saved["character_id"] = str(int(character_id))
     saved["scene_id"] = str(int(scene_id))
 
-    outfit_id_int: Optional[int] = None
+    outfit_id_int: int | None = None
     try:
         s = str(outfit_id or "").strip()
         if s:
@@ -63,7 +60,9 @@ def playground_generator_apply_combo(
     except Exception:
         outfit_id_int = None
 
-    saved["outfit_id"] = str(int(outfit_id_int)) if outfit_id_int is not None else ""
+    saved["outfit_id"] = (
+        str(int(outfit_id_int)) if outfit_id_int is not None else ""
+    )
 
     save_head_state(GENERATOR_STATE_PATH, saved)
     return RedirectResponse(url="/playground/generator", status_code=303)
@@ -76,21 +75,28 @@ def playground_generator_page(request: Request):
     discovery = discover_comfy_lists(cache_path=COMFY_DISCOVERY_CACHE_PATH)
 
     saved = load_head_state(GENERATOR_STATE_PATH)
-    saved_char_id = safe_int(str(saved.get("character_id", "")).strip()) if saved else None
+    saved_char_id = (
+        safe_int(str(saved.get("character_id", "")).strip()) if saved else None
+    )
 
-    char_name_for_defaults = character_name_from_id(dropdowns["characters"], saved_char_id)
-    defaults = workflow_render_defaults(character_name=char_name_for_defaults, character_id=saved_char_id)
+    char_name_for_defaults = character_name_from_id(
+        dropdowns["characters"], saved_char_id
+    )
+    defaults = workflow_render_defaults(
+        character_name=char_name_for_defaults, character_id=saved_char_id
+    )
 
     form = build_form_from_state(saved=saved, defaults=defaults)
 
     preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH)
     for draft in preview:
-        if draft.get("best_img_url") and not file_url_exists(str(draft.get("best_img_url"))):
+        if draft.get("best_img_url") and not file_url_exists(
+            str(draft.get("best_img_url"))
+        ):
             draft["best_img_url"] = ""
             draft["best_avg"] = None
             draft["best_runs"] = None
             draft["best_hits"] = None
-
 
     return templates.TemplateResponse(
         request=request,
@@ -126,7 +132,9 @@ def playground_generator_preview_draft_best(draft_id: str):
     preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH) or []
     draft_id_s = str(draft_id or "").strip()
     if not draft_id_s:
-        return JSONResponse({"status": "error", "error": "missing draft_id"}, status_code=400)
+        return JSONResponse(
+            {"status": "error", "error": "missing draft_id"}, status_code=400
+        )
 
     d = None
     for x in preview:
@@ -135,7 +143,9 @@ def playground_generator_preview_draft_best(draft_id: str):
             break
 
     if d is None:
-        return JSONResponse({"status": "error", "error": "draft not found"}, status_code=404)
+        return JSONResponse(
+            {"status": "error", "error": "draft not found"}, status_code=404
+        )
 
     # fast path if already resolved
     if file_url_exists(str((d or {}).get("best_img_url") or "")):
@@ -150,7 +160,9 @@ def playground_generator_preview_draft_best(draft_id: str):
             }
         )
 
-    from services.playground_generator_ui.best_pictures import resolve_best_picture_for_draft
+    from services.playground_generator_ui.best_pictures import (
+        resolve_best_picture_for_draft,
+    )
 
     res = resolve_best_picture_for_draft(d, png_to_url=png_path_to_url)
 
@@ -170,46 +182,45 @@ def playground_generator_preview_draft_best(draft_id: str):
 
     return JSONResponse(res)
 
+
 @router.post("/playground/generator")
 def playground_generator_run(
     request: Request,
     action: str = Form("preview_generate"),
-
-    character_id: Optional[int] = Form(None),
-    scene_id: Optional[int] = Form(None),
-    outfit_id: Optional[int] = Form(None),
-    pose_id: Optional[int] = Form(None),
-    expression_id: Optional[int] = Form(None),
-    lighting_id: Optional[int] = Form(None),
-    modifier_id: Optional[int] = Form(None),
-    include_lighting: Optional[int] = Form(None),
-    include_modifier: Optional[int] = Form(None),
-    gen_seed: Optional[str] = Form(None),
-    comfy_seed: Optional[str] = Form(None),
+    character_id: int | None = Form(None),
+    scene_id: int | None = Form(None),
+    outfit_id: int | None = Form(None),
+    pose_id: int | None = Form(None),
+    expression_id: int | None = Form(None),
+    lighting_id: int | None = Form(None),
+    modifier_id: int | None = Form(None),
+    include_lighting: int | None = Form(None),
+    include_modifier: int | None = Form(None),
+    gen_seed: str | None = Form(None),
+    comfy_seed: str | None = Form(None),
     max_tries: int = Form(DEFAULT_MAX_TRIES),
-    batch_runs: Optional[int] = Form(None),
-    checkpoint_name: Optional[str] = Form(None),
-    sampler_name: Optional[str] = Form(None),
-    scheduler_name: Optional[str] = Form(None),
-    steps_min: Optional[str] = Form(None),
-    steps_max: Optional[str] = Form(None),
-    cfg_min: Optional[str] = Form(None),
-    cfg_max: Optional[str] = Form(None),
-    cfg_step: Optional[str] = Form(None),
-    steps: Optional[str] = Form(None),
-    cfg: Optional[str] = Form(None),
-    denoise: Optional[str] = Form(None),
-
-    draft_id: Optional[str] = Form(None),
-    draft_seed: Optional[str] = Form(None),
-    draft_steps: Optional[str] = Form(None),
-    draft_cfg: Optional[str] = Form(None),
-    draft_sampler: Optional[str] = Form(None),
-    draft_scheduler: Optional[str] = Form(None),
-    draft_denoise: Optional[str] = Form(None),
-    draft_checkpoint: Optional[str] = Form(None),
-    draft_pos: Optional[str] = Form(None),
-    draft_neg: Optional[str] = Form(None),
+    batch_runs: int | None = Form(None),
+    checkpoint_name: str | None = Form(None),
+    sampler_name: str | None = Form(None),
+    scheduler_name: str | None = Form(None),
+    steps_min: str | None = Form(None),
+    steps_max: str | None = Form(None),
+    cfg_min: str | None = Form(None),
+    cfg_max: str | None = Form(None),
+    cfg_step: str | None = Form(None),
+    steps: str | None = Form(None),
+    cfg: str | None = Form(None),
+    denoise: str | None = Form(None),
+    draft_id: str | None = Form(None),
+    draft_seed: str | None = Form(None),
+    draft_steps: str | None = Form(None),
+    draft_cfg: str | None = Form(None),
+    draft_sampler: str | None = Form(None),
+    draft_scheduler: str | None = Form(None),
+    draft_denoise: str | None = Form(None),
+    draft_checkpoint: str | None = Form(None),
+    draft_pos: str | None = Form(None),
+    draft_neg: str | None = Form(None),
 ):
     act = str(action or "").lower().strip()
     dropdowns = load_playground_dropdown_items()
@@ -266,7 +277,11 @@ def playground_generator_run(
         return _handle_head_save(head_kwargs)
 
     if act == "preview_generate":
-        return _handle_preview_generate(head_kwargs=head_kwargs, characters=dropdowns["characters"], discovery=discovery)
+        return _handle_preview_generate(
+            head_kwargs=head_kwargs,
+            characters=dropdowns["characters"],
+            discovery=discovery,
+        )
 
     if act == "submit_preview":
         return _handle_submit_preview(
@@ -285,30 +300,30 @@ def _redirect_generator() -> RedirectResponse:
 
 def _head_kwargs_from_post(
     *,
-    character_id: Optional[int],
-    scene_id: Optional[int],
-    outfit_id: Optional[int],
-    pose_id: Optional[int],
-    expression_id: Optional[int],
-    lighting_id: Optional[int],
-    modifier_id: Optional[int],
-    include_lighting: Optional[int],
-    include_modifier: Optional[int],
-    gen_seed: Optional[str],
-    comfy_seed: Optional[str],
+    character_id: int | None,
+    scene_id: int | None,
+    outfit_id: int | None,
+    pose_id: int | None,
+    expression_id: int | None,
+    lighting_id: int | None,
+    modifier_id: int | None,
+    include_lighting: int | None,
+    include_modifier: int | None,
+    gen_seed: str | None,
+    comfy_seed: str | None,
     max_tries: int,
-    batch_runs: Optional[int],
-    checkpoint_name: Optional[str],
-    sampler_name: Optional[str],
-    scheduler_name: Optional[str],
-    steps_min: Optional[str],
-    steps_max: Optional[str],
-    cfg_min: Optional[str],
-    cfg_max: Optional[str],
-    cfg_step: Optional[str],
-    steps: Optional[str],
-    cfg: Optional[str],
-    denoise: Optional[str],
+    batch_runs: int | None,
+    checkpoint_name: str | None,
+    sampler_name: str | None,
+    scheduler_name: str | None,
+    steps_min: str | None,
+    steps_max: str | None,
+    cfg_min: str | None,
+    cfg_max: str | None,
+    cfg_step: str | None,
+    steps: str | None,
+    cfg: str | None,
+    denoise: str | None,
 ) -> dict:
     return {
         "character_id": character_id,
@@ -349,15 +364,15 @@ def _handle_draft_update(
     preview: list,
     draft_id: str,
     head_kwargs: dict,
-    draft_seed: Optional[str],
-    draft_steps: Optional[str],
-    draft_cfg: Optional[str],
-    draft_sampler: Optional[str],
-    draft_scheduler: Optional[str],
-    draft_denoise: Optional[str],
-    draft_checkpoint: Optional[str],
-    draft_pos: Optional[str],
-    draft_neg: Optional[str],
+    draft_seed: str | None,
+    draft_steps: str | None,
+    draft_cfg: str | None,
+    draft_sampler: str | None,
+    draft_scheduler: str | None,
+    draft_denoise: str | None,
+    draft_checkpoint: str | None,
+    draft_pos: str | None,
+    draft_neg: str | None,
 ) -> RedirectResponse:
     if not draft_id:
         head = build_head_state_from_post(**head_kwargs)
@@ -387,16 +402,27 @@ def _handle_head_save(head_kwargs: dict) -> RedirectResponse:
     return _redirect_generator()
 
 
-def _handle_preview_generate(*, head_kwargs: dict, characters: list, discovery: Any) -> RedirectResponse:
+def _handle_preview_generate(
+    *,
+    head_kwargs: dict,
+    characters: list,
+    discovery: Any,
+) -> RedirectResponse:
     head = build_head_state_from_post(**head_kwargs)
     save_head_state(GENERATOR_STATE_PATH, head)
 
-    drafts = generate_preview_drafts(head=head, characters=characters, discovery=discovery)
+    drafts = generate_preview_drafts(
+        head=head,
+        characters=characters,
+        discovery=discovery,
+    )
     save_preview_state(GENERATOR_PREVIEW_STATE_PATH, drafts)
     return _redirect_generator()
 
 
-def _handle_submit_preview(*, request: Request, preview: list, dropdowns: dict, discovery: Any):
+def _handle_submit_preview(
+    *, request: Request, preview: list, dropdowns: dict, discovery: Any
+):
     if not preview:
         return _redirect_generator()
 
@@ -431,7 +457,13 @@ def _handle_submit_preview(*, request: Request, preview: list, dropdowns: dict, 
 
 def _reload_form_from_head(dropdowns: dict) -> dict:
     saved = load_head_state(GENERATOR_STATE_PATH)
-    saved_char_id = safe_int(str(saved.get("character_id", "")).strip()) if saved else None
-    char_name_for_defaults = character_name_from_id(dropdowns["characters"], saved_char_id)
-    defaults = workflow_render_defaults(character_name=char_name_for_defaults, character_id=saved_char_id)
+    saved_char_id = (
+        safe_int(str(saved.get("character_id", "")).strip()) if saved else None
+    )
+    char_name_for_defaults = character_name_from_id(
+        dropdowns["characters"], saved_char_id
+    )
+    defaults = workflow_render_defaults(
+        character_name=char_name_for_defaults, character_id=saved_char_id
+    )
     return build_form_from_state(saved=saved, defaults=defaults)

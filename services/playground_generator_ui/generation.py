@@ -1,24 +1,22 @@
 from __future__ import annotations
 
-import random
 import math
+import random
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from config import DEFAULT_MAX_TRIES, PLAYGROUND_DB_PATH
-from services.ui_state_service import safe_int
-
-from services.playground_generator import PlaygroundGenerator
 from services.playground_common.empty_placeholders import filter_random_items
-
+from services.playground_generator import PlaygroundGenerator
+from services.ui_state_service import safe_int
 from stores.playground_store import get_item_by_id
 
 from .head_form import workflow_render_defaults
 from .types import DiscoveryLists
 
 
-def _split_csv(val: Optional[str]) -> List[str]:
+def _split_csv(val: str | None) -> list[str]:
     if val is None:
         return []
     s = str(val).strip()
@@ -27,7 +25,7 @@ def _split_csv(val: Optional[str]) -> List[str]:
     return [p.strip() for p in s.split(",") if p.strip()]
 
 
-def parse_sequence(spec: Optional[str], *, cast, default_step: float):
+def parse_sequence(spec: str | None, *, cast, default_step: float):
     """Parse numeric sequences from user input.
 
     Supported
@@ -65,20 +63,24 @@ def parse_sequence(spec: Optional[str], *, cast, default_step: float):
     parts = [p.strip() for p in s.split(",") if p.strip()]
     return [cast(p) for p in parts]
 
-def _shuffled_cycle(values: List[Any], *, count: int, rng) -> List[Any]:
+
+def _shuffled_cycle(values: list[Any], *, count: int, rng) -> list[Any]:
     """Return length=count list by repeating shuffled copies of values."""
     if not values:
         return []
     if len(values) == 1:
         return [values[0] for _ in range(int(count))]
-    out: List[Any] = []
+    out: list[Any] = []
     while len(out) < int(count):
         chunk = list(values)
         rng.shuffle(chunk)
         out.extend(chunk)
     return out[: int(count)]
 
-def _stratified_pick_from_sorted(values: List[Any], *, count: int, rng) -> List[Any]:
+
+def _stratified_pick_from_sorted(
+    values: list[Any], *, count: int, rng
+) -> list[Any]:
     """Pick values in a stratified way from an ordered list."""
     if not values:
         return []
@@ -86,7 +88,7 @@ def _stratified_pick_from_sorted(values: List[Any], *, count: int, rng) -> List[
     if n <= 1:
         return [rng.choice(values)]
     m = len(values)
-    out: List[Any] = []
+    out: list[Any] = []
     for i in range(n):
         lo = int(math.floor(i * m / n))
         hi = int(math.floor((i + 1) * m / n)) - 1
@@ -97,19 +99,28 @@ def _stratified_pick_from_sorted(values: List[Any], *, count: int, rng) -> List[
     rng.shuffle(out)
     return out
 
-def _stratified_int_range(a: int, b: int, *, count: int, rng) -> List[int]:
+
+def _stratified_int_range(a: int, b: int, *, count: int, rng) -> list[int]:
     if a > b:
         a, b = b, a
     # inclusive range
     values = list(range(int(a), int(b) + 1))
-    return [int(x) for x in _stratified_pick_from_sorted(values, count=int(count), rng=rng)]
+    return [
+        int(x)
+        for x in _stratified_pick_from_sorted(
+            values, count=int(count), rng=rng
+        )
+    ]
 
-def _float_steps(a: float, b: float, step: float, *, ndigits: int = 1) -> List[float]:
+
+def _float_steps(
+    a: float, b: float, step: float, *, ndigits: int = 1
+) -> list[float]:
     if a > b:
         a, b = b, a
     if step <= 0:
         step = 0.1
-    out: List[float] = []
+    out: list[float] = []
     x = float(a)
     # guard floating drift
     while x <= b + (step * 0.0001):
@@ -118,15 +129,14 @@ def _float_steps(a: float, b: float, step: float, *, ndigits: int = 1) -> List[f
     return out
 
 
-
 def _resolve_choice(
     *,
-    raw_value: Optional[str],
-    cycle: List[str],
+    raw_value: str | None,
+    cycle: list[str],
     default_value: Any,
     idx: int,
     rng,
-) -> Optional[str]:
+) -> str | None:
     parts = _split_csv(raw_value)
     if parts:
         return rng.choice(parts)
@@ -139,10 +149,12 @@ def _resolve_choice(
     return dv or None
 
 
-def _pick_random_character_id(characters: List[Dict[str, Any]], rng) -> int:
+def _pick_random_character_id(characters: list[dict[str, Any]], rng) -> int:
     chars = filter_random_items(list(characters or []))
     if not chars:
-        raise ValueError("Keine Characters in der Playground DB gefunden (Empty wird nicht zufaellig genutzt).")
+        raise ValueError(
+            "Keine Characters in der Playground DB gefunden (Empty wird nicht zufaellig genutzt)."
+        )
     return int(rng.choice(chars)["id"])
 
 
@@ -152,11 +164,11 @@ def _subdir_for_character(character_name: str) -> str:
 
 def generate_preview_drafts(
     *,
-    head: Dict[str, Any],
-    characters: List[Dict[str, Any]],
+    head: dict[str, Any],
+    characters: list[dict[str, Any]],
     discovery: DiscoveryLists,
     playground_db_path: Path = PLAYGROUND_DB_PATH,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Generate preview drafts based on the head form."""
 
     generator = PlaygroundGenerator(playground_db_path)
@@ -166,7 +178,7 @@ def generate_preview_drafts(
     cycles = _build_discovery_cycles(discovery, rng)
 
     base_id = int(time.time() * 1000)
-    drafts: List[Dict[str, Any]] = []
+    drafts: list[dict[str, Any]] = []
 
     for idx in range(spec["batch_runs"]):
         run_character_id = _resolve_run_character_id(
@@ -231,9 +243,11 @@ def generate_preview_drafts(
     return drafts
 
 
-def _parse_preview_head_spec(head: Dict[str, Any]) -> Dict[str, Any]:
+def _parse_preview_head_spec(head: dict[str, Any]) -> dict[str, Any]:
     character_id = safe_int(str(head.get("character_id") or "").strip())
-    fixed_character_id = character_id if character_id not in (None, 0) else None
+    fixed_character_id = (
+        character_id if character_id not in (None, 0) else None
+    )
 
     manual_picks = {
         "scene": safe_int(str(head.get("scene_id") or "").strip()),
@@ -250,7 +264,11 @@ def _parse_preview_head_spec(head: Dict[str, Any]) -> Dict[str, Any]:
     max_tries = _safe_int_default(head.get("max_tries"), DEFAULT_MAX_TRIES)
     batch_runs = max(1, _safe_int_default(head.get("batch_runs"), 1))
 
-    seed_seq = parse_sequence(str(head.get("comfy_seed") or ""), cast=lambda x: int(float(x)), default_step=1)
+    seed_seq = parse_sequence(
+        str(head.get("comfy_seed") or ""),
+        cast=lambda x: int(float(x)),
+        default_step=1,
+    )
 
     # steps/cfg ranges should be stratified and random within the user-defined range.
     # Advanced seq fields are still supported for backwards compatibility but are not required by the UI.
@@ -260,9 +278,24 @@ def _parse_preview_head_spec(head: Dict[str, Any]) -> Dict[str, Any]:
     cfg_max = _safe_float_or_none(head.get("cfg_max"), ndigits=1)
     cfg_step = _safe_float_or_none(head.get("cfg_step"), ndigits=1) or 0.1
 
-    legacy_steps_seq = parse_sequence(str(head.get("steps") or ""), cast=lambda x: int(float(x)), default_step=1)
-    legacy_cfg_seq = [round(float(x), 1) for x in parse_sequence(str(head.get("cfg") or ""), cast=lambda x: float(x), default_step=0.1)]
-    denoise_seq = parse_sequence(str(head.get("denoise") or ""), cast=lambda x: float(x), default_step=0.05)
+    legacy_steps_seq = parse_sequence(
+        str(head.get("steps") or ""),
+        cast=lambda x: int(float(x)),
+        default_step=1,
+    )
+    legacy_cfg_seq = [
+        round(float(x), 1)
+        for x in parse_sequence(
+            str(head.get("cfg") or ""),
+            cast=lambda x: float(x),
+            default_step=0.1,
+        )
+    ]
+    denoise_seq = parse_sequence(
+        str(head.get("denoise") or ""),
+        cast=lambda x: float(x),
+        default_step=0.05,
+    )
 
     gen_seed_base = safe_int(str(head.get("gen_seed") or "").strip())
 
@@ -274,22 +307,31 @@ def _parse_preview_head_spec(head: Dict[str, Any]) -> Dict[str, Any]:
     rng = _make_rng(gen_seed_base)
 
     if steps_min is not None and steps_max is not None:
-        steps_seq = _stratified_int_range(int(steps_min), int(steps_max), count=int(batch_runs), rng=rng)
+        steps_seq = _stratified_int_range(
+            int(steps_min), int(steps_max), count=int(batch_runs), rng=rng
+        )
     elif legacy_steps_seq:
-        steps_seq = _shuffled_cycle(list(legacy_steps_seq), count=int(batch_runs), rng=rng)
+        steps_seq = _shuffled_cycle(
+            list(legacy_steps_seq), count=int(batch_runs), rng=rng
+        )
     else:
         steps_seq = []
 
     if cfg_min is not None and cfg_max is not None:
-        cfg_values = _float_steps(float(cfg_min), float(cfg_max), float(cfg_step), ndigits=1)
-        cfg_seq = _stratified_pick_from_sorted(cfg_values, count=int(batch_runs), rng=rng)
+        cfg_values = _float_steps(
+            float(cfg_min), float(cfg_max), float(cfg_step), ndigits=1
+        )
+        cfg_seq = _stratified_pick_from_sorted(
+            cfg_values, count=int(batch_runs), rng=rng
+        )
     elif legacy_cfg_seq:
-        cfg_seq = _shuffled_cycle(list(legacy_cfg_seq), count=int(batch_runs), rng=rng)
+        cfg_seq = _shuffled_cycle(
+            list(legacy_cfg_seq), count=int(batch_runs), rng=rng
+        )
     else:
         cfg_seq = []
 
     return {
-
         "fixed_character_id": fixed_character_id,
         "manual_picks": manual_picks,
         "include_lighting": include_lighting,
@@ -314,11 +356,15 @@ def _safe_int_default(value: Any, default: int) -> int:
             return int(default)
 
 
-def _make_rng(gen_seed_base: Optional[int]):
-    return random.Random(gen_seed_base) if gen_seed_base is not None else random
+def _make_rng(gen_seed_base: int | None):
+    return (
+        random.Random(gen_seed_base) if gen_seed_base is not None else random
+    )
 
 
-def _build_discovery_cycles(discovery: DiscoveryLists, rng) -> Dict[str, List[str]]:
+def _build_discovery_cycles(
+    discovery: DiscoveryLists, rng
+) -> dict[str, list[str]]:
     checkpoint_cycle = list(discovery.checkpoints)
     sampler_cycle = list(discovery.samplers)
     scheduler_cycle = list(discovery.schedulers)
@@ -335,22 +381,34 @@ def _build_discovery_cycles(discovery: DiscoveryLists, rng) -> Dict[str, List[st
     }
 
 
-def _resolve_run_character_id(*, fixed_character_id: Optional[int], characters: List[Dict[str, Any]], rng) -> int:
+def _resolve_run_character_id(
+    *, fixed_character_id: int | None, characters: list[dict[str, Any]], rng
+) -> int:
     if fixed_character_id is not None:
         return int(fixed_character_id)
     return _pick_random_character_id(characters, rng)
 
 
-def _load_character_defaults(*, playground_db_path: Path, character_id: int) -> Tuple[str, Dict[str, Any], str]:
+def _load_character_defaults(
+    *,
+    playground_db_path: Path,
+    character_id: int,
+) -> tuple[str, dict[str, Any], str]:
     char_item = get_item_by_id(playground_db_path, int(character_id))
     if not char_item:
         raise ValueError(f"character_id nicht gefunden: {character_id}")
 
-    character_name = str(char_item.get("name") or char_item.get("key") or "").strip()
+    character_name = str(
+        char_item.get("name") or char_item.get("key") or ""
+    ).strip()
     if not character_name:
-        raise ValueError("character_name ist leer (name/key fehlt im character item).")
+        raise ValueError(
+            "character_name ist leer (name/key fehlt im character item)."
+        )
 
-    run_defaults = workflow_render_defaults(character_name=character_name, character_id=int(character_id))
+    run_defaults = workflow_render_defaults(
+        character_name=character_name, character_id=int(character_id)
+    )
     return character_name, run_defaults, _subdir_for_character(character_name)
 
 
@@ -358,20 +416,36 @@ def _resolve_render_settings(
     *,
     idx: int,
     rng,
-    seed_seq: List[int],
-    steps_seq: List[int],
-    cfg_seq: List[float],
-    denoise_seq: List[float],
-    defaults: Dict[str, Any],
-) -> Tuple[int, Optional[int], Optional[float], Optional[float]]:
-    run_seed = seed_seq[idx % len(seed_seq)] if seed_seq else int(rng.randint(0, 2**31 - 1))
-    run_steps = steps_seq[idx % len(steps_seq)] if steps_seq else _safe_int_or_none(defaults.get("steps"))
-    run_cfg = cfg_seq[idx % len(cfg_seq)] if cfg_seq else _safe_float_or_none(defaults.get("cfg"), ndigits=1)
-    run_denoise = denoise_seq[idx % len(denoise_seq)] if denoise_seq else _safe_float_or_none(defaults.get("denoise"), ndigits=None)
+    seed_seq: list[int],
+    steps_seq: list[int],
+    cfg_seq: list[float],
+    denoise_seq: list[float],
+    defaults: dict[str, Any],
+) -> tuple[int, int | None, float | None, float | None]:
+    run_seed = (
+        seed_seq[idx % len(seed_seq)]
+        if seed_seq
+        else int(rng.randint(0, 2**31 - 1))
+    )
+    run_steps = (
+        steps_seq[idx % len(steps_seq)]
+        if steps_seq
+        else _safe_int_or_none(defaults.get("steps"))
+    )
+    run_cfg = (
+        cfg_seq[idx % len(cfg_seq)]
+        if cfg_seq
+        else _safe_float_or_none(defaults.get("cfg"), ndigits=1)
+    )
+    run_denoise = (
+        denoise_seq[idx % len(denoise_seq)]
+        if denoise_seq
+        else _safe_float_or_none(defaults.get("denoise"), ndigits=None)
+    )
     return run_seed, run_steps, run_cfg, run_denoise
 
 
-def _safe_int_or_none(value: Any) -> Optional[int]:
+def _safe_int_or_none(value: Any) -> int | None:
     try:
         v = str(value).strip()
         if not v:
@@ -381,7 +455,7 @@ def _safe_int_or_none(value: Any) -> Optional[int]:
         return None
 
 
-def _safe_float_or_none(value: Any, *, ndigits: Optional[int]) -> Optional[float]:
+def _safe_float_or_none(value: Any, *, ndigits: int | None) -> float | None:
     try:
         v = str(value).strip().replace(",", ".")
         if not v:
@@ -396,14 +470,16 @@ def _generate_prompt_selection(
     *,
     generator: PlaygroundGenerator,
     character_id: int,
-    manual_picks: Dict[str, Optional[int]],
+    manual_picks: dict[str, int | None],
     include_lighting: bool,
     include_modifier: bool,
-    gen_seed_base: Optional[int],
+    gen_seed_base: int | None,
     idx: int,
     max_tries: int,
-) -> Dict[str, Any]:
-    gen_run_seed = (int(gen_seed_base) + int(idx)) if gen_seed_base is not None else None
+) -> dict[str, Any]:
+    gen_run_seed = (
+        (int(gen_seed_base) + int(idx)) if gen_seed_base is not None else None
+    )
     return generator.generate(
         character_id=int(character_id),
         manual_picks=manual_picks,
@@ -414,22 +490,24 @@ def _generate_prompt_selection(
     )
 
 
-def _require_prompts(gen_res: Dict[str, Any]) -> Tuple[str, str]:
+def _require_prompts(gen_res: dict[str, Any]) -> tuple[str, str]:
     run_pos = str(gen_res.get("positive") or "").strip()
     run_neg = str(gen_res.get("negative") or "").strip()
     if not run_pos or not run_neg:
-        raise ValueError("Generator hat leere Prompts geliefert (positive/negative).")
+        raise ValueError(
+            "Generator hat leere Prompts geliefert (positive/negative)."
+        )
     return run_pos, run_neg
 
 
 def _resolve_render_choices(
     *,
-    head: Dict[str, Any],
-    cycles: Dict[str, List[str]],
-    defaults: Dict[str, Any],
+    head: dict[str, Any],
+    cycles: dict[str, list[str]],
+    defaults: dict[str, Any],
     idx: int,
     rng,
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+) -> tuple[str | None, str | None, str | None]:
     ck = _resolve_choice(
         raw_value=str(head.get("checkpoint_name") or ""),
         cycle=cycles.get("checkpoint") or [],
@@ -458,19 +536,19 @@ def _build_preview_draft(
     *,
     base_id: int,
     idx: int,
-    selection: Dict[str, Any],
+    selection: dict[str, Any],
     character_name: str,
     subdir: str,
     seed: int,
-    steps: Optional[int],
-    cfg: Optional[float],
-    denoise: Optional[float],
-    checkpoint: Optional[str],
-    sampler: Optional[str],
-    scheduler: Optional[str],
+    steps: int | None,
+    cfg: float | None,
+    denoise: float | None,
+    checkpoint: str | None,
+    sampler: str | None,
+    scheduler: str | None,
     prompt_positive: str,
     prompt_negative: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "draft_id": f"{base_id}_{idx}",
         "selection": selection,
@@ -478,9 +556,13 @@ def _build_preview_draft(
         "scene_name": str((selection.get("scene") or {}).get("name") or ""),
         "outfit_name": str((selection.get("outfit") or {}).get("name") or ""),
         "pose_name": str((selection.get("pose") or {}).get("name") or ""),
-        "expression_name": str((selection.get("expression") or {}).get("name") or ""),
+        "expression_name": str(
+            (selection.get("expression") or {}).get("name") or ""
+        ),
         "light_name": str((selection.get("lighting") or {}).get("name") or ""),
-        "modifier_name": str((selection.get("modifier") or {}).get("name") or ""),
+        "modifier_name": str(
+            (selection.get("modifier") or {}).get("name") or ""
+        ),
         "seed": seed,
         "steps": steps,
         "cfg": cfg,
