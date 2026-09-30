@@ -25,6 +25,7 @@ from comfyreview.application import (
     ReviewResult,
     ReviewService,
     SubmitReviewCommand,
+    WorkflowDefaultsService,
 )
 from comfyreview.bootstrap import (
     ApplicationContainer,
@@ -140,6 +141,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
             PlaygroundSubmissionService,
             object(),
         ),
+        workflow_defaults=cast(WorkflowDefaultsService, object()),
         review_service=cast(ReviewService, _RecordingReviewService()),
         ranking_service=rankings,
         arena_service=ArenaService(
@@ -206,6 +208,7 @@ def test_default_container_wires_canonical_review_runtime(
         container.output_images,
         CanonicalOutputImageCatalog,
     )
+    assert isinstance(container.workflow_defaults, WorkflowDefaultsService)
     assert isinstance(container.analytics_service, AnalyticsService)
     assert isinstance(container.analytics_pages, AnalyticsPageService)
     assert isinstance(container.playground_hub, PlaygroundHubService)

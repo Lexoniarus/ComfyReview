@@ -157,6 +157,11 @@ from comfyreview.application.workflow_compilation import (
     WorkflowInputBinding,
     WorkflowOutputBinding,
 )
+from comfyreview.application.workflow_defaults import (
+    GenerationDefaults,
+    GenerationSamplerDefaults,
+    WorkflowDefaultsService,
+)
 
 __all__ = [
     "AssignCurationCommand",
@@ -201,6 +206,7 @@ __all__ = [
     "GenerationPort",
     "GenerationOutputPolicy",
     "GenerationIdentitySource",
+    "GenerationDefaults",
     "GenerationMutationError",
     "GenerationOutput",
     "GenerationOutputCollector",
@@ -213,6 +219,7 @@ __all__ = [
     "GenerationOutputSource",
     "GenerationRequest",
     "GenerationSamplerSettings",
+    "GenerationSamplerDefaults",
     "GenerationService",
     "GenerationSubmission",
     "GenerationValidationError",
@@ -283,6 +290,7 @@ __all__ = [
     "WorkflowBlueprintRepository",
     "WorkflowCompilationError",
     "WorkflowCompiler",
+    "WorkflowDefaultsService",
     "WorkflowInputBinding",
     "WorkflowOutputBinding",
     "imported_prompt_component_uid",

@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from comfyreview.api.dependencies import get_application_container
-from comfyreview.application import PlaygroundService
+from comfyreview.application import GenerationDefaults, PlaygroundService
 from config import (
     DEFAULT_MAX_TRIES,
 )
@@ -16,7 +16,6 @@ from services.file_urls import file_url_exists, png_path_to_url
 from services.playground_generator_ui_service import (
     build_form_from_state,
     build_head_state_from_post,
-    character_name_from_id,
     clear_preview_state,
     generate_preview_drafts,
     load_head_state,
@@ -27,9 +26,7 @@ from services.playground_generator_ui_service import (
     save_preview_state,
     submit_preview_drafts,
     update_draft,
-    workflow_render_defaults,
 )
-from services.ui_state_service import safe_int
 
 from ._shared import (
     GENERATOR_PREVIEW_STATE_PATH,
@@ -76,15 +73,11 @@ def playground_generator_page(request: Request):
     ).playground_discovery.discover()
 
     saved = load_head_state(GENERATOR_STATE_PATH)
-    saved_char_id = (
-        safe_int(str(saved.get("character_id", "")).strip()) if saved else None
-    )
-
-    char_name_for_defaults = character_name_from_id(
-        dropdowns["characters"], saved_char_id
-    )
-    defaults = workflow_render_defaults(
-        character_name=char_name_for_defaults, character_id=saved_char_id
+    defaults = _render_defaults(
+        get_application_container(request).workflow_defaults.load(
+            "default-character",
+            1,
+        )
     )
 
     form = build_form_from_state(saved=saved, defaults=defaults)
@@ -287,6 +280,12 @@ def playground_generator_run(
             playground_service=(
                 get_application_container(request).playground_service
             ),
+            render_defaults=_render_defaults(
+                get_application_container(request).workflow_defaults.load(
+                    "default-character",
+                    1,
+                )
+            ),
         )
 
     if act == "submit_preview":
@@ -414,6 +413,7 @@ def _handle_preview_generate(
     characters: list,
     discovery: Any,
     playground_service: PlaygroundService,
+    render_defaults: dict[str, str],
 ) -> RedirectResponse:
     head = build_head_state_from_post(**head_kwargs)
     save_head_state(GENERATOR_STATE_PATH, head)
@@ -423,6 +423,7 @@ def _handle_preview_generate(
         characters=characters,
         discovery=discovery,
         playground_service=playground_service,
+        render_defaults=render_defaults,
         default_max_attempts=DEFAULT_MAX_TRIES,
     )
     save_preview_state(GENERATOR_PREVIEW_STATE_PATH, drafts)
@@ -443,7 +444,14 @@ def _handle_submit_preview(
     )
     clear_preview_state(GENERATOR_PREVIEW_STATE_PATH)
 
-    form = _reload_form_from_head(dropdowns)
+    form = _reload_form_from_head(
+        _render_defaults(
+            get_application_container(request).workflow_defaults.load(
+                "default-character",
+                1,
+            )
+        ),
+    )
 
     return templates.TemplateResponse(
         request=request,
@@ -469,15 +477,17 @@ def _handle_submit_preview(
     )
 
 
-def _reload_form_from_head(dropdowns: dict) -> dict:
+def _reload_form_from_head(defaults: dict[str, str]) -> dict:
     saved = load_head_state(GENERATOR_STATE_PATH)
-    saved_char_id = (
-        safe_int(str(saved.get("character_id", "")).strip()) if saved else None
-    )
-    char_name_for_defaults = character_name_from_id(
-        dropdowns["characters"], saved_char_id
-    )
-    defaults = workflow_render_defaults(
-        character_name=char_name_for_defaults, character_id=saved_char_id
-    )
     return build_form_from_state(saved=saved, defaults=defaults)
+
+
+def _render_defaults(defaults: GenerationDefaults) -> dict[str, str]:
+    return {
+        "checkpoint_name": defaults.checkpoint,
+        "sampler_name": defaults.sampler.sampler,
+        "scheduler_name": defaults.sampler.scheduler,
+        "steps": str(defaults.sampler.steps),
+        "cfg": str(defaults.sampler.cfg),
+        "denoise": str(defaults.sampler.denoise),
+    }

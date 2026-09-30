@@ -24,7 +24,6 @@ from services.playground_generator_ui.head_form import (
     build_form_from_state,
     build_head_state_from_post,
     character_name_from_id,
-    workflow_render_defaults,
 )
 from services.playground_generator_ui.state import (
     clear_preview_state,
@@ -44,7 +43,6 @@ __all__ = [
     "save_preview_state",
     "clear_preview_state",
     "load_playground_dropdown_items",
-    "workflow_render_defaults",
     "character_name_from_id",
     "build_form_from_state",
     "build_head_state_from_post",

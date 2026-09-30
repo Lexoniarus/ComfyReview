@@ -28,6 +28,7 @@ from comfyreview.application import (
     RankingService,
     ReviewService,
     WorkflowCompiler,
+    WorkflowDefaultsService,
 )
 from comfyreview.observability import (
     RequestTracingMiddleware,
@@ -85,6 +86,7 @@ class ApplicationContainer:
     prompt_catalog_service: PromptCatalogService
     playground_service: PlaygroundService
     playground_submission_service: PlaygroundSubmissionService
+    workflow_defaults: WorkflowDefaultsService
     review_service: ReviewService
     ranking_service: RankingService
     arena_service: ArenaService
@@ -143,6 +145,9 @@ def build_application_container(
     comfyui_provider = NativeComfyUiProvider(
         UrlLibJsonTransport(configured.comfyui_base_url)
     )
+    blueprints = JsonWorkflowBlueprintRepository(
+        configured.workflows_directory
+    )
     generation_output_collector = GenerationOutputCollector(
         comfyui=comfyui_provider,
         source=LocalGenerationOutputSource(configured.output_root),
@@ -151,9 +156,7 @@ def build_application_container(
         ),
     )
     generation_service = GenerationService(
-        blueprints=JsonWorkflowBlueprintRepository(
-            configured.workflows_directory
-        ),
+        blueprints=blueprints,
         compiler=WorkflowCompiler(),
         generations=SqliteGenerationRepository(
             configured.canonical_database_path
@@ -204,6 +207,7 @@ def build_application_container(
                 expected_output_roles=("primary",),
             ),
         ),
+        workflow_defaults=WorkflowDefaultsService(blueprints),
         review_service=review_service,
         ranking_service=ranking_service,
         arena_service=ArenaService(

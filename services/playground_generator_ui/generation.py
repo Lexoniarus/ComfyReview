@@ -15,7 +15,6 @@ from comfyreview.application import (
 from services.playground_common.empty_placeholders import filter_random_items
 from services.ui_state_service import safe_int
 
-from .head_form import workflow_render_defaults
 from .types import DiscoveryLists
 
 
@@ -171,6 +170,7 @@ def generate_preview_drafts(
     characters: list[dict[str, Any]],
     discovery: DiscoveryLists,
     playground_service: PlaygroundService,
+    render_defaults: dict[str, Any],
     default_max_attempts: int,
 ) -> list[dict[str, Any]]:
     """Generate preview drafts based on the head form."""
@@ -191,6 +191,7 @@ def generate_preview_drafts(
         character_name, run_defaults, subdir = _load_character_defaults(
             characters=characters,
             character_id=int(run_character_id),
+            render_defaults=render_defaults,
         )
 
         run_seed, run_steps, run_cfg, run_denoise = _resolve_render_settings(
@@ -401,6 +402,7 @@ def _load_character_defaults(
     *,
     characters: list[dict[str, Any]],
     character_id: int,
+    render_defaults: dict[str, Any],
 ) -> tuple[str, dict[str, Any], str]:
     char_item = next(
         (
@@ -421,10 +423,11 @@ def _load_character_defaults(
             "character_name ist leer (name/key fehlt im character item)."
         )
 
-    run_defaults = workflow_render_defaults(
-        character_name=character_name, character_id=int(character_id)
+    return (
+        character_name,
+        dict(render_defaults),
+        _subdir_for_character(character_name),
     )
-    return character_name, run_defaults, _subdir_for_character(character_name)
 
 
 def _resolve_render_settings(

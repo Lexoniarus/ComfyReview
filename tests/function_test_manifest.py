@@ -113,6 +113,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_workflow_compiler.py::"
         "test_workflow_compiler_uses_only_explicit_roles_and_preserves_blueprint"
     ),
+    "comfyreview.application.workflow_defaults:WorkflowDefaultsService.load": (
+        "tests/test_workflow_defaults.py::"
+        "test_workflow_defaults_service_reads_explicit_roles"
+    ),
     "comfyreview.domain.prompts:parse_prompt_atoms": (
         "tests/test_prompt_atoms.py::"
         "test_parse_prompt_atoms_separates_text_and_explicit_weight"

@@ -73,18 +73,7 @@ def test_preview_generation_uses_catalog_revisions_and_keeps_legacy_submit_shape
         selection_policy=PromptSelectionPolicy(),
         renderer=PromptRenderer(),
     )
-    monkeypatch.setattr(
-        generation,
-        "workflow_render_defaults",
-        lambda **_values: {
-            "checkpoint_name": "model.safetensors",
-            "sampler_name": "euler",
-            "scheduler_name": "normal",
-            "steps": "20",
-            "cfg": "7",
-            "denoise": "1",
-        },
-    )
+    del monkeypatch
     head: dict[str, Any] = {
         "character_id": 1,
         "scene_id": 2,
@@ -106,6 +95,14 @@ def test_preview_generation_uses_catalog_revisions_and_keeps_legacy_submit_shape
         characters=[{"id": 1, "name": "Aiko", "key": "aiko"}],
         discovery=DiscoveryLists([], [], []),
         playground_service=playground,
+        render_defaults={
+            "checkpoint_name": "model.safetensors",
+            "sampler_name": "euler",
+            "scheduler_name": "normal",
+            "steps": "20",
+            "cfg": "7",
+            "denoise": "1",
+        },
         default_max_attempts=200,
     )
 
