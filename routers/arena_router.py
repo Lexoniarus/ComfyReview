@@ -31,6 +31,7 @@ def arena(
         ranking_service=get_application_container(request).ranking_service,
         arena_service=get_application_container(request).arena_service,
         prompt_labels=get_application_container(request).prompt_labels,
+        image_url=get_application_container(request).file_urls.to_url,
         context=ctx,
         min_runs=MIN_RUNS,
         pool_limit=POOL_LIMIT,

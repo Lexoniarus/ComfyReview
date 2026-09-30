@@ -3,7 +3,6 @@ routers/playground/__init__.py
 routers/playground/hub.py
 services/__init__.py
 services/context_filters.py
-services/file_urls.py
 services/playground_common/__init__.py
 services/playground_common/empty_placeholders.py
 services/playground_generator_ui/__init__.py
@@ -14,4 +13,3 @@ services/ui_state_service.py
 templates.py
 tests/conftest.py
 tests/test_prompt_store_tokenize.py
-tests/test_scope_semantics.py

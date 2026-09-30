@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from starlette.requests import Request
 
 from comfyreview.application import PromptMatchPreview, PromptTokenStatistic
+from comfyreview.providers import OutputFileUrlMapper
 
 api = importlib.import_module("routers.playground.api")
 
@@ -47,11 +48,15 @@ class _Analytics:
         return self.match
 
 
-def _request(analytics: _Analytics | None = None) -> Request:
+def _request(
+    analytics: _Analytics | None = None,
+    file_urls: OutputFileUrlMapper | None = None,
+) -> Request:
     container = SimpleNamespace(
         prompt_catalog_views=_Views(),
         analytics_service=analytics or _Analytics(),
         settings=SimpleNamespace(minimum_runs=3, pool_limit=128),
+        file_urls=file_urls or OutputFileUrlMapper(Path("output")),
     )
     application = SimpleNamespace(state=SimpleNamespace(container=container))
     return Request({"type": "http", "app": application})
@@ -83,24 +88,22 @@ def test_token_statistics_validates_payload_and_delegates() -> None:
     ]
 
 
-def test_preview_route_resolves_stable_uids_and_maps_urls(monkeypatch) -> None:
+def test_preview_route_resolves_stable_uids_and_maps_urls(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "image.png"
+    image_path.write_bytes(b"png")
     analytics = _Analytics(
         PromptMatchPreview(
-            Path("output/image.json"),
-            Path("output/image.png"),
+            tmp_path / "image.json",
+            image_path,
             2,
             8.0,
             4,
         )
     )
-    monkeypatch.setattr(
-        api,
-        "existing_png_path_to_url",
-        lambda path: f"/files/{path.replace(chr(92), '/')}",
-    )
-
     response = api.playground_api_previews(
-        _request(analytics),
+        _request(analytics, OutputFileUrlMapper(tmp_path)),
         {
             "item_ids": ["component-a", "missing"],
             "scope": "pos",
@@ -111,12 +114,12 @@ def test_preview_route_resolves_stable_uids_and_maps_urls(monkeypatch) -> None:
 
     assert _json(response) == {
         "component-a": {
-            "png_path": str(Path("output/image.png")),
-            "json_path": str(Path("output/image.json")),
+            "png_path": str(image_path),
+            "json_path": str(tmp_path / "image.json"),
             "hits": 2,
             "avg_rating": 8.0,
             "runs": 4,
-            "url": "/files/output/image.png",
+            "url": "/files/image.png",
         },
         "missing": None,
     }
@@ -126,9 +129,7 @@ def test_preview_route_resolves_stable_uids_and_maps_urls(monkeypatch) -> None:
     assert options["minimum_ratings"] == 0
 
 
-def test_preview_route_rejects_non_list_ids_and_missing_files(
-    monkeypatch,
-) -> None:
+def test_preview_route_rejects_non_list_ids_and_missing_files() -> None:
     invalid = api.playground_api_previews(
         _request(),
         {"item_ids": "component-a"},
@@ -136,7 +137,6 @@ def test_preview_route_rejects_non_list_ids_and_missing_files(
     analytics = _Analytics(
         PromptMatchPreview(None, Path("missing.png"), 1, None, 0)
     )
-    monkeypatch.setattr(api, "existing_png_path_to_url", lambda _path: None)
     missing = api.playground_api_previews(
         _request(analytics),
         {"item_ids": ["component-a"]},

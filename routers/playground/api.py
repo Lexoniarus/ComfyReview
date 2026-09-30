@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Request
@@ -9,7 +10,6 @@ from fastapi.responses import JSONResponse
 
 from comfyreview.api import get_application_container
 from comfyreview.application import PromptMatchPreview
-from services.file_urls import existing_png_path_to_url
 
 router = APIRouter()
 
@@ -83,7 +83,10 @@ def playground_api_previews(
             minimum_ratings=minimum_runs,
             candidate_limit=container.settings.pool_limit,
         )
-        output[component_uid] = _preview_with_url(best)
+        output[component_uid] = _preview_with_url(
+            best,
+            container.file_urls.existing_url,
+        )
     return JSONResponse(output)
 
 
@@ -94,10 +97,13 @@ def _nonnegative_int(value: object, *, default: int) -> int:
         return default
 
 
-def _preview_with_url(best: object) -> dict[str, object] | None:
+def _preview_with_url(
+    best: object,
+    image_url: Callable[[str], str],
+) -> dict[str, object] | None:
     if not isinstance(best, PromptMatchPreview):
         return None
-    url = existing_png_path_to_url(str(best.png_path))
+    url = image_url(str(best.png_path))
     if not url:
         return None
     return {

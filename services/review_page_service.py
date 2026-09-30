@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from comfyreview.application import OutputImageCatalog, OutputImageReadModel
@@ -14,7 +15,6 @@ from services.context_filters import (
     normalize_set_key,
     normalize_unrated_flag,
 )
-from services.file_urls import png_path_to_url
 from services.image_metadata_view import (
     extract_prompts,
     extract_view,
@@ -62,6 +62,7 @@ def build_review_page_context(
     *,
     output_images: OutputImageCatalog,
     prompt_labels: PromptLabelService,
+    image_url: Callable[[str], str],
     unrated: int,
     model: str,
     subdir: str,
@@ -131,6 +132,7 @@ def build_review_page_context(
         character_options=character_options,
         view=view,
         labels=labels,
+        image_url=image_url,
         rated_count=rated_count,
         rating_avg=rating_avg,
         rating_runs=rating_runs,
@@ -234,13 +236,14 @@ def _build_review_context(
     character_options: list[dict[str, str]],
     view: dict[str, Any],
     labels: PromptLabels,
+    image_url: Callable[[str], str],
     rated_count: int,
     rating_avg: Any,
     rating_runs: Any,
     trend_delta: Any,
     last_rating: Any,
 ) -> dict[str, Any]:
-    img_url = png_path_to_url(str(it.png_path))
+    img_url = image_url(str(it.png_path))
     meta_pre = json.dumps(it.meta, indent=2, ensure_ascii=False)
 
     character_name = extract_character_from_subdir(

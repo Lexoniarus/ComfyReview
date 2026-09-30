@@ -36,6 +36,7 @@ def index(
     ctx = build_review_page_context(
         output_images=get_application_container(request).output_images,
         prompt_labels=get_application_container(request).prompt_labels,
+        image_url=get_application_container(request).file_urls.to_url,
         unrated=unrated,
         model=model,
         subdir=subdir,

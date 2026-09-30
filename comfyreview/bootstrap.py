@@ -40,6 +40,7 @@ from comfyreview.providers import (
     LocalCurationFileManager,
     LocalGenerationOutputSource,
     NativeComfyUiProvider,
+    OutputFileUrlMapper,
     UrlLibJsonTransport,
     UuidGenerationIdentitySource,
     UuidPromptIdentitySource,
@@ -65,7 +66,6 @@ from routers.playground import router as playground_router
 from routers.stats_router import router as stats_router
 from routers.top_router import router as top_router
 from services.analytics_page_service import AnalyticsPageService
-from services.file_urls import existing_png_path_to_url
 from services.output_file_service import OutputFileService
 from services.playground_discovery_service import PlaygroundDiscoveryService
 from services.playground_hub_service import PlaygroundHubService
@@ -80,6 +80,7 @@ class ApplicationContainer:
     settings: Settings
     canonical_schema: CanonicalSchemaLifecycle
     output_images: OutputImageCatalog
+    file_urls: OutputFileUrlMapper
     analytics_service: AnalyticsService
     analytics_reports: AnalyticsReportService
     analytics_pages: AnalyticsPageService
@@ -123,6 +124,7 @@ def build_application_container(
             configured.canonical_database_path
         ),
     )
+    file_urls = OutputFileUrlMapper(configured.output_root)
     review_service = ReviewService(
         image_resolver=output_images,
         reviews=SqliteReviewRepository(configured.canonical_database_path),
@@ -187,16 +189,17 @@ def build_application_container(
             configured.canonical_database_path
         ),
         output_images=output_images,
+        file_urls=file_urls,
         analytics_service=analytics_service,
         analytics_reports=analytics_reports,
         analytics_pages=AnalyticsPageService(
             analytics=analytics_service,
             reports=analytics_reports,
-            image_url=existing_png_path_to_url,
+            image_url=file_urls.existing_url,
         ),
         playground_hub=PlaygroundHubService(
             analytics=analytics_service,
-            image_url=existing_png_path_to_url,
+            image_url=file_urls.existing_url,
             default_max_attempts=configured.default_max_tries,
         ),
         playground_discovery=PlaygroundDiscoveryService(

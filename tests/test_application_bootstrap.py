@@ -32,7 +32,10 @@ from comfyreview.bootstrap import (
     build_application_container,
     create_app,
 )
-from comfyreview.providers import CanonicalOutputImageCatalog
+from comfyreview.providers import (
+    CanonicalOutputImageCatalog,
+    OutputFileUrlMapper,
+)
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.settings import Settings, load_settings
 from services.analytics_page_service import AnalyticsPageService
@@ -104,6 +107,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         settings=settings,
         canonical_schema=_RecordingCanonicalSchema(settings, events),
         output_images=_EmptyOutputImageCatalog(),
+        file_urls=OutputFileUrlMapper(settings.output_root),
         analytics_service=cast(AnalyticsService, object()),
         analytics_reports=cast(AnalyticsReportService, object()),
         analytics_pages=cast(AnalyticsPageService, object()),
@@ -189,6 +193,7 @@ def test_default_container_wires_canonical_review_runtime(
         container.output_images,
         CanonicalOutputImageCatalog,
     )
+    assert isinstance(container.file_urls, OutputFileUrlMapper)
     assert isinstance(container.workflow_defaults, WorkflowDefaultsService)
     assert isinstance(container.analytics_service, AnalyticsService)
     assert isinstance(container.analytics_reports, AnalyticsReportService)

@@ -12,7 +12,6 @@ from comfyreview.application import GenerationDefaults, PlaygroundService
 from config import (
     DEFAULT_MAX_TRIES,
 )
-from services.file_urls import file_url_exists, png_path_to_url
 from services.playground_generator_ui_service import (
     build_form_from_state,
     build_head_state_from_post,
@@ -74,9 +73,9 @@ def playground_generator_page(request: Request):
 
     preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH)
     for draft in preview:
-        if draft.get("best_img_url") and not file_url_exists(
-            str(draft.get("best_img_url"))
-        ):
+        if draft.get("best_img_url") and not get_application_container(
+            request
+        ).file_urls.url_exists(str(draft.get("best_img_url"))):
             draft["best_img_url"] = ""
             draft["best_avg"] = None
             draft["best_runs"] = None
@@ -132,7 +131,9 @@ def playground_generator_preview_draft_best(request: Request, draft_id: str):
         )
 
     # fast path if already resolved
-    if file_url_exists(str((d or {}).get("best_img_url") or "")):
+    if get_application_container(request).file_urls.url_exists(
+        str((d or {}).get("best_img_url") or "")
+    ):
         return JSONResponse(
             {
                 "status": "ok",
@@ -154,7 +155,7 @@ def playground_generator_preview_draft_best(request: Request, draft_id: str):
         analytics=container.analytics_service,
         minimum_ratings=container.settings.minimum_runs,
         candidate_limit=container.settings.pool_limit,
-        image_url=png_path_to_url,
+        image_url=container.file_urls.to_url,
     )
 
     # Persist into preview state if we got a definitive answer.

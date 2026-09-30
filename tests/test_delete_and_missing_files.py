@@ -12,7 +12,7 @@ from comfyreview.application import (
     StoredReview,
     SubmitReviewCommand,
 )
-from services import file_urls
+from comfyreview.providers import OutputFileUrlMapper
 from services.output_file_service import (
     InvalidOutputPathError,
     OutputFileService,
@@ -80,19 +80,18 @@ def test_delete_keeps_files_when_rating_write_fails(tmp_path: Path) -> None:
     assert json_path.is_file()
 
 
-def test_existing_png_path_to_url_rejects_missing_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(file_urls, "OUTPUT_ROOT", tmp_path)
+def test_output_file_url_mapper_rejects_missing_and_escaped_files(
+    tmp_path: Path,
+) -> None:
+    mapper = OutputFileUrlMapper(tmp_path)
     existing = tmp_path / "character" / "image.png"
     existing.parent.mkdir()
     existing.write_bytes(b"png")
 
-    assert (
-        file_urls.existing_png_path_to_url(str(existing))
-        == "/files/character/image.png"
-    )
-    assert (
-        file_urls.existing_png_path_to_url(str(tmp_path / "missing.png")) == ""
-    )
+    assert mapper.existing_url(existing) == "/files/character/image.png"
+    assert mapper.existing_url(tmp_path / "missing.png") == ""
+    assert mapper.to_url(tmp_path.parent / "escaped.png") == ""
+    assert mapper.url_exists("/files/../escaped.png") is False
 
 
 def test_output_pair_rejects_path_outside_output_root(tmp_path):

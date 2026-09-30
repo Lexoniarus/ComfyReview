@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -10,7 +11,6 @@ from services.context_filters import (
     extract_character_from_subdir,
     normalize_model,
 )
-from services.file_urls import png_path_to_url
 from services.playground_label_service import PromptLabelService
 
 
@@ -44,6 +44,7 @@ class RankedCard:
 def _card_from_ranked_image(
     image: RankedImage,
     prompt_labels: PromptLabelService,
+    image_url: Callable[[str], str],
 ) -> RankedCard:
     labels = prompt_labels.resolve(
         image.positive_prompt,
@@ -51,7 +52,7 @@ def _card_from_ranked_image(
     )
     return RankedCard(
         image_uid=image.image_uid,
-        img_url=png_path_to_url(str(image.png_path)),
+        img_url=image_url(str(image.png_path)),
         json_path=str(image.json_path or ""),
         png_path=str(image.png_path),
         model_branch=image.model_branch,
@@ -81,6 +82,7 @@ def build_top_pictures_page(
     ranking_service: RankingService,
     prompt_labels: PromptLabelService,
     context: GalleryContext,
+    image_url: Callable[[str], str],
     min_runs: int,
     limit: int,
 ) -> dict[str, Any]:
@@ -102,7 +104,10 @@ def build_top_pictures_page(
             limit=limit,
         )
     )
-    cards = [_card_from_ranked_image(image, prompt_labels) for image in ranked]
+    cards = [
+        _card_from_ranked_image(image, prompt_labels, image_url)
+        for image in ranked
+    ]
     return {
         "cards": cards,
         "model": model,
@@ -118,9 +123,10 @@ def build_top_pictures_page(
 def build_arena_side(
     image: RankedImage,
     prompt_labels: PromptLabelService,
+    image_url: Callable[[str], str],
 ) -> dict[str, Any]:
     """Build one template side from a canonical ranked image."""
-    card = _card_from_ranked_image(image, prompt_labels)
+    card = _card_from_ranked_image(image, prompt_labels, image_url)
     return {
         **asdict(card),
         "view": {

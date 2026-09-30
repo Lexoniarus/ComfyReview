@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from comfyreview.application import (
@@ -23,6 +24,7 @@ def build_arena_page_context(
     arena_service: ArenaService,
     prompt_labels: PromptLabelService,
     context: GalleryContext,
+    image_url: Callable[[str], str],
     min_runs: int,
     pool_limit: int,
 ) -> dict[str, Any]:
@@ -73,7 +75,7 @@ def build_arena_page_context(
 
     return {
         **base,
-        "left": build_arena_side(pair.left, prompt_labels),
-        "right": build_arena_side(pair.right, prompt_labels),
+        "left": build_arena_side(pair.left, prompt_labels, image_url),
+        "right": build_arena_side(pair.right, prompt_labels, image_url),
         "message": "",
     }

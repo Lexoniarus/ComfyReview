@@ -43,6 +43,7 @@ def top_pictures(
     vm = build_top_pictures_page(
         ranking_service=get_application_container(request).ranking_service,
         prompt_labels=get_application_container(request).prompt_labels,
+        image_url=get_application_container(request).file_urls.to_url,
         context=ctx,
         min_runs=MIN_RUNS,
         limit=POOL_LIMIT,

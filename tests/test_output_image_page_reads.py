@@ -67,6 +67,7 @@ def test_review_page_reads_images_from_catalog() -> None:
     context = build_review_page_context(
         output_images=catalog,
         prompt_labels=cast(PromptLabelService, _LabelMatcher()),
+        image_url=lambda path: f"/files/{path}",
         unrated=1,
         model="",
         subdir="",
@@ -85,6 +86,7 @@ def test_top_page_reads_images_from_catalog() -> None:
         ranking_service=rankings,
         prompt_labels=cast(PromptLabelService, _LabelMatcher()),
         context=_gallery_context(),
+        image_url=lambda path: f"/files/{path}",
         min_runs=3,
         limit=128,
     )
@@ -106,6 +108,7 @@ def test_arena_page_reads_images_from_catalog() -> None:
         arena_service=arena,
         prompt_labels=cast(PromptLabelService, _LabelMatcher()),
         context=_gallery_context(),
+        image_url=lambda path: f"/files/{path}",
         min_runs=3,
         pool_limit=128,
     )
