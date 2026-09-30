@@ -82,6 +82,8 @@ def test_prompt_selection_policy_selects_reproducible_compatible_revisions() -> 
         manual_selections=(
             ManualPromptSelection("scene", "scene-night"),
             ManualPromptSelection("outfit", "outfit-red"),
+            ManualPromptSelection("pose", "pose-a"),
+            ManualPromptSelection("expression", "expression-a"),
         ),
         seed=17,
     )
@@ -161,6 +163,111 @@ def test_prompt_selection_policy_reports_incompatible_catalog() -> None:
             catalog,
             PromptSelectionCommand("character-a", seed=2, max_attempts=2),
         )
+
+
+def test_prompt_selection_policy_applies_gates_to_random_candidates() -> None:
+    catalog = tuple(
+        replace(component, tags=())
+        if component.component_uid == "character-a"
+        else replace(component, tags=("lewd",))
+        if component.component_uid == "outfit-red"
+        else component
+        for component in _catalog()
+    )
+
+    with pytest.raises(PromptSelectionError, match="no compatible"):
+        PromptSelectionPolicy().select(
+            catalog,
+            PromptSelectionCommand(
+                "character-a",
+                include_lighting=False,
+                include_modifier=False,
+                max_attempts=1,
+            ),
+        )
+
+
+def test_prompt_selection_policy_validates_manual_excludes_and_requirements() -> (
+    None
+):
+    school_catalog = tuple(
+        replace(component, tags=("school",))
+        if component.component_uid == "scene-night"
+        else replace(component, tags=("lewd",))
+        if component.component_uid == "outfit-red"
+        else component
+        for component in _catalog()
+    )
+    excludes = PromptSelectionCommand(
+        "character-a",
+        manual_selections=(
+            ManualPromptSelection("scene", "scene-night"),
+            ManualPromptSelection("outfit", "outfit-red"),
+            ManualPromptSelection("pose", "pose-a"),
+            ManualPromptSelection("expression", "expression-a"),
+        ),
+        include_lighting=False,
+        include_modifier=False,
+        max_attempts=1,
+    )
+    no_skirt_catalog = tuple(
+        replace(
+            component,
+            latest_revision=replace(
+                component.latest_revision,
+                positive_text="red coat",
+            ),
+        )
+        if component.component_uid == "outfit-red"
+        else component
+        for component in _catalog()
+    )
+    requirement = PromptSelectionCommand(
+        "character-a",
+        manual_selections=(ManualPromptSelection("modifier", "modifier-a"),),
+        include_lighting=False,
+        max_attempts=1,
+    )
+
+    with pytest.raises(PromptSelectionError, match="no compatible"):
+        PromptSelectionPolicy().select(school_catalog, excludes)
+    with pytest.raises(PromptSelectionError, match="no compatible"):
+        PromptSelectionPolicy().select(no_skirt_catalog, requirement)
+
+
+def test_prompt_selection_policy_derives_catalog_compatibility_tags() -> None:
+    catalog = tuple(
+        replace(
+            component,
+            latest_revision=replace(
+                component.latest_revision,
+                positive_text="character must be adult",
+            ),
+        )
+        if component.component_uid == "character-a"
+        else replace(
+            component,
+            latest_revision=replace(
+                component.latest_revision,
+                positive_text="lewd pool beach outfit",
+            ),
+        )
+        if component.component_uid == "outfit-red"
+        else component
+        for component in _catalog()
+    )
+
+    selection = PromptSelectionPolicy().select(
+        catalog,
+        PromptSelectionCommand(
+            "character-a",
+            include_lighting=False,
+            include_modifier=False,
+            max_attempts=1,
+        ),
+    )
+
+    assert selection.components[2].component_uid == "outfit-red"
 
 
 def test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate() -> (
