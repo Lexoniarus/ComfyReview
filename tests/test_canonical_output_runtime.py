@@ -7,10 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from comfyreview.application import (
-    InvalidOutputPathError,
-    OutputImageReference,
-)
+from comfyreview.application import OutputImageReference
 from comfyreview.providers import CanonicalOutputImageCatalog
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
@@ -150,20 +147,8 @@ def test_canonical_catalog_lists_and_resolves_without_sidecar(
     assert native.meta["seed"] == 123
 
     resolved = catalog.resolve(
-        OutputImageReference.from_client_reference(
-            image_uid="image-native",
-            png_path="",
-            json_path="",
-        )
+        OutputImageReference.from_client_uid("image-native")
     )
     assert resolved.pair.json_path is None
     assert resolved.image_uid == "image-native"
     assert resolved.generation_uid == "generation-native"
-
-    with pytest.raises(InvalidOutputPathError, match="image_uid"):
-        catalog.resolve(
-            OutputImageReference.from_client_paths(
-                png_path=str(native_png),
-                json_path=str(native_png.with_suffix(".json")),
-            )
-        )

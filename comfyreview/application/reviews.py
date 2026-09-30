@@ -30,68 +30,17 @@ class OutputMutationError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class OutputImageReference:
-    """Represent an untrusted reference to one output image."""
+    """Identify one canonical output image by stable UID."""
 
-    png_path: Path | None
-    json_path: Path | None
-    image_uid: str | None = None
+    image_uid: str
 
     @classmethod
-    def from_client_paths(
-        cls,
-        *,
-        png_path: str,
-        json_path: str,
-    ) -> OutputImageReference:
-        """Validate one legacy PNG/JSON pair reference."""
-        if not str(png_path or "").strip() or not str(json_path or "").strip():
-            raise ReviewValidationError("Output pair paths are required")
-        return cls.from_client_reference(
-            image_uid="",
-            png_path=png_path,
-            json_path=json_path,
-        )
-
-    @classmethod
-    def from_client_reference(
-        cls,
-        *,
-        image_uid: str,
-        png_path: str,
-        json_path: str,
-    ) -> OutputImageReference:
-        """Validate canonical identity or a legacy PNG/JSON pair."""
-        uid = str(image_uid or "").strip() or None
-        png_text = str(png_path or "").strip()
-        if uid is None and not png_text:
-            raise ReviewValidationError("image_uid or output PNG is required")
-        png = Path(png_text) if png_text else None
-        if png is not None and png.suffix.lower() != ".png":
-            raise ReviewValidationError("Expected a PNG output path")
-
-        sidecar_text = str(json_path or "").strip()
-        sidecar = Path(sidecar_text) if sidecar_text else None
-        if sidecar is not None:
-            if png is None:
-                raise ReviewValidationError(
-                    "JSON sidecar requires its matching PNG path"
-                )
-            if sidecar.suffix.lower() != ".json":
-                raise ReviewValidationError("Expected a JSON sidecar path")
-            if png.parent != sidecar.parent or png.stem != sidecar.stem:
-                raise ReviewValidationError(
-                    "PNG and JSON sidecar do not match"
-                )
-        elif uid is None:
-            raise ReviewValidationError(
-                "image_uid or matching JSON sidecar is required"
-            )
-
-        return cls(
-            png_path=png,
-            json_path=sidecar,
-            image_uid=uid,
-        )
+    def from_client_uid(cls, image_uid: str) -> OutputImageReference:
+        """Validate a stable image UID received at an HTTP boundary."""
+        uid = str(image_uid or "").strip()
+        if not uid:
+            raise ReviewValidationError("image_uid is required")
+        return cls(image_uid=uid)
 
 
 @dataclass(frozen=True, slots=True)

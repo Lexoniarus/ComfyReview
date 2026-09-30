@@ -4,14 +4,15 @@ import pytest
 
 from comfyreview.application import (
     OutputImageReference,
+    OutputPair,
     PromptProjection,
+    ReviewImage,
     ReviewMutationError,
     ReviewRecord,
     ReviewService,
     StoredReview,
     SubmitReviewCommand,
 )
-from comfyreview.providers import LocalOutputImageCatalog
 from services import file_urls
 from services.combo_prompts import rebuild
 from services.output_file_service import (
@@ -44,6 +45,31 @@ class _UnusedJobQueue:
         raise AssertionError("queue must not be called")
 
 
+class _ImageResolver:
+    def __init__(self, png_path: Path, json_path: Path) -> None:
+        self._png_path = png_path
+        self._json_path = json_path
+
+    def resolve(self, reference: OutputImageReference) -> ReviewImage:
+        assert reference.image_uid == "image"
+        return ReviewImage(
+            pair=OutputPair(self._png_path, self._json_path),
+            model_branch="model",
+            checkpoint="checkpoint",
+            combo_key="combo",
+            steps=None,
+            cfg=None,
+            sampler=None,
+            scheduler=None,
+            denoise=None,
+            loras_json="[]",
+            positive_prompt="",
+            negative_prompt="",
+            image_uid="image",
+            generation_uid="generation",
+        )
+
+
 def test_delete_keeps_files_when_rating_write_fails(tmp_path: Path) -> None:
     png_path = tmp_path / "image.png"
     json_path = tmp_path / "image.json"
@@ -51,7 +77,7 @@ def test_delete_keeps_files_when_rating_write_fails(tmp_path: Path) -> None:
     json_path.write_text("{}", encoding="utf-8")
 
     service = ReviewService(
-        image_resolver=LocalOutputImageCatalog(tmp_path),
+        image_resolver=_ImageResolver(png_path, json_path),
         reviews=_FailingReviewRepository(),
         prompts=_UnusedPromptRepository(),
         jobs=_UnusedJobQueue(),
@@ -65,10 +91,7 @@ def test_delete_keeps_files_when_rating_write_fails(tmp_path: Path) -> None:
     with pytest.raises(ReviewMutationError, match="canonical_write"):
         service.submit(
             SubmitReviewCommand(
-                image=OutputImageReference(
-                    png_path=png_path,
-                    json_path=json_path,
-                ),
+                image=OutputImageReference(image_uid="image"),
                 rating=None,
                 delete=True,
             )

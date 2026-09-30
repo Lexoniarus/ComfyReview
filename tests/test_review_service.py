@@ -39,8 +39,6 @@ class _Resolver:
 
     def resolve(self, reference: OutputImageReference) -> ReviewImage:
         self._scenario.record("resolve")
-        assert reference.png_path == self._image.pair.png_path
-        assert reference.json_path == self._image.pair.json_path
         assert reference.image_uid == self._image.image_uid
         return self._image
 
@@ -125,11 +123,7 @@ class _ReviewFixture:
         delete: bool = False,
     ) -> SubmitReviewCommand:
         return SubmitReviewCommand(
-            image=OutputImageReference(
-                png_path=self.image.pair.png_path,
-                json_path=self.image.pair.json_path,
-                image_uid=self.image.image_uid,
-            ),
+            image=OutputImageReference(image_uid=str(self.image.image_uid)),
             rating=rating,
             delete=delete,
         )
@@ -158,8 +152,8 @@ def _fixture(
         loras_json="[]",
         positive_prompt="hero",
         negative_prompt="blur",
-        image_uid="image-native" if sidecarless else None,
-        generation_uid="generation-native" if sidecarless else None,
+        image_uid="image-native",
+        generation_uid="generation-native",
         output_node_id="save" if sidecarless else "legacy_sidecar",
     )
     reviews = _Reviews(scenario)
@@ -181,36 +175,9 @@ def _fixture(
     )
 
 
-@pytest.mark.parametrize(
-    ("png_path", "json_path", "message"),
-    [
-        ("", "image.json", "paths are required"),
-        ("image.jpg", "image.json", "Expected a PNG"),
-        ("left.png", "right.json", "do not match"),
-    ],
-)
-def test_output_reference_rejects_invalid_pair_syntax(
-    png_path: str,
-    json_path: str,
-    message: str,
-) -> None:
-    with pytest.raises(ReviewValidationError, match=message):
-        OutputImageReference.from_client_paths(
-            png_path=png_path,
-            json_path=json_path,
-        )
-
-
-def test_output_reference_preserves_a_valid_client_pair() -> None:
-    reference = OutputImageReference.from_client_paths(
-        png_path="folder/image.PNG",
-        json_path="folder/image.JSON",
-    )
-
-    assert reference == OutputImageReference(
-        png_path=Path("folder/image.PNG"),
-        json_path=Path("folder/image.JSON"),
-    )
+def test_output_reference_requires_canonical_uid() -> None:
+    with pytest.raises(ReviewValidationError, match="image_uid is required"):
+        OutputImageReference.from_client_uid("  ")
 
 
 def test_review_service_submits_rating_in_order() -> None:
@@ -361,41 +328,10 @@ def test_review_service_keeps_primary_error_if_legacy_rollback_fails() -> None:
     assert fixture.scenario.events[-1] == "review_delete"
 
 
-def test_output_reference_accepts_canonical_uid_without_sidecar() -> None:
-    reference = OutputImageReference.from_client_reference(
-        image_uid="image-native",
-        png_path="",
-        json_path="",
-    )
+def test_output_reference_accepts_canonical_uid() -> None:
+    reference = OutputImageReference.from_client_uid(" image-native ")
 
-    assert reference == OutputImageReference(
-        png_path=None,
-        json_path=None,
-        image_uid="image-native",
-    )
-
-
-@pytest.mark.parametrize(
-    ("image_uid", "png_path", "json_path", "message"),
-    [
-        ("image", "image.png", "image.txt", "JSON sidecar"),
-        ("image", "", "image.json", "matching PNG"),
-        ("", "image.png", "", "image_uid"),
-        ("", "", "", "image_uid"),
-    ],
-)
-def test_output_reference_rejects_incomplete_client_references(
-    image_uid: str,
-    png_path: str,
-    json_path: str,
-    message: str,
-) -> None:
-    with pytest.raises(ReviewValidationError, match=message):
-        OutputImageReference.from_client_reference(
-            image_uid=image_uid,
-            png_path=png_path,
-            json_path=json_path,
-        )
+    assert reference == OutputImageReference(image_uid="image-native")
 
 
 def test_review_service_sidecarless_rating_skips_legacy_projection() -> None:

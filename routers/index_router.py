@@ -85,14 +85,12 @@ def rate(
         loras_json,
         filter_scope,
         filter_character,
+        json_path,
+        png_path,
     )
     try:
         command = SubmitReviewCommand(
-            image=OutputImageReference.from_client_reference(
-                image_uid=str(image_uid or ""),
-                png_path=png_path,
-                json_path=json_path,
-            ),
+            image=OutputImageReference.from_client_uid(str(image_uid or "")),
             rating=rating,
             delete=bool(deleted or delete),
         )

@@ -17,13 +17,9 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_canonical_ranking_arena.py::"
         "test_ranking_service_filters_and_sorts_canonical_images"
     ),
-    "comfyreview.application.reviews:OutputImageReference.from_client_paths": (
+    "comfyreview.application.reviews:OutputImageReference.from_client_uid": (
         "tests/test_review_service.py::"
-        "test_output_reference_preserves_a_valid_client_pair"
-    ),
-    "comfyreview.application.reviews:OutputImageReference.from_client_reference": (
-        "tests/test_review_service.py::"
-        "test_output_reference_accepts_canonical_uid_without_sidecar"
+        "test_output_reference_accepts_canonical_uid"
     ),
     "comfyreview.application.reviews:ReviewService.submit": (
         "tests/test_review_service.py::"

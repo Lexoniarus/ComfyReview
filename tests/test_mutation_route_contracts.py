@@ -41,8 +41,10 @@ class _OutputImageCatalog:
 class _RouteReviewService:
     def __init__(self, error: Exception | None = None) -> None:
         self._error = error
+        self.command: SubmitReviewCommand | None = None
 
     def submit(self, command: SubmitReviewCommand) -> ReviewResult:
+        self.command = command
         if self._error is not None:
             raise self._error
         return ReviewResult(
@@ -137,6 +139,7 @@ def _call_review(
         combo_key=str(form["combo_key"]),
         model_branch=str(form["model_branch"]),
         checkpoint=str(form["checkpoint"]),
+        image_uid="image",
         json_path=str(form["json_path"]),
         png_path=str(form["png_path"]),
         sampler="client-sampler",
@@ -152,6 +155,24 @@ def _call_review(
         filter_character=None,
         filter_set_key=None,
     )
+
+
+def test_review_route_uses_uid_and_ignores_legacy_paths(
+    tmp_path: Path,
+) -> None:
+    service = _RouteReviewService()
+
+    response = _call_review(
+        _review_form(
+            tmp_path / "attacker.png",
+            tmp_path / "attacker.json",
+        ),
+        review_service=service,
+    )
+
+    assert response.status_code == 303
+    assert service.command is not None
+    assert service.command.image.image_uid == "image"
 
 
 @pytest.mark.parametrize(

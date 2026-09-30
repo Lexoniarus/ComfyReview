@@ -108,14 +108,10 @@ def top_delete(
     filter_mode: str = Form("top"),
     filter_set_key: str = Form(""),
 ):
-    del combo_key, model_branch, checkpoint
+    del combo_key, model_branch, checkpoint, json_path, png_path
     try:
         command = SubmitReviewCommand(
-            image=OutputImageReference.from_client_reference(
-                image_uid=image_uid,
-                png_path=png_path,
-                json_path=json_path,
-            ),
+            image=OutputImageReference.from_client_uid(image_uid),
             rating=None,
             delete=True,
         )
