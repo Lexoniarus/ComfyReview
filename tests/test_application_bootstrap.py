@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
 from pathlib import Path
 from typing import cast
 
@@ -16,7 +15,6 @@ from comfyreview.application import (
     CurationImage,
     CurationService,
     GenerationService,
-    LegacySchemaReport,
     OutputImageReadModel,
     PlaygroundService,
     PlaygroundSubmissionService,
@@ -54,33 +52,6 @@ class _RecordingCanonicalSchema:
 
     def validate(self) -> CanonicalSchemaReport:
         return CanonicalSchemaReport(schema_version=1)
-
-
-class _RecordingSchemaLifecycle:
-    def __init__(self, settings: Settings, events: list[str]) -> None:
-        self._settings = settings
-        self._events = events
-
-    def prepare_startup(self) -> LegacySchemaReport:
-        assert self._settings.output_root.is_dir()
-        assert self._settings.data_directory.is_dir()
-        self._events.append("schema")
-        return LegacySchemaReport()
-
-    def validate(
-        self,
-        database_names: Collection[str] | None = None,
-    ) -> LegacySchemaReport:
-        del database_names
-        return LegacySchemaReport()
-
-    def upgrade(
-        self,
-        database_names: Collection[str] | None = None,
-        backup_directory: Path | None = None,
-    ) -> LegacySchemaReport:
-        del database_names, backup_directory
-        return LegacySchemaReport()
 
 
 class _EmptyOutputImageCatalog:
@@ -130,7 +101,6 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     return ApplicationContainer(
         settings=settings,
         canonical_schema=_RecordingCanonicalSchema(settings, events),
-        schema_lifecycle=_RecordingSchemaLifecycle(settings, events),
         output_images=_EmptyOutputImageCatalog(),
         analytics_service=cast(AnalyticsService, object()),
         analytics_pages=cast(AnalyticsPageService, object()),
@@ -160,7 +130,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     )
 
 
-def test_lifespan_prepares_canonical_and_required_legacy_schemas(
+def test_lifespan_prepares_only_the_canonical_runtime_schema(
     tmp_path: Path,
 ) -> None:
     events: list[str] = []
@@ -172,13 +142,13 @@ def test_lifespan_prepares_canonical_and_required_legacy_schemas(
     assert not container.settings.data_directory.exists()
 
     with TestClient(application):
-        assert events == ["canonical", "schema"]
+        assert events == ["canonical"]
         assert container.settings.trash_root.is_dir()
         assert container.settings.lora_export_root.is_dir()
         assert container.settings.workflows_directory.is_dir()
         assert container.settings.comfyui_checkpoints_directory.is_dir()
 
-    assert events == ["canonical", "schema"]
+    assert events == ["canonical"]
 
 
 def test_lifespan_preserves_schema_order_when_application_body_fails(
@@ -191,7 +161,7 @@ def test_lifespan_preserves_schema_order_when_application_body_fails(
         with TestClient(application):
             raise RuntimeError("application failed")
 
-    assert events == ["canonical", "schema"]
+    assert events == ["canonical"]
 
 
 def test_entry_points_and_route_contract_remain_compatible() -> None:

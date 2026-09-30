@@ -17,7 +17,6 @@ from comfyreview.application import (
     CurationService,
     GenerationOutputCollector,
     GenerationService,
-    LegacySchemaLifecycle,
     OutputImageCatalog,
     PlaygroundGenerationPolicy,
     PlaygroundService,
@@ -46,7 +45,6 @@ from comfyreview.providers import (
 from comfyreview.repositories.filesystem import JsonWorkflowBlueprintRepository
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
-    LegacySchemaManager,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
     SqliteCurationRepository,
@@ -78,7 +76,6 @@ class ApplicationContainer:
 
     settings: Settings
     canonical_schema: CanonicalSchemaLifecycle
-    schema_lifecycle: LegacySchemaLifecycle
     output_images: OutputImageCatalog
     analytics_service: AnalyticsService
     analytics_pages: AnalyticsPageService
@@ -174,10 +171,6 @@ def build_application_container(
         canonical_schema=CanonicalSchemaManager(
             configured.canonical_database_path
         ),
-        schema_lifecycle=LegacySchemaManager(
-            configured,
-            startup_database_names=("playground",),
-        ),
         output_images=output_images,
         analytics_service=analytics_service,
         analytics_pages=AnalyticsPageService(
@@ -242,7 +235,6 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
         _prepare_directories(resources.settings)
         resources.canonical_schema.prepare_startup()
-        resources.schema_lifecycle.prepare_startup()
         yield
 
     configure_logging()

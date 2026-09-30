@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -35,29 +34,6 @@ class LegacySchemaValidationError(RuntimeError):
             f"{issue.database}: {issue.detail}" for issue in report.issues
         )
         super().__init__(details or "Legacy schema validation failed")
-
-
-class LegacySchemaLifecycle(Protocol):
-    """Define startup validation and explicit legacy schema upgrades."""
-
-    def prepare_startup(self) -> LegacySchemaReport:
-        """Validate existing databases and initialize only missing files."""
-        ...
-
-    def validate(
-        self,
-        database_names: Collection[str] | None = None,
-    ) -> LegacySchemaReport:
-        """Inspect selected databases without mutating them."""
-        ...
-
-    def upgrade(
-        self,
-        database_names: Collection[str] | None = None,
-        backup_directory: Path | None = None,
-    ) -> LegacySchemaReport:
-        """Back up and additively upgrade selected legacy databases."""
-        ...
 
 
 @dataclass(frozen=True)

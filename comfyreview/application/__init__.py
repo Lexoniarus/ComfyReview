@@ -76,7 +76,6 @@ from comfyreview.application.lifecycle import (
     CanonicalSchemaLifecycle,
     CanonicalSchemaReport,
     LegacySchemaIssue,
-    LegacySchemaLifecycle,
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
@@ -230,7 +229,6 @@ __all__ = [
     "CompiledWorkflow",
     "InvalidOutputPathError",
     "LegacySchemaIssue",
-    "LegacySchemaLifecycle",
     "LegacySchemaReport",
     "LegacySchemaValidationError",
     "ManualPromptSelection",
