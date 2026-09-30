@@ -50,6 +50,10 @@ class SqliteGenerationRepository:
                         "filename_prefix": generation.request.output_policy.filename_prefix,
                         "expected_roles": generation.request.output_policy.expected_roles,
                     },
+                    "output_bindings": [
+                        {"role": binding.role, "node_id": binding.node_id}
+                        for binding in generation.compiled_workflow.output_bindings
+                    ],
                 },
                 ensure_ascii=False,
                 sort_keys=True,

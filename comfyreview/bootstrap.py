@@ -15,6 +15,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaLifecycle,
     CurationService,
+    GenerationOutputCollector,
     GenerationService,
     LegacySchemaLifecycle,
     OutputImageCatalog,
@@ -33,6 +34,7 @@ from comfyreview.observability import (
 from comfyreview.providers import (
     CanonicalOutputImageCatalog,
     LocalCurationFileManager,
+    LocalGenerationOutputSource,
     NativeComfyUiProvider,
     UrlLibJsonTransport,
     UuidGenerationIdentitySource,
@@ -45,6 +47,7 @@ from comfyreview.repositories.sqlite import (
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
     SqliteCurationRepository,
+    SqliteGenerationOutputRepository,
     SqliteGenerationRepository,
     SqliteOutputImageRepository,
     SqlitePromptCatalogRepository,
@@ -75,6 +78,7 @@ class ApplicationContainer:
     analytics_pages: AnalyticsPageService
     playground_hub: PlaygroundHubService
     generation_service: GenerationService
+    generation_output_collector: GenerationOutputCollector
     prompt_catalog_service: PromptCatalogService
     playground_service: PlaygroundService
     review_service: ReviewService
@@ -132,6 +136,9 @@ def build_application_container(
     analytics_service = AnalyticsService(
         SqliteAnalyticsRepository(configured.canonical_database_path)
     )
+    comfyui_provider = NativeComfyUiProvider(
+        UrlLibJsonTransport(configured.comfyui_base_url)
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -161,10 +168,15 @@ def build_application_container(
             generations=SqliteGenerationRepository(
                 configured.canonical_database_path
             ),
-            comfyui=NativeComfyUiProvider(
-                UrlLibJsonTransport(configured.comfyui_base_url)
-            ),
+            comfyui=comfyui_provider,
             identities=UuidGenerationIdentitySource(),
+        ),
+        generation_output_collector=GenerationOutputCollector(
+            comfyui=comfyui_provider,
+            source=LocalGenerationOutputSource(configured.output_root),
+            repository=SqliteGenerationOutputRepository(
+                configured.canonical_database_path
+            ),
         ),
         prompt_catalog_service=prompt_catalog_service,
         playground_service=PlaygroundService(

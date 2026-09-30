@@ -33,6 +33,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_generation_service.py::"
         "test_generation_service_wait_maps_external_state"
     ),
+    "comfyreview.application.generation_outputs:GenerationOutputCollector.collect": (
+        "tests/test_generation_outputs.py::"
+        "test_output_collector_maps_expected_nodes_and_actual_batch_indexes"
+    ),
+    "comfyreview.application.generation_outputs:generation_output_identity": (
+        "tests/test_generation_outputs.py::"
+        "test_generation_output_identity_does_not_depend_on_path"
+    ),
     "comfyreview.application.playground:PromptRenderer.render": (
         "tests/test_playground_application.py::"
         "test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate"

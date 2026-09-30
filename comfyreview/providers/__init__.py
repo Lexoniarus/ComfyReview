@@ -6,6 +6,9 @@ from comfyreview.providers.comfyui import (
     UrlLibJsonTransport,
 )
 from comfyreview.providers.curation_files import LocalCurationFileManager
+from comfyreview.providers.generation_outputs import (
+    LocalGenerationOutputSource,
+)
 from comfyreview.providers.legacy_output_import import (
     LocalLegacyOutputImportSource,
 )
@@ -18,6 +21,7 @@ from comfyreview.providers.prompt_identities import (
 __all__ = [
     "CanonicalOutputImageCatalog",
     "LocalCurationFileManager",
+    "LocalGenerationOutputSource",
     "LocalLegacyOutputImportSource",
     "JsonHttpResponse",
     "NativeComfyUiProvider",

@@ -11,6 +11,9 @@ from comfyreview.repositories.sqlite.connection import (
     connect_read_only,
 )
 from comfyreview.repositories.sqlite.curation import SqliteCurationRepository
+from comfyreview.repositories.sqlite.generation_outputs import (
+    SqliteGenerationOutputRepository,
+)
 from comfyreview.repositories.sqlite.generations import (
     SqliteGenerationRepository,
 )
@@ -34,6 +37,7 @@ __all__ = [
     "SqliteArenaRepository",
     "SqliteCurationRepository",
     "SqliteGenerationRepository",
+    "SqliteGenerationOutputRepository",
     "SqliteRankingRepository",
     "SqliteReviewRepository",
     "connect_existing",
