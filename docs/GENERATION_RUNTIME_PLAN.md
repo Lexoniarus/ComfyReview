@@ -1,122 +1,129 @@
 # Native ComfyUI Generation Runtime Plan
 
-Status: agreed implementation direction for `refactor/review-boundary`.
-Slice 2A is based on commit
-`09d2b8aacf75cb8742f88fb58fb9686b17705eaf`.
+Status: canonical image provenance is implemented; native generation remains a
+target on `refactor/review-boundary`, 2026-09-30.
 
-## Goal
+## Implemented foundation
 
-Move ComfyReview from a custom-node/sidecar-centered generation model to a
-canonical generation-run model driven by the native ComfyUI API while
-preserving all existing generated PNG files and JSON sidecars as migration
-sources.
+The canonical database already provides:
 
-The submitted ComfyUI API graph becomes the render provenance source of truth.
-Normalized fields remain query conveniences and learning dimensions, not a
-second independent truth.
+- stable generation and image identities;
+- optional ComfyUI prompt ID and lifecycle fields;
+- raw metadata and workflow provenance;
+- workflow hash and normalized sampler stages;
+- multiple image output slots per generation;
+- optional sidecar paths;
+- audited legacy PNG/sidecar import;
+- sidecar-independent Review, Ranking, Arena and Curation runtime behavior.
 
-## Slice 1 - canonical generation provenance
+Historical sidecars remain immutable migration evidence. They are not the
+target generation runtime.
 
-Implemented:
-
-- canonical schema version 2
-- explicit backed-up v1 -> v2 upgrade
-- raw metadata/workflow provenance columns on `generations`
-- ComfyUI `prompt_id` slot and lifecycle timestamps/status
-- `generation_sampler_stages` for multiple KSampler stages
-
-## Slice 2A - output identity schema
-
-Implemented by schema version 3:
-
-- one generation may own multiple image outputs
-- image identity is independent from generation identity
-- output slots use `output_node_id` plus `output_index`
-- `json_path` is optional canonical provenance
-- delete tombstones are keyed by image identity
-- v2 live images, reviews and deleted tombstones migrate without changing IDs
-- v1 can still upgrade directly to the current schema
-
-The existing sidecar-backed runtime remains active for this commit.
-
-## Slice 2B - sidecar-independent runtime image index
-
-Implemented for the main Review runtime:
-
-- canonical database rows are the first runtime image source
-- stable `image_uid` reads resolve sidecarless canonical PNGs
-- legacy filesystem PNG/sidecar discovery remains a transition fallback
-- Review no longer requires a matching `.json` file for canonical images
-- Top/Worst, Arena and curation remain on transitional legacy contracts until
-  their post-import identity slices
-
-## Slice 3 - legacy PNG/sidecar importer
-
-Slice 3A implements a read-only audit before any write migration. It fingerprints
-the historical files, extracts graph provenance and sampler stages, reports
-metadata conflicts, groups likely batch outputs and detects images already
-registered canonically.
-
-Slice 3B implements the explicit, backed-up write importer. It revalidates the
-complete audit snapshot and source hashes immediately before writing, leaves
-the historical files untouched and performs all canonical writes in one
-transaction. Existing identities, lifecycle fields and output slots are
-preserved while missing provenance is enriched.
-
-For every valid PNG/JSON pair:
-
-1. preserve the PNG unchanged
-2. retain the raw sidecar payload as provenance
-3. prefer `comfy_prompt_graph` / `prompt_graph` as historical workflow truth
-4. normalize exact positive and negative prompts
-5. normalize checkpoint and LoRA information
-6. extract every KSampler node into `generation_sampler_stages`
-7. record conflicts between graph values and legacy summary values
-8. create canonical generation and image identities
-
-Historical ratings are intentionally outside this output-provenance import.
-They move through the later canonical review/Arena/curation migration. Old
-sidecars remain untouched.
-
-## Slice 4 - native ComfyUI provider and generation service
-
-Introduce the target runtime boundary:
+## Target dependency order
 
 ```text
-GenerationService
-    -> persist prepared GenerationRun
-    -> ComfyUiProvider.submit(final_graph)
-    -> store comfy_prompt_id
-    -> watch native ComfyUI execution outside SQLite write transactions
-    -> fetch final outputs/history
-    -> persist output images atomically
+Playground preparation
+    -> GenerationPort
+
+GenerationService implements GenerationPort
+    -> WorkflowBlueprintRepository
+    -> WorkflowCompiler
+    -> GenerationRepository
+    -> ComfyUiProvider
+    -> GenerationOutputCollector
 ```
 
-The provider owns HTTP submission, WebSocket execution events, queue/history
-retrieval, capability discovery and typed provider failures.
+Playground selection and prompt rendering are migrated before native generation
+but are not wired through a temporary generation facade. Final Playground
+submission moves only after the real `GenerationService` exists.
 
-## Slice 5 - workflow compiler
+## Workflow blueprint and compiler
 
-Replace fixed-node patching with semantic workflow roles for prompts,
-checkpoints, sampler stages, LoRAs, reference images/adapters and output nodes.
-Store the compiled graph, its hash, blueprint/version and role mapping before
-submission.
+A versioned `WorkflowBlueprint` contains an API graph template, explicit role
+mappings, expected output-node bindings, sampler-stage definitions and optional
+capability requirements.
 
-## Slice 6 - custom-node removal
+The `WorkflowCompiler` combines a blueprint with a `GenerationRequest`. It owns
+semantic graph mapping for roles such as positive prompt, negative prompt,
+checkpoint, sampler stages, reference image and output node. It produces:
 
-After native generation provenance is verified against real outputs, replace
-`name_meta_export` with standard ComfyUI output nodes. Keep old custom-node
-sidecars supported only by the legacy importer. The canonical database becomes
-the ComfyReview source of truth; ComfyUI history and PNG metadata are execution
-or portable evidence.
+```text
+CompiledWorkflow
+    graph
+    graph_hash
+    blueprint_uid
+    blueprint_version
+    resolved_roles
+    output_bindings
+    sampler_stages
+```
 
-## Slice 2B runtime status
+Compilation never relies on fixed node IDs, titles or the first matching
+KSampler. The current runtime patcher may be used only by an explicit blueprint
+migration and is then removed.
 
-The main review runtime is now canonical-first and sidecar-independent.
-Canonical DB images are merged with unimported legacy sidecar outputs, and
-stable `image_uid` / `generation_uid` values are preserved through review
-mutations. PNG-only deletion is supported.
+Output directory and naming intent come from a `GenerationOutputPolicy` or the
+request. The compiler transfers those decisions into mapped graph inputs; it
+does not choose them.
 
-Top/Worst ranking, Arena and curation still use transitional legacy
-projections/path contracts. Sidecarless canonical outputs are reviewable on the
-main review page but are not yet promoted into those legacy feature pools.
+## Technical ComfyUI provider
+
+The provider receives only an already compiled graph and exposes technical
+operations:
+
+```text
+submit(compiled_graph)
+get_status(prompt_id)
+wait_or_watch(prompt_id)
+fetch_outputs(prompt_id)
+discover_capabilities()
+```
+
+It owns HTTP/WebSocket transport, timeouts, queue/history parsing, technical
+job states, capability discovery and typed failures. It has no knowledge of
+prompt roles, samplers, catalog entries, output policy or workflow node
+semantics.
+
+## Generation lifecycle
+
+```text
+prepared -> submitting -> submitted -> running -> completed
+                    \-> failed
+submitted/running   \-> cancelled
+                    \-> reconciliation_required
+```
+
+Request, selected prompt revisions, exact rendered prompts and compiled
+provenance are persisted in short canonical transactions. No write transaction
+is held during external execution. A wait timeout is not a failed generation.
+An ambiguous crash between external submit and local confirmation remains
+visible for reconciliation.
+
+## Native output collection
+
+Expected and actual output identity are separate:
+
+```text
+CompiledOutputBinding
+    role
+    node_id
+
+GenerationOutput
+    image_uid
+    role
+    node_id
+    output_index
+    path
+    content_hash
+```
+
+The compiler knows the expected role/node binding only. Concrete output indices
+are assigned from returned ComfyUI batches during idempotent collection.
+
+## Standard SaveImage cutover
+
+After native multi-output collection and provenance are verified, blueprints
+move to standard `SaveImage` or another explicitly supported native output
+node. Canonical metadata comes from the request, compiled workflow and collected
+outputs. The `name_meta_export` runtime requirement is removed only after that
+cutover; historical sidecar import remains supported.

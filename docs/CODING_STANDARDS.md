@@ -223,7 +223,13 @@ Rules:
 
 ## 9. ComfyUI provider rules
 
-- ComfyUI requests live in a provider.
+- A `WorkflowBlueprintRepository` or equivalent source loads versioned graph
+  templates and explicit role mappings.
+- A `WorkflowCompiler` maps a `GenerationRequest` and blueprint to an immutable
+  compiled API graph. It owns graph semantics but no HTTP or output-naming
+  decisions.
+- ComfyUI requests live in a provider. The provider receives compiled graphs
+  and does not discover prompt, sampler or output roles itself.
 - Provider operations use explicit timeouts.
 - Submission and completion are separate concepts for long-running work.
 - A timed-out wait is not automatically a failed generation.
@@ -282,8 +288,11 @@ Do not log secrets or entire private prompt payloads by default.
 
 ## 12. Testing
 
-- Every new Python-core callable has an explicit behavior test and manifest
-  entry.
+- Every stable public Python-core behavior boundary has an explicit behavior
+  test and manifest entry.
+- Constructors, private delegation methods, trivial accessors and dunder
+  methods do not receive separate manifest entries. Complex private domain
+  logic is extracted or covered through the public behavior that owns it.
 - Target 100% Python-core statement coverage.
 - Repositories are tested against temporary SQLite databases.
 - Service tests use repository/provider fakes where that isolates behavior.
@@ -347,8 +356,11 @@ Rules:
 
 To migrate an existing file, make it fully clean, remove it from the legacy
 file list, remove its diagnostic and architecture exceptions, add behavior
-tests and update the manifest/core scope where applicable. Run the complete
-gate before committing.
+tests and update the manifest/core scope where applicable.
+
+Before each intermediate commit, run focused behavior tests and static checks
+for every changed file. The targeted gate is a fast feedback mechanism only.
+Run the complete gate at the end of every refactor slice and before integration.
 
 The current baseline is not a claim that the full repository already conforms
 to the target architecture. It is a versioned inventory that prevents new work

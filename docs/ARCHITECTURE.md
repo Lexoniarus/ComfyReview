@@ -153,6 +153,27 @@ when validation fails, an out-of-transaction structural change occurred or
 the commit state is uncertain. Restore failures are reported independently.
 Reports, backups and runtime data are excluded from Git.
 
+## 8.1 Target generation boundaries
+
+Generation is deliberately split into semantic and technical boundaries:
+
+```text
+GenerationRequest + WorkflowBlueprint
+                  -> WorkflowCompiler
+                  -> CompiledWorkflow
+                  -> ComfyUiProvider
+```
+
+The blueprint repository loads versioned graph templates with explicit role and
+expected output-node bindings. The compiler owns graph semantics and produces a
+canonical graph hash, resolved roles and sampler stages. It transfers an
+already-decided output policy into the graph but does not choose directories or
+filenames. The ComfyUI provider only submits compiled graphs, tracks external
+jobs, discovers capabilities and returns raw output descriptors.
+
+Expected output bindings contain a role and node ID. Concrete batch/output
+indices are assigned only when ComfyUI outputs are collected.
+
 ## 9. Schema lifecycle
 
 Runtime startup validates supported canonical and transitional legacy schemas;
@@ -170,10 +191,16 @@ claim crash atomicity across several SQLite files.
 
 The canonical cutover is intentionally not the end of the wider refactor.
 
-- ComfyUI generation still needs a fully injected submit/wait/output provider.
+- ComfyUI generation still needs versioned blueprints, semantic compilation,
+  a technical submit/wait/output provider and native multi-output collection.
 - Playground and prompt-component persistence still use legacy stores.
 - Prompt/statistics projections and their worker remain transitional.
 - Frontend logic still needs the planned ES-module/API-client cleanup.
+
+Existing projection workers are not migration targets by default. Each derived
+dataset is first evaluated for replacement by a direct query or canonical SQL
+view. A new idempotent worker is introduced only for a projection whose
+materialization is demonstrably necessary.
 
 Legacy sources may be read by explicit migration tools. They must not become a
 second writable truth for an already cut-over feature.

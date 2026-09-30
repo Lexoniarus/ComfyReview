@@ -92,6 +92,20 @@ best-effort filesystem rollback; rollback failures are separately visible.
 Sidecars are optional for already-canonical images. Review, Top/Worst, Arena,
 Curation and Delete therefore work for canonical PNGs without sidecars.
 
+## 5.1 Prompt catalog revisions
+
+The future canonical prompt catalog preserves authored material independently
+of whether it has already produced an image. A stable prompt component owns
+immutable prompt revisions. Changing positive text, negative text or explicit
+weights creates a new revision; display name, tags and notes remain mutable
+catalog metadata.
+
+A prompt composition references concrete revision IDs. A generation references
+the composition/revisions it used and also stores the exact rendered positive
+and negative prompt snapshots. Catalog evolution therefore cannot reinterpret
+historical generations. Deleting from the UI archives an item; it does not
+destroy revisions or historical relationships.
+
 ## 6. Audited historical output import
 
 Historical output migration has two explicit steps:
@@ -171,8 +185,11 @@ The target still needs normalized prompt/content components, compositions,
 exact prompts and atom memberships, plus canonical operational job/projection
 state. The design must not duplicate prompt atoms per review or materialize the
 full Cartesian product of possible prompt combinations. Persist combinations
-only when they become domain-relevant, and materialize projections only after
-measured query needs justify them.
+when they are explicitly authored or otherwise become domain-relevant. An
+unused authored template or revision remains canonical catalog data.
+
+Before migrating a derived projection, prefer a direct canonical query, then a
+SQL view. Only measured needs justify a materialized projection and worker.
 
 Character Chronicles may later reuse or extend this foundation, but its
 descriptions, embeddings, RAG and gameplay state remain separate concerns.

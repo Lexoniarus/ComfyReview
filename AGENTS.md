@@ -50,8 +50,10 @@ extend an existing violation merely because it already exists.
   facts. Do not duplicate large prompt, image or rating payloads per event when
   a normalized relation can preserve the same information.
 - Do not eagerly materialize the full Cartesian product of all possible prompt
-  combinations. Persist combinations when they are used, generated, curated or
-  otherwise become domain-relevant.
+  combinations. Authored catalog entries, drafts and immutable prompt
+  revisions are domain-relevant even before their first generation and must be
+  retained. A composition is persisted when it is explicitly authored,
+  generated, curated or otherwise selected as domain data.
 - Schema changes are explicit and versioned. Runtime startup must not silently
   mutate an unknown or unsupported database into a new schema.
 - Existing databases are never destructively migrated without a backup and an
@@ -60,8 +62,13 @@ extend an existing violation merely because it already exists.
 ## ComfyUI integration
 
 - ComfyUI is an external provider, not part of the domain layer.
+- Workflow blueprint loading belongs behind an injected repository or source.
+- Semantic workflow compilation belongs to a dedicated `WorkflowCompiler`.
+  The compiler maps explicit roles to graph inputs and outputs; it does not
+  perform HTTP calls or decide output naming policy.
 - Workflow submission, job polling, output collection and capability discovery
-  belong to the ComfyUI provider boundary.
+  belong to the ComfyUI provider boundary. The provider receives an already
+  compiled graph and has no knowledge of prompt, sampler or output roles.
 - Long-running ComfyUI jobs are modeled as asynchronous work. A client timeout
   is not equivalent to a failed generation.
 - Generated image identity and generation metadata must remain reproducible
@@ -71,10 +78,13 @@ extend an existing violation merely because it already exists.
 
 ## Tests and quality
 
-- No new concrete Python-Core callable is accepted without an explicit behavior
-  test.
-- Maintain a function-to-test manifest for the Python core. New core functions
-  and methods must be registered there with a counter-test.
+- No new stable concrete public Python-Core behavior boundary is accepted
+  without an explicit behavior test.
+- Maintain a function-to-test manifest for stable public Python-Core behavior
+  boundaries. Constructors, private delegation methods, trivial accessors and
+  dunder methods are tested through public behavior rather than registered as
+  separate contracts. Complex private domain logic must be extracted into a
+  testable policy/value boundary or be fully exercised through the public API.
 - Target 100% statement coverage for the Python core. Any exception must be
   narrow, documented and explicitly approved.
 - Test success paths, failure paths and transactional rollback where relevant.
@@ -86,8 +96,12 @@ extend an existing violation merely because it already exists.
   - repositories do not call ComfyUI
   - domain does not import FastAPI/SQLite/providers
 - Passing linters and tests does not replace responsibility review.
-- The shared quality gate must run formatting, linting, typing, tests, coverage
-  and architecture checks before integration.
+- Before each intermediate commit, run focused behavior tests plus formatting,
+  linting and typing for every changed file. This targeted mode is feedback,
+  not integration evidence.
+- The complete shared quality gate must run formatting, linting, typing, tests,
+  coverage and architecture checks at the end of every refactor slice and
+  before integration.
 
 ## Logging and tracing
 

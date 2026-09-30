@@ -105,50 +105,44 @@ were validation controls, not hard-coded acceptance rules.
 
 ## Current acceptance state
 
-The active branch has been developed as small pushed commits. The full quality
-gate is green after the canonical runtime and documentation cleanup with 184
-tests and 100% coverage for the defined Python core. Documentation is the final
-branch commit before review. No merge is performed automatically.
+The active branch is the integration branch for the complete refactor. Pull
+request #7 was closed without merge so later slices can continue as small,
+pushed commits on the same branch. A new pull request is opened only after the
+complete architecture, regression and documentation acceptance.
 
 Runtime imports and their reports/backups are deliberately outside Git.
 
-## Next vertical boundaries
+## Remaining slice order
 
-### ComfyUI generation
+The dependency order is binding. In particular, Playground does not receive a
+temporary generation facade and the ComfyUI provider never owns workflow
+semantics.
 
-- inject a `ComfyUiProvider`;
-- split submit, wait and output collection;
-- use typed failures and timeouts;
-- model asynchronous completion without treating a client timeout as job
-  failure.
+1. align engineering rules and add the targeted feedback gate;
+2. consolidate the canonical identity cutover;
+3. simplify Review, Ranking, Arena and Curation boundaries;
+4. migrate the complete prompt catalog with immutable revisions;
+5. move Playground selection and rendering behind catalog/policy boundaries,
+   while leaving legacy submission isolated;
+6. evaluate every legacy projection as direct query, SQL view, materialization
+   or deletion;
+7. remove remaining multi-database runtime dependencies;
+8. introduce versioned `WorkflowBlueprint` and the semantic
+   `WorkflowCompiler`;
+9. introduce the technical `ComfyUiProvider` for compiled graphs only;
+10. implement `GenerationService` and its canonical asynchronous lifecycle;
+11. collect native multi-output results and assign real output indices only
+    from returned ComfyUI outputs;
+12. apply explicit output policy and migrate to standard `SaveImage`;
+13. wire Playground to the real generation port and delete obsolete legacy
+    clients, stores, workers and compatibility paths;
+14. migrate browser behavior to ES modules and the shared API client;
+15. run the complete architecture, data, browser, quality and documentation
+    acceptance before opening a new pull request.
 
-### Playground and prompt components
-
-- move component, prompt construction and Playground persistence behind ports;
-- normalize exact prompts and reusable atoms;
-- avoid eager Cartesian combination materialization.
-
-### Projection worker and statistics
-
-- move remaining projection logic to idempotent services;
-- place canonical job/cursor state in the canonical database;
-- document source facts, rebuild procedure, freshness and failure state;
-- retire remaining legacy projection databases only after parity acceptance.
-
-### Frontend modules
-
-- extract inline JavaScript into native ES modules;
-- centralize requests in one API client;
-- replace dynamic untrusted `innerHTML` construction;
-- give listeners, timers and requests explicit lifecycle ownership;
-- add checkJs, ESLint, Prettier and Stylelint to the shared gate.
-
-### Final cleanup
-
-- remove remaining compatibility wrappers and dead exports;
-- finish English naming, typing and concise docstrings for public callables;
-- validate complete route, browser and regression coverage;
-- update all architecture/status documents to the final runtime topology.
+Each intermediate commit runs focused tests and static checks for changed
+files. The targeted command is feedback only. Every completed slice and the
+final integration require a successful full `python scripts/quality.py` run.
 
 ## Invariants for remaining work
 
@@ -157,8 +151,12 @@ Runtime imports and their reports/backups are deliberately outside Git.
 - SQL stays in repositories or explicit offline migration adapters;
 - external filesystem/API work does not run inside SQLite write transactions;
 - schema changes are explicit, versioned and backed up;
-- every new core callable has an explicit behaviour test and manifest entry;
-- affected tests and the complete quality gate pass before integration;
+- every stable public core behavior boundary has an explicit behaviour test
+  and manifest entry;
+- private implementation details are tested through their public owner or
+  extracted when they contain independent domain policy;
+- affected tests pass before each commit and the complete quality gate passes
+  at every slice boundary and before integration;
 - documentation describes implemented state and labels targets as targets.
 
 ## Non-goals
