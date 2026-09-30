@@ -38,6 +38,7 @@ from comfyreview.settings import Settings, load_settings
 from services.analytics_page_service import AnalyticsPageService
 from services.playground_discovery_service import PlaygroundDiscoveryService
 from services.playground_hub_service import PlaygroundHubService
+from services.playground_label_service import PromptLabelService
 from services.prompt_catalog_view_service import PromptCatalogViewService
 
 
@@ -138,6 +139,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         generation_service=cast(GenerationService, object()),
         prompt_catalog_service=cast(PromptCatalogService, object()),
         prompt_catalog_views=cast(PromptCatalogViewService, object()),
+        prompt_labels=cast(PromptLabelService, object()),
         playground_service=cast(PlaygroundService, object()),
         playground_submission_service=cast(
             PlaygroundSubmissionService,
@@ -222,6 +224,7 @@ def test_default_container_wires_canonical_review_runtime(
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.prompt_catalog_service, PromptCatalogService)
     assert isinstance(container.prompt_catalog_views, PromptCatalogViewService)
+    assert isinstance(container.prompt_labels, PromptLabelService)
     assert isinstance(container.playground_service, PlaygroundService)
     assert isinstance(
         container.playground_submission_service,

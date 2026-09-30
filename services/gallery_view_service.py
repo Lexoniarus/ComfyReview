@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Any
 
 from comfyreview.application import RankedImage, RankingQuery, RankingService
@@ -12,7 +11,7 @@ from services.context_filters import (
     normalize_model,
 )
 from services.file_urls import png_path_to_url
-from services.playground_label_service import get_playground_label_matcher
+from services.playground_label_service import PromptLabelService
 
 
 @dataclass(frozen=True)
@@ -42,17 +41,13 @@ class RankedCard:
     assigned_set_key: str
 
 
-def _resolve_card_labels(*, matcher: Any, prompt_text: str) -> dict[str, Any]:
-    return matcher.resolve(str(prompt_text or ""), include_lighting=True)
-
-
 def _card_from_ranked_image(
     image: RankedImage,
-    matcher: Any,
+    prompt_labels: PromptLabelService,
 ) -> RankedCard:
-    labels = _resolve_card_labels(
-        matcher=matcher,
-        prompt_text=image.positive_prompt,
+    labels = prompt_labels.resolve(
+        image.positive_prompt,
+        include_lighting=True,
     )
     return RankedCard(
         image_uid=image.image_uid,
@@ -71,12 +66,12 @@ def _card_from_ranked_image(
         combo_key=image.combo_key,
         subdir=image.subdir,
         character_name=extract_character_from_subdir(image.subdir),
-        scene_name=str(labels.get("scene_name") or ""),
-        outfit_name=str(labels.get("outfit_name") or ""),
-        pose_name=str(labels.get("pose_name") or ""),
-        expression_name=str(labels.get("expression_name") or ""),
-        modifiers=list(labels.get("modifiers") or []),
-        light_name=str(labels.get("light_name") or ""),
+        scene_name=labels.scene_name,
+        outfit_name=labels.outfit_name,
+        pose_name=labels.pose_name,
+        expression_name=labels.expression_name,
+        modifiers=list(labels.modifiers),
+        light_name=labels.light_name,
         assigned_set_key=str(image.assigned_set_key or "unsorted"),
     )
 
@@ -84,7 +79,7 @@ def _card_from_ranked_image(
 def build_top_pictures_page(
     *,
     ranking_service: RankingService,
-    playground_db_path: Path,
+    prompt_labels: PromptLabelService,
     context: GalleryContext,
     min_runs: int,
     limit: int,
@@ -107,8 +102,7 @@ def build_top_pictures_page(
             limit=limit,
         )
     )
-    matcher = get_playground_label_matcher(playground_db_path)
-    cards = [_card_from_ranked_image(image, matcher) for image in ranked]
+    cards = [_card_from_ranked_image(image, prompt_labels) for image in ranked]
     return {
         "cards": cards,
         "model": model,
@@ -121,9 +115,12 @@ def build_top_pictures_page(
     }
 
 
-def build_arena_side(image: RankedImage, matcher: Any) -> dict[str, Any]:
+def build_arena_side(
+    image: RankedImage,
+    prompt_labels: PromptLabelService,
+) -> dict[str, Any]:
     """Build one template side from a canonical ranked image."""
-    card = _card_from_ranked_image(image, matcher)
+    card = _card_from_ranked_image(image, prompt_labels)
     return {
         **asdict(card),
         "view": {

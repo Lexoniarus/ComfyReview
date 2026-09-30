@@ -18,7 +18,6 @@ services/playground_generator_ui/best_pictures.py
 services/playground_generator_ui/drafts.py
 services/playground_generator_ui/state.py
 services/playground_generator_ui/types.py
-services/playground_label_service.py
 services/playground_rules.py
 services/playground_rules_engine/__init__.py
 services/playground_rules_engine/checks.py
@@ -28,7 +27,6 @@ services/playground_rules_engine/filtering.py
 services/playground_rules_engine/rules.py
 services/playground_rules_engine/tagging.py
 services/playground_rules_engine/types.py
-services/scene_resolver.py
 services/ui_state_service.py
 stores/__init__.py
 stores/analytics_combo.py

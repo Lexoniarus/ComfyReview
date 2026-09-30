@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from comfyreview.application import OutputImageCatalog, OutputImageReadModel
@@ -17,7 +16,7 @@ from services.context_filters import (
     normalize_unrated_flag,
 )
 from services.file_urls import png_path_to_url
-from services.playground_label_service import get_playground_label_matcher
+from services.playground_label_service import PromptLabels, PromptLabelService
 
 
 def _filter_items_for_review(
@@ -58,7 +57,7 @@ def _filter_items_for_review(
 def build_review_page_context(
     *,
     output_images: OutputImageCatalog,
-    playground_db_path: Path,
+    prompt_labels: PromptLabelService,
     unrated: int,
     model: str,
     subdir: str,
@@ -70,7 +69,7 @@ def build_review_page_context(
     - scan filesystem items
     - apply filters (model, subdir, set_key, unrated)
     - select next item
-    - resolve labels via playground DB
+    - resolve labels via the canonical prompt catalog
     - compute rating stats (avg, runs, last_rating, trend)
     """
 
@@ -111,8 +110,9 @@ def build_review_page_context(
     trend_delta = None
 
     view = extract_view(it.meta)
-    labels = _resolve_labels(
-        playground_db_path, str(view.get("pos_prompt") or "")
+    labels = prompt_labels.resolve(
+        str(view.get("pos_prompt") or ""),
+        include_lighting=True,
     )
 
     return _build_review_context(
@@ -217,13 +217,6 @@ def _empty_review_context(
     }
 
 
-def _resolve_labels(
-    playground_db_path: Path, pos_prompt: str
-) -> dict[str, Any]:
-    matcher = get_playground_label_matcher(playground_db_path)
-    return matcher.resolve(str(pos_prompt or ""), include_lighting=True)
-
-
 def _build_review_context(
     *,
     it: Any,
@@ -236,7 +229,7 @@ def _build_review_context(
     subdir_list: list[str],
     character_options: list[dict[str, str]],
     view: dict[str, Any],
-    labels: dict[str, Any],
+    labels: PromptLabels,
     rated_count: int,
     rating_avg: Any,
     rating_runs: Any,
@@ -272,12 +265,12 @@ def _build_review_context(
         "img_url": img_url,
         "meta_pre": meta_pre,
         "view": view,
-        "scene_name": str(labels.get("scene_name") or ""),
-        "outfit_name": str(labels.get("outfit_name") or ""),
-        "pose_name": str(labels.get("pose_name") or ""),
-        "expression_name": str(labels.get("expression_name") or ""),
-        "modifiers": list(labels.get("modifiers") or []),
-        "light_name": str(labels.get("light_name") or ""),
+        "scene_name": labels.scene_name,
+        "outfit_name": labels.outfit_name,
+        "pose_name": labels.pose_name,
+        "expression_name": labels.expression_name,
+        "modifiers": list(labels.modifiers),
+        "light_name": labels.light_name,
         "character_name": character_name,
         "preset_text": preset_text,
         "prompt_hint": prompt_hint,

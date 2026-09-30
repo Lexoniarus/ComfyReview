@@ -7,7 +7,7 @@ from comfyreview.application import (
     ArenaValidationError,
     RecordArenaDecisionCommand,
 )
-from config import MIN_RUNS, PLAYGROUND_DB_PATH, POOL_LIMIT
+from config import MIN_RUNS, POOL_LIMIT
 from services.arena_page_service import build_arena_page_context
 from services.context_filters import build_gallery_context
 from templates import ARENA_HTML
@@ -30,7 +30,7 @@ def arena(
     vm = build_arena_page_context(
         ranking_service=get_application_container(request).ranking_service,
         arena_service=get_application_container(request).arena_service,
-        playground_db_path=PLAYGROUND_DB_PATH,
+        prompt_labels=get_application_container(request).prompt_labels,
         context=ctx,
         min_runs=MIN_RUNS,
         pool_limit=POOL_LIMIT,

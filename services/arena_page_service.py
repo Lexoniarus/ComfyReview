@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from comfyreview.application import (
@@ -15,14 +14,14 @@ from services.context_filters import (
     normalize_model,
 )
 from services.gallery_view_service import build_arena_side
-from services.playground_label_service import get_playground_label_matcher
+from services.playground_label_service import PromptLabelService
 
 
 def build_arena_page_context(
     *,
     ranking_service: RankingService,
     arena_service: ArenaService,
-    playground_db_path: Path,
+    prompt_labels: PromptLabelService,
     context: GalleryContext,
     min_runs: int,
     pool_limit: int,
@@ -72,10 +71,9 @@ def build_arena_page_context(
             "message": "Keine neuen Paarungen mehr offen für diesen Pool.",
         }
 
-    matcher = get_playground_label_matcher(playground_db_path)
     return {
         **base,
-        "left": build_arena_side(pair.left, matcher),
-        "right": build_arena_side(pair.right, matcher),
+        "left": build_arena_side(pair.left, prompt_labels),
+        "right": build_arena_side(pair.right, prompt_labels),
         "message": "",
     }

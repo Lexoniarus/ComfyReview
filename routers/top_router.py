@@ -18,7 +18,6 @@ from comfyreview.application import (
 from config import (
     CURATION_SET_KEYS,
     MIN_RUNS,
-    PLAYGROUND_DB_PATH,
     POOL_LIMIT,
 )
 from services.context_filters import build_gallery_context
@@ -43,7 +42,7 @@ def top_pictures(
 
     vm = build_top_pictures_page(
         ranking_service=get_application_container(request).ranking_service,
-        playground_db_path=PLAYGROUND_DB_PATH,
+        prompt_labels=get_application_container(request).prompt_labels,
         context=ctx,
         min_runs=MIN_RUNS,
         limit=POOL_LIMIT,
