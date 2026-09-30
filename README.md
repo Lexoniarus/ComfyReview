@@ -93,6 +93,16 @@ Matching JSON sidecars remain supported as historical import evidence. They
 are not required for newly generated canonical images or for already-canonical
 images whose sidecars are absent.
 
+Ambiguous native submissions are never retried automatically. Reconcile a
+known generation against its persisted outputs and ComfyUI history with:
+
+```powershell
+python -m comfyreview generation reconcile GENERATION_UID
+```
+
+If a timed-out submit was accepted but its prompt ID was not returned, identify
+that prompt in ComfyUI and attach it explicitly with `--prompt-id PROMPT_ID`.
+
 ---
 
 ## Main views

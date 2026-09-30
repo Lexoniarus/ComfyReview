@@ -10,6 +10,8 @@ from pathlib import Path
 
 from comfyreview.application import (
     CanonicalSchemaReport,
+    GenerationMutationError,
+    GenerationValidationError,
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
@@ -114,6 +116,15 @@ def _parser() -> argparse.ArgumentParser:
     prompt_import.add_argument("--database", type=Path)
     prompt_import.add_argument("--report", type=Path)
     prompt_import.add_argument("--backup-dir", type=Path)
+
+    generation = commands.add_parser("generation")
+    generation_actions = generation.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    generation_reconcile = generation_actions.add_parser("reconcile")
+    generation_reconcile.add_argument("generation_uid")
+    generation_reconcile.add_argument("--prompt-id")
     return parser
 
 
@@ -334,6 +345,28 @@ def _run_legacy_prompts(options: argparse.Namespace) -> int:
     return 0
 
 
+def _run_generation(options: argparse.Namespace) -> int:
+    from comfyreview.bootstrap import build_application_container
+
+    container = build_application_container(load_settings())
+    container.canonical_schema.validate()
+    result = container.generation_reconciliation.reconcile(
+        options.generation_uid,
+        prompt_id=options.prompt_id,
+    )
+    print(
+        json.dumps(
+            {
+                "generation_uid": result.generation_uid,
+                "prompt_id": result.prompt_id,
+                "status": result.status,
+            },
+            sort_keys=True,
+        )
+    )
+    return 2 if result.status == "reconciliation_required" else 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run a maintenance command and return its stable process exit code."""
     options = _parser().parse_args(arguments)
@@ -346,6 +379,8 @@ def main(arguments: list[str] | None = None) -> int:
             return _run_legacy_features(options)
         if options.command == "legacy-prompts":
             return _run_legacy_prompts(options)
+        if options.command == "generation":
+            return _run_generation(options)
         return _run_legacy_output(options)
     except LegacySchemaValidationError as error:
         print(_render_legacy(error.report), file=sys.stderr)
@@ -369,6 +404,12 @@ def main(arguments: list[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
     except LegacyPromptImportRecoveryError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    except GenerationValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except GenerationMutationError as error:
         print(str(error), file=sys.stderr)
         return 1
     except (OSError, sqlite3.DatabaseError, ValueError) as error:

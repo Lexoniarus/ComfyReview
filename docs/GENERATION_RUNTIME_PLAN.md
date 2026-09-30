@@ -1,7 +1,7 @@
 # Native ComfyUI Generation Runtime Plan
 
-Status: canonical image provenance is implemented; native generation remains a
-target on `refactor/review-boundary`, 2026-09-30.
+Status: native generation, canonical output collection and explicit
+reconciliation are implemented on `refactor/review-boundary`, 2026-09-30.
 
 ## Implemented foundation
 
@@ -97,7 +97,25 @@ Request, selected prompt revisions, exact rendered prompts and compiled
 provenance are persisted in short canonical transactions. No write transaction
 is held during external execution. A wait timeout is not a failed generation.
 An ambiguous crash between external submit and local confirmation remains
-visible for reconciliation.
+visible for reconciliation. `GenerationReconciliationService` first checks
+whether a prior atomic output collection already persisted every compiled
+output binding. If so, it safely completes the local lifecycle without relying
+on retained ComfyUI history. Otherwise it checks the known prompt in ComfyUI,
+repeats output collection idempotently after external completion, and persists
+the observed submitted, running, failed or completed state.
+
+An ambiguous `POST /prompt` timeout may leave no local prompt ID. ComfyReview
+does not automatically resubmit because that could duplicate a generation. An
+operator first identifies the accepted prompt in ComfyUI history or queue and
+then associates it explicitly:
+
+```powershell
+python -m comfyreview generation reconcile GENERATION_UID --prompt-id PROMPT_ID
+```
+
+Once a prompt ID is stored, later attempts can omit `--prompt-id`. Exit code
+`0` means the ambiguous state was resolved; exit code `2` means the generation
+still requires reconciliation; technical failures return `1`.
 
 ## Native output collection
 
