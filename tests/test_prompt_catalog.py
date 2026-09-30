@@ -18,6 +18,7 @@ from comfyreview.application import (
     PromptRevisionDraft,
     RevisePromptComponentCommand,
     UpdatePromptComponentMetadataCommand,
+    imported_prompt_component_uid,
     prompt_revision_identity,
 )
 from comfyreview.repositories.sqlite import (
@@ -135,6 +136,20 @@ def test_prompt_revision_identity_is_content_and_component_stable() -> None:
     assert first[0].startswith("prompt-revision-")
     assert changed_component[0] != first[0]
     assert changed_component[1] == first[1]
+
+
+def test_imported_prompt_component_identity_is_stable_and_source_scoped() -> (
+    None
+):
+    first = imported_prompt_component_uid("legacy_playground", "17")
+
+    assert first == imported_prompt_component_uid("legacy_playground", "17")
+    assert first != imported_prompt_component_uid("another_source", "17")
+    with pytest.raises(
+        PromptCatalogValidationError,
+        match="requires source and source_key",
+    ):
+        imported_prompt_component_uid("", "17")
 
 
 def test_prompt_catalog_service_creates_normalized_component() -> None:

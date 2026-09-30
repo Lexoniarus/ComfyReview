@@ -16,7 +16,10 @@ from comfyreview.application import (
     CurationService,
     LegacySchemaLifecycle,
     OutputImageCatalog,
+    PlaygroundService,
     PromptCatalogService,
+    PromptRenderer,
+    PromptSelectionPolicy,
     RankingService,
     ReviewService,
     WorkerRuntime,
@@ -61,6 +64,7 @@ class ApplicationContainer:
     worker: WorkerRuntime
     output_images: OutputImageCatalog
     prompt_catalog_service: PromptCatalogService
+    playground_service: PlaygroundService
     review_service: ReviewService
     ranking_service: RankingService
     arena_service: ArenaService
@@ -130,6 +134,12 @@ def build_application_container(
             / "prompt_tokens.sqlite3"
         ),
     )
+    prompt_catalog_service = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(
+            configured.canonical_database_path
+        ),
+        identities=UuidPromptIdentitySource(),
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -138,11 +148,11 @@ def build_application_container(
         schema_lifecycle=LegacySchemaManager(legacy_runtime_settings),
         worker=worker,
         output_images=output_images,
-        prompt_catalog_service=PromptCatalogService(
-            repository=SqlitePromptCatalogRepository(
-                configured.canonical_database_path
-            ),
-            identities=UuidPromptIdentitySource(),
+        prompt_catalog_service=prompt_catalog_service,
+        playground_service=PlaygroundService(
+            catalog=prompt_catalog_service,
+            selection_policy=PromptSelectionPolicy(),
+            renderer=PromptRenderer(),
         ),
         review_service=review_service,
         ranking_service=ranking_service,

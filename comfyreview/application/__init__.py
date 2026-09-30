@@ -70,6 +70,7 @@ from comfyreview.application.prompt_catalog import (
     PromptRevisionDraft,
     RevisePromptComponentCommand,
     UpdatePromptComponentMetadataCommand,
+    imported_prompt_component_uid,
     prompt_revision_identity,
 )
 from comfyreview.application.ranking import (
@@ -181,5 +182,6 @@ __all__ = [
     "SubmitReviewCommand",
     "UpdatePromptComponentMetadataCommand",
     "WorkerRuntime",
+    "imported_prompt_component_uid",
     "prompt_revision_identity",
 ]

@@ -3,14 +3,18 @@ from __future__ import annotations
 import math
 import random
 import time
-from pathlib import Path
 from typing import Any
 
-from config import DEFAULT_MAX_TRIES, PLAYGROUND_DB_PATH
+from comfyreview.application import (
+    ManualPromptSelection,
+    PlaygroundDraft,
+    PlaygroundService,
+    PromptSelectionCommand,
+    imported_prompt_component_uid,
+)
+from config import DEFAULT_MAX_TRIES
 from services.playground_common.empty_placeholders import filter_random_items
-from services.playground_generator import PlaygroundGenerator
 from services.ui_state_service import safe_int
-from stores.playground_store import get_item_by_id
 
 from .head_form import workflow_render_defaults
 from .types import DiscoveryLists
@@ -167,11 +171,9 @@ def generate_preview_drafts(
     head: dict[str, Any],
     characters: list[dict[str, Any]],
     discovery: DiscoveryLists,
-    playground_db_path: Path = PLAYGROUND_DB_PATH,
+    playground_service: PlaygroundService,
 ) -> list[dict[str, Any]]:
     """Generate preview drafts based on the head form."""
-
-    generator = PlaygroundGenerator(playground_db_path)
 
     spec = _parse_preview_head_spec(head)
     rng = _make_rng(spec["gen_seed_base"])
@@ -187,7 +189,7 @@ def generate_preview_drafts(
             rng=rng,
         )
         character_name, run_defaults, subdir = _load_character_defaults(
-            playground_db_path=playground_db_path,
+            characters=characters,
             character_id=int(run_character_id),
         )
 
@@ -201,8 +203,8 @@ def generate_preview_drafts(
             defaults=run_defaults,
         )
 
-        gen_res = _generate_prompt_selection(
-            generator=generator,
+        prompt_draft = _generate_prompt_selection(
+            playground_service=playground_service,
             character_id=int(run_character_id),
             manual_picks=spec["manual_picks"],
             include_lighting=spec["include_lighting"],
@@ -211,7 +213,7 @@ def generate_preview_drafts(
             idx=idx,
             max_tries=spec["max_tries"],
         )
-        run_pos, run_neg = _require_prompts(gen_res)
+        run_pos, run_neg = _require_prompts(prompt_draft)
 
         ck, smp, sch = _resolve_render_choices(
             head=head,
@@ -225,7 +227,7 @@ def generate_preview_drafts(
             _build_preview_draft(
                 base_id=base_id,
                 idx=idx,
-                selection=gen_res.get("selection") or {},
+                selection=_selection_view(prompt_draft),
                 character_name=character_name,
                 subdir=subdir,
                 seed=run_seed,
@@ -391,10 +393,17 @@ def _resolve_run_character_id(
 
 def _load_character_defaults(
     *,
-    playground_db_path: Path,
+    characters: list[dict[str, Any]],
     character_id: int,
 ) -> tuple[str, dict[str, Any], str]:
-    char_item = get_item_by_id(playground_db_path, int(character_id))
+    char_item = next(
+        (
+            item
+            for item in characters
+            if int(item.get("id") or 0) == int(character_id)
+        ),
+        None,
+    )
     if not char_item:
         raise ValueError(f"character_id nicht gefunden: {character_id}")
 
@@ -468,7 +477,7 @@ def _safe_float_or_none(value: Any, *, ndigits: int | None) -> float | None:
 
 def _generate_prompt_selection(
     *,
-    generator: PlaygroundGenerator,
+    playground_service: PlaygroundService,
     character_id: int,
     manual_picks: dict[str, int | None],
     include_lighting: bool,
@@ -476,23 +485,56 @@ def _generate_prompt_selection(
     gen_seed_base: int | None,
     idx: int,
     max_tries: int,
-) -> dict[str, Any]:
+) -> PlaygroundDraft:
     gen_run_seed = (
         (int(gen_seed_base) + int(idx)) if gen_seed_base is not None else None
     )
-    return generator.generate(
-        character_id=int(character_id),
-        manual_picks=manual_picks,
-        include_lighting=bool(include_lighting),
-        include_modifier=bool(include_modifier),
-        seed=gen_run_seed,
-        max_tries=int(max_tries),
+    manual_selections = tuple(
+        ManualPromptSelection(
+            kind=kind,
+            component_uid=imported_prompt_component_uid(
+                "legacy_playground",
+                str(component_id),
+            ),
+        )
+        for kind, component_id in manual_picks.items()
+        if component_id is not None
+    )
+    return playground_service.prepare_draft(
+        PromptSelectionCommand(
+            character_component_uid=imported_prompt_component_uid(
+                "legacy_playground",
+                str(character_id),
+            ),
+            manual_selections=manual_selections,
+            include_lighting=bool(include_lighting),
+            include_modifier=bool(include_modifier),
+            seed=gen_run_seed,
+            max_attempts=int(max_tries),
+        )
     )
 
 
-def _require_prompts(gen_res: dict[str, Any]) -> tuple[str, str]:
-    run_pos = str(gen_res.get("positive") or "").strip()
-    run_neg = str(gen_res.get("negative") or "").strip()
+def _selection_view(draft: PlaygroundDraft) -> dict[str, Any]:
+    return {
+        component.kind: {
+            "component_uid": component.component_uid,
+            "revision_uid": component.latest_revision.revision_uid,
+            "kind": component.kind,
+            "key": component.component_key,
+            "name": component.name,
+            "tags": list(component.tags),
+            "pos": component.latest_revision.positive_text,
+            "neg": component.latest_revision.negative_text,
+            "notes": component.notes,
+        }
+        for component in draft.selection.components
+    }
+
+
+def _require_prompts(draft: PlaygroundDraft) -> tuple[str, str]:
+    run_pos = draft.prompt.positive_text.strip()
+    run_neg = draft.prompt.negative_text.strip()
     if not run_pos or not run_neg:
         raise ValueError(
             "Generator hat leere Prompts geliefert (positive/negative)."

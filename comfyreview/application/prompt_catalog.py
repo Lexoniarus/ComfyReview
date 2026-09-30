@@ -153,6 +153,20 @@ def prompt_revision_identity(
     return f"prompt-revision-{revision_hash}", content_hash
 
 
+def imported_prompt_component_uid(source: str, source_key: str) -> str:
+    """Return the stable identity assigned to one imported catalog item."""
+    normalized_source = str(source or "").strip()
+    normalized_key = str(source_key or "").strip()
+    if not normalized_source or not normalized_key:
+        raise PromptCatalogValidationError(
+            "imported prompt identity requires source and source_key"
+        )
+    digest = hashlib.sha256(
+        f"{normalized_source}:{normalized_key}".encode()
+    ).hexdigest()
+    return f"prompt-component-{digest}"
+
+
 class PromptCatalogService:
     """Coordinate validated prompt-catalog mutations and reads."""
 

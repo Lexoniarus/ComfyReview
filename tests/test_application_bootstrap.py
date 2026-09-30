@@ -16,6 +16,7 @@ from comfyreview.application import (
     CurationService,
     LegacySchemaReport,
     OutputImageReadModel,
+    PlaygroundService,
     PromptCatalogService,
     RankingService,
     ReviewResult,
@@ -135,6 +136,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         worker=_RecordingWorker(events),
         output_images=_EmptyOutputImageCatalog(),
         prompt_catalog_service=cast(PromptCatalogService, object()),
+        playground_service=cast(PlaygroundService, object()),
         review_service=cast(ReviewService, _RecordingReviewService()),
         ranking_service=rankings,
         arena_service=ArenaService(
@@ -211,6 +213,7 @@ def test_default_container_wires_canonical_review_runtime(
     )
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.prompt_catalog_service, PromptCatalogService)
+    assert isinstance(container.playground_service, PlaygroundService)
     assert isinstance(container.ranking_service, RankingService)
     assert isinstance(container.arena_service, ArenaService)
     assert isinstance(container.curation_service, CurationService)

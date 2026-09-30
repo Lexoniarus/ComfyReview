@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from comfyreview.application import prompt_revision_identity
+from comfyreview.application import (
+    imported_prompt_component_uid,
+    prompt_revision_identity,
+)
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
@@ -232,7 +235,7 @@ class LegacyPromptImporter:
         counts: list[int],
     ) -> None:
         source_key = str(int(item["id"]))
-        component_uid = _component_uid(source_key)
+        component_uid = imported_prompt_component_uid(_SOURCE, source_key)
         positive_text = str(item.get("pos") or "").strip()
         negative_text = str(item.get("neg") or "").strip()
         if not positive_text and not negative_text:
@@ -403,11 +406,6 @@ class LegacyPromptImporter:
             target.close()
             source.close()
         return destination
-
-
-def _component_uid(source_key: str) -> str:
-    digest = hashlib.sha256(f"{_SOURCE}:{source_key}".encode()).hexdigest()
-    return f"prompt-component-{digest}"
 
 
 def _legacy_tags(value: str) -> tuple[str, ...]:

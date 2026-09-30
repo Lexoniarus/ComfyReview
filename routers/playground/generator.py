@@ -7,6 +7,8 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from comfyreview.api.dependencies import get_application_container
+from comfyreview.application import PlaygroundService
 from config import (
     DEFAULT_MAX_TRIES,
 )
@@ -281,6 +283,9 @@ def playground_generator_run(
             head_kwargs=head_kwargs,
             characters=dropdowns["characters"],
             discovery=discovery,
+            playground_service=(
+                get_application_container(request).playground_service
+            ),
         )
 
     if act == "submit_preview":
@@ -407,6 +412,7 @@ def _handle_preview_generate(
     head_kwargs: dict,
     characters: list,
     discovery: Any,
+    playground_service: PlaygroundService,
 ) -> RedirectResponse:
     head = build_head_state_from_post(**head_kwargs)
     save_head_state(GENERATOR_STATE_PATH, head)
@@ -415,6 +421,7 @@ def _handle_preview_generate(
         head=head,
         characters=characters,
         discovery=discovery,
+        playground_service=playground_service,
     )
     save_preview_state(GENERATOR_PREVIEW_STATE_PATH, drafts)
     return _redirect_generator()
