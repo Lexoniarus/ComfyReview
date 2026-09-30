@@ -1,6 +1,26 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.analytics:AnalyticsService.best_images_for_combos": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_service_normalizes_canonical_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsService.best_images_for_parameter": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_service_normalizes_canonical_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsService.latest_review_sequence": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_service_handles_empty_and_observed_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsService.observed_combinations": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_service_handles_empty_and_observed_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsService.prompt_token_statistics": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_service_normalizes_canonical_queries"
+    ),
     "comfyreview.application.playground:PlaygroundService.prepare_draft": (
         "tests/test_playground_application.py::"
         "test_playground_service_prepares_draft_without_generation_submission"

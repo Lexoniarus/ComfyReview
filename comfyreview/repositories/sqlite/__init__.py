@@ -25,6 +25,7 @@ from comfyreview.repositories.sqlite.ranking import SqliteRankingRepository
 from comfyreview.repositories.sqlite.reviews import SqliteReviewRepository
 
 __all__ = [
+    "SqliteAnalyticsRepository",
     "CanonicalSchemaManager",
     "CanonicalSchemaValidationError",
     "LegacyProjectionJobQueue",
@@ -39,3 +40,4 @@ __all__ = [
     "connect_existing",
     "connect_read_only",
 ]
+from comfyreview.repositories.sqlite.analytics import SqliteAnalyticsRepository

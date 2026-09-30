@@ -1,5 +1,12 @@
 """Application contracts for ComfyReview lifecycle ownership."""
 
+from comfyreview.application.analytics import (
+    AnalyticsImage,
+    AnalyticsRepository,
+    AnalyticsService,
+    ObservedPromptCombination,
+    PromptTokenStatistic,
+)
 from comfyreview.application.arena import (
     ArenaCompetitor,
     ArenaDecision,
@@ -103,6 +110,9 @@ from comfyreview.application.reviews import (
 
 __all__ = [
     "AssignCurationCommand",
+    "AnalyticsImage",
+    "AnalyticsRepository",
+    "AnalyticsService",
     "ArenaCompetitor",
     "ArenaDecision",
     "ArenaMutationError",
@@ -142,6 +152,7 @@ __all__ = [
     "OutputImageReadModel",
     "OutputImageReference",
     "OutputMutationError",
+    "ObservedPromptCombination",
     "OutputPair",
     "OutputPairNotFoundError",
     "PlaygroundDraft",
@@ -161,6 +172,7 @@ __all__ = [
     "PromptSelectionCommand",
     "PromptSelectionError",
     "PromptSelectionPolicy",
+    "PromptTokenStatistic",
     "RankedImage",
     "RankingQuery",
     "RankingRepository",
