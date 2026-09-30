@@ -106,6 +106,7 @@ def test_preview_generation_uses_catalog_revisions_and_keeps_legacy_submit_shape
         characters=[{"id": 1, "name": "Aiko", "key": "aiko"}],
         discovery=DiscoveryLists([], [], []),
         playground_service=playground,
+        default_max_attempts=200,
     )
 
     assert len(drafts) == 1

@@ -12,7 +12,6 @@ from comfyreview.application import (
     PromptSelectionCommand,
     imported_prompt_component_uid,
 )
-from config import DEFAULT_MAX_TRIES
 from services.playground_common.empty_placeholders import filter_random_items
 from services.ui_state_service import safe_int
 
@@ -172,10 +171,11 @@ def generate_preview_drafts(
     characters: list[dict[str, Any]],
     discovery: DiscoveryLists,
     playground_service: PlaygroundService,
+    default_max_attempts: int,
 ) -> list[dict[str, Any]]:
     """Generate preview drafts based on the head form."""
 
-    spec = _parse_preview_head_spec(head)
+    spec = _parse_preview_head_spec(head, default_max_attempts)
     rng = _make_rng(spec["gen_seed_base"])
     cycles = _build_discovery_cycles(discovery, rng)
 
@@ -245,7 +245,10 @@ def generate_preview_drafts(
     return drafts
 
 
-def _parse_preview_head_spec(head: dict[str, Any]) -> dict[str, Any]:
+def _parse_preview_head_spec(
+    head: dict[str, Any],
+    default_max_attempts: int,
+) -> dict[str, Any]:
     character_id = safe_int(str(head.get("character_id") or "").strip())
     fixed_character_id = (
         character_id if character_id not in (None, 0) else None
@@ -263,7 +266,10 @@ def _parse_preview_head_spec(head: dict[str, Any]) -> dict[str, Any]:
     include_lighting = bool(head.get("include_lighting", True))
     include_modifier = bool(head.get("include_modifier", True))
 
-    max_tries = _safe_int_default(head.get("max_tries"), DEFAULT_MAX_TRIES)
+    max_tries = _safe_int_default(
+        head.get("max_tries"),
+        default_max_attempts,
+    )
     batch_runs = max(1, _safe_int_default(head.get("batch_runs"), 1))
 
     seed_seq = parse_sequence(

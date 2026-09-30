@@ -8,7 +8,6 @@ routers/playground/__init__.py
 routers/playground/_shared.py
 routers/playground/api.py
 routers/playground/browse.py
-routers/playground/generator.py
 routers/playground/hub.py
 routers/stats_router.py
 services/__init__.py
@@ -36,19 +35,11 @@ services/mv_worker_core/prompt_ratings_pipeline.py
 services/mv_worker_core/ratings_io.py
 services/playground_common/__init__.py
 services/playground_common/empty_placeholders.py
-services/playground_generator.py
-services/playground_generator_core/__init__.py
-services/playground_generator_core/generator.py
-services/playground_generator_core/prompt_building.py
-services/playground_generator_core/slot_picker.py
-services/playground_generator_core/tags.py
-services/playground_generator_core/types.py
 services/playground_generator_ui/__init__.py
 services/playground_generator_ui/best_pictures.py
 services/playground_generator_ui/discovery.py
 services/playground_generator_ui/drafts.py
 services/playground_generator_ui/dropdowns.py
-services/playground_generator_ui/generation.py
 services/playground_generator_ui/head_form.py
 services/playground_generator_ui/state.py
 services/playground_generator_ui/submit.py

@@ -422,6 +422,7 @@ def _handle_preview_generate(
         characters=characters,
         discovery=discovery,
         playground_service=playground_service,
+        default_max_attempts=DEFAULT_MAX_TRIES,
     )
     save_preview_state(GENERATOR_PREVIEW_STATE_PATH, drafts)
     return _redirect_generator()
