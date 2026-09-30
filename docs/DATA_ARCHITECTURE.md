@@ -1,8 +1,9 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v4 is implemented for images, reviews, Arena and
-Curation on the active refactor branch, 2026-09-30. Prompt components,
-generation execution and some derived statistics remain transitional.
+Status: canonical schema v5 is implemented for images, reviews, Arena,
+Curation and the revisioned prompt catalog on the active refactor branch,
+2026-09-30. Playground execution, generation and some derived statistics
+remain transitional.
 
 ## 1. Source-of-truth rule
 
@@ -20,20 +21,23 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v4
+## 2. Canonical schema v5
 
-The canonical database uses explicit schema metadata and foreign keys. Its
-implemented cutover structures include:
+The canonical database uses explicit schema metadata and foreign keys. Schema
+v5 contains the v4 identity/review cutover plus the prompt-catalog structures:
 
 - `generations` and normalized generation provenance;
 - `images` with stable UID, current paths and `deleted_at`;
 - append-only `review_events`;
 - `arena_matches` referencing images;
 - `curation_assignments` with one assignment per image;
+- `prompt_components` with stable component UIDs and mutable metadata;
+- immutable `prompt_revisions`;
+- `prompt_compositions` and their concrete revision membership;
 - rebuildable current-state and aggregate views.
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
-a v3 to v4 migration. The explicit, backed-up command is:
+a v3-to-v4 or v4-to-v5 migration. The explicit, backed-up command is:
 
 ```text
 python -m comfyreview canonical-db upgrade [--backup-dir PATH]
@@ -94,7 +98,7 @@ Curation and Delete therefore work for canonical PNGs without sidecars.
 
 ## 5.1 Prompt catalog revisions
 
-The future canonical prompt catalog preserves authored material independently
+The canonical prompt catalog preserves authored material independently
 of whether it has already produced an image. A stable prompt component owns
 immutable prompt revisions. Changing positive text, negative text or explicit
 weights creates a new revision; display name, tags and notes remain mutable
@@ -105,6 +109,23 @@ the composition/revisions it used and also stores the exact rendered positive
 and negative prompt snapshots. Catalog evolution therefore cannot reinterpret
 historical generations. Deleting from the UI archives an item; it does not
 destroy revisions or historical relationships.
+
+`PromptCatalogService` owns catalog use cases through an injected repository;
+SQLite and stable-ID generation remain technical adapters. This service is not
+yet wired into Playground submission, so no temporary generation facade or
+catalog/legacy dual-write exists.
+
+Legacy prompt migration is explicit:
+
+```text
+python -m comfyreview legacy-prompts audit
+python -m comfyreview legacy-prompts import [--backup-dir PATH]
+```
+
+The audit binds both databases by SHA-256 and reads the source in SQLite
+read-only mode. The import revalidates the snapshot, creates a backup and
+writes the complete accepted set in one transaction. It is idempotent, retains
+unused items and never mutates the source database.
 
 ## 6. Audited historical output import
 
@@ -170,7 +191,7 @@ Reports, backups and runtime databases are local artifacts ignored by Git.
 | `prompt_tokens.sqlite3` | legacy prompt projection; redesign instead of blind copy |
 | `prompt_ratings.sqlite3` | transitional derived prompt statistics |
 | `combo_prompts.sqlite3` | transitional eager combination projection |
-| `playground.sqlite3` | pending prompt-component migration |
+| `playground.sqlite3` | audited prompt import source and isolated transitional Playground runtime until Slice E/M wiring |
 | `mv_jobs.sqlite3` | transitional worker/job state |
 
 Legacy DDL remains centralized in

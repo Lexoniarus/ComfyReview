@@ -1,7 +1,8 @@
 # ComfyReview Architecture
 
-Status: canonical Review, Ranking, Arena and Curation cutover implemented on
-the active refactor branch, 2026-09-30. Generation, Playground and parts of the
+Status: canonical Review, Ranking, Arena and Curation cutover plus the
+revisioned prompt-catalog boundary are implemented on the active refactor
+branch, 2026-09-30. Generation, Playground submission and parts of the
 statistics/projection pipeline remain transitional.
 
 ## 1. Product boundary
@@ -39,9 +40,10 @@ bounded stop. Root `app.py` and `main.py` remain compatible entry points.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v4 is the active
-shape for the cut-over features. Stable `image_uid` and `generation_uid` values
-are identity; PNG and optional sidecar paths are mutable attributes.
+The canonical database has an explicit schema version. Schema v5 is the active
+shape: it retains the v4 identity/review cutover and adds the revisioned prompt
+catalog. Stable `image_uid` and `generation_uid` values are identity; PNG and
+optional sidecar paths are mutable attributes.
 
 Canonical v4 facts include:
 
@@ -49,6 +51,10 @@ Canonical v4 facts include:
 - append-only `review_events`;
 - `arena_matches` linked to images;
 - one `curation_assignments` relation per image.
+
+Canonical v5 additionally includes stable prompt components, immutable prompt
+revisions, explicit compositions and source mappings for audited legacy
+imports. Catalog metadata can change without rewriting revision content.
 
 `images.deleted_at`, `current_image_reviews`, `image_review_summary` and ranking
 results are projections derived from canonical facts. The old `image_reviews`
@@ -159,6 +165,19 @@ when validation fails, an out-of-transaction structural change occurred or
 the commit state is uncertain. Restore failures are reported independently.
 Reports, backups and runtime data are excluded from Git.
 
+### Legacy Playground prompt catalog
+
+`legacy-prompts audit` opens `playground.sqlite3` read-only and writes a
+checksum-bound snapshot. `legacy-prompts import` revalidates the source and
+canonical database hashes, creates a backup and imports every accepted item in
+one transaction. Existing source IDs receive deterministic component UIDs;
+prompt text becomes immutable revisions while name, tags and notes remain
+mutable component metadata. Repeating the audit/import is idempotent and does
+not remove unused catalog content.
+
+The legacy Playground runtime has not yet been rewired to this catalog. Until
+that later slice, it remains isolated rather than dual-writing both models.
+
 ## 8.1 Target generation boundaries
 
 Generation is deliberately split into semantic and technical boundaries:
@@ -183,10 +202,11 @@ indices are assigned only when ComfyUI outputs are collected.
 ## 9. Schema lifecycle
 
 Runtime startup validates supported canonical and transitional legacy schemas;
-it never upgrades an unsupported database silently. Canonical v3 to v4 changes
-are available only through `python -m comfyreview canonical-db upgrade` and are
-backed up. The upgrade migrates writable legacy review state into events,
-projects delete tombstones and replaces old tables with read-only views.
+it never upgrades an unsupported database silently. Canonical v3 through v5
+changes are available only through `python -m comfyreview canonical-db
+upgrade` and are backed up. The v3-to-v4 step migrates writable legacy review
+state into events, projects delete tombstones and replaces old tables with
+read-only views; v5 adds the prompt catalog without changing those facts.
 
 The older multi-file schema lifecycle remains centralized in
 `comfyreview.repositories.sqlite.legacy_schema`. Its explicit
@@ -199,7 +219,8 @@ The canonical cutover is intentionally not the end of the wider refactor.
 
 - ComfyUI generation still needs versioned blueprints, semantic compilation,
   a technical submit/wait/output provider and native multi-output collection.
-- Playground and prompt-component persistence still use legacy stores.
+- Playground selection/submission still uses legacy stores; the canonical
+  prompt catalog exists but is not yet its runtime dependency.
 - Prompt/statistics projections and their worker remain transitional.
 - Frontend logic still needs the planned ES-module/API-client cleanup.
 

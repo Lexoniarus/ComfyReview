@@ -1,8 +1,9 @@
 # ComfyReview Refactor Plan
 
-Status: canonical Review, Ranking, Arena and Curation cutover implemented on
-`refactor/review-boundary`, 2026-09-30. The branch remains at review stop until
-accepted and merged.
+Status: canonical Review, Ranking, Arena and Curation cutover plus Slice D's
+revisioned prompt catalog are implemented on `refactor/review-boundary`,
+2026-09-30. The branch remains the unmerged integration branch until the full
+refactor is accepted.
 
 The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
@@ -149,29 +150,43 @@ Runtime imports and their reports/backups are deliberately outside Git.
 - routes retain their existing URLs, fields and redirects while passing stable
   UIDs into application services.
 
+### D. Revisioned prompt catalog
+
+- canonical schema v5 adds stable prompt components, immutable revisions and
+  reproducible compositions without materializing a Cartesian product;
+- `PromptCatalogService` owns creation, revision, mutable metadata,
+  archive/restore and listing behavior through an injected repository;
+- unused authored catalog content is retained;
+- `legacy-prompts audit` reads the legacy Playground source in read-only mode
+  and binds it plus the canonical database to a checksum-protected report;
+- `legacy-prompts import` revalidates that report, creates a backup and writes
+  the accepted catalog idempotently in one transaction;
+- Playground submission remains isolated on the legacy path until Slice E and
+  the final GenerationService wiring; there is no temporary generation facade
+  and no dual-write.
+
 ## Remaining slice order
 
 The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-1. migrate the complete prompt catalog with immutable revisions;
-2. move Playground selection and rendering behind catalog/policy boundaries,
+1. move Playground selection and rendering behind catalog/policy boundaries,
    while leaving legacy submission isolated;
-3. evaluate every legacy projection as direct query, SQL view, materialization
+2. evaluate every legacy projection as direct query, SQL view, materialization
    or deletion;
-4. remove remaining multi-database runtime dependencies;
-5. introduce versioned `WorkflowBlueprint` and the semantic
+3. remove remaining multi-database runtime dependencies;
+4. introduce versioned `WorkflowBlueprint` and the semantic
    `WorkflowCompiler`;
-6. introduce the technical `ComfyUiProvider` for compiled graphs only;
-7. implement `GenerationService` and its canonical asynchronous lifecycle;
-8. collect native multi-output results and assign real output indices only
+5. introduce the technical `ComfyUiProvider` for compiled graphs only;
+6. implement `GenerationService` and its canonical asynchronous lifecycle;
+7. collect native multi-output results and assign real output indices only
     from returned ComfyUI outputs;
-9. apply explicit output policy and migrate to standard `SaveImage`;
-10. wire Playground to the real generation port and delete obsolete legacy
+8. apply explicit output policy and migrate to standard `SaveImage`;
+9. wire Playground to the real generation port and delete obsolete legacy
     clients, stores, workers and compatibility paths;
-11. migrate browser behavior to ES modules and the shared API client;
-12. run the complete architecture, data, browser, quality and documentation
+10. migrate browser behavior to ES modules and the shared API client;
+11. run the complete architecture, data, browser, quality and documentation
     acceptance before opening a new pull request.
 
 Each intermediate commit runs focused tests and static checks for changed

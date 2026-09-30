@@ -215,7 +215,7 @@ structurally incompatible database is never repaired implicitly; startup stops
 with a visible error instead.
 
 The Review, Top/Worst, Arena and Curation paths now use the canonical
-`comfyreview.sqlite3` schema-v4 database. Images are addressed by stable UIDs;
+`comfyreview.sqlite3` schema-v5 database. Images are addressed by stable UIDs;
 their current PNG and optional sidecar paths are mutable attributes. Other
 features are still being migrated, so the legacy database validation and worker
 remain part of startup for now.
@@ -420,8 +420,10 @@ audited import input for local testing.
   sidecarless images remain usable in Review, Top/Worst, Arena, Curation and
   Delete
 - Export and dataset-building workflows are not final production pipelines
-- Generation, Playground and some statistics/projection paths are still on
-  transitional legacy persistence
+- Playground submission, generation and some statistics/projection paths are
+  still on transitional legacy persistence; the canonical revisioned prompt
+  catalog and audited import command are implemented but not yet wired into
+  Playground execution
 - Public documentation may lag behind internal workflow experiments
 
 ---

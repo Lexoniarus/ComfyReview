@@ -69,8 +69,9 @@ Known limitations of the current public prototype:
 - new historical output imports require matching sidecars; already-canonical
   sidecarless images remain usable in the cut-over review workflows
 - export and dataset-building logic is not a final production pipeline
-- generation, Playground and parts of statistics/projection persistence remain
-  transitional
+- Playground submission, generation and parts of statistics/projection
+  persistence remain transitional; the canonical revisioned prompt catalog is
+  implemented but not yet the Playground runtime dependency
 - documentation may lag behind experimental internal workflow ideas
 
 ## Good public indicators
@@ -93,7 +94,8 @@ Useful future cleanup tasks, if the project is polished further:
 - add a small sample workflow diagram
 - add a minimal example output pair for import testing, only if legally and personally safe
 - finish the ComfyUI generation-provider boundary
-- migrate Playground and remaining projection state into canonical persistence
+- wire Playground selection/rendering to the canonical catalog before the
+  later native GenerationService cutover
 - complete the native ES-module frontend cleanup
 
 ## License
