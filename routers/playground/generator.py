@@ -9,23 +9,15 @@ from fastapi.templating import Jinja2Templates
 
 from comfyreview.api.dependencies import get_application_container
 from comfyreview.application import GenerationDefaults, PlaygroundService
-from services.playground_generator_ui_service import (
+from services.playground_generator_ui.drafts import remove_draft, update_draft
+from services.playground_generator_ui.generation import generate_preview_drafts
+from services.playground_generator_ui.head_form import (
     build_form_from_state,
     build_head_state_from_post,
-    clear_preview_state,
-    generate_preview_drafts,
-    load_head_state,
-    load_preview_state,
-    remove_draft,
-    save_head_state,
-    save_preview_state,
-    submit_preview_drafts,
-    update_draft,
 )
-
-from ._shared import (
-    GENERATOR_PREVIEW_STATE_PATH,
-    GENERATOR_STATE_PATH,
+from services.playground_generator_ui.ports import PlaygroundGeneratorState
+from services.playground_generator_ui.submit import (
+    submit_preview_drafts,
 )
 
 router = APIRouter()
@@ -34,17 +26,19 @@ templates = Jinja2Templates(directory="templates")
 
 @router.post("/playground/generator/apply_combo")
 def playground_generator_apply_combo(
+    request: Request,
     character_id: str = Form(...),
     scene_id: str = Form(...),
     outfit_id: str | None = Form(None),
 ) -> RedirectResponse:
-    saved = load_head_state(GENERATOR_STATE_PATH)
+    state = get_application_container(request).playground_ui_state
+    saved = state.load_head()
 
     saved["character_id"] = str(character_id).strip()
     saved["scene_id"] = str(scene_id).strip()
     saved["outfit_id"] = str(outfit_id or "").strip()
 
-    save_head_state(GENERATOR_STATE_PATH, saved)
+    state.save_head(saved)
     return RedirectResponse(url="/playground/generator", status_code=303)
 
 
@@ -58,7 +52,7 @@ def playground_generator_page(request: Request):
         request
     ).playground_discovery.discover()
 
-    saved = load_head_state(GENERATOR_STATE_PATH)
+    saved = get_application_container(request).playground_ui_state.load_head()
     defaults = _render_defaults(
         get_application_container(request).workflow_defaults.load(
             "default-character",
@@ -73,7 +67,7 @@ def playground_generator_page(request: Request):
         default_max_attempts=container.settings.default_max_tries,
     )
 
-    preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH)
+    preview = container.playground_ui_state.load_preview()
     for draft in preview:
         if draft.get("best_img_url") and not get_application_container(
             request
@@ -114,7 +108,9 @@ def playground_generator_preview_draft_best(request: Request, draft_id: str):
     The generator page must render fast. Best picture matching can be slow because it hits
     prompt_tokens and ratings/images indices. This endpoint resolves one draft at a time.
     """
-    preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH) or []
+    preview = get_application_container(
+        request
+    ).playground_ui_state.load_preview()
     draft_id_s = str(draft_id or "").strip()
     if not draft_id_s:
         return JSONResponse(
@@ -170,7 +166,7 @@ def playground_generator_preview_draft_best(request: Request, draft_id: str):
                 x["best_hits"] = res.get("best_hits")
                 break
         try:
-            save_preview_state(GENERATOR_PREVIEW_STATE_PATH, preview)
+            container.playground_ui_state.save_preview(preview)
         except Exception:
             pass
 
@@ -223,7 +219,8 @@ def playground_generator_run(
     discovery = get_application_container(
         request
     ).playground_discovery.discover()
-    preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH)
+    state = get_application_container(request).playground_ui_state
+    preview = state.load_preview()
 
     head_kwargs = _head_kwargs_from_post(
         character_id=character_id,
@@ -257,7 +254,11 @@ def playground_generator_run(
     )
 
     if act == "draft_remove":
-        return _handle_draft_remove(preview, str(draft_id or ""))
+        return _handle_draft_remove(
+            preview,
+            str(draft_id or ""),
+            state=state,
+        )
 
     if act == "draft_update":
         return _handle_draft_update(
@@ -273,10 +274,11 @@ def playground_generator_run(
             draft_checkpoint=draft_checkpoint,
             draft_pos=draft_pos,
             draft_neg=draft_neg,
+            state=state,
         )
 
     if act == "head_save":
-        return _handle_head_save(head_kwargs)
+        return _handle_head_save(head_kwargs, state=state)
 
     if act == "preview_generate":
         return _handle_preview_generate(
@@ -295,6 +297,7 @@ def playground_generator_run(
                     1,
                 )
             ),
+            state=state,
         )
 
     if act == "submit_preview":
@@ -367,9 +370,14 @@ def _head_kwargs_from_post(
     }
 
 
-def _handle_draft_remove(preview: list, did: str) -> RedirectResponse:
+def _handle_draft_remove(
+    preview: list,
+    did: str,
+    *,
+    state: PlaygroundGeneratorState,
+) -> RedirectResponse:
     updated = remove_draft(preview, did)
-    save_preview_state(GENERATOR_PREVIEW_STATE_PATH, updated)
+    state.save_preview(updated)
     return _redirect_generator()
 
 
@@ -387,10 +395,11 @@ def _handle_draft_update(
     draft_checkpoint: str | None,
     draft_pos: str | None,
     draft_neg: str | None,
+    state: PlaygroundGeneratorState,
 ) -> RedirectResponse:
     if not draft_id:
         head = build_head_state_from_post(**head_kwargs)
-        save_head_state(GENERATOR_STATE_PATH, head)
+        state.save_head(head)
         return _redirect_generator()
 
     updated = update_draft(
@@ -406,13 +415,17 @@ def _handle_draft_update(
         pos=draft_pos,
         neg=draft_neg,
     )
-    save_preview_state(GENERATOR_PREVIEW_STATE_PATH, updated)
+    state.save_preview(updated)
     return _redirect_generator()
 
 
-def _handle_head_save(head_kwargs: dict) -> RedirectResponse:
+def _handle_head_save(
+    head_kwargs: dict,
+    *,
+    state: PlaygroundGeneratorState,
+) -> RedirectResponse:
     head = build_head_state_from_post(**head_kwargs)
-    save_head_state(GENERATOR_STATE_PATH, head)
+    state.save_head(head)
     return _redirect_generator()
 
 
@@ -424,9 +437,10 @@ def _handle_preview_generate(
     playground_service: PlaygroundService,
     default_max_attempts: int,
     render_defaults: dict[str, str],
+    state: PlaygroundGeneratorState,
 ) -> RedirectResponse:
     head = build_head_state_from_post(**head_kwargs)
-    save_head_state(GENERATOR_STATE_PATH, head)
+    state.save_head(head)
 
     drafts = generate_preview_drafts(
         head=head,
@@ -436,7 +450,7 @@ def _handle_preview_generate(
         render_defaults=render_defaults,
         default_max_attempts=default_max_attempts,
     )
-    save_preview_state(GENERATOR_PREVIEW_STATE_PATH, drafts)
+    state.save_preview(drafts)
     return _redirect_generator()
 
 
@@ -452,7 +466,8 @@ def _handle_submit_preview(
             get_application_container(request).playground_submission_service
         ),
     )
-    clear_preview_state(GENERATOR_PREVIEW_STATE_PATH)
+    state = get_application_container(request).playground_ui_state
+    state.clear_preview()
 
     default_max_attempts = get_application_container(
         request
@@ -465,6 +480,7 @@ def _handle_submit_preview(
             )
         ),
         default_max_attempts=default_max_attempts,
+        state=state,
     )
 
     return templates.TemplateResponse(
@@ -495,8 +511,9 @@ def _reload_form_from_head(
     defaults: dict[str, str],
     *,
     default_max_attempts: int,
+    state: PlaygroundGeneratorState,
 ) -> dict:
-    saved = load_head_state(GENERATOR_STATE_PATH)
+    saved = state.load_head()
     return build_form_from_state(
         saved=saved,
         defaults=defaults,

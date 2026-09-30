@@ -45,7 +45,10 @@ from comfyreview.providers import (
     UuidGenerationIdentitySource,
     UuidPromptIdentitySource,
 )
-from comfyreview.repositories.filesystem import JsonWorkflowBlueprintRepository
+from comfyreview.repositories.filesystem import (
+    JsonWorkflowBlueprintRepository,
+    PlaygroundGeneratorStateRepository,
+)
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteAnalyticsReportRepository,
@@ -68,6 +71,7 @@ from routers.top_router import router as top_router
 from services.analytics_page_service import AnalyticsPageService
 from services.output_file_service import OutputFileService
 from services.playground_discovery_service import PlaygroundDiscoveryService
+from services.playground_generator_ui.ports import PlaygroundGeneratorState
 from services.playground_hub_service import PlaygroundHubService
 from services.playground_label_service import PromptLabelService
 from services.prompt_catalog_view_service import PromptCatalogViewService
@@ -86,6 +90,7 @@ class ApplicationContainer:
     analytics_pages: AnalyticsPageService
     playground_hub: PlaygroundHubService
     playground_discovery: PlaygroundDiscoveryService
+    playground_ui_state: PlaygroundGeneratorState
     generation_service: GenerationService
     generation_reconciliation: GenerationReconciliationService
     prompt_catalog_service: PromptCatalogService
@@ -207,6 +212,18 @@ def build_application_container(
             configured.data_directory
             / "ui_state"
             / "comfy_discovery_cache.json",
+        ),
+        playground_ui_state=PlaygroundGeneratorStateRepository(
+            head_path=(
+                configured.data_directory
+                / "ui_state"
+                / "playground_generator_last.json"
+            ),
+            preview_path=(
+                configured.data_directory
+                / "ui_state"
+                / "playground_generator_preview.json"
+            ),
         ),
         generation_service=generation_service,
         generation_reconciliation=generation_reconciliation,
