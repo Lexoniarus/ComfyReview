@@ -1,5 +1,10 @@
 """Concrete external-system providers used by the composition root."""
 
+from comfyreview.providers.comfyui import (
+    JsonHttpResponse,
+    NativeComfyUiProvider,
+    UrlLibJsonTransport,
+)
 from comfyreview.providers.curation_files import LocalCurationFileManager
 from comfyreview.providers.legacy_output_import import (
     LocalLegacyOutputImportSource,
@@ -11,5 +16,8 @@ __all__ = [
     "CanonicalOutputImageCatalog",
     "LocalCurationFileManager",
     "LocalLegacyOutputImportSource",
+    "JsonHttpResponse",
+    "NativeComfyUiProvider",
+    "UrlLibJsonTransport",
     "UuidPromptIdentitySource",
 ]
