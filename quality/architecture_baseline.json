@@ -2,22 +2,9 @@
   "schema_version": 1,
   "violations": {
     "services/analytics_page_service.py|services.no_global_config": 1,
-    "services/combo_prompts/images_index.py|services.no_global_config": 1,
-    "services/combo_prompts/images_index.py|services.no_sqlite": 1,
-    "services/comfy_client.py|services.no_global_config": 1,
-    "services/comfy_client_core/client.py|services.no_global_config": 1,
     "services/context_filters.py|services.no_global_config": 1,
     "services/file_urls.py|services.no_global_config": 1,
-    "services/images_service.py|services.no_sql": 7,
-    "services/images_service.py|services.no_sqlite": 1,
-    "services/mv_update_service.py|services.no_sql": 7,
-    "services/mv_update_service.py|services.no_sqlite": 1,
     "services/playground_generator_ui/best_pictures.py|services.no_global_config": 1,
-    "services/playground_generator_ui/head_form.py|services.no_global_config": 1,
-    "services/playground_hub_service.py|services.no_global_config": 1,
-    "services/playground_hub_service.py|services.no_sql": 1,
-    "services/playground_hub_service.py|services.no_sqlite": 1,
-    "services/prompt_ratings_service.py|services.no_sql": 1,
-    "services/prompt_ratings_service.py|services.no_sqlite": 1
+    "services/playground_generator_ui/head_form.py|services.no_global_config": 1
   }
 }

@@ -13,7 +13,6 @@ from comfyreview.application import (
     SubmitReviewCommand,
 )
 from services import file_urls
-from services.combo_prompts import rebuild
 from services.output_file_service import (
     InvalidOutputPathError,
     OutputFileService,
@@ -94,33 +93,6 @@ def test_existing_png_path_to_url_rejects_missing_file(tmp_path, monkeypatch):
     assert (
         file_urls.existing_png_path_to_url(str(tmp_path / "missing.png")) == ""
     )
-
-
-def test_combo_database_replace_retries_windows_lock(tmp_path, monkeypatch):
-    source = tmp_path / "combo.sqlite3.tmp"
-    target = tmp_path / "combo.sqlite3"
-    source.write_bytes(b"new")
-    target.write_bytes(b"old")
-    calls = 0
-    real_replace = rebuild.os.replace
-
-    def flaky_replace(src, dst):
-        nonlocal calls
-        calls += 1
-        if calls < 3:
-            error = PermissionError("locked")
-            error.__dict__["winerror"] = 32
-            raise error
-        real_replace(src, dst)
-
-    monkeypatch.setattr(rebuild.os, "replace", flaky_replace)
-
-    rebuild._replace_database_with_retry(
-        source, target, attempts=3, delay_seconds=0
-    )
-
-    assert calls == 3
-    assert target.read_bytes() == b"new"
 
 
 def test_output_pair_rejects_path_outside_output_root(tmp_path):

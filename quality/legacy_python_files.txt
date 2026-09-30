@@ -5,10 +5,6 @@ routers/__init__.py
 routers/playground/__init__.py
 routers/playground/hub.py
 services/__init__.py
-services/combo_prompts/__init__.py
-services/combo_prompts/scoring.py
-services/combo_prompts/token_utils.py
-services/combo_prompts_service.py
 services/context_filters.py
 services/file_urls.py
 services/playground_common/__init__.py
@@ -31,7 +27,6 @@ stores/playground/token_stats.py
 stores/playground_store.py
 stores/prompt_tokens_match.py
 stores/rating_rules.py
-stores/ratings_state_store.py
 templates.py
 tests/conftest.py
 tests/test_prompt_store_tokenize.py
