@@ -13,9 +13,6 @@ from services.playground_generator_ui.best_pictures import (
     enrich_preview_with_best_pictures,
 )
 from services.playground_generator_ui.drafts import remove_draft, update_draft
-from services.playground_generator_ui.dropdowns import (
-    load_playground_dropdown_items,
-)
 from services.playground_generator_ui.generation import (
     generate_preview_drafts,
     parse_sequence,
@@ -42,7 +39,6 @@ __all__ = [
     "load_preview_state",
     "save_preview_state",
     "clear_preview_state",
-    "load_playground_dropdown_items",
     "character_name_from_id",
     "build_form_from_state",
     "build_head_state_from_post",

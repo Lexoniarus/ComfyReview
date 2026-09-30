@@ -120,6 +120,7 @@ from comfyreview.application.prompt_catalog import (
     UpdatePromptComponentCommand,
     UpdatePromptComponentMetadataCommand,
     imported_prompt_component_uid,
+    prompt_component_key,
     prompt_revision_identity,
 )
 from comfyreview.application.ranking import (
@@ -296,6 +297,7 @@ __all__ = [
     "WorkflowInputBinding",
     "WorkflowOutputBinding",
     "imported_prompt_component_uid",
+    "prompt_component_key",
     "generation_output_identity",
     "prompt_revision_identity",
 ]

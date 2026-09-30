@@ -75,13 +75,17 @@ def test_preview_generation_uses_catalog_revisions_and_keeps_legacy_submit_shape
     )
     del monkeypatch
     head: dict[str, Any] = {
-        "character_id": 1,
-        "scene_id": 2,
-        "outfit_id": 3,
-        "pose_id": 4,
-        "expression_id": 5,
-        "lighting_id": 6,
-        "modifier_id": 7,
+        "character_id": imported_prompt_component_uid(
+            "legacy_playground", "1"
+        ),
+        "scene_id": imported_prompt_component_uid("legacy_playground", "2"),
+        "outfit_id": imported_prompt_component_uid("legacy_playground", "3"),
+        "pose_id": imported_prompt_component_uid("legacy_playground", "4"),
+        "expression_id": imported_prompt_component_uid(
+            "legacy_playground", "5"
+        ),
+        "lighting_id": imported_prompt_component_uid("legacy_playground", "6"),
+        "modifier_id": imported_prompt_component_uid("legacy_playground", "7"),
         "include_lighting": True,
         "include_modifier": True,
         "gen_seed": "13",
@@ -92,7 +96,13 @@ def test_preview_generation_uses_catalog_revisions_and_keeps_legacy_submit_shape
 
     drafts = generation.generate_preview_drafts(
         head=head,
-        characters=[{"id": 1, "name": "Aiko", "key": "aiko"}],
+        characters=[
+            {
+                "id": imported_prompt_component_uid("legacy_playground", "1"),
+                "name": "Aiko",
+                "key": "aiko",
+            }
+        ],
         discovery=DiscoveryLists([], [], []),
         playground_service=playground,
         render_defaults={

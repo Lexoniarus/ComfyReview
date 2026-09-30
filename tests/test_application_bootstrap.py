@@ -38,6 +38,7 @@ from comfyreview.settings import Settings, load_settings
 from services.analytics_page_service import AnalyticsPageService
 from services.playground_discovery_service import PlaygroundDiscoveryService
 from services.playground_hub_service import PlaygroundHubService
+from services.prompt_catalog_view_service import PromptCatalogViewService
 
 
 class _RecordingCanonicalSchema:
@@ -136,6 +137,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         playground_discovery=cast(PlaygroundDiscoveryService, object()),
         generation_service=cast(GenerationService, object()),
         prompt_catalog_service=cast(PromptCatalogService, object()),
+        prompt_catalog_views=cast(PromptCatalogViewService, object()),
         playground_service=cast(PlaygroundService, object()),
         playground_submission_service=cast(
             PlaygroundSubmissionService,
@@ -219,6 +221,7 @@ def test_default_container_wires_canonical_review_runtime(
     assert isinstance(container.generation_service, GenerationService)
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.prompt_catalog_service, PromptCatalogService)
+    assert isinstance(container.prompt_catalog_views, PromptCatalogViewService)
     assert isinstance(container.playground_service, PlaygroundService)
     assert isinstance(
         container.playground_submission_service,

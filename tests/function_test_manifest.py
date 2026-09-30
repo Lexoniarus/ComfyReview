@@ -89,6 +89,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_prompt_catalog.py::"
         "test_prompt_revision_identity_is_content_and_component_stable"
     ),
+    "comfyreview.application.prompt_catalog:prompt_component_key": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_component_key_is_readable_and_identity_scoped"
+    ),
     "comfyreview.application.prompt_catalog:imported_prompt_component_uid": (
         "tests/test_prompt_catalog.py::"
         "test_imported_prompt_component_identity_is_stable_and_source_scoped"

@@ -6,17 +6,14 @@ from config import DEFAULT_MAX_TRIES
 
 
 def character_name_from_id(
-    characters: list[dict[str, Any]], character_id: int | None
+    characters: list[dict[str, Any]], character_id: str | None
 ) -> str:
     if character_id is None:
         return ""
     for c in characters:
-        try:
-            raw_id = c.get("id")
-            if raw_id is not None and int(str(raw_id)) == int(character_id):
-                return str(c.get("name") or c.get("key") or "").strip()
-        except (TypeError, ValueError):
-            continue
+        raw_id = str(c.get("id") or "").strip()
+        if raw_id == str(character_id).strip():
+            return str(c.get("name") or c.get("key") or "").strip()
     return ""
 
 
@@ -74,13 +71,13 @@ def build_form_from_state(
 
 def build_head_state_from_post(
     *,
-    character_id: int | None,
-    scene_id: int | None,
-    outfit_id: int | None,
-    pose_id: int | None,
-    expression_id: int | None,
-    lighting_id: int | None,
-    modifier_id: int | None,
+    character_id: str | None,
+    scene_id: str | None,
+    outfit_id: str | None,
+    pose_id: str | None,
+    expression_id: str | None,
+    lighting_id: str | None,
+    modifier_id: str | None,
     include_lighting: int | None,
     include_modifier: int | None,
     gen_seed: str | None,

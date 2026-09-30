@@ -19,7 +19,6 @@ from services.playground_generator_ui_service import (
     clear_preview_state,
     generate_preview_drafts,
     load_head_state,
-    load_playground_dropdown_items,
     load_preview_state,
     remove_draft,
     save_head_state,
@@ -39,26 +38,15 @@ templates = Jinja2Templates(directory="templates")
 
 @router.post("/playground/generator/apply_combo")
 def playground_generator_apply_combo(
-    character_id: int = Form(...),
-    scene_id: int = Form(...),
+    character_id: str = Form(...),
+    scene_id: str = Form(...),
     outfit_id: str | None = Form(None),
 ) -> RedirectResponse:
     saved = load_head_state(GENERATOR_STATE_PATH)
 
-    saved["character_id"] = str(int(character_id))
-    saved["scene_id"] = str(int(scene_id))
-
-    outfit_id_int: int | None = None
-    try:
-        s = str(outfit_id or "").strip()
-        if s:
-            outfit_id_int = int(float(s))
-    except Exception:
-        outfit_id_int = None
-
-    saved["outfit_id"] = (
-        str(int(outfit_id_int)) if outfit_id_int is not None else ""
-    )
+    saved["character_id"] = str(character_id).strip()
+    saved["scene_id"] = str(scene_id).strip()
+    saved["outfit_id"] = str(outfit_id or "").strip()
 
     save_head_state(GENERATOR_STATE_PATH, saved)
     return RedirectResponse(url="/playground/generator", status_code=303)
@@ -66,7 +54,9 @@ def playground_generator_apply_combo(
 
 @router.get("/playground/generator")
 def playground_generator_page(request: Request):
-    dropdowns = load_playground_dropdown_items()
+    dropdowns = get_application_container(
+        request
+    ).prompt_catalog_views.dropdown_items()
 
     discovery = get_application_container(
         request
@@ -181,13 +171,13 @@ def playground_generator_preview_draft_best(draft_id: str):
 def playground_generator_run(
     request: Request,
     action: str = Form("preview_generate"),
-    character_id: int | None = Form(None),
-    scene_id: int | None = Form(None),
-    outfit_id: int | None = Form(None),
-    pose_id: int | None = Form(None),
-    expression_id: int | None = Form(None),
-    lighting_id: int | None = Form(None),
-    modifier_id: int | None = Form(None),
+    character_id: str | None = Form(None),
+    scene_id: str | None = Form(None),
+    outfit_id: str | None = Form(None),
+    pose_id: str | None = Form(None),
+    expression_id: str | None = Form(None),
+    lighting_id: str | None = Form(None),
+    modifier_id: str | None = Form(None),
     include_lighting: int | None = Form(None),
     include_modifier: int | None = Form(None),
     gen_seed: str | None = Form(None),
@@ -217,7 +207,9 @@ def playground_generator_run(
     draft_neg: str | None = Form(None),
 ):
     act = str(action or "").lower().strip()
-    dropdowns = load_playground_dropdown_items()
+    dropdowns = get_application_container(
+        request
+    ).prompt_catalog_views.dropdown_items()
     discovery = get_application_container(
         request
     ).playground_discovery.discover()
@@ -305,13 +297,13 @@ def _redirect_generator() -> RedirectResponse:
 
 def _head_kwargs_from_post(
     *,
-    character_id: int | None,
-    scene_id: int | None,
-    outfit_id: int | None,
-    pose_id: int | None,
-    expression_id: int | None,
-    lighting_id: int | None,
-    modifier_id: int | None,
+    character_id: str | None,
+    scene_id: str | None,
+    outfit_id: str | None,
+    pose_id: str | None,
+    expression_id: str | None,
+    lighting_id: str | None,
+    modifier_id: str | None,
     include_lighting: int | None,
     include_modifier: int | None,
     gen_seed: str | None,

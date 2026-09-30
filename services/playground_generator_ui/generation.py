@@ -10,7 +10,6 @@ from comfyreview.application import (
     PlaygroundDraft,
     PlaygroundService,
     PromptSelectionCommand,
-    imported_prompt_component_uid,
 )
 from services.playground_common.empty_placeholders import filter_random_items
 from services.ui_state_service import safe_int
@@ -151,13 +150,13 @@ def _resolve_choice(
     return dv or None
 
 
-def _pick_random_character_id(characters: list[dict[str, Any]], rng) -> int:
+def _pick_random_character_id(characters: list[dict[str, Any]], rng) -> str:
     chars = filter_random_items(list(characters or []))
     if not chars:
         raise ValueError(
             "Keine Characters in der Playground DB gefunden (Empty wird nicht zufaellig genutzt)."
         )
-    return int(rng.choice(chars)["id"])
+    return str(rng.choice(chars)["id"])
 
 
 def _subdir_for_character(character_name: str) -> str:
@@ -190,7 +189,7 @@ def generate_preview_drafts(
         )
         character_name, run_defaults, subdir = _load_character_defaults(
             characters=characters,
-            character_id=int(run_character_id),
+            character_id=run_character_id,
             render_defaults=render_defaults,
         )
 
@@ -206,7 +205,7 @@ def generate_preview_drafts(
 
         prompt_draft = _generate_prompt_selection(
             playground_service=playground_service,
-            character_id=int(run_character_id),
+            character_id=run_character_id,
             manual_picks=spec["manual_picks"],
             include_lighting=spec["include_lighting"],
             include_modifier=spec["include_modifier"],
@@ -250,18 +249,16 @@ def _parse_preview_head_spec(
     head: dict[str, Any],
     default_max_attempts: int,
 ) -> dict[str, Any]:
-    character_id = safe_int(str(head.get("character_id") or "").strip())
-    fixed_character_id = (
-        character_id if character_id not in (None, 0) else None
-    )
+    character_id = str(head.get("character_id") or "").strip()
+    fixed_character_id = character_id or None
 
     manual_picks = {
-        "scene": safe_int(str(head.get("scene_id") or "").strip()),
-        "outfit": safe_int(str(head.get("outfit_id") or "").strip()),
-        "pose": safe_int(str(head.get("pose_id") or "").strip()),
-        "expression": safe_int(str(head.get("expression_id") or "").strip()),
-        "lighting": safe_int(str(head.get("lighting_id") or "").strip()),
-        "modifier": safe_int(str(head.get("modifier_id") or "").strip()),
+        "scene": str(head.get("scene_id") or "").strip() or None,
+        "outfit": str(head.get("outfit_id") or "").strip() or None,
+        "pose": str(head.get("pose_id") or "").strip() or None,
+        "expression": str(head.get("expression_id") or "").strip() or None,
+        "lighting": str(head.get("lighting_id") or "").strip() or None,
+        "modifier": str(head.get("modifier_id") or "").strip() or None,
     }
 
     include_lighting = bool(head.get("include_lighting", True))
@@ -391,24 +388,24 @@ def _build_discovery_cycles(
 
 
 def _resolve_run_character_id(
-    *, fixed_character_id: int | None, characters: list[dict[str, Any]], rng
-) -> int:
+    *, fixed_character_id: str | None, characters: list[dict[str, Any]], rng
+) -> str:
     if fixed_character_id is not None:
-        return int(fixed_character_id)
+        return fixed_character_id
     return _pick_random_character_id(characters, rng)
 
 
 def _load_character_defaults(
     *,
     characters: list[dict[str, Any]],
-    character_id: int,
+    character_id: str,
     render_defaults: dict[str, Any],
 ) -> tuple[str, dict[str, Any], str]:
     char_item = next(
         (
             item
             for item in characters
-            if int(item.get("id") or 0) == int(character_id)
+            if str(item.get("id") or "").strip() == character_id
         ),
         None,
     )
@@ -487,8 +484,8 @@ def _safe_float_or_none(value: Any, *, ndigits: int | None) -> float | None:
 def _generate_prompt_selection(
     *,
     playground_service: PlaygroundService,
-    character_id: int,
-    manual_picks: dict[str, int | None],
+    character_id: str,
+    manual_picks: dict[str, str | None],
     include_lighting: bool,
     include_modifier: bool,
     gen_seed_base: int | None,
@@ -501,20 +498,14 @@ def _generate_prompt_selection(
     manual_selections = tuple(
         ManualPromptSelection(
             kind=kind,
-            component_uid=imported_prompt_component_uid(
-                "legacy_playground",
-                str(component_id),
-            ),
+            component_uid=component_id,
         )
         for kind, component_id in manual_picks.items()
         if component_id is not None
     )
     return playground_service.prepare_draft(
         PromptSelectionCommand(
-            character_component_uid=imported_prompt_component_uid(
-                "legacy_playground",
-                str(character_id),
-            ),
+            character_component_uid=character_id,
             manual_selections=manual_selections,
             include_lighting=bool(include_lighting),
             include_modifier=bool(include_modifier),

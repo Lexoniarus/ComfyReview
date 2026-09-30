@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -191,6 +193,24 @@ def imported_prompt_component_uid(source: str, source_key: str) -> str:
     return f"prompt-component-{digest}"
 
 
+def prompt_component_key(kind: str, name: str, component_uid: str) -> str:
+    """Return a readable collision-resistant key for a new component."""
+    normalized = unicodedata.normalize("NFKD", str(name or "").strip().lower())
+    ascii_name = "".join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    )
+    slug = re.sub(
+        r"_+",
+        "_",
+        re.sub(r"[^a-z0-9]+", "_", ascii_name),
+    ).strip("_")
+    base = slug or "item"
+    suffix = hashlib.sha256(component_uid.encode()).hexdigest()[:8]
+    return f"{base}_{kind}_{suffix}"
+
+
 class PromptCatalogService:
     """Coordinate validated prompt-catalog mutations and reads."""
 
@@ -209,9 +229,11 @@ class PromptCatalogService:
     ) -> PromptComponent:
         """Create a catalog component with revision one."""
         kind = self._required(command.kind, "kind")
-        component_key = self._required(command.component_key, "component_key")
         name = self._required(command.name, "name")
         component_uid = self._identities.new_component_uid()
+        component_key = str(
+            command.component_key or ""
+        ).strip() or prompt_component_key(kind, name, component_uid)
         revision = self._revision(
             component_uid,
             command.positive_text,

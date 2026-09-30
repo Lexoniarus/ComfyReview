@@ -68,6 +68,7 @@ from services.file_urls import existing_png_path_to_url
 from services.output_file_service import OutputFileService
 from services.playground_discovery_service import PlaygroundDiscoveryService
 from services.playground_hub_service import PlaygroundHubService
+from services.prompt_catalog_view_service import PromptCatalogViewService
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,7 @@ class ApplicationContainer:
     playground_discovery: PlaygroundDiscoveryService
     generation_service: GenerationService
     prompt_catalog_service: PromptCatalogService
+    prompt_catalog_views: PromptCatalogViewService
     playground_service: PlaygroundService
     playground_submission_service: PlaygroundSubmissionService
     workflow_defaults: WorkflowDefaultsService
@@ -194,6 +196,7 @@ def build_application_container(
         ),
         generation_service=generation_service,
         prompt_catalog_service=prompt_catalog_service,
+        prompt_catalog_views=PromptCatalogViewService(prompt_catalog_service),
         playground_service=PlaygroundService(
             catalog=prompt_catalog_service,
             selection_policy=PromptSelectionPolicy(),

@@ -3,8 +3,6 @@ meta_view.py
 models.py
 routers/__init__.py
 routers/playground/__init__.py
-routers/playground/api.py
-routers/playground/browse.py
 routers/playground/hub.py
 services/__init__.py
 services/combo_prompts/__init__.py
@@ -18,7 +16,6 @@ services/playground_common/empty_placeholders.py
 services/playground_generator_ui/__init__.py
 services/playground_generator_ui/best_pictures.py
 services/playground_generator_ui/drafts.py
-services/playground_generator_ui/dropdowns.py
 services/playground_generator_ui/state.py
 services/playground_generator_ui/types.py
 services/playground_label_service.py

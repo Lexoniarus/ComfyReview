@@ -13,7 +13,6 @@
     "services/mv_update_service.py|services.no_sql": 7,
     "services/mv_update_service.py|services.no_sqlite": 1,
     "services/playground_generator_ui/best_pictures.py|services.no_global_config": 1,
-    "services/playground_generator_ui/dropdowns.py|services.no_global_config": 1,
     "services/playground_generator_ui/head_form.py|services.no_global_config": 1,
     "services/playground_hub_service.py|services.no_global_config": 1,
     "services/playground_hub_service.py|services.no_sql": 1,

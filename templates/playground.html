@@ -85,7 +85,8 @@
     </div>
 
     <div class="hint">
-      Builder Datenbasis fuer Generator. Kein Log. Hard delete.
+      Kanonischer Vorlagenkatalog. Prompt-Aenderungen erzeugen Revisionen;
+      Loeschen archiviert und bleibt wiederherstellbar.
     </div>
 
     <div class="pgSubnav">
@@ -190,7 +191,7 @@
     </tr>
 
     {% for r in rows %}
-    <tr>
+    <tr{% if r["archived"] %} style="opacity:0.55;"{% endif %}>
       <td>{{ r["kind"] }}</td>
       <td>{{ r["name"] }}</td>
       <td class="mono">{{ r["key"] }}</td>
@@ -258,10 +259,19 @@
           </form>
         </details>
 
-        <form method="post" action="/playground/delete" style="margin-top:8px;">
-          <input type="hidden" name="item_id" value="{{ r['id'] }}">
-          <button class="danger" type="submit">loeschen</button>
-        </form>
+        {% if r["archived"] %}
+          <form method="post" action="/playground/restore" style="margin-top:8px;">
+            <input type="hidden" name="item_id" value="{{ r['id'] }}">
+            <input type="hidden" name="kind" value="{{ r['kind'] }}">
+            <button type="submit">wiederherstellen</button>
+          </form>
+        {% else %}
+          <form method="post" action="/playground/delete" style="margin-top:8px;">
+            <input type="hidden" name="item_id" value="{{ r['id'] }}">
+            <input type="hidden" name="kind" value="{{ r['kind'] }}">
+            <button class="danger" type="submit">archivieren</button>
+          </form>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}

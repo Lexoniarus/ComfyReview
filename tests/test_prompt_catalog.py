@@ -20,6 +20,7 @@ from comfyreview.application import (
     UpdatePromptComponentCommand,
     UpdatePromptComponentMetadataCommand,
     imported_prompt_component_uid,
+    prompt_component_key,
     prompt_revision_identity,
 )
 from comfyreview.repositories.sqlite import (
@@ -188,12 +189,29 @@ def test_prompt_catalog_service_creates_normalized_component() -> None:
     assert component.notes == "reusable"
     assert component.latest_revision.positive_text == "skyline"
 
+    generated = service.create_component(
+        replace(_create_command(), component_key="")
+    )
+    assert generated.component_key.startswith("rooftop_scene_")
+
+
+def test_prompt_component_key_is_readable_and_identity_scoped() -> None:
+    first = prompt_component_key("scene", " Café Roof! ", "component-1")
+
+    assert first.startswith("cafe_roof_scene_")
+    assert first == prompt_component_key(
+        "scene", " Café Roof! ", "component-1"
+    )
+    assert first != prompt_component_key("scene", "Café Roof!", "component-2")
+    assert prompt_component_key("pose", "***", "component-1").startswith(
+        "item_pose_"
+    )
+
 
 @pytest.mark.parametrize(
     ("field", "command"),
     [
         ("kind", replace(_create_command(), kind="")),
-        ("component_key", replace(_create_command(), component_key="")),
         ("name", replace(_create_command(), name="")),
         (
             "prompt revision",
