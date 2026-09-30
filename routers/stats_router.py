@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
-from db_store import DELETE_WEIGHT_DEFAULT, SUCCESS_THRESHOLD_DEFAULT
 
+from db_store import DELETE_WEIGHT_DEFAULT, SUCCESS_THRESHOLD_DEFAULT
 from services.analytics_page_service import (
     build_param_stats_page_context,
     build_prompt_tokens_page_context,
     build_recommendations_page_context,
     build_stats_page_context,
 )
+
 # Jinja Templates für die Analytics-Seiten
 from templates import PARAM_HTML, PROMPT_HTML, RECO_HTML, STATS_HTML
 
@@ -26,7 +27,9 @@ def stats(
     t: int = Query(SUCCESS_THRESHOLD_DEFAULT),
     dw: float = Query(DELETE_WEIGHT_DEFAULT),
 ):
-    ctx = build_stats_page_context(model=model, min_n=min_n, limit=limit, t=t, dw=dw)
+    ctx = build_stats_page_context(
+        model=model, min_n=min_n, limit=limit, t=t, dw=dw
+    )
     return STATS_HTML.render(**ctx)
 
 
@@ -81,6 +84,7 @@ def prompt_tokens(
     min_n: int = Query(8),
     limit: int = Query(200),
 ):
-    ctx = build_prompt_tokens_page_context(model=model, scope=scope, min_n=min_n, limit=limit)
+    ctx = build_prompt_tokens_page_context(
+        model=model, scope=scope, min_n=min_n, limit=limit
+    )
     return PROMPT_HTML.render(**ctx)
-

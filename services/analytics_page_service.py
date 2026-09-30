@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from config import DB_PATH, IMAGES_DB_PATH, PROMPT_RATINGS_DB_PATH
 from db_store import (
@@ -14,18 +14,25 @@ from db_store import (
 )
 from services.context_filters import normalize_model
 from services.file_urls import existing_png_path_to_url
-from stores.images_store import fetch_best_images_by_combo_keys, fetch_best_images_by_param_values
+from stores.images_store import (
+    fetch_best_images_by_combo_keys,
+    fetch_best_images_by_param_values,
+)
 from stores.prompt_ratings_store import fetch_prompt_ratings_stats
 
 
-def load_model_dropdown_list() -> List[str]:
+def load_model_dropdown_list() -> list[str]:
     """Dropdown-Liste der vorhandenen Modelle aus ratings.sqlite3."""
 
     return list_models_from_db(DB_PATH)
 
 
-def _attach_best_images_to_combo_rows(rows: List[Dict[str, Any]], model: str) -> None:
-    combo_keys = [str(r.get("combo_key") or "") for r in rows if r.get("combo_key")]
+def _attach_best_images_to_combo_rows(
+    rows: list[dict[str, Any]], model: str
+) -> None:
+    combo_keys = [
+        str(r.get("combo_key") or "") for r in rows if r.get("combo_key")
+    ]
     if not combo_keys:
         return
 
@@ -61,7 +68,7 @@ def build_stats_page_context(
     limit: int = 200,
     t: int = SUCCESS_THRESHOLD_DEFAULT,
     dw: float = DELETE_WEIGHT_DEFAULT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Baut den Template-Context für /stats."""
 
     model = normalize_model(model)
@@ -98,7 +105,7 @@ def build_recommendations_page_context(
     min_lb: float = 0.5,
     approx_min_n: int = 8,
     approx_limit: int = 80,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Baut den Template-Context für /recommendations."""
 
     model = normalize_model(model)
@@ -137,7 +144,7 @@ def build_recommendations_page_context(
     }
 
 
-def _build_param_sections(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _build_param_sections(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     title_map = {
         "checkpoint": "Checkpoint",
         "steps": "Steps",
@@ -146,16 +153,28 @@ def _build_param_sections(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         "scheduler": "Scheduler",
     }
 
-    sections: List[Dict[str, Any]] = []
+    sections: list[dict[str, Any]] = []
     for feat in ("checkpoint", "steps", "cfg", "sampler", "scheduler"):
         feat_rows = [r for r in rows if r.get("feat") == feat]
-        sections.append({"key": feat, "title": title_map.get(feat, feat), "rows": feat_rows})
+        sections.append(
+            {
+                "key": feat,
+                "title": title_map.get(feat, feat),
+                "rows": feat_rows,
+            }
+        )
     return sections
 
 
-def _attach_best_images_to_param_sections(sections: List[Dict[str, Any]], model: str) -> None:
+def _attach_best_images_to_param_sections(
+    sections: list[dict[str, Any]], model: str
+) -> None:
     for sec in sections:
-        vals = [r.get("value") for r in sec.get("rows", []) if r.get("value") is not None]
+        vals = [
+            r.get("value")
+            for r in sec.get("rows", [])
+            if r.get("value") is not None
+        ]
         if not vals:
             continue
 
@@ -172,7 +191,9 @@ def _attach_best_images_to_param_sections(sections: List[Dict[str, Any]], model:
             imgs = best_map.get(key, [])
             best_images = []
             for image in imgs:
-                url = existing_png_path_to_url(str(image.get("png_path") or ""))
+                url = existing_png_path_to_url(
+                    str(image.get("png_path") or "")
+                )
                 if not url:
                     continue
                 best_images.append(
@@ -191,7 +212,7 @@ def build_param_stats_page_context(
     min_n: int = 10,
     t: int = SUCCESS_THRESHOLD_DEFAULT,
     dw: int = DELETE_WEIGHT_DEFAULT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Baut den Template-Context für /param_stats."""
 
     model = normalize_model(model)
@@ -243,7 +264,7 @@ def build_prompt_tokens_page_context(
     scope: str = "pos",
     min_n: int = 8,
     limit: int = 200,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Baut den Template-Context für /prompt_tokens."""
 
     model = normalize_model(model)

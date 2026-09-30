@@ -9,9 +9,7 @@ routers/playground/_shared.py
 routers/playground/api.py
 routers/playground/browse.py
 routers/playground/hub.py
-routers/stats_router.py
 services/__init__.py
-services/analytics_page_service.py
 services/combo_prompts/__init__.py
 services/combo_prompts/scoring.py
 services/combo_prompts/token_utils.py
@@ -45,7 +43,6 @@ services/playground_generator_ui/state.py
 services/playground_generator_ui/submit.py
 services/playground_generator_ui/types.py
 services/playground_generator_ui_service.py
-services/playground_hub_service.py
 services/playground_label_service.py
 services/playground_rules.py
 services/playground_rules_engine/__init__.py
