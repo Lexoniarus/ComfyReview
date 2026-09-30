@@ -39,10 +39,14 @@ def test_default_blueprint_compiles_to_standard_save_image() -> None:
     compiled = WorkflowCompiler().compile(blueprint, request)
 
     assert compiled.graph["33"]["class_type"] == "SaveImage"
+    assert compiled.graph["42"]["class_type"] == "CheckpointLoaderSimple"
+    assert compiled.graph["42"]["inputs"] == {"ckpt_name": "model.safetensors"}
     assert all(
-        node.get("class_type") != "name_meta_export"
+        node.get("class_type")
+        not in {"name_meta_export", "RandomLoadCheckpoint"}
         for node in compiled.graph.values()
     )
+    assert "CheckpointLoaderSimple" in compiled.capability_requirements
     assert compiled.graph["cr:output_subdir"]["inputs"]["value"] == (
         "playground/Hero"
     )
