@@ -2,6 +2,7 @@
 
 from comfyreview.repositories.sqlite.canonical_features import (
     SqliteArenaRepository,
+    SqliteCurationRepository,
     SqliteRankingRepository,
 )
 from comfyreview.repositories.sqlite.canonical_schema import (
@@ -30,6 +31,7 @@ __all__ = [
     "LegacySchemaManager",
     "SqliteOutputImageRepository",
     "SqliteArenaRepository",
+    "SqliteCurationRepository",
     "SqliteRankingRepository",
     "SqlitePathRelinker",
     "SqlitePromptRepository",

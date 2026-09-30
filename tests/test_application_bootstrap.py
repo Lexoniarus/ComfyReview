@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 from comfyreview.application import (
     ArenaService,
     CanonicalSchemaReport,
+    CurationImage,
+    CurationService,
     LegacySchemaReport,
     OutputImageReadModel,
     RankingService,
@@ -109,6 +111,19 @@ class _EmptyArenaRepository:
         raise AssertionError(decision)
 
 
+class _EmptyCurationRepository:
+    def get_live_image(self, image_uid):
+        return CurationImage(image_uid, Path("image.png"), None)
+
+    def assign(self, assignment):
+        raise AssertionError(assignment)
+
+
+class _EmptyCurationFiles:
+    def stage_move(self, image, set_key):
+        raise AssertionError((image, set_key))
+
+
 def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
     rankings = RankingService(_EmptyRankingRepository())
@@ -123,6 +138,11 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         arena_service=ArenaService(
             rankings=rankings,
             repository=_EmptyArenaRepository(),
+        ),
+        curation_service=CurationService(
+            repository=_EmptyCurationRepository(),
+            files=_EmptyCurationFiles(),
+            allowed_set_keys=settings.curation_set_keys,
         ),
     )
 
@@ -190,4 +210,5 @@ def test_default_container_wires_canonical_review_runtime(
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.ranking_service, RankingService)
     assert isinstance(container.arena_service, ArenaService)
+    assert isinstance(container.curation_service, CurationService)
     assert isinstance(container.canonical_schema, CanonicalSchemaManager)

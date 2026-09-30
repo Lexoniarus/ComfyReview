@@ -15,6 +15,8 @@ from comfyreview.application import (
     ArenaMutationError,
     ArenaResult,
     ArenaValidationError,
+    CurationResult,
+    CurationValidationError,
     InvalidOutputPathError,
     OutputPairNotFoundError,
     ReviewMutationError,
@@ -80,16 +82,33 @@ class _RouteArenaService:
         )
 
 
+class _RouteCurationService:
+    def __init__(self, error: Exception | None = None) -> None:
+        self._error = error
+
+    def assign(self, command):
+        if self._error is not None:
+            raise self._error
+        return CurationResult(
+            command.image_uid,
+            Path("image.png"),
+            None,
+            command.set_key,
+        )
+
+
 def _request(
     *,
     items: list[RatedItem] | None = None,
     review_service: object | None = None,
     arena_service: object | None = None,
+    curation_service: object | None = None,
 ) -> Request:
     container = SimpleNamespace(
         output_images=_OutputImageCatalog(items or []),
         review_service=review_service or _RouteReviewService(),
         arena_service=arena_service or _RouteArenaService(),
+        curation_service=curation_service or _RouteCurationService(),
     )
     application = SimpleNamespace(
         state=SimpleNamespace(container=container),
@@ -266,24 +285,16 @@ def test_curation_route_returns_400_for_unknown_set(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    output_root = tmp_path / "output"
-    output_root.mkdir()
-    png_path = output_root / "image.png"
-    json_path = output_root / "image.json"
-    png_path.write_bytes(b"png")
-    json_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(top_router, "OUTPUT_ROOT", output_root)
-    monkeypatch.setattr(top_router, "CURATION_SET_KEYS", ("scene",))
-    monkeypatch.setattr(
-        top_router,
-        "CURATION_DB_PATH",
-        tmp_path / "curation.sqlite3",
-    )
+    del tmp_path, monkeypatch
 
     with pytest.raises(HTTPException) as caught:
         top_router.assign_set(
-            png_path=str(png_path),
-            json_path=str(json_path),
+            request=_request(
+                curation_service=_RouteCurationService(
+                    CurationValidationError("unknown")
+                )
+            ),
+            image_uid="image",
             set_key="unknown",
             model="",
             mode="top",

@@ -9,6 +9,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_canonical_ranking_arena.py::"
         "test_arena_service_records_clamped_target_ratings"
     ),
+    "comfyreview.application.curation:CurationService.assign": (
+        "tests/test_canonical_curation.py::"
+        "test_curation_service_assigns_by_stable_image_identity"
+    ),
     "comfyreview.application.ranking:RankingService.list_images": (
         "tests/test_canonical_ranking_arena.py::"
         "test_ranking_service_filters_and_sorts_canonical_images"

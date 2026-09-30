@@ -5,6 +5,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from comfyreview.api import get_application_container
 from comfyreview.application import (
+    AssignCurationCommand,
+    CurationMutationError,
+    CurationValidationError,
     InvalidOutputPathError,
     OutputImageReference,
     OutputPairNotFoundError,
@@ -13,25 +16,12 @@ from comfyreview.application import (
     SubmitReviewCommand,
 )
 from config import (
-    ARENA_DB_PATH,
-    COMBO_PROMPTS_DB_PATH,
-    CURATION_DB_PATH,
     CURATION_SET_KEYS,
-    DB_PATH,
-    IMAGES_DB_PATH,
-    LORA_EXPORT_ROOT,
     MIN_RUNS,
-    OUTPUT_ROOT,
     PLAYGROUND_DB_PATH,
     POOL_LIMIT,
-    PROMPT_TOKENS_DB_PATH,
 )
 from services.context_filters import build_gallery_context
-from services.curation_assignment_service import (
-    CurationMutationError,
-    CurationValidationError,
-    assign_image_to_set,
-)
 from services.gallery_view_service import build_top_pictures_page
 from services.output_file_service import OutputMutationError
 from templates import TOP_PICTURES_HTML
@@ -76,8 +66,8 @@ def top_pictures(
 
 @router.post("/assign_set")
 def assign_set(
-    png_path: str = Form(...),
-    json_path: str = Form(...),
+    request: Request,
+    image_uid: str = Form(...),
     set_key: str = Form(""),
     model: str = Form(""),
     mode: str = Form("top"),
@@ -85,19 +75,11 @@ def assign_set(
     view_set_key: str = Form(""),
 ):
     try:
-        assign_image_to_set(
-            curation_db_path=CURATION_DB_PATH,
-            output_root=OUTPUT_ROOT,
-            lora_export_root=LORA_EXPORT_ROOT,
-            allowed_set_keys=CURATION_SET_KEYS,
-            ratings_db_path=DB_PATH,
-            prompt_tokens_db_path=PROMPT_TOKENS_DB_PATH,
-            images_db_path=IMAGES_DB_PATH,
-            combo_prompts_db_path=COMBO_PROMPTS_DB_PATH,
-            arena_db_path=ARENA_DB_PATH,
-            png_path=str(png_path),
-            json_path=str(json_path),
-            set_key=str(set_key),
+        get_application_container(request).curation_service.assign(
+            AssignCurationCommand(
+                image_uid=image_uid,
+                set_key=set_key,
+            )
         )
     except (CurationValidationError, InvalidOutputPathError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

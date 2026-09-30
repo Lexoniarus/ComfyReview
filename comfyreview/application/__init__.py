@@ -12,6 +12,18 @@ from comfyreview.application.arena import (
     ArenaValidationError,
     RecordArenaDecisionCommand,
 )
+from comfyreview.application.curation import (
+    AssignCurationCommand,
+    CurationAssignment,
+    CurationFileManager,
+    CurationImage,
+    CurationMutationError,
+    CurationRepository,
+    CurationResult,
+    CurationService,
+    CurationValidationError,
+    StagedCurationMove,
+)
 from comfyreview.application.lifecycle import (
     CanonicalSchemaLifecycle,
     CanonicalSchemaReport,
@@ -57,6 +69,7 @@ from comfyreview.application.reviews import (
 )
 
 __all__ = [
+    "AssignCurationCommand",
     "ArenaCompetitor",
     "ArenaDecision",
     "ArenaMutationError",
@@ -70,6 +83,14 @@ __all__ = [
     "CanonicalOutputImageSource",
     "CanonicalSchemaLifecycle",
     "CanonicalSchemaReport",
+    "CurationAssignment",
+    "CurationFileManager",
+    "CurationImage",
+    "CurationMutationError",
+    "CurationRepository",
+    "CurationResult",
+    "CurationService",
+    "CurationValidationError",
     "InvalidOutputPathError",
     "JobQueue",
     "LegacySchemaIssue",
@@ -100,6 +121,7 @@ __all__ = [
     "ReviewValidationError",
     "StagedDeletion",
     "StoredReview",
+    "StagedCurationMove",
     "SubmitReviewCommand",
     "WorkerRuntime",
 ]

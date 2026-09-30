@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from comfyreview.application import (
     ArenaService,
     CanonicalSchemaLifecycle,
+    CurationService,
     LegacySchemaLifecycle,
     OutputImageCatalog,
     RankingService,
@@ -26,6 +27,7 @@ from comfyreview.observability import (
 )
 from comfyreview.providers import (
     CanonicalFirstOutputImageCatalog,
+    LocalCurationFileManager,
     LocalOutputImageCatalog,
 )
 from comfyreview.repositories.sqlite import (
@@ -33,6 +35,7 @@ from comfyreview.repositories.sqlite import (
     LegacyProjectionJobQueue,
     LegacySchemaManager,
     SqliteArenaRepository,
+    SqliteCurationRepository,
     SqliteOutputImageRepository,
     SqliteRankingRepository,
     SqliteReviewRepository,
@@ -58,6 +61,7 @@ class ApplicationContainer:
     review_service: ReviewService
     ranking_service: RankingService
     arena_service: ArenaService
+    curation_service: CurationService
 
 
 def _prepare_directories(settings: Settings) -> None:
@@ -140,6 +144,13 @@ def build_application_container(
             repository=SqliteArenaRepository(
                 configured.canonical_database_path
             ),
+        ),
+        curation_service=CurationService(
+            repository=SqliteCurationRepository(
+                configured.canonical_database_path
+            ),
+            files=LocalCurationFileManager(configured.output_root),
+            allowed_set_keys=configured.curation_set_keys,
         ),
     )
 
