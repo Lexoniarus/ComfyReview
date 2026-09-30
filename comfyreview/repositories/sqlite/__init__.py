@@ -1,10 +1,6 @@
 """SQLite persistence adapters."""
 
-from comfyreview.repositories.sqlite.canonical_features import (
-    SqliteArenaRepository,
-    SqliteCurationRepository,
-    SqliteRankingRepository,
-)
+from comfyreview.repositories.sqlite.arena import SqliteArenaRepository
 from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
@@ -13,10 +9,12 @@ from comfyreview.repositories.sqlite.connection import (
     connect_existing,
     connect_read_only,
 )
+from comfyreview.repositories.sqlite.curation import SqliteCurationRepository
 from comfyreview.repositories.sqlite.legacy_schema import LegacySchemaManager
 from comfyreview.repositories.sqlite.output_images import (
     SqliteOutputImageRepository,
 )
+from comfyreview.repositories.sqlite.ranking import SqliteRankingRepository
 from comfyreview.repositories.sqlite.reviews import (
     LegacyProjectionJobQueue,
     SqlitePromptRepository,

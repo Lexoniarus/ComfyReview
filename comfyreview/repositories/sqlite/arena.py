@@ -1,0 +1,261 @@
+"""SQLite adapter for canonical Arena workflows."""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+from uuid import uuid4
+
+from comfyreview.application.arena import (
+    ArenaCompetitor,
+    ArenaDecision,
+    ArenaMutationError,
+    ArenaResult,
+    ArenaValidationError,
+)
+from comfyreview.repositories.sqlite.connection import (
+    connect_existing,
+    connect_read_only,
+)
+
+
+class SqliteArenaRepository:
+    """Persist canonical Arena matches and review events atomically."""
+
+    def __init__(self, database_path: Path) -> None:
+        self._database_path = Path(database_path)
+
+    def list_played_directions(
+        self,
+        image_uids: tuple[str, ...],
+    ) -> frozenset[tuple[str, str]]:
+        """Return canonical directed matches within the supplied pool."""
+        if len(image_uids) < 2:
+            return frozenset()
+        placeholders = ",".join("?" for _value in image_uids)
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                f"""
+                SELECT left_image.image_uid AS left_uid,
+                       right_image.image_uid AS right_uid
+                FROM arena_matches AS match
+                JOIN images AS left_image
+                    ON left_image.id = match.left_image_id
+                JOIN images AS right_image
+                    ON right_image.id = match.right_image_id
+                WHERE left_image.image_uid IN ({placeholders})
+                  AND right_image.image_uid IN ({placeholders})
+                """,
+                (*image_uids, *image_uids),
+            ).fetchall()
+            return frozenset(
+                (str(row["left_uid"]), str(row["right_uid"])) for row in rows
+            )
+        finally:
+            connection.close()
+
+    def get_competitors(
+        self,
+        left_image_uid: str,
+        right_image_uid: str,
+    ) -> tuple[ArenaCompetitor, ArenaCompetitor]:
+        """Return live aggregate state for exactly two images."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            competitors = self._load_competitors(
+                connection,
+                left_image_uid,
+                right_image_uid,
+            )
+            return (
+                competitors[left_image_uid][1],
+                competitors[right_image_uid][1],
+            )
+        finally:
+            connection.close()
+
+    def save_decision(self, decision: ArenaDecision) -> ArenaResult:
+        """Write one match and its two generated ratings in one transaction."""
+        connection = connect_existing(self._database_path, rows=True)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            command = decision.command
+            competitors = self._load_competitors(
+                connection,
+                command.left_image_uid,
+                command.right_image_uid,
+            )
+            self._ensure_direction_is_new(
+                connection,
+                command.left_image_uid,
+                command.right_image_uid,
+            )
+            match_uid = f"runtime-arena-{uuid4()}"
+            left_id = competitors[command.left_image_uid][0]
+            right_id = competitors[command.right_image_uid][0]
+            winner_uid = (
+                command.left_image_uid
+                if command.winner_side == "left"
+                else command.right_image_uid
+            )
+            winner_id = competitors[winner_uid][0]
+            connection.execute(
+                """
+                INSERT INTO arena_matches(
+                    match_uid,
+                    left_image_id,
+                    right_image_id,
+                    winner_image_id,
+                    decision,
+                    source,
+                    source_key
+                )
+                VALUES (?, ?, ?, ?, ?, 'runtime', ?)
+                """,
+                (
+                    match_uid,
+                    left_id,
+                    right_id,
+                    winner_id,
+                    command.winner_side,
+                    match_uid,
+                ),
+            )
+            loser_uid = (
+                command.right_image_uid
+                if command.winner_side == "left"
+                else command.left_image_uid
+            )
+            self._append_rating(
+                connection,
+                competitors[winner_uid][0],
+                decision.winner_rating,
+                match_uid,
+                "winner",
+            )
+            self._append_rating(
+                connection,
+                competitors[loser_uid][0],
+                decision.loser_rating,
+                match_uid,
+                "loser",
+            )
+            connection.commit()
+            return ArenaResult(
+                match_uid=match_uid,
+                winner_image_uid=winner_uid,
+                winner_rating=decision.winner_rating,
+                loser_rating=decision.loser_rating,
+            )
+        except ArenaValidationError:
+            connection.rollback()
+            raise
+        except Exception as error:
+            connection.rollback()
+            raise ArenaMutationError(
+                "Could not record canonical Arena decision"
+            ) from error
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _load_competitors(
+        connection: sqlite3.Connection,
+        left_image_uid: str,
+        right_image_uid: str,
+    ) -> dict[str, tuple[int, ArenaCompetitor]]:
+        rows = connection.execute(
+            """
+            SELECT image.id,
+                   image.image_uid,
+                   summary.average_rating
+            FROM images AS image
+            JOIN image_review_summary AS summary
+                ON summary.image_id = image.id
+            WHERE image.image_uid IN (?, ?)
+              AND image.deleted_at IS NULL
+              AND summary.average_rating IS NOT NULL
+              AND summary.rating_count > 0
+            """,
+            (left_image_uid, right_image_uid),
+        ).fetchall()
+        competitors = {
+            str(row["image_uid"]): (
+                int(row["id"]),
+                ArenaCompetitor(
+                    image_uid=str(row["image_uid"]),
+                    average_rating=float(row["average_rating"]),
+                ),
+            )
+            for row in rows
+        }
+        if set(competitors) != {left_image_uid, right_image_uid}:
+            raise ArenaValidationError(
+                "Arena pair no longer contains two live rated images"
+            )
+        return competitors
+
+    @staticmethod
+    def _ensure_direction_is_new(
+        connection: sqlite3.Connection,
+        left_image_uid: str,
+        right_image_uid: str,
+    ) -> None:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM arena_matches AS match
+            JOIN images AS left_image
+                ON left_image.id = match.left_image_id
+            JOIN images AS right_image
+                ON right_image.id = match.right_image_id
+            WHERE left_image.image_uid = ?
+              AND right_image.image_uid = ?
+            LIMIT 1
+            """,
+            (left_image_uid, right_image_uid),
+        ).fetchone()
+        if row is not None:
+            raise ArenaValidationError(
+                "Arena pairing was already decided in this direction"
+            )
+
+    @staticmethod
+    def _append_rating(
+        connection: sqlite3.Connection,
+        image_id: int,
+        rating: int,
+        match_uid: str,
+        role: str,
+    ) -> None:
+        connection.execute(
+            "UPDATE review_clock SET value = value + 1 WHERE singleton_id = 1"
+        )
+        sequence_row = connection.execute(
+            "SELECT value FROM review_clock WHERE singleton_id = 1"
+        ).fetchone()
+        if sequence_row is None:
+            raise RuntimeError("Review clock is unavailable")
+        event_uid = f"{match_uid}-{role}"
+        connection.execute(
+            """
+            INSERT INTO review_events(
+                event_uid,
+                image_id,
+                event_type,
+                rating,
+                source,
+                source_key,
+                sequence
+            )
+            VALUES (?, ?, 'rating', ?, 'runtime_arena', ?, ?)
+            """,
+            (
+                event_uid,
+                image_id,
+                int(rating),
+                event_uid,
+                int(sequence_row[0]),
+            ),
+        )
