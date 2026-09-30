@@ -343,8 +343,10 @@ class LocalLegacyOutputImportSource:
         existing_generation_uid = self._optional_text(
             item.get("canonical_generation_uid")
         )
-        image_uid = (
-            existing_image_uid or f"legacy-image-{str(item['png_sha256'])}"
+        image_uid = existing_image_uid or self._image_uid(
+            png_sha256=str(item["png_sha256"]),
+            generation_uid=generation_uid,
+            output_index=output_index,
         )
 
         return LegacyImageImport(
@@ -398,6 +400,19 @@ class LocalLegacyOutputImportSource:
                 "generations"
             )
         return next(iter(existing), f"legacy-generation-{group_key}")
+
+    @staticmethod
+    def _image_uid(
+        *,
+        png_sha256: str,
+        generation_uid: str,
+        output_index: int,
+    ) -> str:
+        evidence = (
+            f"{png_sha256}\0{generation_uid}\0legacy_sidecar\0{output_index}"
+        )
+        digest = hashlib.sha256(evidence.encode("utf-8")).hexdigest()
+        return f"legacy-image-{digest}"
 
     @staticmethod
     def _resolve_source(

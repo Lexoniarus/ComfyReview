@@ -11,6 +11,7 @@ import pytest
 
 from comfyreview.__main__ import main
 from comfyreview.importers import (
+    LegacyOutputAuditor,
     LegacyOutputImporter,
     LegacyOutputImportValidationError,
 )
@@ -432,6 +433,37 @@ def test_import_is_idempotent_for_one_audit_snapshot(tmp_path: Path) -> None:
         assert connection.execute(
             "SELECT COUNT(*) FROM images"
         ).fetchone() == (1,)
+
+
+def test_import_distinguishes_equal_pngs_from_distinct_generations(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    output_root = tmp_path / "output"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    first_png, first_json = _write_source(output_root)
+    second_png = output_root / "second.png"
+    second_json = output_root / "second.json"
+    second_png.write_bytes(first_png.read_bytes())
+    metadata = json.loads(first_json.read_text(encoding="utf-8"))
+    metadata["timestamp"] = "20260929_130000"
+    second_json.write_text(json.dumps(metadata), encoding="utf-8")
+    report_path = tmp_path / "audit.json"
+    LegacyOutputAuditor(
+        output_root=output_root,
+        canonical_database_path=database_path,
+    ).audit(report_path)
+
+    result = _importer(database_path).import_audit(report_path)
+
+    assert result.new_images == 2
+    assert result.new_generations == 2
+    with sqlite3.connect(database_path) as connection:
+        image_uids = connection.execute(
+            "SELECT image_uid FROM images ORDER BY image_uid"
+        ).fetchall()
+    assert len(image_uids) == 2
+    assert image_uids[0] != image_uids[1]
 
 
 def test_import_uses_rollback_without_unnecessary_restore(

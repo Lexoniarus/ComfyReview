@@ -163,7 +163,6 @@ class LegacyOutputAuditor:
             timestamp=timestamp,
             workflow_sha256=graph_sha,
             sidecar_sha256=str(base["sidecar_sha256"]),
-            fallback_name=resolved_png.stem,
         )
         graph_facts = self._graph_facts(graph)
         summary_facts = self._sidecar_summary(metadata)
@@ -501,10 +500,9 @@ class LegacyOutputAuditor:
         timestamp: str,
         workflow_sha256: str | None,
         sidecar_sha256: str,
-        fallback_name: str,
     ) -> str:
         evidence = workflow_sha256 or sidecar_sha256
-        time_key = timestamp or fallback_name
+        time_key = timestamp or sidecar_sha256
         payload = f"legacy_sidecar\\0{time_key}\\0{evidence}"
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
