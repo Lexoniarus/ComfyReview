@@ -17,7 +17,6 @@ from comfyreview.repositories.sqlite.legacy_schema import LegacySchemaManager
 from comfyreview.repositories.sqlite.output_images import (
     SqliteOutputImageRepository,
 )
-from comfyreview.repositories.sqlite.path_relink import SqlitePathRelinker
 from comfyreview.repositories.sqlite.reviews import (
     LegacyProjectionJobQueue,
     SqlitePromptRepository,
@@ -33,7 +32,6 @@ __all__ = [
     "SqliteArenaRepository",
     "SqliteCurationRepository",
     "SqliteRankingRepository",
-    "SqlitePathRelinker",
     "SqlitePromptRepository",
     "SqliteReviewRepository",
     "connect_existing",

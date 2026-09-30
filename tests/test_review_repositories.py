@@ -255,6 +255,22 @@ def test_review_repository_rejects_canonical_event_deletion(
         ).fetchone() == (1,)
 
 
+def test_review_repository_rejects_writable_legacy_review_state(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "ratings.sqlite3"
+    initialize_legacy_database("ratings", database_path)
+    repository = SqliteReviewRepository(database_path)
+
+    with pytest.raises(RuntimeError, match="schema v4"):
+        repository.append(_review_record(tmp_path / "image.json", 8))
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM ratings"
+        ).fetchone() == (0,)
+
+
 def test_prompt_repository_is_compatibility_noop(tmp_path: Path) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
     CanonicalSchemaManager(database_path).prepare_startup()

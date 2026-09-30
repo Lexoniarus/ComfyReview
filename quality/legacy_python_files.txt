@@ -27,7 +27,6 @@ services/comfy_client_core/patching.py
 services/comfy_client_core/types.py
 services/comfy_client_core/workflows.py
 services/context_filters.py
-services/curation_assignment_service.py
 services/file_urls.py
 services/mv_worker_core/__init__.py
 services/mv_worker_core/combo_pipeline.py
@@ -35,7 +34,6 @@ services/mv_worker_core/debounce.py
 services/mv_worker_core/images_pipeline.py
 services/mv_worker_core/prompt_ratings_pipeline.py
 services/mv_worker_core/ratings_io.py
-services/path_relink_service.py
 services/playground_common/__init__.py
 services/playground_common/empty_placeholders.py
 services/playground_generator.py
@@ -67,7 +65,6 @@ services/playground_rules_engine/filtering.py
 services/playground_rules_engine/rules.py
 services/playground_rules_engine/tagging.py
 services/playground_rules_engine/types.py
-services/rating_service.py
 services/scene_resolver.py
 services/ui_state_service.py
 stores/__init__.py

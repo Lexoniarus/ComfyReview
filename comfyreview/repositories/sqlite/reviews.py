@@ -27,8 +27,7 @@ class SqliteReviewRepository:
         """Atomically apply one rating replacement or delete observation."""
         connection = connect_existing(self._database_path, rows=True)
         try:
-            if not self._uses_canonical_schema(connection):
-                return self._append_legacy(connection, record)
+            self._require_canonical_schema(connection)
             connection.execute("BEGIN IMMEDIATE")
             positive_prompt_id = self._ensure_prompt(
                 connection,
@@ -73,42 +72,9 @@ class SqliteReviewRepository:
             connection.close()
 
     def delete(self, review_id: int) -> None:
-        """Remove one current rating and reverse its learning contribution."""
-        connection = connect_existing(self._database_path, rows=True)
-        try:
-            if not self._uses_canonical_schema(connection):
-                self._delete_legacy(connection, review_id)
-                return
-            connection.execute("BEGIN IMMEDIATE")
-            if self._object_type(connection, "review_events") == "table":
-                raise RuntimeError("Canonical review events are append-only")
-            row = connection.execute(
-                """
-                SELECT review.rating, image.generation_id
-                FROM image_reviews AS review
-                JOIN images AS image ON image.id = review.image_id
-                WHERE review.id = ?
-                """,
-                (int(review_id),),
-            ).fetchone()
-            if row is not None:
-                self._apply_learning_delta(
-                    connection,
-                    generation_id=int(row["generation_id"]),
-                    rating=int(row["rating"]),
-                    deleted=False,
-                    delta=-1,
-                )
-                connection.execute(
-                    "DELETE FROM image_reviews WHERE id = ?",
-                    (int(review_id),),
-                )
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
+        """Reject deletion because canonical review history is append-only."""
+        del review_id
+        raise RuntimeError("Canonical review events are append-only")
 
     def _append_canonical_event(
         self,
@@ -234,84 +200,22 @@ class SqliteReviewRepository:
         return int(cursor.lastrowid or 0)
 
     @staticmethod
-    def _object_type(connection: sqlite3.Connection, name: str) -> str:
-        row = connection.execute(
-            "SELECT type FROM sqlite_master WHERE name = ?",
-            (name,),
-        ).fetchone()
-        return str(row[0]) if row else ""
-
-    @staticmethod
-    def _uses_canonical_schema(connection: sqlite3.Connection) -> bool:
-        row = connection.execute(
-            "SELECT 1 FROM sqlite_master "
-            "WHERE type = 'table' AND name = 'schema_metadata'"
-        ).fetchone()
-        return row is not None
-
-    @staticmethod
-    def _append_legacy(
+    def _require_canonical_schema(
         connection: sqlite3.Connection,
-        record: ReviewRecord,
-    ) -> StoredReview:
-        image = record.image
-        if image.pair.json_path is None:
-            raise RuntimeError("Legacy review storage requires a JSON sidecar")
-        row = connection.execute(
-            """
-            SELECT COALESCE(MAX(run), 0) AS maximum_run
-            FROM ratings
-            WHERE json_path = ?
-            """,
-            (str(image.pair.json_path),),
-        ).fetchone()
-        run = int(row["maximum_run"] or 0) + 1
-        cursor = connection.execute(
-            """
-            INSERT INTO ratings(
-                png_path, json_path, run, model_branch, checkpoint,
-                combo_key, rating, deleted, rating_count, steps, cfg,
-                sampler, scheduler, denoise, loras_json, pos_prompt,
-                neg_prompt
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                str(image.pair.png_path),
-                str(image.pair.json_path),
-                run,
-                image.model_branch,
-                image.checkpoint,
-                image.combo_key,
-                record.rating,
-                int(record.deleted),
-                run,
-                image.steps,
-                image.cfg,
-                image.sampler,
-                image.scheduler,
-                image.denoise,
-                image.loras_json,
-                image.positive_prompt,
-                image.negative_prompt,
-            ),
-        )
-        connection.commit()
-        return StoredReview(
-            review_id=int(cursor.lastrowid or 0),
-            run=run,
-        )
-
-    @staticmethod
-    def _delete_legacy(
-        connection: sqlite3.Connection,
-        review_id: int,
     ) -> None:
-        connection.execute(
-            "DELETE FROM ratings WHERE id = ?",
-            (int(review_id),),
+        rows = dict(
+            connection.execute(
+                "SELECT name, type FROM sqlite_master "
+                "WHERE name IN ('schema_metadata', 'review_events', "
+                "'image_reviews')"
+            ).fetchall()
         )
-        connection.commit()
+        if rows != {
+            "schema_metadata": "table",
+            "review_events": "table",
+            "image_reviews": "view",
+        }:
+            raise RuntimeError("Canonical schema v4 is required for reviews")
 
     def _ensure_prompt(
         self,

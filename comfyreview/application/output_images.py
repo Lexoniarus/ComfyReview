@@ -34,6 +34,9 @@ class CanonicalOutputImageRecord:
     workflow_json: str | None
     current_rating: int | None
     review_version: int | None
+    average_rating: float | None
+    rating_count: int
+    assigned_set_key: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +56,9 @@ class OutputImageReadModel:
     output_index: int = 0
     current_rating: int | None = None
     review_version: int | None = None
+    average_rating: float | None = None
+    rating_count: int = 0
+    assigned_set_key: str | None = None
     source: str = "legacy_sidecar"
 
 

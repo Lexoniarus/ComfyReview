@@ -2,9 +2,6 @@
   "schema_version": 1,
   "violations": {
     "services/analytics_page_service.py|services.no_global_config": 1,
-    "services/arena_service.py|services.no_global_config": 1,
-    "services/arena_service.py|services.no_sql": 1,
-    "services/arena_service.py|services.no_sqlite": 1,
     "services/combo_prompts/images_index.py|services.no_global_config": 1,
     "services/combo_prompts/images_index.py|services.no_sqlite": 1,
     "services/comfy_client.py|services.no_global_config": 1,
@@ -19,8 +16,6 @@
     "services/mv_worker_core/prompt_ratings_pipeline.py|services.no_sqlite": 1,
     "services/mv_worker_core/ratings_io.py|services.no_sql": 3,
     "services/mv_worker_core/ratings_io.py|services.no_sqlite": 1,
-    "services/path_relink_service.py|services.no_sql": 8,
-    "services/path_relink_service.py|services.no_sqlite": 1,
     "services/playground_generator_core/generator.py|services.no_global_config": 1,
     "services/playground_generator_core/slot_picker.py|services.no_global_config": 1,
     "services/playground_generator_ui/best_pictures.py|services.no_global_config": 1,
@@ -30,13 +25,8 @@
     "services/playground_hub_service.py|services.no_global_config": 1,
     "services/playground_hub_service.py|services.no_sql": 1,
     "services/playground_hub_service.py|services.no_sqlite": 1,
-    "services/pool_service.py|services.no_global_config": 1,
-    "services/pool_service.py|services.no_sqlite": 1,
     "services/prompt_ratings_service.py|services.no_sql": 1,
     "services/prompt_ratings_service.py|services.no_sqlite": 1,
-    "services/rating_service.py|services.no_global_config": 1,
-    "services/rating_service.py|services.no_sql": 1,
-    "services/review_page_service.py|services.no_sql": 2,
     "services/scene_resolver.py|services.no_global_config": 1
   }
 }

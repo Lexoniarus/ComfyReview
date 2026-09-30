@@ -31,8 +31,11 @@ SELECT
     generation.workflow_json,
     positive_prompt.text AS positive_prompt,
     negative_prompt.text AS negative_prompt,
-    review.rating AS current_rating,
-    review.version AS review_version
+    summary.current_rating,
+    summary.latest_rating_sequence AS review_version,
+    summary.average_rating,
+    summary.rating_count,
+    assignment.set_key AS assigned_set_key
 FROM images AS image
 JOIN generations AS generation
     ON generation.id = image.generation_id
@@ -40,8 +43,10 @@ JOIN prompts AS positive_prompt
     ON positive_prompt.id = generation.positive_prompt_id
 JOIN prompts AS negative_prompt
     ON negative_prompt.id = generation.negative_prompt_id
-LEFT JOIN image_reviews AS review
-    ON review.image_id = image.id
+LEFT JOIN image_review_summary AS summary
+    ON summary.image_id = image.id
+LEFT JOIN curation_assignments AS assignment
+    ON assignment.image_id = image.id
 WHERE image.deleted_at IS NULL
 """
 
@@ -129,6 +134,17 @@ class SqliteOutputImageRepository:
             review_version=(
                 int(row["review_version"])
                 if row["review_version"] is not None
+                else None
+            ),
+            average_rating=(
+                float(row["average_rating"])
+                if row["average_rating"] is not None
+                else None
+            ),
+            rating_count=int(row["rating_count"] or 0),
+            assigned_set_key=(
+                str(row["assigned_set_key"])
+                if row["assigned_set_key"] is not None
                 else None
             ),
         )

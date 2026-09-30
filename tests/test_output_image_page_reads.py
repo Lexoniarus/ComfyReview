@@ -24,11 +24,6 @@ class _RecordingOutputImageCatalog:
         return self._images
 
 
-class _RatingsConnection:
-    def close(self) -> None:
-        return None
-
-
 class _LabelMatcher:
     def resolve(
         self,
@@ -67,27 +62,12 @@ def _gallery_context() -> GalleryContext:
 
 def test_review_page_reads_images_from_catalog(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
-    from services import review_page_service
-
     catalog = _RecordingOutputImageCatalog()
-    monkeypatch.setattr(
-        review_page_service,
-        "db",
-        lambda _path: _RatingsConnection(),
-    )
-    monkeypatch.setattr(
-        review_page_service,
-        "get_rated_map",
-        lambda _connection: {},
-    )
 
     context = build_review_page_context(
         output_images=catalog,
-        ratings_db_path=tmp_path / "ratings.sqlite3",
         playground_db_path=tmp_path / "playground.sqlite3",
-        curation_db_path=tmp_path / "curation.sqlite3",
         unrated=1,
         model="",
         subdir="",

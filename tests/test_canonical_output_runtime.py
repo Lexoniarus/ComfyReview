@@ -1,4 +1,4 @@
-"""Integration tests for canonical-first output image runtime reads."""
+"""Integration tests for canonical output image runtime reads."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from comfyreview.application import OutputImageReference
-from comfyreview.providers import (
-    CanonicalFirstOutputImageCatalog,
-    LocalOutputImageCatalog,
+from comfyreview.application import (
+    InvalidOutputPathError,
+    OutputImageReference,
 )
+from comfyreview.providers import CanonicalOutputImageCatalog
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteOutputImageRepository,
@@ -124,7 +124,7 @@ def test_canonical_read_connection_rejects_writes(tmp_path: Path) -> None:
         connection.close()
 
 
-def test_canonical_first_catalog_lists_and_resolves_without_sidecar(
+def test_canonical_catalog_lists_and_resolves_without_sidecar(
     tmp_path: Path,
 ) -> None:
     output_root = tmp_path / "output"
@@ -136,23 +136,14 @@ def test_canonical_first_catalog_lists_and_resolves_without_sidecar(
     native_png.write_bytes(b"png")
     _insert_native_image(database_path, native_png)
 
-    legacy_png = output_root / "legacy.png"
-    legacy_json = output_root / "legacy.json"
-    legacy_png.write_bytes(b"png")
-    legacy_json.write_text("{}", encoding="utf-8")
-
     repository = SqliteOutputImageRepository(database_path)
-    catalog = CanonicalFirstOutputImageCatalog(
+    catalog = CanonicalOutputImageCatalog(
         output_root=output_root,
         canonical_images=repository,
-        legacy_catalog=LocalOutputImageCatalog(output_root),
     )
 
     images = catalog.list_images()
-    assert {item.png_path.name for item in images} == {
-        "native.png",
-        "legacy.png",
-    }
+    assert {item.png_path.name for item in images} == {"native.png"}
     native = next(item for item in images if item.image_uid == "image-native")
     assert native.json_path is None
     assert native.meta["pos_prompt"] == "hero"
@@ -168,3 +159,11 @@ def test_canonical_first_catalog_lists_and_resolves_without_sidecar(
     assert resolved.pair.json_path is None
     assert resolved.image_uid == "image-native"
     assert resolved.generation_uid == "generation-native"
+
+    with pytest.raises(InvalidOutputPathError, match="image_uid"):
+        catalog.resolve(
+            OutputImageReference.from_client_paths(
+                png_path=str(native_png),
+                json_path=str(native_png.with_suffix(".json")),
+            )
+        )

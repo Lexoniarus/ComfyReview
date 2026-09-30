@@ -12,13 +12,7 @@ from comfyreview.application import (
     ReviewValidationError,
     SubmitReviewCommand,
 )
-from config import (
-    CURATION_DB_PATH,
-    CURATION_SET_KEYS,
-    DB_PATH,
-    DEFAULT_UNRATED_ONLY,
-    PLAYGROUND_DB_PATH,
-)
+from config import CURATION_SET_KEYS, DEFAULT_UNRATED_ONLY, PLAYGROUND_DB_PATH
 from services.context_filters import (
     normalize_model,
     normalize_set_key,
@@ -41,9 +35,7 @@ def index(
 ):
     ctx = build_review_page_context(
         output_images=get_application_container(request).output_images,
-        ratings_db_path=DB_PATH,
         playground_db_path=PLAYGROUND_DB_PATH,
-        curation_db_path=CURATION_DB_PATH,
         unrated=unrated,
         model=model,
         subdir=subdir,

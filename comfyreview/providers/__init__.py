@@ -5,12 +5,12 @@ from comfyreview.providers.legacy_output_import import (
     LocalLegacyOutputImportSource,
 )
 from comfyreview.providers.output_images import (
-    CanonicalFirstOutputImageCatalog,
+    CanonicalOutputImageCatalog,
     LocalOutputImageCatalog,
 )
 
 __all__ = [
-    "CanonicalFirstOutputImageCatalog",
+    "CanonicalOutputImageCatalog",
     "LocalCurationFileManager",
     "LocalLegacyOutputImportSource",
     "LocalOutputImageCatalog",

@@ -346,24 +346,21 @@ class LocalOutputImageCatalog:
             return
 
 
-class CanonicalFirstOutputImageCatalog:
-    """Merge canonical DB images with unimported legacy sidecar outputs."""
+class CanonicalOutputImageCatalog:
+    """Expose filesystem-validated images from canonical persistence."""
 
     def __init__(
         self,
         *,
         output_root: Path,
         canonical_images: CanonicalOutputImageSource,
-        legacy_catalog: LocalOutputImageCatalog,
     ) -> None:
         self._output_root = Path(output_root).resolve()
         self._canonical_images = canonical_images
-        self._legacy_catalog = legacy_catalog
 
     def list_images(self) -> tuple[OutputImageReadModel, ...]:
-        """Return canonical images first, then undiscovered legacy outputs."""
+        """Return live canonical images whose output files still exist."""
         images: list[OutputImageReadModel] = []
-        canonical_paths: set[Path] = set()
 
         for record in self._canonical_images.list_live_images():
             try:
@@ -371,12 +368,6 @@ class CanonicalFirstOutputImageCatalog:
             except (InvalidOutputPathError, OutputPairNotFoundError):
                 continue
             images.append(item)
-            canonical_paths.add(item.png_path)
-
-        for legacy in self._legacy_catalog.list_images():
-            resolved = legacy.png_path.resolve(strict=False)
-            if resolved not in canonical_paths:
-                images.append(legacy)
 
         images.sort(
             key=lambda item: (
@@ -387,9 +378,9 @@ class CanonicalFirstOutputImageCatalog:
         return tuple(images)
 
     def resolve(self, reference: OutputImageReference) -> ReviewImage:
-        """Resolve canonical identity or fall back to legacy sidecar lookup."""
+        """Resolve one stable canonical image identity."""
         if reference.image_uid is None:
-            return self._legacy_catalog.resolve(reference)
+            raise InvalidOutputPathError("Canonical image_uid is required")
 
         record = self._canonical_images.get_live_image(reference.image_uid)
         if record is None:
@@ -453,6 +444,9 @@ class CanonicalFirstOutputImageCatalog:
             output_index=record.output_index,
             current_rating=record.current_rating,
             review_version=record.review_version,
+            average_rating=record.average_rating,
+            rating_count=record.rating_count,
+            assigned_set_key=record.assigned_set_key,
             source=record.source,
         )
 

@@ -82,11 +82,12 @@ def list_current_python_files() -> set[str]:
     )
     if tracked.return_code != 0 or untracked.return_code != 0:
         raise QualityError("Git could not enumerate Python files")
-    return {
+    candidates = {
         normalize_path(path)
         for path in (tracked.stdout + untracked.stdout).splitlines()
         if path.strip()
     }
+    return {path for path in candidates if (ROOT / path).is_file()}
 
 
 def resolve_base_commit(base_ref: str) -> str:

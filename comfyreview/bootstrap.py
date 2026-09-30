@@ -26,9 +26,8 @@ from comfyreview.observability import (
     configure_logging,
 )
 from comfyreview.providers import (
-    CanonicalFirstOutputImageCatalog,
+    CanonicalOutputImageCatalog,
     LocalCurationFileManager,
-    LocalOutputImageCatalog,
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
@@ -93,13 +92,11 @@ def build_application_container(
         images_database_path=configured.images_database_path,
         debounce_seconds=configured.worker_debounce_seconds,
     )
-    legacy_output_images = LocalOutputImageCatalog(configured.output_root)
-    output_images = CanonicalFirstOutputImageCatalog(
+    output_images = CanonicalOutputImageCatalog(
         output_root=configured.output_root,
         canonical_images=SqliteOutputImageRepository(
             configured.canonical_database_path
         ),
-        legacy_catalog=legacy_output_images,
     )
     review_service = ReviewService(
         image_resolver=output_images,

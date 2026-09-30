@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from comfyreview.application import OutputImageCatalog, OutputImageReadModel
-from db_store import db, get_rated_map
 from meta_view import extract_prompts, extract_view, preset_text_from_view
 from services.context_filters import (
     build_dropdown_lists,
@@ -19,15 +18,11 @@ from services.context_filters import (
 )
 from services.file_urls import png_path_to_url
 from services.playground_label_service import get_playground_label_matcher
-from services.rating_service import rating_avg_and_runs_for_json
-from stores.curation_store import fetch_set_map
 
 
 def _filter_items_for_review(
     *,
     items: list[OutputImageReadModel],
-    rated_map: dict[str, int],
-    set_map: dict[str, str | None],
     model: str,
     subdir: str,
     set_key: str,
@@ -43,15 +38,14 @@ def _filter_items_for_review(
         ):
             continue
 
-        assigned = set_map.get(str(it.png_path))
         if not matches_set_filter(
             selected_set_key=set_key,
-            assigned_set_key=assigned,
+            assigned_set_key=it.assigned_set_key,
             png_path=str(it.png_path),
         ):
             continue
 
-        rated_count = _rated_count(it, rated_map)
+        rated_count = _rated_count(it)
         rated = 1 if rated_count > 0 else 0
         if unrated_only == 1 and rated == 1:
             continue
@@ -64,9 +58,7 @@ def _filter_items_for_review(
 def build_review_page_context(
     *,
     output_images: OutputImageCatalog,
-    ratings_db_path: Path,
     playground_db_path: Path,
-    curation_db_path: Path,
     unrated: int,
     model: str,
     subdir: str,
@@ -90,67 +82,33 @@ def build_review_page_context(
     items, total, model_list, subdir_list, character_options = (
         _load_review_items(output_images)
     )
-    set_map = _load_set_map_safe(curation_db_path, items)
-
-    con = db(ratings_db_path)
-    try:
-        rated_map = get_rated_map(con)
-        filtered = _filter_items_for_review(
-            items=items,
-            rated_map=rated_map,
-            set_map=set_map,
-            model=model_n,
-            subdir=subdir_n,
-            set_key=set_key_n,
-            unrated_only=unrated_flag,
+    filtered = _filter_items_for_review(
+        items=items,
+        model=model_n,
+        subdir=subdir_n,
+        set_key=set_key_n,
+        unrated_only=unrated_flag,
+    )
+    if unrated_flag == 0:
+        _sort_items_for_review_all(filtered)
+    if not filtered:
+        return _empty_review_context(
+            total=total,
+            unrated_flag=unrated_flag,
+            model_n=model_n,
+            subdir_n=subdir_n,
+            set_key_n=set_key_n,
+            model_list=model_list,
+            subdir_list=subdir_list,
+            character_options=character_options,
         )
 
-        if unrated_flag == 0:
-            _sort_items_for_review_all(filtered, rated_map)
-
-        if not filtered:
-            return _empty_review_context(
-                total=total,
-                unrated_flag=unrated_flag,
-                model_n=model_n,
-                subdir_n=subdir_n,
-                set_key_n=set_key_n,
-                model_list=model_list,
-                subdir_list=subdir_list,
-                character_options=character_options,
-            )
-
-        it = filtered[0]
-        rated_count = _rated_count(it, rated_map)
-
-        if it.image_uid is not None:
-            rating_avg = (
-                float(it.current_rating)
-                if it.current_rating is not None
-                else None
-            )
-            rating_runs = 1 if it.current_rating is not None else 0
-            last_rating = it.current_rating
-            trend_delta = None
-        else:
-            json_path = it.json_path
-            if json_path is None:
-                rating_avg = None
-                rating_runs = 0
-                last_rating = None
-                trend_delta = None
-            else:
-                rating_avg, rating_runs = rating_avg_and_runs_for_json(
-                    con,
-                    str(json_path),
-                )
-                last_rating, trend_delta = _fetch_last_and_trend(
-                    con,
-                    str(json_path),
-                    int(rating_runs or 0),
-                )
-    finally:
-        con.close()
+    it = filtered[0]
+    rated_count = _rated_count(it)
+    rating_avg = it.average_rating
+    rating_runs = it.rating_count
+    last_rating = it.current_rating
+    trend_delta = None
 
     view = extract_view(it.meta)
     labels = _resolve_labels(
@@ -186,41 +144,26 @@ def _load_review_items(
     list[str],
     list[dict[str, str]],
 ]:
-    items = list(output_images.list_images())
+    items = [
+        item
+        for item in output_images.list_images()
+        if item.image_uid is not None
+    ]
     total = len(items)
     model_list, subdir_list, character_options = build_dropdown_lists(items)
     return items, total, model_list, subdir_list, character_options
 
 
-def _load_set_map_safe(
-    curation_db_path: Path, items: list[OutputImageReadModel]
-) -> dict[str, str | None]:
-    try:
-        return fetch_set_map(
-            curation_db_path, [str(it.png_path) for it in items]
-        )
-    except Exception:
-        return {}
-
-
-def _rated_count(
-    item: OutputImageReadModel,
-    rated_map: dict[str, int],
-) -> int:
-    if item.image_uid is not None:
-        return 1 if item.current_rating is not None else 0
-    if item.json_path is None:
-        return 0
-    return int(rated_map.get(str(item.json_path), 0) or 0)
+def _rated_count(item: OutputImageReadModel) -> int:
+    return int(item.rating_count)
 
 
 def _sort_items_for_review_all(
     items: list[Any],
-    rated_map: dict[str, int],
 ) -> None:
     items.sort(
         key=lambda item: (
-            _rated_count(item, rated_map),
+            _rated_count(item),
             str(
                 getattr(item, "image_uid", None)
                 or getattr(item, "json_path", None)
@@ -272,48 +215,6 @@ def _empty_review_context(
         "trend_delta": None,
         "last_rating": None,
     }
-
-
-def _fetch_last_and_trend(con, json_path: str, rating_runs: int):
-    last_row = con.execute(
-        """
-        SELECT rating
-        FROM ratings
-        WHERE json_path = ?
-          AND rating IS NOT NULL
-          AND (deleted IS NULL OR deleted = 0)
-        ORDER BY run DESC
-        LIMIT 1
-        """,
-        (json_path,),
-    ).fetchone()
-
-    last_rating = (
-        int(last_row[0]) if last_row and last_row[0] is not None else None
-    )
-
-    trend_delta = None
-    if rating_runs >= 2:
-        prev_row = con.execute(
-            """
-            SELECT rating
-            FROM ratings
-            WHERE json_path = ?
-              AND rating IS NOT NULL
-              AND (deleted IS NULL OR deleted = 0)
-            ORDER BY run DESC
-            LIMIT 1 OFFSET 1
-            """,
-            (json_path,),
-        ).fetchone()
-
-        prev_rating = (
-            int(prev_row[0]) if prev_row and prev_row[0] is not None else None
-        )
-        if prev_rating is not None and last_rating is not None:
-            trend_delta = int(last_rating) - int(prev_rating)
-
-    return last_rating, trend_delta
 
 
 def _resolve_labels(
