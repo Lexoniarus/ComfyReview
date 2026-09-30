@@ -139,6 +139,13 @@ def build_application_container(
     comfyui_provider = NativeComfyUiProvider(
         UrlLibJsonTransport(configured.comfyui_base_url)
     )
+    generation_output_collector = GenerationOutputCollector(
+        comfyui=comfyui_provider,
+        source=LocalGenerationOutputSource(configured.output_root),
+        repository=SqliteGenerationOutputRepository(
+            configured.canonical_database_path
+        ),
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -169,15 +176,10 @@ def build_application_container(
                 configured.canonical_database_path
             ),
             comfyui=comfyui_provider,
+            outputs=generation_output_collector,
             identities=UuidGenerationIdentitySource(),
         ),
-        generation_output_collector=GenerationOutputCollector(
-            comfyui=comfyui_provider,
-            source=LocalGenerationOutputSource(configured.output_root),
-            repository=SqliteGenerationOutputRepository(
-                configured.canonical_database_path
-            ),
-        ),
+        generation_output_collector=generation_output_collector,
         prompt_catalog_service=prompt_catalog_service,
         playground_service=PlaygroundService(
             catalog=prompt_catalog_service,

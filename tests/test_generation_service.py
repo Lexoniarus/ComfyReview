@@ -176,18 +176,37 @@ class _ComfyUi:
         raise AssertionError(prompt_id)
 
 
+class _Outputs:
+    def __init__(
+        self,
+        events: list[str],
+        error: Exception | None = None,
+    ) -> None:
+        self.events = events
+        self.error = error
+
+    def collect(self, generation_uid, prompt_id):
+        self.events.append("collect")
+        assert (generation_uid, prompt_id) == ("generation-1", "prompt-1")
+        if self.error is not None:
+            raise self.error
+        return ()
+
+
 def _service(
     *,
     generations: _Generations,
     comfyui: _ComfyUi,
     events: list[str],
     requirements: tuple[str, ...] = ("SaveImage",),
+    output_error: Exception | None = None,
 ) -> GenerationService:
     return GenerationService(
         blueprints=_Blueprints(events, requirements),
         compiler=WorkflowCompiler(),
         generations=generations,
         comfyui=comfyui,
+        outputs=_Outputs(events, output_error),
         identities=_Identities(),
     )
 
@@ -415,3 +434,51 @@ def test_generation_service_wait_requires_generation_and_prompt_identity() -> (
         service.wait(" ", timeout_seconds=1)
     with pytest.raises(GenerationValidationError, match="no external"):
         service.wait("generation-1", timeout_seconds=1)
+
+
+def test_generation_service_collects_outputs_before_marking_complete() -> None:
+    events: list[str] = []
+    generations = _Generations(events)
+    generations.record = GenerationRecord(
+        "generation-1", "submitted", "prompt-1"
+    )
+    service = _service(
+        generations=generations,
+        comfyui=_ComfyUi(
+            events,
+            wait_result=ComfyUiJobStatus("prompt-1", "completed", True, False),
+        ),
+        events=events,
+    )
+
+    result = service.wait("generation-1", timeout_seconds=1)
+
+    assert result.status == "completed"
+    assert events[-2:] == ["collect", "completed"]
+
+
+def test_generation_service_marks_failed_collection_for_reconciliation() -> (
+    None
+):
+    events: list[str] = []
+    generations = _Generations(events)
+    generations.record = GenerationRecord(
+        "generation-1", "submitted", "prompt-1"
+    )
+    service = _service(
+        generations=generations,
+        comfyui=_ComfyUi(
+            events,
+            wait_result=ComfyUiJobStatus("prompt-1", "completed", True, False),
+        ),
+        events=events,
+        output_error=OSError("missing output"),
+    )
+
+    with pytest.raises(
+        GenerationReconciliationRequired,
+        match="outputs could not be confirmed",
+    ):
+        service.wait("generation-1", timeout_seconds=1)
+
+    assert events[-2:] == ["collect", "reconcile"]

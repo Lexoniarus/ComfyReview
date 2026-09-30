@@ -171,6 +171,16 @@ class GenerationPort(Protocol):
         ...
 
 
+class GenerationOutputCollection(Protocol):
+    """Persist outputs after ComfyUI reports successful completion."""
+
+    def collect(
+        self, generation_uid: str, prompt_id: str
+    ) -> tuple[object, ...]:
+        """Collect every expected output for one completed generation."""
+        ...
+
+
 class GenerationService:
     """Coordinate compilation, short persistence and external submission."""
 
@@ -181,12 +191,14 @@ class GenerationService:
         compiler: WorkflowCompiler,
         generations: GenerationRepository,
         comfyui: ComfyUiProvider,
+        outputs: GenerationOutputCollection,
         identities: GenerationIdentitySource,
     ) -> None:
         self._blueprints = blueprints
         self._compiler = compiler
         self._generations = generations
         self._comfyui = comfyui
+        self._outputs = outputs
         self._identities = identities
         self._logger = logging.getLogger("comfyreview.generation")
 
@@ -295,10 +307,25 @@ class GenerationService:
                 status.message or "comfyui_failed",
             )
         elif status.completed:
-            updated = self._generations.mark_completed(record.generation_uid)
+            updated = self._complete(record)
         else:
             updated = self._generations.mark_running(record.generation_uid)
         return self._submission(updated)
+
+    def _complete(self, record: GenerationRecord) -> GenerationRecord:
+        assert record.prompt_id is not None
+        try:
+            self._outputs.collect(record.generation_uid, record.prompt_id)
+            return self._generations.mark_completed(record.generation_uid)
+        except Exception as error:
+            self._mark_reconciliation(
+                record.generation_uid,
+                prompt_id=record.prompt_id,
+                reason="output_collection_failed",
+            )
+            raise GenerationReconciliationRequired(
+                "ComfyUI completed but outputs could not be confirmed"
+            ) from error
 
     def _validate_capabilities(self, compiled: CompiledWorkflow) -> None:
         requirements = set(compiled.capability_requirements)
