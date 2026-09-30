@@ -18,6 +18,9 @@ from comfyreview.repositories.sqlite.legacy_schema import LegacySchemaManager
 from comfyreview.repositories.sqlite.output_images import (
     SqliteOutputImageRepository,
 )
+from comfyreview.repositories.sqlite.prompt_catalog import (
+    SqlitePromptCatalogRepository,
+)
 from comfyreview.repositories.sqlite.ranking import SqliteRankingRepository
 from comfyreview.repositories.sqlite.reviews import SqliteReviewRepository
 
@@ -27,6 +30,7 @@ __all__ = [
     "LegacyProjectionJobQueue",
     "LegacySchemaManager",
     "SqliteOutputImageRepository",
+    "SqlitePromptCatalogRepository",
     "SqliteArenaRepository",
     "SqliteCurationRepository",
     "SqliteRankingRepository",

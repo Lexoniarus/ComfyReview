@@ -16,6 +16,7 @@ from comfyreview.application import (
     CurationService,
     LegacySchemaLifecycle,
     OutputImageCatalog,
+    PromptCatalogService,
     RankingService,
     ReviewService,
     WorkerRuntime,
@@ -28,6 +29,7 @@ from comfyreview.observability import (
 from comfyreview.providers import (
     CanonicalOutputImageCatalog,
     LocalCurationFileManager,
+    UuidPromptIdentitySource,
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
@@ -36,6 +38,7 @@ from comfyreview.repositories.sqlite import (
     SqliteArenaRepository,
     SqliteCurationRepository,
     SqliteOutputImageRepository,
+    SqlitePromptCatalogRepository,
     SqliteRankingRepository,
     SqliteReviewRepository,
 )
@@ -57,6 +60,7 @@ class ApplicationContainer:
     schema_lifecycle: LegacySchemaLifecycle
     worker: WorkerRuntime
     output_images: OutputImageCatalog
+    prompt_catalog_service: PromptCatalogService
     review_service: ReviewService
     ranking_service: RankingService
     arena_service: ArenaService
@@ -134,6 +138,12 @@ def build_application_container(
         schema_lifecycle=LegacySchemaManager(legacy_runtime_settings),
         worker=worker,
         output_images=output_images,
+        prompt_catalog_service=PromptCatalogService(
+            repository=SqlitePromptCatalogRepository(
+                configured.canonical_database_path
+            ),
+            identities=UuidPromptIdentitySource(),
+        ),
         review_service=review_service,
         ranking_service=ranking_service,
         arena_service=ArenaService(

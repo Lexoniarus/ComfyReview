@@ -1,6 +1,30 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.prompt_catalog:PromptCatalogService.add_revision": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_appends_immutable_revision"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.create_component": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_creates_normalized_component"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.list_components": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_archives_restores_and_lists"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.set_archived": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_archives_restores_and_lists"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.update_metadata": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_updates_only_mutable_metadata"
+    ),
+    "comfyreview.application.prompt_catalog:prompt_revision_identity": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_revision_identity_is_content_and_component_stable"
+    ),
     "comfyreview.application.arena:ArenaService.next_pair": (
         "tests/test_canonical_ranking_arena.py::"
         "test_arena_service_selects_forward_then_reverse_pair"

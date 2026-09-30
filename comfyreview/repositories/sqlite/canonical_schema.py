@@ -398,6 +398,7 @@ _REQUIRED_OBJECTS_V5 = {
 }
 _REQUIRED_PROMPT_COMPONENT_COLUMNS_V5 = {
     "id",
+    "component_uid",
     "kind",
     "component_key",
     "name",
@@ -1006,6 +1007,17 @@ class CanonicalSchemaManager:
     @staticmethod
     def _upgrade_v4_to_v5(connection: sqlite3.Connection) -> None:
         connection.execute(
+            "ALTER TABLE prompt_components ADD COLUMN component_uid TEXT"
+        )
+        connection.execute(
+            "UPDATE prompt_components "
+            "SET component_uid = 'canonical-v4-component-' || id"
+        )
+        connection.execute(
+            "CREATE UNIQUE INDEX ux_prompt_components_uid "
+            "ON prompt_components(component_uid)"
+        )
+        connection.execute(
             "ALTER TABLE prompt_components ADD COLUMN archived_at TEXT"
         )
         connection.execute(
@@ -1426,6 +1438,14 @@ class CanonicalSchemaManager:
                 raise CanonicalSchemaValidationError(
                     "prompt_revisions is missing immutable identity constraints"
                 )
+        component_indexes = cls._unique_index_columns(
+            connection,
+            "prompt_components",
+        )
+        if ("component_uid",) not in component_indexes:
+            raise CanonicalSchemaValidationError(
+                "prompt_components is missing stable UID uniqueness"
+            )
 
     def _is_valid_version(self, version: int) -> bool:
         try:

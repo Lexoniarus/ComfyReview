@@ -361,6 +361,13 @@ def test_version_four_upgrade_adds_revisioned_prompt_catalog(
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
     _create_version_four_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO prompt_components(kind, component_key, name)
+            VALUES ('scene', 'legacy-scene', 'Legacy Scene')
+            """
+        )
 
     report = CanonicalSchemaManager(database_path).upgrade(
         tmp_path / "backups"
@@ -394,7 +401,12 @@ def test_version_four_upgrade_adds_revisioned_prompt_catalog(
             for row in connection.execute("PRAGMA table_info(generations)")
         }
         assert "archived_at" in component_columns
+        assert "component_uid" in component_columns
         assert "prompt_composition_id" in generation_columns
+        assert connection.execute(
+            "SELECT component_uid FROM prompt_components "
+            "WHERE component_key = 'legacy-scene'"
+        ).fetchone() == ("canonical-v4-component-1",)
 
 
 def test_upgrade_rolls_back_without_unnecessary_backup_restore(
