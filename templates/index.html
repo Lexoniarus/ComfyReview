@@ -175,8 +175,6 @@
         <input type="hidden" name="model_branch" value="{{ it.model_branch }}">
         <input type="hidden" name="checkpoint" value="{{ it.checkpoint }}">
         <input type="hidden" name="image_uid" value="{{ it.image_uid or '' }}">
-        <input type="hidden" name="json_path" value="{{ it.json_path or '' }}">
-        <input type="hidden" name="png_path" value="{{ it.png_path }}">
         <input type="hidden" name="sampler" value="{{ view.get('sampler') }}">
         <input type="hidden" name="scheduler" value="{{ view.get('scheduler') }}">
         <input type="hidden" name="steps" value="{{ view.get('steps') }}">

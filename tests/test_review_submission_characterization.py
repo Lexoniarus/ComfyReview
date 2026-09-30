@@ -206,6 +206,7 @@ def test_review_mutation_routes_keep_form_contracts() -> None:
     }
     assert top_delete_parameters == {
         "request",
+        "image_uid",
         "json_path",
         "png_path",
         "combo_key",
@@ -257,6 +258,7 @@ def test_review_mutation_routes_keep_success_redirects() -> None:
     )
     top_response = top_router.top_delete(
         request=_request(),
+        image_uid="image",
         json_path="image.json",
         png_path="image.png",
         combo_key="combo",

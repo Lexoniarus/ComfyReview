@@ -67,7 +67,7 @@ def rate(
     checkpoint: str = Form(...),
     image_uid: str | None = Form(None),
     json_path: str = Form(""),
-    png_path: str = Form(...),
+    png_path: str = Form(""),
     sampler: str | None = Form(None),
     scheduler: str | None = Form(None),
     steps: str | None = Form(None),

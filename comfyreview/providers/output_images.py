@@ -61,6 +61,10 @@ class LocalOutputImageCatalog:
             raise InvalidOutputPathError(
                 "Legacy output resolution requires a JSON sidecar"
             )
+        if reference.png_path is None:
+            raise InvalidOutputPathError(
+                "Legacy output resolution requires a PNG path"
+            )
         resolved_root = self._output_root.resolve()
         try:
             png_path = reference.png_path.resolve(strict=False)
@@ -394,11 +398,12 @@ class CanonicalFirstOutputImageCatalog:
             )
         png_path, json_path = self._validated_paths(record)
 
-        submitted_png = self._resolve_inside(reference.png_path)
-        if submitted_png != png_path:
-            raise InvalidOutputPathError(
-                "Submitted PNG does not match canonical image identity"
-            )
+        if reference.png_path is not None:
+            submitted_png = self._resolve_inside(reference.png_path)
+            if submitted_png != png_path:
+                raise InvalidOutputPathError(
+                    "Submitted PNG does not match canonical image identity"
+                )
 
         if reference.json_path is not None:
             submitted_json = self._resolve_inside(reference.json_path)

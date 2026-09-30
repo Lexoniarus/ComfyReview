@@ -161,7 +161,7 @@ def test_canonical_first_catalog_lists_and_resolves_without_sidecar(
     resolved = catalog.resolve(
         OutputImageReference.from_client_reference(
             image_uid="image-native",
-            png_path=str(native_png),
+            png_path="",
             json_path="",
         )
     )

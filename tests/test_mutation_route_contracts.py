@@ -267,6 +267,7 @@ def test_top_delete_route_maps_mutation_error(tmp_path: Path) -> None:
                     ReviewMutationError("failed")
                 )
             ),
+            image_uid="image",
             json_path=str(tmp_path / "image.json"),
             png_path=str(tmp_path / "image.png"),
             combo_key="client-combo",

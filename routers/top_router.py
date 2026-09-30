@@ -97,8 +97,9 @@ def assign_set(
 @router.post("/top_delete")
 def top_delete(
     request: Request,
-    json_path: str = Form(...),
-    png_path: str = Form(...),
+    image_uid: str = Form(...),
+    json_path: str = Form(""),
+    png_path: str = Form(""),
     combo_key: str = Form(""),
     model_branch: str = Form(""),
     checkpoint: str = Form(""),
@@ -110,7 +111,8 @@ def top_delete(
     del combo_key, model_branch, checkpoint
     try:
         command = SubmitReviewCommand(
-            image=OutputImageReference.from_client_paths(
+            image=OutputImageReference.from_client_reference(
+                image_uid=image_uid,
                 png_path=png_path,
                 json_path=json_path,
             ),

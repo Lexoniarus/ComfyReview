@@ -32,7 +32,7 @@ class OutputMutationError(RuntimeError):
 class OutputImageReference:
     """Represent an untrusted reference to one output image."""
 
-    png_path: Path
+    png_path: Path | None
     json_path: Path | None
     image_uid: str | None = None
 
@@ -62,15 +62,20 @@ class OutputImageReference:
     ) -> OutputImageReference:
         """Validate canonical identity or a legacy PNG/JSON pair."""
         uid = str(image_uid or "").strip() or None
-        if not str(png_path or "").strip():
-            raise ReviewValidationError("Output PNG path is required")
-        png = Path(png_path)
-        if png.suffix.lower() != ".png":
+        png_text = str(png_path or "").strip()
+        if uid is None and not png_text:
+            raise ReviewValidationError("image_uid or output PNG is required")
+        png = Path(png_text) if png_text else None
+        if png is not None and png.suffix.lower() != ".png":
             raise ReviewValidationError("Expected a PNG output path")
 
         sidecar_text = str(json_path or "").strip()
         sidecar = Path(sidecar_text) if sidecar_text else None
         if sidecar is not None:
+            if png is None:
+                raise ReviewValidationError(
+                    "JSON sidecar requires its matching PNG path"
+                )
             if sidecar.suffix.lower() != ".json":
                 raise ReviewValidationError("Expected a JSON sidecar path")
             if png.parent != sidecar.parent or png.stem != sidecar.stem:
