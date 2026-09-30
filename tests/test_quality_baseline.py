@@ -1,6 +1,9 @@
-"""Tests for the versioned diagnostic-baseline ratchet."""
+"""Tests for the versioned diagnostic-baseline and targeted quality modes."""
 
-from scripts.quality import _find_baseline_growth
+from scripts.quality import (
+    _find_baseline_growth,
+    targeted_test_nodes,
+)
 
 
 def test_diagnostic_baseline_can_shrink() -> None:
@@ -37,3 +40,16 @@ def test_diagnostic_baseline_cannot_grow() -> None:
         "ruff|legacy.py|F401: 2 > 1",
         "ruff|legacy.py|F821: 1 > 0",
     ]
+
+
+def test_targeted_tests_include_contracts_and_remove_duplicates() -> None:
+    assert targeted_test_nodes(
+        [
+            "tests/test_review_service.py::test_review_service_submits_rating_in_order",
+            "tests/test_architecture.py",
+        ]
+    ) == (
+        "tests/test_architecture.py",
+        "tests/test_function_test_manifest.py",
+        "tests/test_review_service.py::test_review_service_submits_rating_in_order",
+    )

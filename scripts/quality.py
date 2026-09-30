@@ -17,6 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 LEGACY_FILES_PATH = ROOT / "quality" / "legacy_python_files.txt"
 BASELINE_PATH = ROOT / "quality" / "legacy_diagnostics.json"
 DEFAULT_BASE_REF = "origin/master"
+TARGETED_CONTRACT_TESTS = (
+    "tests/test_architecture.py",
+    "tests/test_function_test_manifest.py",
+)
 
 
 class QualityError(RuntimeError):
@@ -166,6 +170,32 @@ def list_changed_python_files(base_commit: str) -> set[str]:
         for path in (changed.stdout + untracked.stdout).splitlines()
         if path.strip()
     }
+
+
+def list_worktree_python_files() -> set[str]:
+    """List Python files changed since HEAD, including untracked files."""
+    changed = run_command(
+        [
+            "git",
+            "diff",
+            "--name-only",
+            "--diff-filter=ACMRT",
+            "HEAD",
+            "--",
+            "*.py",
+        ]
+    )
+    untracked = run_command(
+        ["git", "ls-files", "--others", "--exclude-standard", "--", "*.py"]
+    )
+    if changed.return_code != 0 or untracked.return_code != 0:
+        raise QualityError("Git could not enumerate worktree Python files")
+    candidates = {
+        normalize_path(path)
+        for path in (changed.stdout + untracked.stdout).splitlines()
+        if path.strip()
+    }
+    return {path for path in candidates if (ROOT / path).is_file()}
 
 
 def diagnostic_key(tool: str, path: str, rule: str) -> str:
@@ -414,6 +444,27 @@ def run_pytest() -> None:
         raise QualityError("Python-core coverage is below 100%")
 
 
+def targeted_test_nodes(requested: Sequence[str]) -> tuple[str, ...]:
+    """Return required contract tests followed by requested focused tests."""
+    return tuple(dict.fromkeys((*TARGETED_CONTRACT_TESTS, *requested)))
+
+
+def run_targeted_pytest(requested: Sequence[str]) -> None:
+    """Run focused tests plus the architecture and manifest contracts."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            *targeted_test_nodes(requested),
+        ],
+        cwd=ROOT,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise QualityError("targeted pytest failed")
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse quality-gate command-line options."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -426,6 +477,18 @@ def parse_arguments() -> argparse.Namespace:
         "--print-baseline",
         action="store_true",
         help="print measured legacy diagnostics without changing files",
+    )
+    parser.add_argument(
+        "--targeted",
+        action="store_true",
+        help="check worktree Python files and run focused contract tests",
+    )
+    parser.add_argument(
+        "--test",
+        action="append",
+        default=[],
+        dest="tests",
+        help="pytest node to include in a targeted run; may be repeated",
     )
     return parser.parse_args()
 
@@ -443,6 +506,18 @@ def main() -> int:
             current_files,
             legacy_files,
         )
+        if arguments.targeted:
+            if arguments.print_baseline:
+                raise QualityError(
+                    "--targeted cannot be combined with --print-baseline"
+                )
+            changed_files = list_worktree_python_files()
+            if changed_files:
+                diagnostics = collect_diagnostics(changed_files)
+                validate_strict_files(diagnostics, changed_files)
+            run_targeted_pytest(arguments.tests)
+            print("targeted quality gate passed")
+            return 0
         diagnostics = collect_diagnostics(current_files)
         if arguments.print_baseline:
             print(
