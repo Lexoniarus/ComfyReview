@@ -112,32 +112,54 @@ complete architecture, regression and documentation acceptance.
 
 Runtime imports and their reports/backups are deliberately outside Git.
 
+## Completed continuation slices
+
+### A. Rules and targeted quality feedback
+
+- repository rules now name the compiler/provider/output-policy boundaries;
+- the callable manifest covers stable public Core behavior rather than private
+  implementation details;
+- `scripts/quality.py --targeted --test <node>` checks changed Python files and
+  always includes architecture and manifest contracts;
+- targeted mode is documented and implemented only as feedback; the full gate
+  remains the slice acceptance criterion.
+
+### B. Canonical identity consolidation
+
+- Review and Delete application commands now accept only canonical
+  `image_uid` identity;
+- legacy hidden path form fields remain accepted by HTTP routes but are ignored;
+- the canonical resolver derives paths and metadata exclusively server-side;
+- path-derived image and generation UID fallbacks were removed;
+- the unreferenced sidecar-scanning `LocalOutputImageCatalog` and its obsolete
+  tests were removed;
+- canonical runtime readers remain SQLite `mode=ro`, while schema v4
+  compatibility views remain read-only.
+
 ## Remaining slice order
 
 The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-1. align engineering rules and add the targeted feedback gate;
-2. consolidate the canonical identity cutover;
-3. simplify Review, Ranking, Arena and Curation boundaries;
-4. migrate the complete prompt catalog with immutable revisions;
-5. move Playground selection and rendering behind catalog/policy boundaries,
+1. simplify Review, Ranking, Arena and Curation boundaries;
+2. migrate the complete prompt catalog with immutable revisions;
+3. move Playground selection and rendering behind catalog/policy boundaries,
    while leaving legacy submission isolated;
-6. evaluate every legacy projection as direct query, SQL view, materialization
+4. evaluate every legacy projection as direct query, SQL view, materialization
    or deletion;
-7. remove remaining multi-database runtime dependencies;
-8. introduce versioned `WorkflowBlueprint` and the semantic
+5. remove remaining multi-database runtime dependencies;
+6. introduce versioned `WorkflowBlueprint` and the semantic
    `WorkflowCompiler`;
-9. introduce the technical `ComfyUiProvider` for compiled graphs only;
-10. implement `GenerationService` and its canonical asynchronous lifecycle;
-11. collect native multi-output results and assign real output indices only
+7. introduce the technical `ComfyUiProvider` for compiled graphs only;
+8. implement `GenerationService` and its canonical asynchronous lifecycle;
+9. collect native multi-output results and assign real output indices only
     from returned ComfyUI outputs;
-12. apply explicit output policy and migrate to standard `SaveImage`;
-13. wire Playground to the real generation port and delete obsolete legacy
+10. apply explicit output policy and migrate to standard `SaveImage`;
+11. wire Playground to the real generation port and delete obsolete legacy
     clients, stores, workers and compatibility paths;
-14. migrate browser behavior to ES modules and the shared API client;
-15. run the complete architecture, data, browser, quality and documentation
+12. migrate browser behavior to ES modules and the shared API client;
+13. run the complete architecture, data, browser, quality and documentation
     acceptance before opening a new pull request.
 
 Each intermediate commit runs focused tests and static checks for changed
