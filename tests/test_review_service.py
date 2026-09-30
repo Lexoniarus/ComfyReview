@@ -375,6 +375,28 @@ def test_output_reference_accepts_canonical_uid_without_sidecar() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("image_uid", "png_path", "json_path", "message"),
+    [
+        ("image", "", "", "PNG path"),
+        ("image", "image.png", "image.txt", "JSON sidecar"),
+        ("", "image.png", "", "image_uid"),
+    ],
+)
+def test_output_reference_rejects_incomplete_client_references(
+    image_uid: str,
+    png_path: str,
+    json_path: str,
+    message: str,
+) -> None:
+    with pytest.raises(ReviewValidationError, match=message):
+        OutputImageReference.from_client_reference(
+            image_uid=image_uid,
+            png_path=png_path,
+            json_path=json_path,
+        )
+
+
 def test_review_service_sidecarless_rating_skips_legacy_projection() -> None:
     fixture = _fixture(sidecarless=True)
 

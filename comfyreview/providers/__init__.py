@@ -1,5 +1,8 @@
 """Concrete external-system providers used by the composition root."""
 
+from comfyreview.providers.legacy_output_import import (
+    LocalLegacyOutputImportSource,
+)
 from comfyreview.providers.output_images import (
     CanonicalFirstOutputImageCatalog,
     LocalOutputImageCatalog,
@@ -7,5 +10,6 @@ from comfyreview.providers.output_images import (
 
 __all__ = [
     "CanonicalFirstOutputImageCatalog",
+    "LocalLegacyOutputImportSource",
     "LocalOutputImageCatalog",
 ]

@@ -317,10 +317,7 @@ class ReviewService:
     ) -> PromptProjection:
         image = record.image
         json_path = image.pair.json_path
-        if json_path is None:
-            raise ReviewMutationError(
-                "Legacy prompt projection requires a JSON sidecar"
-            )
+        assert json_path is not None, "projection requires a JSON sidecar"
         return PromptProjection(
             json_path=json_path,
             run=stored.run,

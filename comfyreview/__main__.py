@@ -13,11 +13,20 @@ from comfyreview.application import (
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
-from comfyreview.importers import LegacyOutputAuditor
+from comfyreview.importers import (
+    LegacyOutputAuditor,
+    LegacyOutputImporter,
+    LegacyOutputImportRecoveryError,
+    LegacyOutputImportValidationError,
+)
+from comfyreview.providers import LocalLegacyOutputImportSource
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
     LegacySchemaManager,
+)
+from comfyreview.repositories.sqlite.legacy_output_import import (
+    SqliteLegacyOutputImportRepository,
 )
 from comfyreview.settings import load_settings
 
@@ -69,6 +78,9 @@ def _parser() -> argparse.ArgumentParser:
     output_audit.add_argument("--output-root", type=Path)
     output_audit.add_argument("--database", type=Path)
     output_audit.add_argument("--report", type=Path)
+    output_import = output_actions.add_parser("import")
+    output_import.add_argument("--report", type=Path)
+    output_import.add_argument("--backup-dir", type=Path)
     return parser
 
 
@@ -126,6 +138,8 @@ def _run_canonical(options: argparse.Namespace) -> int:
 
 def _run_legacy_output(options: argparse.Namespace) -> int:
     settings = load_settings()
+    if options.action == "import":
+        return _run_legacy_output_import(options)
     output_root = (
         options.output_root
         if options.output_root is not None
@@ -154,6 +168,45 @@ def _run_legacy_output(options: argparse.Namespace) -> int:
     return 0
 
 
+class _CliImportObserver:
+    def backup_created(self, backup_path: Path) -> None:
+        payload = {
+            "event": "legacy_output_import.backup_created",
+            "backup_path": str(backup_path),
+        }
+        print(json.dumps(payload, sort_keys=True), file=sys.stderr)
+
+
+def _run_legacy_output_import(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    report_path = (
+        options.report
+        if options.report is not None
+        else settings.data_directory / "reports" / "legacy-output-audit.json"
+    )
+    database_path = settings.canonical_database_path
+    repository = SqliteLegacyOutputImportRepository(database_path)
+    result = LegacyOutputImporter(
+        schema=CanonicalSchemaManager(database_path),
+        source=LocalLegacyOutputImportSource(database_path),
+        repository=repository,
+        observer=_CliImportObserver(),
+    ).import_audit(
+        report_path,
+        backup_directory=options.backup_dir,
+    )
+    payload = {
+        "backup_path": str(result.backup_path),
+        "new_images": result.new_images,
+        "enriched_images": result.enriched_images,
+        "new_generations": result.new_generations,
+        "sampler_stages": result.sampler_stages,
+        "excluded_without_sidecar": result.excluded_without_sidecar,
+    }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run a maintenance command and return its stable process exit code."""
     options = _parser().parse_args(arguments)
@@ -169,6 +222,12 @@ def main(arguments: list[str] | None = None) -> int:
     except CanonicalSchemaValidationError as error:
         print(str(error), file=sys.stderr)
         return 2
+    except LegacyOutputImportValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except LegacyOutputImportRecoveryError as error:
+        print(str(error), file=sys.stderr)
+        return 1
     except (OSError, sqlite3.DatabaseError, ValueError) as error:
         print(f"database operation failed: {error}", file=sys.stderr)
         return 1

@@ -77,6 +77,10 @@ class CanonicalSchemaLifecycle(Protocol):
         """Validate or atomically create the canonical database."""
         ...
 
+    def validate(self) -> CanonicalSchemaReport:
+        """Inspect the canonical database without mutating it."""
+        ...
+
 
 class WorkerRuntime(Protocol):
     """Define ownership of one long-lived background worker."""

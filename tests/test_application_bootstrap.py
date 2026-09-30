@@ -37,6 +37,9 @@ class _RecordingCanonicalSchema:
         self._events.append("canonical")
         return CanonicalSchemaReport(initialized=True, schema_version=1)
 
+    def validate(self) -> CanonicalSchemaReport:
+        return CanonicalSchemaReport(schema_version=1)
+
 
 class _RecordingSchemaLifecycle:
     def __init__(self, settings: Settings, events: list[str]) -> None:
