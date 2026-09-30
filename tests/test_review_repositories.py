@@ -62,7 +62,7 @@ def test_canonical_schema_initializes_once_and_exposes_compatibility_views(
     second = manager.prepare_startup()
 
     assert first.initialized is True
-    assert first.schema_version == 3
+    assert first.schema_version == 4
     assert second.initialized is False
     with sqlite3.connect(database_path) as connection:
         objects = dict(
@@ -104,6 +104,12 @@ def test_review_repository_replaces_rating_without_token_journal_growth(
                 "SELECT COUNT(*) FROM image_reviews"
             ).fetchone()[0]
             == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM review_events"
+            ).fetchone()[0]
+            == 2
         )
         assert (
             connection.execute("SELECT COUNT(*) FROM prompt_atoms").fetchone()[
@@ -153,7 +159,7 @@ def test_delete_removes_live_link_and_keeps_one_negative_observation(
         connection.row_factory = sqlite3.Row
         assert (
             connection.execute("SELECT COUNT(*) FROM images").fetchone()[0]
-            == 0
+            == 1
         )
         assert (
             connection.execute(
@@ -176,8 +182,12 @@ def test_delete_removes_live_link_and_keeps_one_negative_observation(
             FROM atom_learning_stats
             """
         ).fetchall()
+        event_types = connection.execute(
+            "SELECT event_type FROM review_events ORDER BY sequence"
+        ).fetchall()
     assert tuple(compatibility) == (None, 1, deleted.run)
     assert [tuple(row) for row in stats] == [(1, 0.0, 1)]
+    assert [row[0] for row in event_types] == ["rating", "delete"]
 
 
 def test_reappearing_generation_replaces_delete_evidence(
@@ -205,10 +215,24 @@ def test_reappearing_generation_replaces_delete_evidence(
         assert connection.execute(
             "SELECT rating FROM image_reviews"
         ).fetchone() == (9,)
+        assert connection.execute(
+            "SELECT event_type FROM review_events ORDER BY sequence"
+        ).fetchall() == [
+            ("rating",),
+            ("delete",),
+            ("restore",),
+            ("rating",),
+        ]
+        assert connection.execute(
+            """
+            SELECT current_rating, rating_count, rating_sum, average_rating
+            FROM image_review_summary
+            """
+        ).fetchone() == (9, 2, 17, 8.5)
     assert stats == [(1, 9.0, 0)]
 
 
-def test_review_repository_delete_reverses_current_rating_contribution(
+def test_review_repository_rejects_canonical_event_deletion(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
@@ -216,18 +240,19 @@ def test_review_repository_delete_reverses_current_rating_contribution(
     repository = SqliteReviewRepository(database_path)
     stored = repository.append(_review_record(tmp_path / "image.json", 6))
 
-    repository.delete(stored.review_id)
+    with pytest.raises(RuntimeError, match="append-only"):
+        repository.delete(stored.review_id)
 
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM image_reviews"
-        ).fetchone() == (0,)
+        ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM atom_learning_stats"
-        ).fetchone() == (0,)
+        ).fetchone() == (3,)
         assert connection.execute(
             "SELECT COUNT(*) FROM render_learning_stats"
-        ).fetchone() == (0,)
+        ).fetchone() == (1,)
 
 
 def test_prompt_repository_is_compatibility_noop(tmp_path: Path) -> None:

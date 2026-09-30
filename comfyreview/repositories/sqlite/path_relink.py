@@ -247,6 +247,8 @@ class SqlitePathRelinker:
         new_json_path: str,
     ) -> None:
         for table in ("images", "deleted_images"):
+            if SqlitePathRelinker._object_type(connection, table) != "table":
+                continue
             connection.execute(
                 f"""
                 UPDATE {table}

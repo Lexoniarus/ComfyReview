@@ -11,8 +11,7 @@ from uuid import uuid4
 
 from comfyreview.application import CanonicalSchemaReport
 
-SCHEMA_VERSION = 3
-_PREVIOUS_SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -366,6 +365,30 @@ _REQUIRED_DELETED_IMAGE_COLUMNS_V3 = {
     "deleted_at",
 }
 
+_REQUIRED_OBJECTS_V4 = {
+    **_REQUIRED_OBJECTS_V2,
+    "arena_matches": "table",
+    "curation_assignments": "table",
+    "current_image_reviews": "view",
+    "deleted_images": "view",
+    "image_review_summary": "view",
+    "image_reviews": "view",
+    "review_events": "table",
+}
+_REQUIRED_IMAGE_COLUMNS_V4 = _REQUIRED_IMAGE_COLUMNS_V3 | {"deleted_at"}
+_REQUIRED_REVIEW_EVENT_COLUMNS_V4 = {
+    "id",
+    "event_uid",
+    "image_id",
+    "event_type",
+    "rating",
+    "source",
+    "source_key",
+    "sequence",
+    "source_created_at",
+    "created_at",
+}
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -378,7 +401,7 @@ class CanonicalSchemaManager:
         self._database_path = Path(database_path).resolve()
 
     def prepare_startup(self) -> CanonicalSchemaReport:
-        """Validate or atomically create canonical schema version three."""
+        """Validate or atomically create canonical schema version four."""
         if self._database_path.exists():
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
@@ -401,7 +424,7 @@ class CanonicalSchemaManager:
         self,
         backup_directory: Path | None = None,
     ) -> CanonicalSchemaReport:
-        """Back up and explicitly upgrade schema version one or two."""
+        """Back up and explicitly upgrade a supported older schema."""
         if not self._database_path.exists():
             self._create_new_database()
             return CanonicalSchemaReport(
@@ -413,30 +436,32 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {
-            _MIN_UPGRADE_VERSION,
-            _PREVIOUS_SCHEMA_VERSION,
-        }:
+        if current_version not in {1, 2, 3}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected {_MIN_UPGRADE_VERSION}, "
-                f"{_PREVIOUS_SCHEMA_VERSION}, or {SCHEMA_VERSION}"
+                f"{current_version}; expected 1, 2, 3, or {SCHEMA_VERSION}"
             )
 
         if current_version == _MIN_UPGRADE_VERSION:
             self._validate_version_one()
-        else:
+        elif current_version == 2:
             self._validate_version_two()
+        else:
+            self._validate_version_three()
 
         backup_path = self._create_backup(backup_directory)
+        committed = False
         try:
             connection = self._open_read_write(foreign_keys=False)
             try:
                 connection.execute("BEGIN IMMEDIATE")
                 if current_version == _MIN_UPGRADE_VERSION:
                     self._upgrade_v1_to_v2(connection)
-                self._upgrade_v2_to_v3(connection)
+                if current_version <= 2:
+                    self._upgrade_v2_to_v3(connection)
+                self._upgrade_v3_to_v4(connection)
                 connection.commit()
+                committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
                 connection.rollback()
@@ -445,7 +470,8 @@ class CanonicalSchemaManager:
                 connection.close()
             self._validate_existing()
         except Exception:
-            self._restore_backup(backup_path)
+            if committed or not self._is_valid_version(current_version):
+                self._restore_backup(backup_path)
             raise
 
         return CanonicalSchemaReport(
@@ -473,6 +499,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v2_to_v3(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v3_to_v4(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -485,10 +514,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {
-                _MIN_UPGRADE_VERSION,
-                _PREVIOUS_SCHEMA_VERSION,
-            }:
+            if version in {1, 2, 3}:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -522,7 +548,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version != _PREVIOUS_SCHEMA_VERSION:
+            if version != 2:
                 raise CanonicalSchemaValidationError(
                     "Expected canonical schema version 2 before upgrade"
                 )
@@ -533,9 +559,25 @@ class CanonicalSchemaManager:
             )
             self._validate_metadata_version(
                 connection,
-                _PREVIOUS_SCHEMA_VERSION,
+                2,
             )
             self._validate_generation_columns(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_three(self) -> None:
+        connection = self._open_read_only()
+        try:
+            version = self._schema_version(connection)
+            if version != 3:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 3 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V3)
+            self._validate_metadata_version(connection, 3)
+            self._validate_generation_columns(connection)
+            self._validate_output_identity_v3(connection)
         finally:
             connection.close()
 
@@ -547,10 +589,10 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V3)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V4)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
-        self._validate_output_identity(connection)
+        self._validate_output_identity_v4(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -604,9 +646,9 @@ class CanonicalSchemaManager:
         connection.execute(
             "UPDATE schema_metadata SET value = ? "
             "WHERE key = 'schema_version'",
-            (str(_PREVIOUS_SCHEMA_VERSION),),
+            ("2",),
         )
-        connection.execute(f"PRAGMA user_version = {_PREVIOUS_SCHEMA_VERSION}")
+        connection.execute("PRAGMA user_version = 2")
 
     def _upgrade_v2_to_v3(self, connection: sqlite3.Connection) -> None:
         views = self._capture_compatibility_views(connection)
@@ -708,9 +750,299 @@ class CanonicalSchemaManager:
         connection.execute(
             "UPDATE schema_metadata SET value = ? "
             "WHERE key = 'schema_version'",
+            ("3",),
+        )
+        connection.execute("PRAGMA user_version = 3")
+
+    def _upgrade_v3_to_v4(self, connection: sqlite3.Connection) -> None:
+        compatibility_views = self._capture_compatibility_views(connection)
+        connection.execute("DROP VIEW ratings")
+        connection.execute("DROP VIEW tokens")
+        connection.execute(
+            "ALTER TABLE image_reviews RENAME TO image_reviews_v3"
+        )
+        connection.execute(
+            "ALTER TABLE deleted_images RENAME TO deleted_images_v3"
+        )
+        connection.execute("ALTER TABLE images ADD COLUMN deleted_at TEXT")
+        connection.execute(
+            """
+            CREATE TABLE review_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_uid TEXT NOT NULL UNIQUE,
+                image_id INTEGER NOT NULL
+                    REFERENCES images(id) ON DELETE CASCADE,
+                event_type TEXT NOT NULL
+                    CHECK (event_type IN ('rating', 'delete', 'restore')),
+                rating INTEGER CHECK (
+                    (event_type = 'rating' AND rating BETWEEN 1 AND 10)
+                    OR (event_type != 'rating' AND rating IS NULL)
+                ),
+                source TEXT NOT NULL,
+                source_key TEXT NOT NULL,
+                sequence INTEGER NOT NULL UNIQUE,
+                source_created_at TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (source, source_key)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_review_events_image_sequence "
+            "ON review_events(image_id, sequence)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE arena_matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                match_uid TEXT NOT NULL UNIQUE,
+                left_image_id INTEGER NOT NULL
+                    REFERENCES images(id),
+                right_image_id INTEGER NOT NULL
+                    REFERENCES images(id),
+                winner_image_id INTEGER REFERENCES images(id),
+                decision TEXT NOT NULL
+                    CHECK (decision IN ('left', 'right', 'skip')),
+                source TEXT NOT NULL,
+                source_key TEXT NOT NULL,
+                source_created_at TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                CHECK (left_image_id != right_image_id),
+                CHECK (
+                    (decision = 'skip' AND winner_image_id IS NULL)
+                    OR (
+                        decision != 'skip'
+                        AND winner_image_id IN (
+                            left_image_id,
+                            right_image_id
+                        )
+                    )
+                ),
+                UNIQUE (source, source_key)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_arena_matches_images "
+            "ON arena_matches(left_image_id, right_image_id)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE curation_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_id INTEGER NOT NULL UNIQUE
+                    REFERENCES images(id) ON DELETE CASCADE,
+                set_key TEXT NOT NULL,
+                source TEXT NOT NULL,
+                source_key TEXT NOT NULL,
+                source_created_at TEXT,
+                assigned_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (source, source_key)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_curation_assignments_set "
+            "ON curation_assignments(set_key, image_id)"
+        )
+        connection.execute(
+            """
+            INSERT INTO images(
+                image_uid,
+                generation_id,
+                output_node_id,
+                output_index,
+                png_path,
+                json_path,
+                last_seen_at,
+                deleted_at
+            )
+            SELECT
+                deleted.image_uid,
+                deleted.generation_id,
+                'legacy_deleted',
+                deleted.version,
+                deleted.png_path,
+                deleted.json_path,
+                deleted.deleted_at,
+                deleted.deleted_at
+            FROM deleted_images_v3 AS deleted
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM images AS image
+                WHERE image.image_uid = deleted.image_uid
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO review_events(
+                event_uid,
+                image_id,
+                event_type,
+                rating,
+                source,
+                source_key,
+                sequence,
+                source_created_at,
+                created_at
+            )
+            SELECT
+                'canonical-v3-rating-' || review.id,
+                review.image_id,
+                'rating',
+                review.rating,
+                'canonical_v3',
+                'image-review:' || review.id,
+                review.version,
+                review.updated_at,
+                review.updated_at
+            FROM image_reviews_v3 AS review
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO review_events(
+                event_uid,
+                image_id,
+                event_type,
+                rating,
+                source,
+                source_key,
+                sequence,
+                source_created_at,
+                created_at
+            )
+            SELECT
+                'canonical-v3-delete-' || deleted.id,
+                image.id,
+                'delete',
+                NULL,
+                'canonical_v3',
+                'deleted-image:' || deleted.id,
+                deleted.version,
+                deleted.deleted_at,
+                deleted.deleted_at
+            FROM deleted_images_v3 AS deleted
+            JOIN images AS image
+                ON image.image_uid = deleted.image_uid
+            """
+        )
+        connection.execute(
+            """
+            UPDATE review_clock
+            SET value = MAX(
+                value,
+                COALESCE((SELECT MAX(sequence) FROM review_events), 0)
+            )
+            WHERE singleton_id = 1
+            """
+        )
+        connection.execute("DROP TABLE image_reviews_v3")
+        connection.execute("DROP TABLE deleted_images_v3")
+        self._create_review_views(connection)
+        for name in ("ratings", "tokens"):
+            connection.execute(compatibility_views[name])
+        connection.execute(
+            "UPDATE schema_metadata SET value = ? "
+            "WHERE key = 'schema_version'",
             (str(SCHEMA_VERSION),),
         )
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    @staticmethod
+    def _create_review_views(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE VIEW current_image_reviews AS
+            WITH boundaries AS (
+                SELECT
+                    image_id,
+                    COALESCE(MAX(sequence), 0) AS sequence
+                FROM review_events
+                WHERE event_type IN ('delete', 'restore')
+                GROUP BY image_id
+            ),
+            current_ratings AS (
+                SELECT event.*
+                FROM review_events AS event
+                LEFT JOIN boundaries AS boundary
+                    ON boundary.image_id = event.image_id
+                WHERE event.event_type = 'rating'
+                  AND event.sequence > COALESCE(boundary.sequence, 0)
+            )
+            SELECT
+                event.id AS event_id,
+                event.image_id,
+                event.rating,
+                event.sequence,
+                COALESCE(event.source_created_at, event.created_at)
+                    AS reviewed_at
+            FROM current_ratings AS event
+            WHERE event.sequence = (
+                SELECT MAX(candidate.sequence)
+                FROM current_ratings AS candidate
+                WHERE candidate.image_id = event.image_id
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE VIEW image_reviews AS
+            SELECT
+                event_id AS id,
+                image_id,
+                rating,
+                sequence AS version,
+                reviewed_at AS updated_at
+            FROM current_image_reviews
+            """
+        )
+        connection.execute(
+            """
+            CREATE VIEW deleted_images AS
+            SELECT
+                event.id AS id,
+                image.image_uid,
+                image.generation_id,
+                image.png_path,
+                image.json_path,
+                event.sequence AS version,
+                image.deleted_at
+            FROM images AS image
+            JOIN review_events AS event
+                ON event.image_id = image.id
+               AND event.event_type = 'delete'
+            WHERE image.deleted_at IS NOT NULL
+              AND event.sequence = (
+                  SELECT MAX(candidate.sequence)
+                  FROM review_events AS candidate
+                  WHERE candidate.image_id = image.id
+                    AND candidate.event_type = 'delete'
+              )
+            """
+        )
+        connection.execute(
+            """
+            CREATE VIEW image_review_summary AS
+            SELECT
+                image.id AS image_id,
+                image.image_uid,
+                current.rating AS current_rating,
+                COUNT(event.id) AS rating_count,
+                COALESCE(SUM(event.rating), 0) AS rating_sum,
+                AVG(event.rating) AS average_rating,
+                MAX(event.sequence) AS latest_rating_sequence,
+                image.deleted_at
+            FROM images AS image
+            LEFT JOIN current_image_reviews AS current
+                ON current.image_id = image.id
+            LEFT JOIN review_events AS event
+                ON event.image_id = image.id
+               AND event.event_type = 'rating'
+            GROUP BY image.id
+            """
+        )
 
     @staticmethod
     def _capture_compatibility_views(
@@ -836,7 +1168,7 @@ class CanonicalSchemaManager:
             )
 
     @classmethod
-    def _validate_output_identity(
+    def _validate_output_identity_v3(
         cls,
         connection: sqlite3.Connection,
     ) -> None:
@@ -888,6 +1220,64 @@ class CanonicalSchemaManager:
             raise CanonicalSchemaValidationError(
                 "deleted_images.image_uid must be unique"
             )
+
+    @classmethod
+    def _validate_output_identity_v4(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        image_columns = cls._table_column_rows(connection, "images")
+        event_columns = cls._table_column_rows(connection, "review_events")
+        missing_images = sorted(
+            _REQUIRED_IMAGE_COLUMNS_V4 - image_columns.keys()
+        )
+        missing_events = sorted(
+            _REQUIRED_REVIEW_EVENT_COLUMNS_V4 - event_columns.keys()
+        )
+        if missing_images or missing_events:
+            raise CanonicalSchemaValidationError(
+                "Canonical review tables are missing required columns: "
+                + ", ".join(missing_images + missing_events)
+            )
+        if int(str(image_columns["json_path"][3])) != 0:
+            raise CanonicalSchemaValidationError(
+                "images.json_path must be nullable in schema version 4"
+            )
+        expected_output_key = (
+            "generation_id",
+            "output_node_id",
+            "output_index",
+        )
+        if expected_output_key not in cls._unique_index_columns(
+            connection,
+            "images",
+        ):
+            raise CanonicalSchemaValidationError(
+                "images is missing its generation output-slot constraint"
+            )
+        event_indexes = cls._unique_index_columns(
+            connection,
+            "review_events",
+        )
+        for expected in (("event_uid",), ("source", "source_key")):
+            if expected not in event_indexes:
+                raise CanonicalSchemaValidationError(
+                    "review_events is missing canonical identity constraints"
+                )
+
+    def _is_valid_version(self, version: int) -> bool:
+        try:
+            if version == 1:
+                self._validate_version_one()
+            elif version == 2:
+                self._validate_version_two()
+            elif version == 3:
+                self._validate_version_three()
+            else:
+                self._validate_existing()
+        except (CanonicalSchemaValidationError, sqlite3.DatabaseError):
+            return False
+        return True
 
     @staticmethod
     def _table_column_rows(

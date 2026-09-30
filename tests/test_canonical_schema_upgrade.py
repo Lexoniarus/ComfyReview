@@ -149,10 +149,24 @@ def _create_version_two_database(path: Path) -> None:
         connection.close()
 
 
+def _create_version_three_database(path: Path) -> None:
+    _create_version_two_database(path)
+    manager = CanonicalSchemaManager(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute("BEGIN IMMEDIATE")
+        manager._upgrade_v2_to_v3(connection)
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def test_old_versions_require_explicit_upgrade(tmp_path: Path) -> None:
     for version, factory in (
         (1, _create_version_one_database),
         (2, _create_version_two_database),
+        (3, _create_version_three_database),
     ):
         database_path = tmp_path / f"v{version}.sqlite3"
         factory(database_path)
@@ -172,13 +186,13 @@ def test_version_two_upgrade_preserves_output_identity_and_reviews(
 
     report = CanonicalSchemaManager(database_path).upgrade(backup_root)
 
-    assert report.schema_version == 3
+    assert report.schema_version == 4
     assert report.upgraded_from == 2
     assert report.backup_path is not None
     assert report.backup_path.is_file()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (3,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (4,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         live = connection.execute(
             """
@@ -199,6 +213,19 @@ def test_version_two_upgrade_preserves_output_identity_and_reviews(
         assert connection.execute(
             "SELECT image_id, rating, version FROM image_reviews"
         ).fetchone() == (10, 8, 1)
+        assert connection.execute(
+            """
+            SELECT event_type, rating, source, source_key, sequence
+            FROM review_events
+            WHERE image_id = 10
+            """
+        ).fetchone() == (
+            "rating",
+            8,
+            "canonical_v3",
+            "image-review:20",
+            1,
+        )
         deleted = connection.execute(
             """
             SELECT image_uid, generation_id, png_path, json_path, version
@@ -212,6 +239,27 @@ def test_version_two_upgrade_preserves_output_identity_and_reviews(
             "deleted.json",
             2,
         )
+        assert (
+            connection.execute(
+                "SELECT deleted_at FROM images WHERE image_uid = ?",
+                ("generation-deleted",),
+            ).fetchone()[0]
+            is not None
+        )
+        assert connection.execute(
+            """
+            SELECT event_type, rating, source_key, sequence
+            FROM review_events
+            WHERE event_type = 'delete'
+            """
+        ).fetchone() == ("delete", None, "deleted-image:30", 2)
+        with pytest.raises(sqlite3.OperationalError):
+            connection.execute(
+                """
+                INSERT INTO image_reviews(image_id, rating, version)
+                VALUES (10, 9, 3)
+                """
+            )
         connection.execute(
             """
             INSERT INTO images(
@@ -244,10 +292,10 @@ def test_version_one_can_upgrade_directly_to_current_schema(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 3
+    assert report.schema_version == 4
     assert report.upgraded_from == 1
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (3,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (4,)
         row = connection.execute(
             """
             SELECT generation_uid, source, status, seed
@@ -262,7 +310,39 @@ def test_version_one_can_upgrade_directly_to_current_schema(
         )
 
 
-def test_upgrade_restores_version_two_backup_after_failure(
+def test_version_three_upgrade_preserves_ids_and_replaces_writable_state(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    _create_version_three_database(database_path)
+
+    report = CanonicalSchemaManager(database_path).upgrade(
+        tmp_path / "backups"
+    )
+
+    assert report.schema_version == 4
+    assert report.upgraded_from == 3
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT id, image_uid FROM images ORDER BY id"
+        ).fetchall() == [
+            (10, "generation-one"),
+            (11, "generation-deleted"),
+        ]
+        assert dict(
+            connection.execute(
+                "SELECT name, type FROM sqlite_master "
+                "WHERE name IN ('image_reviews', 'deleted_images')"
+            ).fetchall()
+        ) == {
+            "deleted_images": "view",
+            "image_reviews": "view",
+        }
+        with pytest.raises(sqlite3.OperationalError):
+            connection.execute("DELETE FROM image_reviews WHERE image_id = 10")
+
+
+def test_upgrade_rolls_back_without_unnecessary_backup_restore(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -281,6 +361,11 @@ def test_upgrade_restores_version_two_backup_after_failure(
         CanonicalSchemaManager,
         "_upgrade_v2_to_v3",
         fail_after_upgrade,
+    )
+    monkeypatch.setattr(
+        CanonicalSchemaManager,
+        "_restore_backup",
+        lambda *_args: pytest.fail("valid rollback must not restore a file"),
     )
 
     with pytest.raises(OSError, match="forced migration failure"):
@@ -317,8 +402,8 @@ def test_canonical_database_cli_validates_and_upgrades(
         == 0
     )
     output = capsys.readouterr().out
-    assert '"schema_version": 3' in output
+    assert '"schema_version": 4' in output
     assert '"upgraded_from": 2' in output
 
     assert main(["canonical-db", "validate"]) == 0
-    assert '"schema_version": 3' in capsys.readouterr().out
+    assert '"schema_version": 4' in capsys.readouterr().out

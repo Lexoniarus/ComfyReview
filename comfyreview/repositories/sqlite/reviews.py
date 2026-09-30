@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 from pathlib import Path
+from uuid import uuid4
 
 from comfyreview.application import (
     PromptProjection,
@@ -59,118 +60,12 @@ class SqliteReviewRepository:
                 generation_id=generation_id,
                 image_uid=image_uid,
             )
-            prior_deleted = connection.execute(
-                """
-                SELECT id
-                FROM deleted_images
-                WHERE image_uid = ?
-                """,
-                (image_uid,),
-            ).fetchone()
-            if prior_deleted is not None:
-                self._apply_learning_delta(
-                    connection,
-                    generation_id=generation_id,
-                    rating=0,
-                    deleted=True,
-                    delta=-1,
-                )
-            previous = connection.execute(
-                """
-                SELECT id, rating
-                FROM image_reviews
-                WHERE image_id = ?
-                """,
-                (image_id,),
-            ).fetchone()
-            if previous is not None:
-                self._apply_learning_delta(
-                    connection,
-                    generation_id=generation_id,
-                    rating=int(previous["rating"]),
-                    deleted=False,
-                    delta=-1,
-                )
-
-            version = self._next_version(connection)
-            if record.deleted:
-                review_id = int(previous["id"]) if previous else 0
-                self._apply_learning_delta(
-                    connection,
-                    generation_id=generation_id,
-                    rating=0,
-                    deleted=True,
-                    delta=1,
-                )
-                connection.execute(
-                    """
-                    INSERT INTO deleted_images(
-                        image_uid,
-                        generation_id,
-                        png_path,
-                        json_path,
-                        version,
-                        deleted_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, datetime('now'))
-                    ON CONFLICT(image_uid) DO UPDATE SET
-                        generation_id = excluded.generation_id,
-                        png_path = excluded.png_path,
-                        json_path = excluded.json_path,
-                        version = excluded.version,
-                        deleted_at = datetime('now')
-                    """,
-                    (
-                        image_uid,
-                        generation_id,
-                        str(record.image.pair.png_path),
-                        self._path_text(record.image.pair.json_path),
-                        version,
-                    ),
-                )
-                connection.execute(
-                    "DELETE FROM images WHERE id = ?",
-                    (image_id,),
-                )
-            else:
-                rating = int(record.rating or 0)
-                connection.execute(
-                    "DELETE FROM deleted_images WHERE image_uid = ?",
-                    (image_uid,),
-                )
-                if previous is None:
-                    cursor = connection.execute(
-                        """
-                        INSERT INTO image_reviews(
-                            image_id, rating, version, updated_at
-                        )
-                        VALUES (?, ?, ?, datetime('now'))
-                        """,
-                        (image_id, rating, version),
-                    )
-                    review_id = int(cursor.lastrowid or 0)
-                else:
-                    review_id = int(previous["id"])
-                    connection.execute(
-                        """
-                        UPDATE image_reviews
-                        SET rating = ?,
-                            version = ?,
-                            updated_at = datetime('now')
-                        WHERE id = ?
-                        """,
-                        (rating, version, review_id),
-                    )
-                self._apply_learning_delta(
-                    connection,
-                    generation_id=generation_id,
-                    rating=rating,
-                    deleted=False,
-                    delta=1,
-                )
-
-            connection.commit()
-            return StoredReview(review_id=review_id, run=version)
+            return self._append_canonical_event(
+                connection,
+                record,
+                generation_id=generation_id,
+                image_id=image_id,
+            )
         except Exception:
             connection.rollback()
             raise
@@ -185,6 +80,8 @@ class SqliteReviewRepository:
                 self._delete_legacy(connection, review_id)
                 return
             connection.execute("BEGIN IMMEDIATE")
+            if self._object_type(connection, "review_events") == "table":
+                raise RuntimeError("Canonical review events are append-only")
             row = connection.execute(
                 """
                 SELECT review.rating, image.generation_id
@@ -212,6 +109,137 @@ class SqliteReviewRepository:
             raise
         finally:
             connection.close()
+
+    def _append_canonical_event(
+        self,
+        connection: sqlite3.Connection,
+        record: ReviewRecord,
+        *,
+        generation_id: int,
+        image_id: int,
+    ) -> StoredReview:
+        state = connection.execute(
+            "SELECT deleted_at FROM images WHERE id = ?",
+            (image_id,),
+        ).fetchone()
+        if state is None:
+            raise RuntimeError("Canonical image state is unavailable")
+        prior_deleted = state["deleted_at"] is not None
+        previous = connection.execute(
+            "SELECT id, rating FROM image_reviews WHERE image_id = ?",
+            (image_id,),
+        ).fetchone()
+        if prior_deleted:
+            self._apply_learning_delta(
+                connection,
+                generation_id=generation_id,
+                rating=0,
+                deleted=True,
+                delta=-1,
+            )
+        if previous is not None:
+            self._apply_learning_delta(
+                connection,
+                generation_id=generation_id,
+                rating=int(previous["rating"]),
+                deleted=False,
+                delta=-1,
+            )
+
+        if record.deleted:
+            version = self._next_version(connection)
+            review_id = self._insert_review_event(
+                connection,
+                image_id=image_id,
+                event_type="delete",
+                rating=None,
+                sequence=version,
+            )
+            connection.execute(
+                "UPDATE images SET deleted_at = datetime('now') WHERE id = ?",
+                (image_id,),
+            )
+            self._apply_learning_delta(
+                connection,
+                generation_id=generation_id,
+                rating=0,
+                deleted=True,
+                delta=1,
+            )
+        else:
+            if prior_deleted:
+                restore_sequence = self._next_version(connection)
+                self._insert_review_event(
+                    connection,
+                    image_id=image_id,
+                    event_type="restore",
+                    rating=None,
+                    sequence=restore_sequence,
+                )
+            connection.execute(
+                "UPDATE images SET deleted_at = NULL WHERE id = ?",
+                (image_id,),
+            )
+            version = self._next_version(connection)
+            rating = int(record.rating or 0)
+            review_id = self._insert_review_event(
+                connection,
+                image_id=image_id,
+                event_type="rating",
+                rating=rating,
+                sequence=version,
+            )
+            self._apply_learning_delta(
+                connection,
+                generation_id=generation_id,
+                rating=rating,
+                deleted=False,
+                delta=1,
+            )
+        connection.commit()
+        return StoredReview(review_id=review_id, run=version)
+
+    @staticmethod
+    def _insert_review_event(
+        connection: sqlite3.Connection,
+        *,
+        image_id: int,
+        event_type: str,
+        rating: int | None,
+        sequence: int,
+    ) -> int:
+        event_uid = f"runtime-{uuid4()}"
+        cursor = connection.execute(
+            """
+            INSERT INTO review_events(
+                event_uid,
+                image_id,
+                event_type,
+                rating,
+                source,
+                source_key,
+                sequence
+            )
+            VALUES (?, ?, ?, ?, 'runtime', ?, ?)
+            """,
+            (
+                event_uid,
+                image_id,
+                event_type,
+                rating,
+                event_uid,
+                sequence,
+            ),
+        )
+        return int(cursor.lastrowid or 0)
+
+    @staticmethod
+    def _object_type(connection: sqlite3.Connection, name: str) -> str:
+        row = connection.execute(
+            "SELECT type FROM sqlite_master WHERE name = ?",
+            (name,),
+        ).fetchone()
+        return str(row[0]) if row else ""
 
     @staticmethod
     def _uses_canonical_schema(connection: sqlite3.Connection) -> bool:

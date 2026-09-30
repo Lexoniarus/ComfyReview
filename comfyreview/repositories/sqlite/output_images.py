@@ -42,6 +42,7 @@ JOIN prompts AS negative_prompt
     ON negative_prompt.id = generation.negative_prompt_id
 LEFT JOIN image_reviews AS review
     ON review.image_id = image.id
+WHERE image.deleted_at IS NULL
 """
 
 
@@ -70,7 +71,7 @@ class SqliteOutputImageRepository:
         connection = connect_read_only(self._database_path, rows=True)
         try:
             row = connection.execute(
-                _SELECT_LIVE_IMAGES + " WHERE image.image_uid = ?",
+                _SELECT_LIVE_IMAGES + " AND image.image_uid = ?",
                 (str(image_uid),),
             ).fetchone()
             return None if row is None else self._record(row)
