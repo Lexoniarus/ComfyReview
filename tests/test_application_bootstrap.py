@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from comfyreview.application import (
+    AnalyticsService,
     ArenaService,
     CanonicalSchemaReport,
     CurationImage,
@@ -31,6 +32,8 @@ from comfyreview.bootstrap import (
 from comfyreview.providers import CanonicalOutputImageCatalog
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.settings import Settings, load_settings
+from services.analytics_page_service import AnalyticsPageService
+from services.playground_hub_service import PlaygroundHubService
 
 
 class _RecordingCanonicalSchema:
@@ -135,6 +138,9 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         schema_lifecycle=_RecordingSchemaLifecycle(settings, events),
         worker=_RecordingWorker(events),
         output_images=_EmptyOutputImageCatalog(),
+        analytics_service=cast(AnalyticsService, object()),
+        analytics_pages=cast(AnalyticsPageService, object()),
+        playground_hub=cast(PlaygroundHubService, object()),
         prompt_catalog_service=cast(PromptCatalogService, object()),
         playground_service=cast(PlaygroundService, object()),
         review_service=cast(ReviewService, _RecordingReviewService()),
@@ -211,6 +217,9 @@ def test_default_container_wires_canonical_review_runtime(
         container.output_images,
         CanonicalOutputImageCatalog,
     )
+    assert isinstance(container.analytics_service, AnalyticsService)
+    assert isinstance(container.analytics_pages, AnalyticsPageService)
+    assert isinstance(container.playground_hub, PlaygroundHubService)
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.prompt_catalog_service, PromptCatalogService)
     assert isinstance(container.playground_service, PlaygroundService)

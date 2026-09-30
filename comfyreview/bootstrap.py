@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from comfyreview.application import (
+    AnalyticsService,
     ArenaService,
     CanonicalSchemaLifecycle,
     CurationService,
@@ -38,6 +39,7 @@ from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     LegacyProjectionJobQueue,
     LegacySchemaManager,
+    SqliteAnalyticsRepository,
     SqliteArenaRepository,
     SqliteCurationRepository,
     SqliteOutputImageRepository,
@@ -51,7 +53,10 @@ from routers.index_router import router as index_router
 from routers.playground import router as playground_router
 from routers.stats_router import router as stats_router
 from routers.top_router import router as top_router
+from services.analytics_page_service import AnalyticsPageService
+from services.file_urls import existing_png_path_to_url
 from services.output_file_service import OutputFileService
+from services.playground_hub_service import PlaygroundHubService
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,9 @@ class ApplicationContainer:
     schema_lifecycle: LegacySchemaLifecycle
     worker: WorkerRuntime
     output_images: OutputImageCatalog
+    analytics_service: AnalyticsService
+    analytics_pages: AnalyticsPageService
+    playground_hub: PlaygroundHubService
     prompt_catalog_service: PromptCatalogService
     playground_service: PlaygroundService
     review_service: ReviewService
@@ -140,6 +148,9 @@ def build_application_container(
         ),
         identities=UuidPromptIdentitySource(),
     )
+    analytics_service = AnalyticsService(
+        SqliteAnalyticsRepository(configured.canonical_database_path)
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -148,6 +159,17 @@ def build_application_container(
         schema_lifecycle=LegacySchemaManager(legacy_runtime_settings),
         worker=worker,
         output_images=output_images,
+        analytics_service=analytics_service,
+        analytics_pages=AnalyticsPageService(
+            database_path=configured.canonical_database_path,
+            analytics=analytics_service,
+            image_url=existing_png_path_to_url,
+        ),
+        playground_hub=PlaygroundHubService(
+            analytics=analytics_service,
+            image_url=existing_png_path_to_url,
+            default_max_attempts=configured.default_max_tries,
+        ),
         prompt_catalog_service=prompt_catalog_service,
         playground_service=PlaygroundService(
             catalog=prompt_catalog_service,

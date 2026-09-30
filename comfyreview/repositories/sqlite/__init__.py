@@ -1,5 +1,6 @@
 """SQLite persistence adapters."""
 
+from comfyreview.repositories.sqlite.analytics import SqliteAnalyticsRepository
 from comfyreview.repositories.sqlite.arena import SqliteArenaRepository
 from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
@@ -40,4 +41,3 @@ __all__ = [
     "connect_existing",
     "connect_read_only",
 ]
-from comfyreview.repositories.sqlite.analytics import SqliteAnalyticsRepository

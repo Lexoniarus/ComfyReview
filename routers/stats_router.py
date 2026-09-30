@@ -1,13 +1,8 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 
+from comfyreview.api import get_application_container
 from db_store import DELETE_WEIGHT_DEFAULT, SUCCESS_THRESHOLD_DEFAULT
-from services.analytics_page_service import (
-    build_param_stats_page_context,
-    build_prompt_tokens_page_context,
-    build_recommendations_page_context,
-    build_stats_page_context,
-)
 
 # Jinja Templates für die Analytics-Seiten
 from templates import PARAM_HTML, PROMPT_HTML, RECO_HTML, STATS_HTML
@@ -21,14 +16,19 @@ router = APIRouter()
 # ===============================
 @router.get("/stats", response_class=HTMLResponse)
 def stats(
+    request: Request,
     model: str = Query(""),
     min_n: int = Query(8),
     limit: int = Query(200),
     t: int = Query(SUCCESS_THRESHOLD_DEFAULT),
     dw: float = Query(DELETE_WEIGHT_DEFAULT),
 ):
-    ctx = build_stats_page_context(
-        model=model, min_n=min_n, limit=limit, t=t, dw=dw
+    ctx = get_application_container(request).analytics_pages.stats_context(
+        model=model,
+        min_n=min_n,
+        limit=limit,
+        success_threshold=t,
+        delete_weight=dw,
     )
     return STATS_HTML.render(**ctx)
 
@@ -38,6 +38,7 @@ def stats(
 # ===============================
 @router.get("/recommendations", response_class=HTMLResponse)
 def recommendations(
+    request: Request,
     model: str = Query(""),
     min_n: int = Query(5),
     limit: int = Query(200),
@@ -47,15 +48,17 @@ def recommendations(
     approx_min_n: int = Query(8),
     approx_limit: int = Query(80),
 ):
-    ctx = build_recommendations_page_context(
+    ctx = get_application_container(
+        request
+    ).analytics_pages.recommendations_context(
         model=model,
         min_n=min_n,
         limit=limit,
-        t=t,
-        dw=dw,
-        min_lb=min_lb,
-        approx_min_n=approx_min_n,
-        approx_limit=approx_limit,
+        success_threshold=t,
+        delete_weight=dw,
+        minimum_lower_bound=min_lb,
+        approximate_minimum_samples=approx_min_n,
+        approximate_limit=approx_limit,
     )
     return RECO_HTML.render(**ctx)
 
@@ -65,12 +68,18 @@ def recommendations(
 # ===============================
 @router.get("/param_stats", response_class=HTMLResponse)
 def param_stats(
+    request: Request,
     model: str = Query(""),
     min_n: int = Query(10),
     t: int = Query(SUCCESS_THRESHOLD_DEFAULT),
     dw: int = Query(DELETE_WEIGHT_DEFAULT),
 ):
-    ctx = build_param_stats_page_context(model=model, min_n=min_n, t=t, dw=dw)
+    ctx = get_application_container(request).analytics_pages.parameter_context(
+        model=model,
+        min_n=min_n,
+        success_threshold=t,
+        delete_weight=dw,
+    )
     return PARAM_HTML.render(**ctx)
 
 
@@ -79,12 +88,15 @@ def param_stats(
 # ===============================
 @router.get("/prompt_tokens", response_class=HTMLResponse)
 def prompt_tokens(
+    request: Request,
     model: str = Query(""),
     scope: str = Query("pos"),
     min_n: int = Query(8),
     limit: int = Query(200),
 ):
-    ctx = build_prompt_tokens_page_context(
+    ctx = get_application_container(
+        request
+    ).analytics_pages.prompt_tokens_context(
         model=model, scope=scope, min_n=min_n, limit=limit
     )
     return PROMPT_HTML.render(**ctx)

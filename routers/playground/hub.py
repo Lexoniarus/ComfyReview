@@ -4,10 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 
-from config import COMBO_PROMPTS_DB_PATH, DEFAULT_MAX_TRIES, MV_QUEUE_DB_PATH
-from services.playground_hub_service import build_playground_dashboard_context
-
-from ._shared import png_path_to_url
+from comfyreview.api import get_application_container
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -15,12 +12,7 @@ templates = Jinja2Templates(directory="templates")
 
 @router.get("/playground")
 def playground_home(request: Request):
-    ctx = build_playground_dashboard_context(
-        combo_db_path=COMBO_PROMPTS_DB_PATH,
-        mv_queue_db_path=MV_QUEUE_DB_PATH,
-        default_max_tries=DEFAULT_MAX_TRIES,
-        png_to_url=png_path_to_url,
-    )
+    ctx = get_application_container(request).playground_hub.build_context()
 
     return templates.TemplateResponse(
         request=request,

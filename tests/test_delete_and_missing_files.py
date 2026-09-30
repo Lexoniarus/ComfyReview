@@ -19,7 +19,6 @@ from services.output_file_service import (
     OutputFileService,
     OutputMutationError,
 )
-from services.playground_hub_service import _attach_urls
 
 
 class _FailingReviewRepository:
@@ -101,31 +100,6 @@ def test_existing_png_path_to_url_rejects_missing_file(tmp_path, monkeypatch):
     assert (
         file_urls.existing_png_path_to_url(str(tmp_path / "missing.png")) == ""
     )
-
-
-def test_playground_dashboard_drops_missing_thumbnails(tmp_path):
-    existing = tmp_path / "existing.png"
-    existing.write_bytes(b"png")
-    missing = tmp_path / "missing.png"
-
-    rows = [
-        {
-            "best_png_path": str(missing),
-            "best_images": [
-                {"png_path": str(missing)},
-                {"png_path": str(existing)},
-            ],
-        }
-    ]
-
-    result = _attach_urls(
-        rows, png_to_url=lambda path: f"url:{Path(path).name}"
-    )
-
-    assert result[0]["best_url"] == ""
-    assert result[0]["best_images"] == [
-        {"png_path": str(existing), "url": "url:existing.png"}
-    ]
 
 
 def test_combo_database_replace_retries_windows_lock(tmp_path, monkeypatch):

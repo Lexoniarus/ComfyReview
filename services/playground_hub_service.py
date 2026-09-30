@@ -1,117 +1,92 @@
+"""Canonical Playground dashboard view composition."""
+
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
-from config import DB_PATH
-from services.combo_prompts_service import (
-    ensure_combo_prompts_db,
-    get_top_combos_2,
-    get_top_combos_3,
+from comfyreview.application import (
+    AnalyticsImage,
+    AnalyticsService,
+    ObservedPromptCombination,
 )
-from stores.mv_state_store import list_states
+
+ImageUrlResolver = Callable[[str], str]
 
 
-def build_playground_dashboard_context(
-    *,
-    combo_db_path,
-    mv_queue_db_path,
-    ratings_db_path=DB_PATH,
-    default_max_tries: int,
-    png_to_url,
-) -> dict[str, Any]:
-    """Build context for the playground dashboard page."""
+class PlaygroundHubService:
+    """Build the Playground dashboard without legacy materialized views."""
 
-    ensure_combo_prompts_db(combo_db_path)
+    def __init__(
+        self,
+        *,
+        analytics: AnalyticsService,
+        image_url: ImageUrlResolver,
+        default_max_attempts: int,
+    ) -> None:
+        self._analytics = analytics
+        self._image_url = image_url
+        self._default_max_attempts = int(default_max_attempts)
 
-    top2 = _attach_urls(
-        get_top_combos_2(combo_db_path, limit=8), png_to_url=png_to_url
-    )
-    top3 = _attach_urls(
-        get_top_combos_3(combo_db_path, limit=8), png_to_url=png_to_url
-    )
-
-    max_id = _max_rating_id(ratings_db_path)
-    mv_status = _build_mv_status(
-        mv_queue_db_path=mv_queue_db_path, max_rating_id=max_id
-    )
-
-    return {
-        "top2": top2,
-        "top3": top3,
-        "default_max_tries": int(default_max_tries),
-        "max_rating_id": int(max_id),
-        "mv_status": mv_status,
-    }
-
-
-def _max_rating_id(db_path) -> int:
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
-    try:
-        row = con.execute(
-            "SELECT COALESCE(MAX(id), 0) AS m FROM ratings"
-        ).fetchone()
-        return int(row["m"] or 0)
-    finally:
-        con.close()
-
-
-def _pending(max_id: int, last_processed: int) -> int:
-    try:
-        return int(max_id) - int(last_processed)
-    except Exception:
-        return 0
-
-
-def _attach_urls(
-    rows: list[dict[str, Any]], *, png_to_url
-) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for r0 in rows or []:
-        r = dict(r0)
-
-        best_png = str(r.get("best_png_path") or "")
-        r["best_url"] = (
-            png_to_url(best_png)
-            if best_png and Path(best_png).is_file()
-            else ""
-        )
-
-        best_images = []
-        for bi0 in r.get("best_images") or []:
-            bi = dict(bi0)
-            bi_png = str(bi.get("png_path") or "")
-            if not bi_png or not Path(bi_png).is_file():
-                continue
-            bi["url"] = png_to_url(bi_png)
-            best_images.append(bi)
-        r["best_images"] = best_images
-
-        out.append(r)
-    return out
-
-
-def _build_mv_status(
-    *, mv_queue_db_path, max_rating_id: int
-) -> list[dict[str, Any]]:
-    states = list_states(mv_queue_db_path)
-    st_map = {str(s.get("aggregator_name")): s for s in (states or [])}
-
-    def _state_row(name: str) -> dict[str, Any]:
-        s = st_map.get(name) or {}
-        lp = int(s.get("last_processed_rating_id") or 0)
+    def build_context(self) -> dict[str, Any]:
+        """Return observed two- and three-component combinations."""
         return {
-            "name": name,
-            "last_processed_rating_id": lp,
-            "last_run_at": s.get("last_run_at"),
-            "last_error": s.get("last_error"),
-            "pending": _pending(int(max_rating_id), lp),
+            "top2": [
+                self._combination_view(item)
+                for item in self._analytics.observed_combinations(
+                    combo_size=2,
+                    limit=8,
+                )
+            ],
+            "top3": [
+                self._combination_view(item)
+                for item in self._analytics.observed_combinations(
+                    combo_size=3,
+                    limit=8,
+                )
+            ],
+            "default_max_tries": self._default_max_attempts,
+            "max_rating_id": self._analytics.latest_review_sequence(),
+            "mv_status": [],
         }
 
-    return [
-        _state_row("prompt_ratings"),
-        _state_row("combo_prompts"),
-        _state_row("images"),
-    ]
+    def _combination_view(
+        self,
+        item: ObservedPromptCombination,
+    ) -> dict[str, Any]:
+        return {
+            "combo_key": item.combo_key,
+            "combo_size": item.combo_size,
+            "character_id": item.character_id,
+            "scene_id": item.scene_id,
+            "outfit_id": item.outfit_id,
+            "label": item.label,
+            "combo_pos_avg_rating": item.average_rating,
+            "combo_pos_runs": item.total_rating_count,
+            "combo_pos_coverage": 1.0 if item.total_rating_count else 0.0,
+            "combo_neg_avg_rating": None,
+            "combo_neg_runs": 0,
+            "combo_image_count": item.image_count,
+            "combo_total_runs": item.total_rating_count,
+            "best_images": self._image_views(item.best_images),
+        }
+
+    def _image_views(
+        self,
+        images: tuple[AnalyticsImage, ...],
+    ) -> list[dict[str, object]]:
+        output: list[dict[str, object]] = []
+        for image in images:
+            url = self._image_url(str(image.png_path))
+            if not url:
+                continue
+            output.append(
+                {
+                    "url": url,
+                    "png_path": str(image.png_path),
+                    "json_path": str(image.json_path or ""),
+                    "avg_rating": image.average_rating,
+                    "runs": image.rating_count,
+                }
+            )
+        return output
