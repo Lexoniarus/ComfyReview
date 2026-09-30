@@ -203,6 +203,75 @@ class SqlitePromptCatalogRepository:
         finally:
             connection.close()
 
+    def update_component(
+        self,
+        metadata: UpdatePromptComponentMetadataCommand,
+        revision: PromptRevisionDraft,
+    ) -> PromptComponent:
+        """Update metadata and append content in one transaction."""
+        connection = connect_existing(self._database_path, rows=True)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT id FROM prompt_components WHERE component_uid = ?",
+                (metadata.component_uid,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(
+                    f"Unknown prompt component: {metadata.component_uid}"
+                )
+            component_id = int(row["id"])
+            connection.execute(
+                """
+                UPDATE prompt_components
+                SET name = ?, tags = ?, notes = ?, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (
+                    metadata.name,
+                    self._tags_json(metadata.tags),
+                    metadata.notes,
+                    component_id,
+                ),
+            )
+            existing = connection.execute(
+                """
+                SELECT id FROM prompt_revisions
+                WHERE component_id = ? AND content_hash = ?
+                """,
+                (component_id, revision.content_hash),
+            ).fetchone()
+            if existing is None:
+                next_row = connection.execute(
+                    """
+                    SELECT COALESCE(MAX(revision_number), 0) + 1
+                    FROM prompt_revisions WHERE component_id = ?
+                    """,
+                    (component_id,),
+                ).fetchone()
+                self._insert_revision(
+                    connection,
+                    component_id=component_id,
+                    revision_number=int(next_row[0]),
+                    revision=revision,
+                )
+            component = self._get_component(connection, metadata.component_uid)
+            connection.commit()
+            return component
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def get_component(self, component_uid: str) -> PromptComponent:
+        """Read one component by stable identity."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            return self._get_component(connection, component_uid)
+        finally:
+            connection.close()
+
     def list_components(
         self,
         *,

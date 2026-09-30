@@ -17,6 +17,7 @@ from comfyreview.application import (
     PromptRevision,
     PromptRevisionDraft,
     RevisePromptComponentCommand,
+    UpdatePromptComponentCommand,
     UpdatePromptComponentMetadataCommand,
     imported_prompt_component_uid,
     prompt_revision_identity,
@@ -93,6 +94,28 @@ class _CatalogRepository:
         assert self.component is not None
         assert component_uid == self.component.component_uid
         self.component = replace(self.component, archived=archived)
+        return self.component
+
+    def update_component(self, metadata, revision):
+        assert self.component is not None
+        self.component = replace(
+            self.component,
+            name=metadata.name,
+            tags=metadata.tags,
+            notes=metadata.notes,
+            latest_revision=PromptRevision(
+                revision.revision_uid,
+                self.component.latest_revision.revision_number + 1,
+                revision.positive_text,
+                revision.negative_text,
+                revision.content_hash,
+            ),
+        )
+        return self.component
+
+    def get_component(self, component_uid):
+        assert self.component is not None
+        assert component_uid == self.component.component_uid
         return self.component
 
     def list_components(
@@ -241,6 +264,41 @@ def test_prompt_catalog_service_updates_only_mutable_metadata() -> None:
         )
 
 
+def test_prompt_catalog_service_updates_metadata_and_revision_atomically() -> (
+    None
+):
+    service, _repository = _service()
+    original = service.create_component(_create_command())
+
+    updated = service.update_component(
+        UpdatePromptComponentCommand(
+            component_uid=original.component_uid,
+            name=" Rainy Rooftop ",
+            tags=(" rain ", "rain"),
+            notes=" changed ",
+            positive_text=" skyline, rain ",
+            negative_text=" blur ",
+        )
+    )
+
+    assert updated.name == "Rainy Rooftop"
+    assert updated.tags == ("rain",)
+    assert updated.latest_revision.revision_number == 2
+    assert service.get_component(original.component_uid) == updated
+
+    with pytest.raises(PromptCatalogValidationError, match="prompt revision"):
+        service.update_component(
+            UpdatePromptComponentCommand(
+                original.component_uid,
+                "name",
+                (),
+                "",
+                "",
+                "",
+            )
+        )
+
+
 def test_prompt_catalog_service_archives_restores_and_lists() -> None:
     service, repository = _service()
     component = service.create_component(_create_command())
@@ -300,10 +358,22 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
     [archived] = service.list_components(include_archived=True)
     assert archived.archived is True
     assert archived.name == "Rainy Rooftop"
+    updated = service.update_component(
+        UpdatePromptComponentCommand(
+            component_uid=created.component_uid,
+            name="Storm Rooftop",
+            tags=("storm",),
+            notes="atomic",
+            positive_text="skyline, storm",
+            negative_text="blur",
+        )
+    )
+    assert updated.latest_revision.revision_number == 3
+    assert service.get_component(created.component_uid) == updated
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM prompt_components"
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM prompt_revisions"
-        ).fetchone() == (2,)
+        ).fetchone() == (3,)

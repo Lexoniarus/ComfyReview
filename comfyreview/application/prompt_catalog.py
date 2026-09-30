@@ -69,6 +69,18 @@ class UpdatePromptComponentMetadataCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class UpdatePromptComponentCommand:
+    """Update mutable metadata and append immutable content atomically."""
+
+    component_uid: str
+    name: str
+    tags: tuple[str, ...]
+    notes: str
+    positive_text: str
+    negative_text: str
+
+
+@dataclass(frozen=True, slots=True)
 class PromptRevisionDraft:
     """Carry normalized immutable revision content to persistence."""
 
@@ -128,6 +140,18 @@ class PromptCatalogRepository(Protocol):
         archived: bool,
     ) -> PromptComponent:
         """Set the reversible catalog archive state."""
+        ...
+
+    def update_component(
+        self,
+        metadata: UpdatePromptComponentMetadataCommand,
+        revision: PromptRevisionDraft,
+    ) -> PromptComponent:
+        """Update metadata and append content in one transaction."""
+        ...
+
+    def get_component(self, component_uid: str) -> PromptComponent:
+        """Return one component by stable identity."""
         ...
 
     def list_components(
@@ -233,6 +257,34 @@ class PromptCatalogService:
             notes=str(command.notes or "").strip(),
         )
         return self._repository.update_metadata(normalized)
+
+    def update_component(
+        self,
+        command: UpdatePromptComponentCommand,
+    ) -> PromptComponent:
+        """Persist metadata and content changes as one atomic catalog edit."""
+        component_uid = self._required(
+            command.component_uid,
+            "component_uid",
+        )
+        metadata = UpdatePromptComponentMetadataCommand(
+            component_uid=component_uid,
+            name=self._required(command.name, "name"),
+            tags=self._tags(command.tags),
+            notes=str(command.notes or "").strip(),
+        )
+        revision = self._revision(
+            component_uid,
+            command.positive_text,
+            command.negative_text,
+        )
+        return self._repository.update_component(metadata, revision)
+
+    def get_component(self, component_uid: str) -> PromptComponent:
+        """Return one component by stable identity."""
+        return self._repository.get_component(
+            self._required(component_uid, "component_uid")
+        )
 
     def set_archived(
         self,

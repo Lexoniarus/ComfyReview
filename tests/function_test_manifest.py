@@ -69,6 +69,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_prompt_catalog.py::"
         "test_prompt_catalog_service_archives_restores_and_lists"
     ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.get_component": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_updates_metadata_and_revision_atomically"
+    ),
     "comfyreview.application.prompt_catalog:PromptCatalogService.set_archived": (
         "tests/test_prompt_catalog.py::"
         "test_prompt_catalog_service_archives_restores_and_lists"
@@ -76,6 +80,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     "comfyreview.application.prompt_catalog:PromptCatalogService.update_metadata": (
         "tests/test_prompt_catalog.py::"
         "test_prompt_catalog_service_updates_only_mutable_metadata"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.update_component": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_updates_metadata_and_revision_atomically"
     ),
     "comfyreview.application.prompt_catalog:prompt_revision_identity": (
         "tests/test_prompt_catalog.py::"
