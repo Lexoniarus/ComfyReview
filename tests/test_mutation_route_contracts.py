@@ -17,13 +17,13 @@ from comfyreview.application import (
     CurationResult,
     CurationValidationError,
     InvalidOutputPathError,
+    OutputImageReadModel,
     OutputPairNotFoundError,
     ReviewMutationError,
     ReviewResult,
     ReviewValidationError,
     SubmitReviewCommand,
 )
-from models import RatedItem
 
 arena_router = importlib.import_module("routers.arena_router")
 index_router = importlib.import_module("routers.index_router")
@@ -31,10 +31,10 @@ top_router = importlib.import_module("routers.top_router")
 
 
 class _OutputImageCatalog:
-    def __init__(self, items: list[RatedItem]) -> None:
+    def __init__(self, items: list[OutputImageReadModel]) -> None:
         self._items = items
 
-    def list_images(self) -> tuple[RatedItem, ...]:
+    def list_images(self) -> tuple[OutputImageReadModel, ...]:
         return tuple(self._items)
 
 
@@ -90,7 +90,7 @@ class _RouteCurationService:
 
 def _request(
     *,
-    items: list[RatedItem] | None = None,
+    items: list[OutputImageReadModel] | None = None,
     review_service: object | None = None,
     arena_service: object | None = None,
     curation_service: object | None = None,

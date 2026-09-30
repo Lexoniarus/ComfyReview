@@ -4,7 +4,6 @@ import json
 from typing import Any
 
 from comfyreview.application import OutputImageCatalog, OutputImageReadModel
-from meta_view import extract_prompts, extract_view, preset_text_from_view
 from services.context_filters import (
     build_dropdown_lists,
     extract_character_from_subdir,
@@ -16,6 +15,11 @@ from services.context_filters import (
     normalize_unrated_flag,
 )
 from services.file_urls import png_path_to_url
+from services.image_metadata_view import (
+    extract_prompts,
+    extract_view,
+    preset_text_from_view,
+)
 from services.playground_label_service import PromptLabels, PromptLabelService
 
 

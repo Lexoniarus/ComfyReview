@@ -3,8 +3,6 @@
   "schema_version": 1,
   "tools": {
     "format": {
-      "format|meta_view.py|unformatted": 1,
-      "format|models.py|unformatted": 1,
       "format|routers/__init__.py|unformatted": 1,
       "format|routers/playground/__init__.py|unformatted": 1,
       "format|routers/playground/hub.py|unformatted": 1,
@@ -28,14 +26,6 @@
       "pyright|tests/test_prompt_store_tokenize.py|reportArgumentType": 1
     },
     "ruff": {
-      "ruff|meta_view.py|I001": 1,
-      "ruff|meta_view.py|UP006": 16,
-      "ruff|meta_view.py|UP035": 3,
-      "ruff|meta_view.py|UP045": 2,
-      "ruff|models.py|F401": 1,
-      "ruff|models.py|UP006": 1,
-      "ruff|models.py|UP035": 2,
-      "ruff|models.py|UP045": 6,
       "ruff|routers/__init__.py|I001": 1,
       "ruff|routers/playground/__init__.py|I001": 1,
       "ruff|services/context_filters.py|UP006": 6,
