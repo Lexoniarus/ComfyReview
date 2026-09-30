@@ -23,8 +23,9 @@ The current repository demonstrates a usable local workflow around ComfyUI outpu
 Implemented areas include:
 
 - local FastAPI web app
-- SQLite-backed persistence
-- PNG and JSON sidecar scanning
+- canonical schema-v4 SQLite persistence for images, reviews, Arena and Curation
+- audited PNG and JSON sidecar import with stable image identity
+- append-only review history with rebuildable current-state views
 - image review and rating flow
 - character and set filtering
 - Top and aggregate views
@@ -32,7 +33,7 @@ Implemented areas include:
 - Stats and analysis pages
 - Playground handoff back toward ComfyUI
 - included ComfyUI custom node for metadata export
-- pytest-based test setup
+- shared lint, type, architecture, test and coverage quality gate
 
 ## Workflow assumptions
 
@@ -41,7 +42,10 @@ ComfyReview currently expects a specific local workflow:
 - ComfyUI generates PNG files
 - the included `name_meta_export` node creates matching JSON sidecars
 - image outputs are stored in a local output folder
-- ComfyReview scans that folder and stores derived data in local SQLite databases
+- an explicit audit/import workflow records new historical output provenance in
+  the canonical database
+- Review, Top/Worst, Arena and Curation use image UIDs instead of paths as
+  client identity
 - runtime databases, certificates, keys and private image output folders should not be committed
 
 ## Local-first scope
@@ -62,9 +66,11 @@ Known limitations of the current public prototype:
 
 - setup still requires direct local path configuration
 - metadata extraction depends on the included ComfyUI custom node
-- PNG and JSON sidecar pairs are expected for reliable behavior
+- new historical output imports require matching sidecars; already-canonical
+  sidecarless images remain usable in the cut-over review workflows
 - export and dataset-building logic is not a final production pipeline
-- physical folder layout still influences parts of the workflow
+- generation, Playground and parts of statistics/projection persistence remain
+  transitional
 - documentation may lag behind experimental internal workflow ideas
 
 ## Good public indicators
@@ -85,10 +91,10 @@ Useful future cleanup tasks, if the project is polished further:
 
 - add screenshots or a short GIF to the README
 - add a small sample workflow diagram
-- add a minimal example output pair for scanner testing, only if legally and personally safe
-- pin dependency versions more tightly for reproducible installs
-- add a `.env.example` file for common local configuration values
-- add GitHub Actions for running tests
+- add a minimal example output pair for import testing, only if legally and personally safe
+- finish the ComfyUI generation-provider boundary
+- migrate Playground and remaining projection state into canonical persistence
+- complete the native ES-module frontend cleanup
 
 ## License
 

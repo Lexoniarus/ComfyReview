@@ -15,6 +15,7 @@ htmlcov/
 # local state
 data/ui_state/
 data/reports/
+data/backups/
 output/
 
 # databases and artifacts

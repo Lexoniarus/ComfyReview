@@ -1,7 +1,7 @@
 # ComfyReview Coding Standards
 
-Status: binding target for all new and changed code from 2026-09-28; bootstrap
-foundation implemented 2026-09-29.
+Status: binding target for all new and changed code from 2026-09-28; canonical
+schema-v4 feature cutover implemented 2026-09-30.
 
 The current repository predates this baseline and is not yet fully compliant.
 Existing violations are migration work, not precedent for new code.
@@ -174,13 +174,15 @@ Routes call services. They do not execute SQL or external provider calls.
 - Unsupported schemas fail explicitly; runtime startup does not silently repair
   arbitrary historical layouts.
 - Destructive migration requires backup + explicit offline migration command.
-- Legacy schema DDL exists only in
-  `comfyreview/repositories/sqlite/legacy_schema.py`; architecture tests reject
-  DDL in other Python modules.
+- Schema DDL exists only in the explicit canonical and legacy schema managers;
+  architecture tests reject DDL in ordinary repositories, services and routes.
 - Normal repositories open existing files in `rw` mode and never create or
   upgrade schemas as a side effect of a query or mutation.
 - Known additive legacy repair uses `python -m comfyreview legacy-db upgrade`;
   startup initializes only database files that are completely absent.
+- Canonical version changes use the explicit, backed-up
+  `python -m comfyreview canonical-db upgrade` command. Startup validates but
+  never performs a version cutover.
 
 ## 7. Canonical data vs derived data
 

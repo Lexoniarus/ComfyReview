@@ -1,263 +1,178 @@
 # ComfyReview Data Architecture
 
-Status: migration direction with explicit legacy lifecycle, 2026-09-29.
+Status: canonical schema v4 is implemented for images, reviews, Arena and
+Curation on the active refactor branch, 2026-09-30. Prompt components,
+generation execution and some derived statistics remain transitional.
 
-This document records the persistence principles that must be preserved while
-ComfyReview is consolidated from multiple SQLite files into one canonical
-runtime database.
+## 1. Source-of-truth rule
 
-## 1. Current legacy database roles
+Every business fact has one writable authoritative home. Review, Arena and
+Curation runtime writes now go only to `comfyreview.sqlite3`; the old files are
+read-only import sources for these concerns. There are no dual-writes.
 
-The current repository and historical files show these roles:
-
-| Legacy database | Role | Target treatment |
-| --- | --- | --- |
-| `playground.sqlite3` | reusable character/scene/outfit/etc. prompt components | migrate as canonical domain data |
-| `ratings.sqlite3` | raw review/rating history and generation context | migrate as canonical review/image facts |
-| `arena.sqlite3` | pairwise image decisions | migrate as canonical Arena facts |
-| `curation.sqlite3` | image -> curation set assignment | migrate as canonical curation facts |
-| `prompt_tokens.sqlite3` | per-rating/run expansion of prompts into atoms | do not blindly copy; rebuild normalized prompt/atom relations |
-| `images.sqlite3` | derived per-image aggregate/materialized view | rebuild from canonical data |
-| `prompt_ratings.sqlite3` | derived per-atom aggregate | rebuild from canonical data |
-| `combo_prompts.sqlite3` | large precomputed combination projection | redesign; migrate only domain-relevant compositions/facts |
-| `mv_jobs.sqlite3` | projection job/cursor state | replace with canonical operational job/projection state |
-
-The target runtime does not preserve one SQLite file per concern.
-
-### Current legacy schema policy
-
-The pre-One-DB runtime now has one technical owner for all legacy DDL:
-`comfyreview.repositories.sqlite.legacy_schema`. Repository calls open existing
-files in SQLite `rw` mode. They neither create database files nor silently add
-tables, indexes, triggers, or columns.
-
-Application startup follows this order:
-
-1. inspect every existing configured database read-only;
-2. abort before mutation if any existing file is empty, corrupt, structurally
-   incompatible, or missing required current objects;
-3. build each entirely missing database in a temporary file;
-4. validate all temporary databases and move them into place;
-5. validate the complete configured legacy set before starting the worker.
-
-Unknown additional tables and columns remain allowed so provenance or newer
-data is not destroyed. Required columns with incompatible SQLite types are
-rejected.
-
-Older known schemas are upgraded only through the explicit command:
+Stable IDs are identity. Paths are mutable evidence and file attributes:
 
 ```text
-python -m comfyreview legacy-db upgrade [--database NAME] [--backup-dir PATH]
+image_uid = "..."
+png_path = "E:/ComfyUI/output/.../image.png"
 ```
 
-All affected existing files are backed up before the first schema mutation.
-Only known additive legacy changes are applied. The complete selected set is
-validated afterwards, and ordinary failures restore all backed-up files.
-Validation without mutation is exposed by `legacy-db validate`.
+Changing a path does not change the image UID or any review, match or curation
+relationship.
 
-These safeguards do not make a collection of SQLite files one transaction. A
-process or machine crash between filesystem replacements can still expose a
-partially advanced multi-file set. Full crash atomicity is deliberately
-deferred to the canonical one-database runtime.
+## 2. Canonical schema v4
 
-Historical output provenance uses a two-step offline workflow. A read-only
-audit fingerprints PNGs, sidecars, workflow graphs and the current canonical
-assignments. The explicit importer treats that report as a snapshot contract,
-revalidates source evidence, creates a database backup and writes all accepted
-generation/image provenance in one SQLite transaction. Existing stable IDs and
-lifecycle fields are preserved. Paths remain evidence and mutable attributes,
-never identity. Historical ratings, Arena matches and curation assignments are
-not part of this importer and remain inputs to the separate canonical feature
-cutover.
+The canonical database uses explicit schema metadata and foreign keys. Its
+implemented cutover structures include:
 
-## 2. Source-of-truth rule
+- `generations` and normalized generation provenance;
+- `images` with stable UID, current paths and `deleted_at`;
+- append-only `review_events`;
+- `arena_matches` referencing images;
+- `curation_assignments` with one assignment per image;
+- rebuildable current-state and aggregate views.
 
-A datum must have one authoritative home.
-
-Examples:
-
-- Image generation metadata belongs to the image/generation record.
-- A review score belongs to a review event.
-- A prompt atom belongs to the prompt vocabulary/membership model.
-- Aggregate average score is derived; it is not another independent fact.
-
-No new design may require keeping the same business fact synchronized across
-multiple writable databases.
-
-## 3. Stable identities
-
-Use stable integer IDs and/or UUIDs for domain identity.
-
-Paths are mutable attributes:
+Unknown or unsupported versions fail at startup. Runtime startup never performs
+a v3 to v4 migration. The explicit, backed-up command is:
 
 ```text
-image_id = 827
-png_path = E:/ComfyUI/output/.../image.png
+python -m comfyreview canonical-db upgrade [--backup-dir PATH]
 ```
 
-If the path changes, `image_id` remains 827 and reviews/comparisons/curation
-remain valid.
+## 3. Review history and current state
 
-## 4. Prompt/content components
+Schema v4 intentionally changes reviews from a writable current-state table to
+an append-only canonical history. Each `review_events` row has a stable event
+UID, image relation, event type, optional rating, source, idempotent source key,
+canonical sequence and available source timestamp.
 
-The legacy `playground_items` concept is useful and should survive in normalized
-form.
+Event semantics:
 
-A component has at least:
+- `rating` appends a score;
+- `delete` records the decision and makes the image non-live;
+- rating a deleted image appends `restore` and then `rating` atomically;
+- `restore` makes the image live without erasing history.
 
-- stable ID
-- `kind`
-- stable key/slug
-- display name
-- positive text
-- negative text
-- tags/notes
+`images.deleted_at` is updated in the same transaction for efficient runtime
+queries, but is a projection of the event history rather than a competing
+truth. The current score is the latest effective rating after the last
+lifecycle boundary. Rating count and average are derived from rating events;
+live rankings exclude deleted images.
 
-Kinds may include character, scene, outfit, pose, expression, modifier,
-lighting and future compatible categories.
+`current_image_reviews`, `image_review_summary`, `image_reviews` and
+`deleted_images` are read-only views. The latter two preserve legacy query
+shapes only. No repository may write to them, and all projections can be rebuilt
+from `review_events` and canonical image facts.
 
-## 5. Prompt compositions
+## 4. Image and generation provenance
 
-A composition is a real ordered combination of components.
+A generation and each output image have separate stable identities. Existing
+UIDs survive imports. New historical images and generations receive
+content-derived identities; file paths are deliberately excluded from identity.
 
-Use a relation such as:
+Generation provenance may include raw sidecar metadata, workflow content and
+hash, normalized prompts, checkpoint, LoRAs and ordered sampler stages.
+Enriching an existing generation does not replace its source, lifecycle,
+ComfyUI prompt ID, timestamps or occupied output slots.
+
+The ComfyUI graph remains the render source of truth. Raw payloads are retained
+for provenance and future parsing; application queries use normalized fields.
+
+## 5. Arena and Curation
+
+Arena facts relate `left_image_id`, `right_image_id` and `winner_image_id`.
+The match and its generated rating events commit in one canonical transaction.
+Directed rematches retain the existing product behavior.
+
+Curation relates one image to an optional set key. A filesystem move happens
+outside the SQLite write transaction. After a successful move, current image
+paths and the assignment update atomically. A database failure causes a
+best-effort filesystem rollback; rollback failures are separately visible.
+
+Sidecars are optional for already-canonical images. Review, Top/Worst, Arena,
+Curation and Delete therefore work for canonical PNGs without sidecars.
+
+## 6. Audited historical output import
+
+Historical output migration has two explicit steps:
 
 ```text
-prompt_compositions
-prompt_composition_members
+python -m comfyreview legacy-output audit
+python -m comfyreview legacy-output import [--backup-dir PATH]
 ```
 
-Do not store every theoretical character x scene x outfit permutation merely
-because it is computable. Persist a composition when it is actually generated,
-used, curated, explicitly saved or otherwise becomes domain-relevant.
+The audit fingerprints the canonical database plus PNGs, sidecars and workflow
+graphs. The importer validates the report structure and UID assignments, then
+recomputes hashes immediately before any write. Missing files, changed content,
+unknown samplers, partial graphs and UID/path/output-slot collisions abort the
+whole import. PNGs without sidecars are reported separately and are not
+invented as canonical records. Source PNGs and sidecars are never modified.
 
-## 6. Exact prompts and atoms
+The accepted import writes all provenance and sampler stages in one SQLite
+transaction after creating a backup. Canonical readers use a genuine
+SQLite `mode=ro` connection.
 
-Exact positive/negative prompt text should have stable identity (for example by
-hash + canonical text record).
+## 7. Audited legacy feature import
 
-Tokenize an exact prompt once into ordered atom memberships:
+Ratings, Arena and Curation use their own audit/import workflow:
 
 ```text
-prompts
-prompt_atoms
-prompt_members
+python -m comfyreview legacy-features audit
+python -m comfyreview legacy-features import [--backup-dir PATH]
 ```
 
-Do not duplicate the same atom text for every rating event.
+All source databases are opened read-only and bound to the report by SHA-256.
+Legacy paths are used only to resolve an existing canonical image UID; no UID is
+derived from a path. Existing canonical v3 reviews are deduplicated against
+matching source facts. Ambiguous or contradictory mappings block the import.
+Historical missing images and dependent facts are reported as orphans.
 
-The large historical `prompt_tokens.sqlite3` is therefore treated as a legacy
-projection/journal, not as the desired canonical shape.
+The importer is idempotent, validates aggregate parity and writes ratings,
+matches and assignments in one canonical transaction. Observed source counts
+are operational control values, not hard-coded schema expectations.
 
-## 7. Images and raw metadata
+## 8. Backup, rollback and restore
 
-A generation run and its output images have separate identities. One
-run may own multiple outputs. An image record stores normalized fields such as:
+Both import workflows complete validation before opening the write transaction
+and create a SQLite backup before the first write. All accepted facts then
+commit in exactly one transaction.
 
-- stable image ID plus its generation ID
-- current PNG path and optional legacy JSON sidecar path
-- output node ID and output index within the generation
-- prompt IDs through the generation relation
-- checkpoint/model reference
-- seed
-- steps
-- CFG
-- sampler
-- scheduler
-- denoise
-- LoRA/config references as appropriate
-- timestamps
+On an ordinary exception the transaction is rolled back first. The production
+database is validated after rollback and is not overwritten merely because an
+exception occurred. A physical restore is attempted only when validation fails,
+an out-of-transaction structural change took effect or the commit state cannot
+be established. Restore errors remain distinguishable from the original error.
 
-Preserve the raw sidecar/workflow payload separately for provenance and future
-re-parsing. Raw metadata is not the primary query model.
+Reports, backups and runtime databases are local artifacts ignored by Git.
 
-## 8. Reviews
+## 9. Legacy databases during transition
 
-Model reviews as events/facts, not overwritten image columns.
+| Legacy database | Current treatment |
+| --- | --- |
+| `ratings.sqlite3` | read-only review import source; not Review runtime truth |
+| `arena.sqlite3` | read-only Arena import source; not Arena runtime truth |
+| `curation.sqlite3` | read-only Curation import source; not Curation runtime truth |
+| `images.sqlite3` | rebuildable/verification projection for transitional features |
+| `prompt_tokens.sqlite3` | legacy prompt projection; redesign instead of blind copy |
+| `prompt_ratings.sqlite3` | transitional derived prompt statistics |
+| `combo_prompts.sqlite3` | transitional eager combination projection |
+| `playground.sqlite3` | pending prompt-component migration |
+| `mv_jobs.sqlite3` | transitional worker/job state |
 
-A review event may represent:
+Legacy DDL remains centralized in
+`comfyreview.repositories.sqlite.legacy_schema`. Normal legacy repositories
+open existing files in `rw` mode and do not create schemas. Only entirely
+missing files can be initialized during startup; invalid existing files abort.
+Known additive changes require `python -m comfyreview legacy-db upgrade`.
 
-- score/rating
-- delete/restore decision if that remains product behavior
-- timestamp/session/user context when applicable
+## 10. Remaining canonical design
 
-Per-image averages, counts and rankings are derived from review events.
+The target still needs normalized prompt/content components, compositions,
+exact prompts and atom memberships, plus canonical operational job/projection
+state. The design must not duplicate prompt atoms per review or materialize the
+full Cartesian product of possible prompt combinations. Persist combinations
+only when they become domain-relevant, and materialize projections only after
+measured query needs justify them.
 
-## 9. Arena
-
-Arena records reference image IDs:
-
-```text
-left_image_id
-right_image_id
-winner_image_id
-```
-
-They do not use mutable JSON/PNG paths as relational identity.
-
-## 10. Curation
-
-Curation references `image_id` and a typed/set key. Moving the underlying file
-does not change curation identity.
-
-## 11. Derived statistics
-
-Derived tables/views must be small, purposeful and rebuildable.
-
-Candidate projections:
-
-- image review summary
-- prompt atom performance by checkpoint and global scope
-- composition performance
-
-Start as SQL views where performance is sufficient. Materialize only after
-measurement demonstrates a need.
-
-## 12. Operational state
-
-Background queue and projection cursor state may share the canonical SQLite
-file but are operational, not product facts.
-
-Examples:
-
-```text
-background_jobs
-projection_state
-schema_meta
-```
-
-They must be safe to rebuild/reset according to documented rules without
-corrupting canonical review/image/prompt data.
-
-## 13. Schema versioning
-
-The canonical database has an explicit schema version.
-
-Runtime behavior:
-
-- supported version -> open normally
-- older/newer unsupported version -> fail explicitly
-- no silent structural repair of arbitrary databases on application startup
-
-Offline migration behavior:
-
-- source database(s) remain unchanged
-- backup/source verification first
-- create new output database
-- migrate inside explicit transactions
-- validate counts, relationships and invariants
-- produce a migration report
-- activate only after user acceptance
-
-## 14. Character Chronicles relationship
-
-ComfyReview should provide a clean image/prompt/review foundation that Character
-Chronicles can later reuse or extend.
-
-Character Chronicles-specific concerns such as image descriptions, embeddings,
-RAG, campaign/gameplay state and card-battler data are not added to ComfyReview
-merely to anticipate future use.
-
-If both products later share one physical database, ComfyReview's core tables
-remain independently understandable and Character Chronicles adds explicit
-extensions rather than duplicating the same image/prompt/review facts.
+Character Chronicles may later reuse or extend this foundation, but its
+descriptions, embeddings, RAG and gameplay state remain separate concerns.

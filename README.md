@@ -18,7 +18,7 @@ Built for character-focused image workflows, especially anime-style generation a
 
 ComfyReview is a local FastAPI and SQLite web app for reviewing AI-generated image batches from ComfyUI. It grew out of a practical workflow problem: once a character-focused ComfyUI setup starts producing large batches of variations, selecting the useful images becomes its own time-consuming process.
 
-Instead of treating that step like endless file cleanup, ComfyReview turns it into a structured review flow: scan outputs, rate images, compare candidates, filter by character and set, keep generation context attached, and prepare curated selections for later reuse or LoRA-oriented dataset building.
+Instead of treating that step like endless file cleanup, ComfyReview turns it into a structured review flow: import audited outputs, rate images, compare candidates, filter by character and set, keep generation context attached, and prepare curated selections for later reuse or LoRA-oriented dataset building.
 
 ---
 
@@ -26,7 +26,7 @@ Instead of treating that step like endless file cleanup, ComfyReview turns it in
 
 ComfyReview is a public prototype and local workflow tool.
 
-The current repository demonstrates a usable local review system with image scanning, rating, filtering, statistics, Arena comparison, Playground handoff, SQLite persistence and a required ComfyUI metadata export node.
+The current repository demonstrates a usable local review system with audited image import, rating, filtering, statistics, Arena comparison, Playground handoff, SQLite persistence and a ComfyUI metadata export node.
 
 It should not be treated as a polished packaged desktop application. The project is best understood as a practical tool and portfolio project that documents a real local AI workflow.
 
@@ -47,7 +47,7 @@ docs/project_status.md
 | **Main input** | PNG files plus matching JSON sidecars |
 | **Required dependency** | Included ComfyUI custom node `name_meta_export` |
 | **Main views** | Review, Top, Arena, Stats, Playground |
-| **Storage** | Local SQLite databases |
+| **Storage** | Canonical SQLite plus transitional legacy projections |
 | **Main benefit** | Faster selection, cleaner curation, reproducible reuse |
 
 ---
@@ -58,7 +58,7 @@ ComfyUI is excellent at generating images fast. The trouble starts afterwards: l
 
 ComfyReview exists to make that part easier:
 
-- scan local PNG and JSON output pairs
+- audit and import local PNG and JSON output pairs
 - review images with direct 1 to 10 ratings and delete actions
 - compare candidates in Arena-style A/B views
 - filter results by character and set
@@ -79,7 +79,7 @@ ComfyReview exists to make that part easier:
 - Reuse selected generation values in the Playground Generator
 - Maintain persistent UI state for generator inputs
 - Load heavier generator-side data lazily to keep the page responsive
-- Update aggregate views such as Top and Arena through the MV worker path
+- Read Top and Arena from canonical image and review facts
 
 ---
 
@@ -87,7 +87,10 @@ ComfyReview exists to make that part easier:
 
 A required part of this workflow is the included ComfyUI custom node **`name_meta_export`**.
 
-ComfyReview depends on sidecar JSON files generated alongside each PNG. Without that JSON output, metadata extraction, statistics, filtering and reproducible generator handoff are not reliable.
+The historical importer depends on sidecar JSON files generated alongside each
+new PNG. Without that JSON output, ComfyReview cannot reconstruct generation
+provenance reliably and does not invent a canonical image. Images that are
+already canonical can remain usable if a sidecar is later absent.
 
 **Included in this repository**
 
@@ -177,7 +180,7 @@ Important settings:
 
 | Setting | Environment variable | Purpose |
 |---|---|---|
-| `OUTPUT_ROOT` | `COMFYREVIEW_OUTPUT_ROOT` | Folder scanned for PNG and JSON output pairs |
+| `OUTPUT_ROOT` | `COMFYREVIEW_OUTPUT_ROOT` | Root boundary for canonical files and audited output imports |
 | `COMFYUI_BASE_URL` | `COMFYREVIEW_COMFYUI_BASE_URL` | Local ComfyUI API URL |
 | `WORKFLOWS_DIR` | `COMFYREVIEW_WORKFLOWS_DIR` | Folder for workflow files |
 | `DEFAULT_WORKFLOW_PATH` | `COMFYREVIEW_DEFAULT_WORKFLOW` | Default workflow used by Playground features |
@@ -211,6 +214,43 @@ missing, and then starts the projection worker. An existing empty, damaged, or
 structurally incompatible database is never repaired implicitly; startup stops
 with a visible error instead.
 
+The Review, Top/Worst, Arena and Curation paths now use the canonical
+`comfyreview.sqlite3` schema-v4 database. Images are addressed by stable UIDs;
+their current PNG and optional sidecar paths are mutable attributes. Other
+features are still being migrated, so the legacy database validation and worker
+remain part of startup for now.
+
+### Canonical database and audited imports
+
+Validate or explicitly upgrade the canonical database:
+
+```bash
+python -m comfyreview canonical-db validate
+python -m comfyreview canonical-db upgrade --backup-dir data/backups/canonical-v4
+```
+
+Historical ComfyUI output provenance is imported through a read-only audit
+followed by a separate write command:
+
+```bash
+python -m comfyreview legacy-output audit
+python -m comfyreview legacy-output import --backup-dir data/backups/legacy-output
+```
+
+Legacy Review, Arena and Curation facts use the same two-step contract:
+
+```bash
+python -m comfyreview legacy-features audit
+python -m comfyreview legacy-features import --backup-dir data/backups/legacy-features
+```
+
+Audit reports bind source files and databases by hash. Import commands
+revalidate that evidence, create a backup before writing, and commit all writes
+in one canonical SQLite transaction. A normal transaction failure is rolled
+back first; the backup is restored only when validation fails or the resulting
+commit state is uncertain. Reports, backups and runtime databases are local
+artifacts and are ignored by Git.
+
 ### Legacy database maintenance
 
 Validate all configured legacy databases without changing them:
@@ -234,8 +274,9 @@ python -m comfyreview legacy-db upgrade --backup-dir data/backups
 The command returns exit code `0` on success, `2` for an invalid or unsupported
 schema, and `1` for a technical failure. Upgrades restore affected files from
 their backups when an ordinary upgrade or validation step fails. SQLite cannot
-provide crash-atomic commits across several independent database files; the
-later canonical one-database migration remains responsible for that guarantee.
+provide crash-atomic commits across several independent database files.
+Cut-over Review, Arena and Curation writes avoid that limitation by using the
+canonical database; remaining legacy projections retain it until migrated.
 
 ---
 
@@ -244,8 +285,8 @@ later canonical one-database migration remains responsible for that guarantee.
 1. Install the included `name_meta_export` custom node in ComfyUI.
 2. Use a workflow that saves PNG files together with matching JSON sidecars.
 3. Point ComfyReview at the correct ComfyUI output folder.
-4. Start ComfyReview locally.
-5. Open the local web UI.
+4. Audit and import new historical outputs with the maintenance commands above.
+5. Start ComfyReview locally and open the web UI.
 6. Review images with ratings, deletes, filters and Arena comparisons.
 7. Use Top, Stats and Playground pages to reuse and analyze the results.
 8. Build curated character and set selections for later dataset or LoRA-oriented work.
@@ -269,8 +310,12 @@ This matters for character-focused curation workflows, where different images ma
 
 ComfyReview is designed as a local tool.
 
-- Images are scanned from local folders
-- Ratings and derived data are stored in local SQLite databases
+- Canonical images are discovered from the canonical database and read from
+  local files
+- Reviews, Arena matches and Curation assignments use one canonical SQLite
+  database
+- Remaining legacy databases are transitional inputs for features that have
+  not yet completed their cutover
 - Runtime state and generated databases are intentionally ignored by Git
 - ComfyUI integration expects a local or user-controlled ComfyUI instance
 - No cloud service is required for the core review workflow
@@ -287,10 +332,9 @@ ComfyReview/
 ├── app.py
 ├── main.py
 ├── config.py
-├── scanner.py
 ├── routers/                  # page routes and API endpoints
-├── services/                 # business logic
-├── stores/                   # legacy SQLite repositories (schema-free at runtime)
+├── services/                 # remaining transitional feature logic
+├── stores/                   # remaining legacy repositories
 ├── quality/                  # versioned quality and architecture baselines
 ├── scripts/                  # shared repository automation
 ├── templates/                # HTML templates
@@ -306,9 +350,11 @@ ComfyReview/
 ## Architecture notes
 
 <details>
-<summary><strong>Scanner</strong></summary>
+<summary><strong>Canonical image catalog</strong></summary>
 
-The scanner reads PNG and JSON pairs from the ComfyUI output folder, extracts metadata, and upserts the relevant information into the local SQLite-backed app state.
+The image catalog reads canonical image identities and mutable file attributes
+from SQLite through a real read-only connection. Historical output discovery
+and sidecar parsing happen only in the explicit audited import workflow.
 
 </details>
 
@@ -316,6 +362,10 @@ The scanner reads PNG and JSON pairs from the ComfyUI output folder, extracts me
 <summary><strong>Review flow</strong></summary>
 
 The review side of the app is built to make large batches of similar images easier to work through without turning the whole thing into manual sorting work.
+
+Ratings, deletes and restores append canonical `review_events`. The UI still
+shows the current effective state, derived from that history. Compatibility
+views expose old query shapes but cannot be written.
 
 </details>
 
@@ -327,9 +377,11 @@ The Playground Generator is designed to carry values back into ComfyUI in a repr
 </details>
 
 <details>
-<summary><strong>MV worker</strong></summary>
+<summary><strong>Canonical and legacy projections</strong></summary>
 
-Aggregate-style views such as Top and Arena are not just static file listings. They depend on the app's worker/update path and the local derived data it maintains.
+Top/Worst and Arena now use canonical review aggregates and image UIDs. The
+legacy worker remains for statistics and prompt projections that have not yet
+been migrated.
 
 </details>
 
@@ -355,7 +407,7 @@ core. Existing pre-baseline violations remain visible in versioned ratchet
 files; new and changed Python files must pass without adding exceptions.
 
 The repository may include sample PNG and JSON files that can be used as
-scanner input for local testing.
+audited import input for local testing.
 
 ---
 
@@ -364,9 +416,12 @@ scanner input for local testing.
 - This is a local prototype, not a packaged desktop application
 - Configuration still requires direct path and environment setup
 - The metadata workflow depends on the included ComfyUI custom node
-- The app assumes PNG and JSON sidecar pairs for reliable metadata handling
+- New historical output imports require a JSON sidecar; already-canonical
+  sidecarless images remain usable in Review, Top/Worst, Arena, Curation and
+  Delete
 - Export and dataset-building workflows are not final production pipelines
-- The data identity model is still tied to the current local workflow assumptions
+- Generation, Playground and some statistics/projection paths are still on
+  transitional legacy persistence
 - Public documentation may lag behind internal workflow experiments
 
 ---
