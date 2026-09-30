@@ -12,13 +12,12 @@ from comfyreview.application import PlaygroundService
 from config import (
     DEFAULT_MAX_TRIES,
 )
-from services.file_urls import file_url_exists
+from services.file_urls import file_url_exists, png_path_to_url
 from services.playground_generator_ui_service import (
     build_form_from_state,
     build_head_state_from_post,
     character_name_from_id,
     clear_preview_state,
-    discover_comfy_lists,
     generate_preview_drafts,
     load_head_state,
     load_playground_dropdown_items,
@@ -33,10 +32,8 @@ from services.playground_generator_ui_service import (
 from services.ui_state_service import safe_int
 
 from ._shared import (
-    COMFY_DISCOVERY_CACHE_PATH,
     GENERATOR_PREVIEW_STATE_PATH,
     GENERATOR_STATE_PATH,
-    png_path_to_url,
 )
 
 router = APIRouter()
@@ -74,7 +71,9 @@ def playground_generator_apply_combo(
 def playground_generator_page(request: Request):
     dropdowns = load_playground_dropdown_items()
 
-    discovery = discover_comfy_lists(cache_path=COMFY_DISCOVERY_CACHE_PATH)
+    discovery = get_application_container(
+        request
+    ).playground_discovery.discover()
 
     saved = load_head_state(GENERATOR_STATE_PATH)
     saved_char_id = (
@@ -226,7 +225,9 @@ def playground_generator_run(
 ):
     act = str(action or "").lower().strip()
     dropdowns = load_playground_dropdown_items()
-    discovery = discover_comfy_lists(cache_path=COMFY_DISCOVERY_CACHE_PATH)
+    discovery = get_application_container(
+        request
+    ).playground_discovery.discover()
     preview = load_preview_state(GENERATOR_PREVIEW_STATE_PATH)
 
     head_kwargs = _head_kwargs_from_post(

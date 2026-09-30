@@ -35,6 +35,7 @@ from comfyreview.providers import CanonicalOutputImageCatalog
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.settings import Settings, load_settings
 from services.analytics_page_service import AnalyticsPageService
+from services.playground_discovery_service import PlaygroundDiscoveryService
 from services.playground_hub_service import PlaygroundHubService
 
 
@@ -131,6 +132,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         analytics_service=cast(AnalyticsService, object()),
         analytics_pages=cast(AnalyticsPageService, object()),
         playground_hub=cast(PlaygroundHubService, object()),
+        playground_discovery=cast(PlaygroundDiscoveryService, object()),
         generation_service=cast(GenerationService, object()),
         prompt_catalog_service=cast(PromptCatalogService, object()),
         playground_service=cast(PlaygroundService, object()),
@@ -207,6 +209,10 @@ def test_default_container_wires_canonical_review_runtime(
     assert isinstance(container.analytics_service, AnalyticsService)
     assert isinstance(container.analytics_pages, AnalyticsPageService)
     assert isinstance(container.playground_hub, PlaygroundHubService)
+    assert isinstance(
+        container.playground_discovery,
+        PlaygroundDiscoveryService,
+    )
     assert isinstance(container.generation_service, GenerationService)
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.prompt_catalog_service, PromptCatalogService)

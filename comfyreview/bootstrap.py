@@ -65,6 +65,7 @@ from routers.top_router import router as top_router
 from services.analytics_page_service import AnalyticsPageService
 from services.file_urls import existing_png_path_to_url
 from services.output_file_service import OutputFileService
+from services.playground_discovery_service import PlaygroundDiscoveryService
 from services.playground_hub_service import PlaygroundHubService
 
 
@@ -79,6 +80,7 @@ class ApplicationContainer:
     analytics_service: AnalyticsService
     analytics_pages: AnalyticsPageService
     playground_hub: PlaygroundHubService
+    playground_discovery: PlaygroundDiscoveryService
     generation_service: GenerationService
     prompt_catalog_service: PromptCatalogService
     playground_service: PlaygroundService
@@ -180,6 +182,12 @@ def build_application_container(
             analytics=analytics_service,
             image_url=existing_png_path_to_url,
             default_max_attempts=configured.default_max_tries,
+        ),
+        playground_discovery=PlaygroundDiscoveryService(
+            comfyui_provider,
+            configured.data_directory
+            / "ui_state"
+            / "comfy_discovery_cache.json",
         ),
         generation_service=generation_service,
         prompt_catalog_service=prompt_catalog_service,
