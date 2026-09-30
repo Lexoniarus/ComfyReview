@@ -79,7 +79,7 @@ def build_stats_page_context(
         min_n=int(min_n),
         limit=int(limit),
         success_threshold=int(t),
-        delete_weight=float(dw),
+        delete_weight=int(dw),
     )
 
     _attach_best_images_to_combo_rows(rows, model)
