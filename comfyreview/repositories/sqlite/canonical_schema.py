@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from comfyreview.application import CanonicalSchemaReport
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -419,6 +419,12 @@ _REQUIRED_PROMPT_REVISION_COLUMNS_V5 = {
     "created_at",
 }
 
+_REQUIRED_OBJECTS_V6 = dict(_REQUIRED_OBJECTS_V5)
+_REQUIRED_IMAGE_COLUMNS_V6 = _REQUIRED_IMAGE_COLUMNS_V4 | {
+    "content_hash",
+    "output_role",
+}
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -431,7 +437,7 @@ class CanonicalSchemaManager:
         self._database_path = Path(database_path).resolve()
 
     def prepare_startup(self) -> CanonicalSchemaReport:
-        """Validate or atomically create canonical schema version five."""
+        """Validate or atomically create the current canonical schema."""
         if self._database_path.exists():
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
@@ -466,10 +472,11 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4}:
+        if current_version not in {1, 2, 3, 4, 5}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1, 2, 3, 4, or {SCHEMA_VERSION}"
+                f"{current_version}; expected 1, 2, 3, 4, 5, or "
+                f"{SCHEMA_VERSION}"
             )
 
         if current_version == _MIN_UPGRADE_VERSION:
@@ -478,8 +485,10 @@ class CanonicalSchemaManager:
             self._validate_version_two()
         elif current_version == 3:
             self._validate_version_three()
-        else:
+        elif current_version == 4:
             self._validate_version_four()
+        else:
+            self._validate_version_five()
 
         backup_path = self._create_backup(backup_directory)
         committed = False
@@ -493,7 +502,9 @@ class CanonicalSchemaManager:
                     self._upgrade_v2_to_v3(connection)
                 if current_version <= 3:
                     self._upgrade_v3_to_v4(connection)
-                self._upgrade_v4_to_v5(connection)
+                if current_version <= 4:
+                    self._upgrade_v4_to_v5(connection)
+                self._upgrade_v5_to_v6(connection)
                 connection.commit()
                 committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
@@ -539,6 +550,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v4_to_v5(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v5_to_v6(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -551,7 +565,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3, 4}:
+            if version in {1, 2, 3, 4, 5}:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -634,6 +648,23 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_five(self) -> None:
+        connection = self._open_read_only()
+        try:
+            version = self._schema_version(connection)
+            if version != 5:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 5 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V5)
+            self._validate_metadata_version(connection, 5)
+            self._validate_generation_columns(connection)
+            self._validate_output_identity_v4(connection)
+            self._validate_prompt_catalog_v5(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -642,10 +673,10 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V5)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V6)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
-        self._validate_output_identity_v4(connection)
+        self._validate_output_identity_v6(connection)
         self._validate_prompt_catalog_v5(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
@@ -1082,6 +1113,19 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 5")
 
     @staticmethod
+    def _upgrade_v5_to_v6(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "ALTER TABLE images ADD COLUMN output_role TEXT NOT NULL "
+            "DEFAULT 'primary'"
+        )
+        connection.execute("ALTER TABLE images ADD COLUMN content_hash TEXT")
+        connection.execute(
+            "UPDATE schema_metadata SET value = '6' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 6")
+
+    @staticmethod
     def _create_review_views(connection: sqlite3.Connection) -> None:
         connection.execute(
             """
@@ -1397,6 +1441,20 @@ class CanonicalSchemaManager:
                 )
 
     @classmethod
+    def _validate_output_identity_v6(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        cls._validate_output_identity_v4(connection)
+        image_columns = cls._table_column_rows(connection, "images")
+        missing = sorted(_REQUIRED_IMAGE_COLUMNS_V6 - image_columns.keys())
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical outputs are missing required columns: "
+                + ", ".join(missing)
+            )
+
+    @classmethod
     def _validate_prompt_catalog_v5(
         cls,
         connection: sqlite3.Connection,
@@ -1457,6 +1515,8 @@ class CanonicalSchemaManager:
                 self._validate_version_three()
             elif version == 4:
                 self._validate_version_four()
+            elif version == 5:
+                self._validate_version_five()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):

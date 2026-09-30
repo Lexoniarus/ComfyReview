@@ -200,13 +200,13 @@ def test_version_two_upgrade_preserves_output_identity_and_reviews(
 
     report = CanonicalSchemaManager(database_path).upgrade(backup_root)
 
-    assert report.schema_version == 5
+    assert report.schema_version == 6
     assert report.upgraded_from == 2
     assert report.backup_path is not None
     assert report.backup_path.is_file()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (5,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (6,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         live = connection.execute(
             """
@@ -306,10 +306,10 @@ def test_version_one_can_upgrade_directly_to_current_schema(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 5
+    assert report.schema_version == 6
     assert report.upgraded_from == 1
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (5,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (6,)
         row = connection.execute(
             """
             SELECT generation_uid, source, status, seed
@@ -334,7 +334,7 @@ def test_version_three_upgrade_preserves_ids_and_replaces_writable_state(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 5
+    assert report.schema_version == 6
     assert report.upgraded_from == 3
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -373,7 +373,7 @@ def test_version_four_upgrade_adds_revisioned_prompt_catalog(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 5
+    assert report.schema_version == 6
     assert report.upgraded_from == 4
     with sqlite3.connect(database_path) as connection:
         objects = dict(
@@ -407,6 +407,28 @@ def test_version_four_upgrade_adds_revisioned_prompt_catalog(
             "SELECT component_uid FROM prompt_components "
             "WHERE component_key = 'legacy-scene'"
         ).fetchone() == ("canonical-v4-component-1",)
+
+
+def test_version_five_upgrade_adds_output_provenance(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    _create_version_four_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        CanonicalSchemaManager._upgrade_v4_to_v5(connection)
+
+    report = CanonicalSchemaManager(database_path).upgrade(
+        tmp_path / "backups"
+    )
+
+    assert report.schema_version == 6
+    assert report.upgraded_from == 5
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (6,)
+        image_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(images)")
+        }
+        assert {"content_hash", "output_role"} <= image_columns
 
 
 def test_upgrade_rolls_back_without_unnecessary_backup_restore(
@@ -469,8 +491,8 @@ def test_canonical_database_cli_validates_and_upgrades(
         == 0
     )
     output = capsys.readouterr().out
-    assert '"schema_version": 5' in output
+    assert '"schema_version": 6' in output
     assert '"upgraded_from": 2' in output
 
     assert main(["canonical-db", "validate"]) == 0
-    assert '"schema_version": 5' in capsys.readouterr().out
+    assert '"schema_version": 6' in capsys.readouterr().out

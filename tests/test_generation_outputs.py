@@ -240,6 +240,10 @@ def test_sqlite_output_repository_is_idempotent_and_detects_conflicts(
     )
     assert repository.save_outputs("generation-1", (output,)) == (output,)
     assert repository.save_outputs("generation-1", (output,)) == (output,)
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT output_role, content_hash FROM images"
+        ).fetchone() == ("primary", "hash")
     with pytest.raises(RuntimeError, match="identity conflict"):
         repository.save_outputs(
             "generation-1",

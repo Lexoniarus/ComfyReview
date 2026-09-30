@@ -64,7 +64,7 @@ class SqliteGenerationOutputRepository:
             for output in outputs:
                 existing = connection.execute(
                     """
-                    SELECT image_uid, png_path
+                    SELECT image_uid, output_role, png_path, content_hash
                     FROM images
                     WHERE generation_id = ? AND output_node_id = ? AND output_index = ?
                     """,
@@ -75,20 +75,25 @@ class SqliteGenerationOutputRepository:
                         """
                         INSERT INTO images(
                             image_uid, generation_id, output_node_id,
-                            output_index, png_path, json_path
-                        ) VALUES (?, ?, ?, ?, ?, NULL)
+                            output_index, output_role, png_path, json_path,
+                            content_hash
+                        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
                         """,
                         (
                             output.image_uid,
                             generation_id,
                             output.node_id,
                             output.output_index,
+                            output.role,
                             str(output.path),
+                            output.content_hash,
                         ),
                     )
                 elif (
                     str(existing["image_uid"]) != output.image_uid
+                    or str(existing["output_role"]) != output.role
                     or Path(str(existing["png_path"])) != output.path
+                    or str(existing["content_hash"]) != output.content_hash
                 ):
                     raise RuntimeError(
                         f"Generation output identity conflict at {output.node_id}:{output.output_index}"
