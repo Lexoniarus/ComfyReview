@@ -1,7 +1,7 @@
 # ComfyReview Refactor Plan
 
-Status: active migration plan; output-image read slice implemented and awaiting
-review, 2026-09-29.
+Status: active canonical review and identity migration; audited historical
+output import implemented, 2026-09-30.
 
 Goal: bring ComfyReview to the same engineering standard as the current
 World Freight Idle codebase before using it as the data/application foundation
@@ -115,6 +115,22 @@ This slice is read-only. Paths remain compatibility attributes rather than
 stable image identity. Delete/trash, curation moves, path relinking and browser
 URL mapping remain legacy behavior for their later vertical slices. No database
 schema, migration, persisted `image_id` or dual-write behavior was introduced.
+
+Implemented historical output import:
+
+- explicit audit snapshot followed by a separate write command
+- immediate PNG, sidecar and workflow-hash revalidation before writes
+- preservation of existing image/generation identities, lifecycle fields and
+  occupied output slots
+- content-derived identities for newly imported images and generations
+- normalized graph provenance and every standard sampler stage
+- backup emission before writes and one canonical SQLite transaction
+- rollback-first recovery with conditional backup restore
+- read-only canonical image queries through SQLite `mode=ro`
+
+This importer deliberately does not migrate historical ratings, Arena matches
+or curation assignments. Those facts belong to the schema-v4 feature cutover,
+where canonical image IDs replace path identity without dual-writes.
 
 Create the target `comfyreview/` structure and composition root. The package
 name avoids a conflict with the compatible root `app.py` entry point.

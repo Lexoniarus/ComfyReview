@@ -1,6 +1,6 @@
 # ComfyReview Architecture
 
-Status: active migration with bootstrap and output-image read boundaries
+Status: active migration with canonical image reads and audited output import
 implemented, 2026-09-29.
 
 The current public prototype is functional but still predates many of these
@@ -386,6 +386,17 @@ application port. The page-read services consume an injected catalog, while
 routes obtain the configured instance from `ApplicationContainer`. This is the
 first feature-specific vertical boundary and deliberately stops before review,
 Arena or curation mutation ownership.
+
+Canonical image queries use a genuine SQLite read-only connection. Historical
+PNG/sidecar provenance enters the canonical database only through the explicit
+offline `legacy-output` audit/import workflow. The audit binds a snapshot to
+content hashes; the importer revalidates that evidence before creating or
+enriching stable identities. It creates a backup before the single write
+transaction and never changes source PNGs or sidecars.
+
+The output importer owns generation provenance only. Historical review, Arena
+and curation facts remain separate migration inputs for the schema-v4 cutover;
+there is no transitional dual-write between legacy and canonical stores.
 
 Refactor and data migration are staged:
 

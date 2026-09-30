@@ -57,8 +57,11 @@ the historical files, extracts graph provenance and sampler stages, reports
 metadata conflicts, groups likely batch outputs and detects images already
 registered canonically.
 
-Slice 3B will build the explicit write importer only after the audit report has
-been reviewed.
+Slice 3B implements the explicit, backed-up write importer. It revalidates the
+complete audit snapshot and source hashes immediately before writing, leaves
+the historical files untouched and performs all canonical writes in one
+transaction. Existing identities, lifecycle fields and output slots are
+preserved while missing provenance is enriched.
 
 For every valid PNG/JSON pair:
 
@@ -71,7 +74,9 @@ For every valid PNG/JSON pair:
 7. record conflicts between graph values and legacy summary values
 8. create canonical generation and image identities
 
-Historical ratings may intentionally be omitted. Old sidecars remain untouched.
+Historical ratings are intentionally outside this output-provenance import.
+They move through the later canonical review/Arena/curation migration. Old
+sidecars remain untouched.
 
 ## Slice 4 - native ComfyUI provider and generation service
 

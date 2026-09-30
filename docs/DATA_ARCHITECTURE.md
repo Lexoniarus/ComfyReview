@@ -60,6 +60,16 @@ process or machine crash between filesystem replacements can still expose a
 partially advanced multi-file set. Full crash atomicity is deliberately
 deferred to the canonical one-database runtime.
 
+Historical output provenance uses a two-step offline workflow. A read-only
+audit fingerprints PNGs, sidecars, workflow graphs and the current canonical
+assignments. The explicit importer treats that report as a snapshot contract,
+revalidates source evidence, creates a database backup and writes all accepted
+generation/image provenance in one SQLite transaction. Existing stable IDs and
+lifecycle fields are preserved. Paths remain evidence and mutable attributes,
+never identity. Historical ratings, Arena matches and curation assignments are
+not part of this importer and remain inputs to the separate canonical feature
+cutover.
+
 ## 2. Source-of-truth rule
 
 A datum must have one authoritative home.
