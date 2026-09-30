@@ -28,6 +28,17 @@ class PromptTokenStatistic:
 
 
 @dataclass(frozen=True, slots=True)
+class PromptMatchPreview:
+    """Describe the best live image matching requested prompt atoms."""
+
+    json_path: Path | None
+    png_path: Path
+    token_hits: int
+    average_rating: float | None
+    rating_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class ObservedPromptCombination:
     """Describe one actually generated legacy-compatible prompt combination."""
 
@@ -55,6 +66,29 @@ class AnalyticsRepository(Protocol):
         limit: int,
     ) -> tuple[PromptTokenStatistic, ...]:
         """Return prompt-token statistics without a materialized database."""
+        ...
+
+    def list_selected_prompt_token_statistics(
+        self,
+        tokens: tuple[str, ...],
+        *,
+        model_branch: str,
+        scope: str,
+    ) -> tuple[PromptTokenStatistic, ...]:
+        """Return statistics for requested canonical prompt atoms."""
+        ...
+
+    def find_best_prompt_match(
+        self,
+        tokens: tuple[str, ...],
+        *,
+        model_branch: str,
+        scope: str,
+        minimum_hits: int,
+        minimum_ratings: int,
+        candidate_limit: int,
+    ) -> PromptMatchPreview | None:
+        """Return the strongest live image matching requested atoms."""
         ...
 
     def list_best_images_for_combos(
@@ -115,6 +149,55 @@ class AnalyticsService:
             scope=normalized_scope,
             minimum_samples=max(int(minimum_samples), 0),
             limit=max(int(limit), 0),
+        )
+
+    def token_statistics_for(
+        self,
+        tokens: tuple[str, ...],
+        *,
+        model_branch: str = "",
+        scope: str = "pos",
+    ) -> dict[str, PromptTokenStatistic]:
+        """Return one statistic for every requested unique prompt atom."""
+        normalized_tokens = self._normalized_values(tokens)
+        if not normalized_tokens:
+            return {}
+        normalized_scope = self._scope(scope)
+        statistics = self._repository.list_selected_prompt_token_statistics(
+            normalized_tokens,
+            model_branch=str(model_branch or "").strip(),
+            scope=normalized_scope,
+        )
+        by_token = {item.token: item for item in statistics}
+        return {
+            token: by_token.get(
+                token,
+                PromptTokenStatistic(token, 0, 0.0, 0.0),
+            )
+            for token in normalized_tokens
+        }
+
+    def best_prompt_match(
+        self,
+        tokens: tuple[str, ...],
+        *,
+        model_branch: str = "",
+        scope: str = "pos",
+        minimum_hits: int = 1,
+        minimum_ratings: int = 0,
+        candidate_limit: int = 128,
+    ) -> PromptMatchPreview | None:
+        """Return the best canonical image matching requested prompt atoms."""
+        normalized_tokens = self._normalized_values(tokens)
+        if not normalized_tokens:
+            return None
+        return self._repository.find_best_prompt_match(
+            normalized_tokens,
+            model_branch=str(model_branch or "").strip(),
+            scope=self._scope(scope),
+            minimum_hits=max(int(minimum_hits), 1),
+            minimum_ratings=max(int(minimum_ratings), 0),
+            candidate_limit=max(int(candidate_limit), 1),
         )
 
     def best_images_for_combos(
@@ -178,3 +261,16 @@ class AnalyticsService:
     def latest_review_sequence(self) -> int:
         """Return the current canonical review frontier."""
         return self._repository.latest_review_sequence()
+
+    @staticmethod
+    def _scope(scope: str) -> str:
+        normalized = str(scope or "").strip().lower()
+        return normalized if normalized in {"pos", "neg"} else "pos"
+
+    @staticmethod
+    def _normalized_values(values: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(
+                value for raw in values if (value := str(raw).strip())
+            )
+        )

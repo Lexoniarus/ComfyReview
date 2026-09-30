@@ -9,6 +9,7 @@ from typing import Any
 from comfyreview.application.analytics import (
     AnalyticsImage,
     ObservedPromptCombination,
+    PromptMatchPreview,
     PromptTokenStatistic,
 )
 from comfyreview.repositories.sqlite.connection import connect_read_only
@@ -101,6 +102,129 @@ class SqliteAnalyticsRepository:
             model_branch=model_branch,
         )
         return self._group_images(rows, limit_per_combo)
+
+    def list_selected_prompt_token_statistics(
+        self,
+        tokens: tuple[str, ...],
+        *,
+        model_branch: str,
+        scope: str,
+    ) -> tuple[PromptTokenStatistic, ...]:
+        """Aggregate selected canonical tokens without a projection DB."""
+        if not tokens:
+            return ()
+        placeholders = ",".join("?" for _token in tokens)
+        arguments: list[object] = [scope, *tokens]
+        model_clause = ""
+        if model_branch:
+            model_clause = " AND model_branch = ?"
+            arguments.append(model_branch)
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                f"""
+                SELECT token, COUNT(rating) AS sample_count,
+                       AVG(rating) AS mean_score,
+                       CASE
+                           WHEN COUNT(rating) <= 1 THEN AVG(rating)
+                           ELSE AVG(rating) - 1.645 * SQRT(
+                               CASE
+                                   WHEN AVG(rating * rating)
+                                        - AVG(rating) * AVG(rating) > 0
+                                   THEN AVG(rating * rating)
+                                        - AVG(rating) * AVG(rating)
+                                   ELSE 0.0
+                               END / COUNT(rating)
+                           )
+                       END AS lower_bound
+                FROM tokens
+                WHERE deleted = 0 AND rating IS NOT NULL AND scope = ?
+                  AND token IN ({placeholders}) {model_clause}
+                GROUP BY token
+                """,
+                arguments,
+            ).fetchall()
+            return tuple(
+                PromptTokenStatistic(
+                    token=str(row["token"]),
+                    sample_count=int(row["sample_count"]),
+                    mean_score=float(row["mean_score"]),
+                    lower_bound=float(row["lower_bound"]),
+                )
+                for row in rows
+            )
+        finally:
+            connection.close()
+
+    def find_best_prompt_match(
+        self,
+        tokens: tuple[str, ...],
+        *,
+        model_branch: str,
+        scope: str,
+        minimum_hits: int,
+        minimum_ratings: int,
+        candidate_limit: int,
+    ) -> PromptMatchPreview | None:
+        """Find the best live image for canonical prompt-token evidence."""
+        if not tokens:
+            return None
+        placeholders = ",".join("?" for _token in tokens)
+        arguments: list[object] = [scope, *tokens]
+        model_clause = ""
+        if model_branch:
+            model_clause = " AND token.model_branch = ?"
+            arguments.append(model_branch)
+        arguments.extend((minimum_hits, candidate_limit, minimum_ratings))
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            row = connection.execute(
+                f"""
+                WITH candidates AS (
+                    SELECT token.json_path,
+                           COUNT(DISTINCT token.token) AS token_hits
+                    FROM tokens AS token
+                    WHERE token.deleted = 0 AND token.scope = ?
+                      AND token.token IN ({placeholders})
+                      AND token.json_path IS NOT NULL
+                      AND token.json_path <> '' {model_clause}
+                    GROUP BY token.json_path
+                    HAVING COUNT(DISTINCT token.token) >= ?
+                    ORDER BY token_hits DESC
+                    LIMIT ?
+                )
+                SELECT candidate.json_path, candidate.token_hits,
+                       image.png_path, summary.average_rating,
+                       summary.rating_count
+                FROM candidates AS candidate
+                JOIN images AS image ON image.json_path = candidate.json_path
+                JOIN image_review_summary AS summary
+                    ON summary.image_id = image.id
+                WHERE image.deleted_at IS NULL
+                  AND summary.rating_count >= ?
+                ORDER BY candidate.token_hits DESC,
+                         summary.average_rating DESC,
+                         summary.rating_count DESC,
+                         image.image_uid
+                LIMIT 1
+                """,
+                arguments,
+            ).fetchone()
+            if row is None:
+                return None
+            return PromptMatchPreview(
+                json_path=Path(str(row["json_path"])),
+                png_path=Path(str(row["png_path"])),
+                token_hits=int(row["token_hits"]),
+                average_rating=(
+                    float(row["average_rating"])
+                    if row["average_rating"] is not None
+                    else None
+                ),
+                rating_count=int(row["rating_count"]),
+            )
+        finally:
+            connection.close()
 
     def list_best_images_for_parameter(
         self,

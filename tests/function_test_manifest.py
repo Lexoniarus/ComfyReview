@@ -21,6 +21,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_normalizes_canonical_queries"
     ),
+    "comfyreview.application.analytics:AnalyticsService.token_statistics_for": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_service_normalizes_selected_tokens_and_matches"
+    ),
+    "comfyreview.application.analytics:AnalyticsService.best_prompt_match": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_service_normalizes_selected_tokens_and_matches"
+    ),
     "comfyreview.application.playground:PlaygroundService.prepare_draft": (
         "tests/test_playground_application.py::"
         "test_playground_service_prepares_draft_without_generation_submission"

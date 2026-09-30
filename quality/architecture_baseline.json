@@ -4,7 +4,6 @@
     "services/analytics_page_service.py|services.no_global_config": 1,
     "services/context_filters.py|services.no_global_config": 1,
     "services/file_urls.py|services.no_global_config": 1,
-    "services/playground_generator_ui/best_pictures.py|services.no_global_config": 1,
     "services/playground_generator_ui/head_form.py|services.no_global_config": 1
   }
 }

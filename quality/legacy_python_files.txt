@@ -10,7 +10,6 @@ services/file_urls.py
 services/playground_common/__init__.py
 services/playground_common/empty_placeholders.py
 services/playground_generator_ui/__init__.py
-services/playground_generator_ui/best_pictures.py
 services/playground_generator_ui/drafts.py
 services/playground_generator_ui/state.py
 services/playground_generator_ui/types.py
@@ -18,13 +17,6 @@ services/ui_state_service.py
 stores/__init__.py
 stores/analytics_combo.py
 stores/analytics_params.py
-stores/playground/__init__.py
-stores/playground/items.py
-stores/playground/keys.py
-stores/playground/kinds.py
-stores/playground/mutations.py
-stores/playground/token_stats.py
-stores/playground_store.py
 stores/prompt_tokens_match.py
 stores/rating_rules.py
 templates.py

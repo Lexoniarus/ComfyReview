@@ -107,7 +107,7 @@ def playground_generator_page(request: Request):
 
 
 @router.get("/playground/generator/preview_draft_best")
-def playground_generator_preview_draft_best(draft_id: str):
+def playground_generator_preview_draft_best(request: Request, draft_id: str):
     """Lazy load per-draft best picture info.
 
     The generator page must render fast. Best picture matching can be slow because it hits
@@ -148,7 +148,14 @@ def playground_generator_preview_draft_best(draft_id: str):
         resolve_best_picture_for_draft,
     )
 
-    res = resolve_best_picture_for_draft(d, png_to_url=png_path_to_url)
+    container = get_application_container(request)
+    res = resolve_best_picture_for_draft(
+        d,
+        analytics=container.analytics_service,
+        minimum_ratings=container.settings.minimum_runs,
+        candidate_limit=container.settings.pool_limit,
+        image_url=png_path_to_url,
+    )
 
     # Persist into preview state if we got a definitive answer.
     if res.get("status") == "ok" and res.get("best_img_url"):

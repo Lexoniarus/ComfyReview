@@ -9,9 +9,6 @@ implementation into smaller, focused modules under services.playground_generator
 
 from __future__ import annotations
 
-from services.playground_generator_ui.best_pictures import (
-    enrich_preview_with_best_pictures,
-)
 from services.playground_generator_ui.drafts import remove_draft, update_draft
 from services.playground_generator_ui.generation import (
     generate_preview_drafts,
@@ -44,7 +41,6 @@ __all__ = [
     "build_head_state_from_post",
     "remove_draft",
     "update_draft",
-    "enrich_preview_with_best_pictures",
     "generate_preview_drafts",
     "parse_sequence",
     "submit_preview_drafts",

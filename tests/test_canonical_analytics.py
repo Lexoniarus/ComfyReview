@@ -11,6 +11,7 @@ from comfyreview.application import (
     AnalyticsImage,
     AnalyticsService,
     ObservedPromptCombination,
+    PromptMatchPreview,
     PromptTokenStatistic,
 )
 from comfyreview.repositories.sqlite import (
@@ -30,6 +31,20 @@ class _AnalyticsRepository:
     def list_best_images_for_combos(self, combo_keys, **values):
         self.calls.append(("combos", (combo_keys, values)))
         return {combo_keys[0]: ()}
+
+    def list_selected_prompt_token_statistics(self, tokens, **values):
+        self.calls.append(("selected-tokens", (tokens, values)))
+        return (PromptTokenStatistic(tokens[0], 2, 8.0, 7.0),)
+
+    def find_best_prompt_match(self, tokens, **values):
+        self.calls.append(("prompt-match", (tokens, values)))
+        return PromptMatchPreview(
+            Path("image.json"),
+            Path("image.png"),
+            2,
+            8.0,
+            3,
+        )
 
     def list_best_images_for_parameter(self, parameter, values, **options):
         self.calls.append(("parameter", (parameter, values, options)))
@@ -104,8 +119,54 @@ def test_analytics_service_handles_empty_and_observed_queries() -> None:
     assert service.best_images_for_parameter("steps", ()) == {}
     assert service.observed_combinations(combo_size=2, limit=-1) == ()
     assert service.latest_review_sequence() == 9
+    assert service.token_statistics_for(()) == {}
+    assert service.best_prompt_match(()) is None
     with pytest.raises(ValueError, match="combo_size must be 2 or 3"):
         service.observed_combinations(combo_size=4)
+
+
+def test_analytics_service_normalizes_selected_tokens_and_matches() -> None:
+    repository = _AnalyticsRepository()
+    service = AnalyticsService(repository)
+
+    statistics = service.token_statistics_for(
+        (" hero ", "hero", "missing", ""),
+        model_branch=" sdxl ",
+        scope="invalid",
+    )
+    match = service.best_prompt_match(
+        (" hero ", "hero"),
+        model_branch=" sdxl ",
+        scope="invalid",
+        minimum_hits=0,
+        minimum_ratings=-1,
+        candidate_limit=0,
+    )
+
+    assert statistics["hero"].sample_count == 2
+    assert statistics["missing"] == PromptTokenStatistic(
+        "missing", 0, 0.0, 0.0
+    )
+    assert match is not None and match.token_hits == 2
+    assert repository.calls[-2:] == [
+        (
+            "selected-tokens",
+            (("hero", "missing"), {"model_branch": "sdxl", "scope": "pos"}),
+        ),
+        (
+            "prompt-match",
+            (
+                ("hero",),
+                {
+                    "model_branch": "sdxl",
+                    "scope": "pos",
+                    "minimum_hits": 1,
+                    "minimum_ratings": 0,
+                    "candidate_limit": 1,
+                },
+            ),
+        ),
+    ]
 
 
 def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
@@ -164,14 +225,16 @@ def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
         )
         png_path = tmp_path / "image.png"
         png_path.write_bytes(b"png")
+        json_path = tmp_path / "image.json"
+        json_path.write_text("{}", encoding="utf-8")
         connection.execute(
             """
             INSERT INTO images(
                 image_uid, generation_id, output_node_id, output_index,
                 png_path, json_path
-            ) VALUES ('image-1', 1, 'save', 0, ?, NULL)
+            ) VALUES ('image-1', 1, 'save', 0, ?, ?)
             """,
-            (str(png_path),),
+            (str(png_path), str(json_path)),
         )
         connection.execute(
             """
@@ -211,8 +274,29 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         limit_per_value=3,
     )
     observed = repository.list_observed_combinations(combo_size=3, limit=8)
+    selected = repository.list_selected_prompt_token_statistics(
+        ("hero", "missing"),
+        model_branch="sdxl",
+        scope="pos",
+    )
+    match = repository.find_best_prompt_match(
+        ("hero",),
+        model_branch="sdxl",
+        scope="pos",
+        minimum_hits=1,
+        minimum_ratings=1,
+        candidate_limit=10,
+    )
 
     assert token_stats == (PromptTokenStatistic("hero", 1, 8.0, 8.0),)
+    assert selected == (PromptTokenStatistic("hero", 1, 8.0, 8.0),)
+    assert match == PromptMatchPreview(
+        json_path=tmp_path / "image.json",
+        png_path=tmp_path / "image.png",
+        token_hits=1,
+        average_rating=8.0,
+        rating_count=1,
+    )
     assert combo_images[combo_key][0].average_rating == 8.0
     assert parameter_images["20"][0].rating_count == 1
     assert observed == (
@@ -229,7 +313,7 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
             best_images=(
                 AnalyticsImage(
                     png_path=tmp_path / "image.png",
-                    json_path=None,
+                    json_path=tmp_path / "image.json",
                     average_rating=8.0,
                     rating_count=1,
                 ),

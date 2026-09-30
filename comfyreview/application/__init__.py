@@ -5,6 +5,7 @@ from comfyreview.application.analytics import (
     AnalyticsRepository,
     AnalyticsService,
     ObservedPromptCombination,
+    PromptMatchPreview,
     PromptTokenStatistic,
 )
 from comfyreview.application.arena import (
@@ -265,6 +266,7 @@ __all__ = [
     "PromptSelectionError",
     "PromptSelectionPolicy",
     "PromptTokenStatistic",
+    "PromptMatchPreview",
     "RankedImage",
     "RankingQuery",
     "RankingRepository",
