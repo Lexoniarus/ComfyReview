@@ -10,16 +10,16 @@ from comfyreview.repositories.sqlite.connection import (
     connect_read_only,
 )
 from comfyreview.repositories.sqlite.curation import SqliteCurationRepository
+from comfyreview.repositories.sqlite.legacy_projections import (
+    LegacyProjectionJobQueue,
+    SqlitePromptRepository,
+)
 from comfyreview.repositories.sqlite.legacy_schema import LegacySchemaManager
 from comfyreview.repositories.sqlite.output_images import (
     SqliteOutputImageRepository,
 )
 from comfyreview.repositories.sqlite.ranking import SqliteRankingRepository
-from comfyreview.repositories.sqlite.reviews import (
-    LegacyProjectionJobQueue,
-    SqlitePromptRepository,
-    SqliteReviewRepository,
-)
+from comfyreview.repositories.sqlite.reviews import SqliteReviewRepository
 
 __all__ = [
     "CanonicalSchemaManager",
