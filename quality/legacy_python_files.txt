@@ -13,15 +13,6 @@ services/combo_prompts/__init__.py
 services/combo_prompts/scoring.py
 services/combo_prompts/token_utils.py
 services/combo_prompts_service.py
-services/comfy_client.py
-services/comfy_client_core/__init__.py
-services/comfy_client_core/client.py
-services/comfy_client_core/discovery.py
-services/comfy_client_core/format_detection.py
-services/comfy_client_core/http.py
-services/comfy_client_core/patching.py
-services/comfy_client_core/types.py
-services/comfy_client_core/workflows.py
 services/context_filters.py
 services/file_urls.py
 services/playground_common/__init__.py
@@ -60,6 +51,5 @@ stores/rating_rules.py
 stores/ratings_state_store.py
 templates.py
 tests/conftest.py
-tests/test_comfy_client_patch.py
 tests/test_prompt_store_tokenize.py
 tests/test_scope_semantics.py
