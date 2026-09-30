@@ -77,17 +77,6 @@ class _RecordingSchemaLifecycle:
         return LegacySchemaReport()
 
 
-class _RecordingWorker:
-    def __init__(self, events: list[str]) -> None:
-        self._events = events
-
-    def start(self) -> None:
-        self._events.append("start")
-
-    def stop(self, timeout_seconds: float) -> None:
-        self._events.append(f"stop:{timeout_seconds:g}")
-
-
 class _EmptyOutputImageCatalog:
     def list_images(self) -> tuple[OutputImageReadModel, ...]:
         return ()
@@ -96,7 +85,7 @@ class _EmptyOutputImageCatalog:
 class _RecordingReviewService:
     def submit(self, command: SubmitReviewCommand) -> ReviewResult:
         del command
-        return ReviewResult(review_id=1, run=1, deleted=False, job_id=1)
+        return ReviewResult(review_id=1, run=1, deleted=False)
 
 
 class _EmptyRankingRepository:
@@ -136,7 +125,6 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         settings=settings,
         canonical_schema=_RecordingCanonicalSchema(settings, events),
         schema_lifecycle=_RecordingSchemaLifecycle(settings, events),
-        worker=_RecordingWorker(events),
         output_images=_EmptyOutputImageCatalog(),
         analytics_service=cast(AnalyticsService, object()),
         analytics_pages=cast(AnalyticsPageService, object()),
@@ -157,7 +145,9 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     )
 
 
-def test_lifespan_prepares_schema_then_owns_worker(tmp_path: Path) -> None:
+def test_lifespan_prepares_canonical_and_required_legacy_schemas(
+    tmp_path: Path,
+) -> None:
     events: list[str] = []
     container = _container(tmp_path, events)
     application = create_app(container)
@@ -167,21 +157,16 @@ def test_lifespan_prepares_schema_then_owns_worker(tmp_path: Path) -> None:
     assert not container.settings.data_directory.exists()
 
     with TestClient(application):
-        assert events == ["canonical", "schema", "start"]
+        assert events == ["canonical", "schema"]
         assert container.settings.trash_root.is_dir()
         assert container.settings.lora_export_root.is_dir()
         assert container.settings.workflows_directory.is_dir()
         assert container.settings.comfyui_checkpoints_directory.is_dir()
 
-    assert events == [
-        "canonical",
-        "schema",
-        "start",
-        "stop:30",
-    ]
+    assert events == ["canonical", "schema"]
 
 
-def test_lifespan_stops_worker_when_application_body_fails(
+def test_lifespan_preserves_schema_order_when_application_body_fails(
     tmp_path: Path,
 ) -> None:
     events: list[str] = []
@@ -191,12 +176,7 @@ def test_lifespan_stops_worker_when_application_body_fails(
         with TestClient(application):
             raise RuntimeError("application failed")
 
-    assert events == [
-        "canonical",
-        "schema",
-        "start",
-        "stop:30",
-    ]
+    assert events == ["canonical", "schema"]
 
 
 def test_entry_points_and_route_contract_remain_compatible() -> None:

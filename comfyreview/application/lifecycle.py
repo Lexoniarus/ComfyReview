@@ -80,15 +80,3 @@ class CanonicalSchemaLifecycle(Protocol):
     def validate(self) -> CanonicalSchemaReport:
         """Inspect the canonical database without mutating it."""
         ...
-
-
-class WorkerRuntime(Protocol):
-    """Define ownership of one long-lived background worker."""
-
-    def start(self) -> None:
-        """Start the worker once."""
-        ...
-
-    def stop(self, timeout_seconds: float) -> None:
-        """Signal and await an orderly worker shutdown."""
-        ...

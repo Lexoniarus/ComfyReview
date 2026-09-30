@@ -51,7 +51,6 @@ class _RouteReviewService:
             review_id=1,
             run=1,
             deleted=command.delete,
-            job_id=1,
         )
 
 

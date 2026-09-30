@@ -81,6 +81,26 @@ def test_startup_initializes_only_fully_missing_databases(
     assert not manager.validate().issues
 
 
+def test_runtime_startup_initializes_only_selected_legacy_database(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    manager = LegacySchemaManager(
+        settings,
+        startup_database_names=("playground",),
+    )
+
+    report = manager.prepare_startup()
+
+    assert report.initialized == ("playground",)
+    assert settings.playground_database_path.is_file()
+    assert all(
+        not path.exists()
+        for path in _database_paths(settings)
+        if path != settings.playground_database_path
+    )
+
+
 def test_startup_does_not_modify_valid_databases(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     manager = LegacySchemaManager(settings)

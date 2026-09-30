@@ -100,26 +100,12 @@ class StoredReview:
 
 
 @dataclass(frozen=True, slots=True)
-class PromptProjection:
-    """Legacy compatibility payload retained for old Arena callers."""
-
-    json_path: Path
-    run: int
-    model_branch: str
-    positive_prompt: str
-    negative_prompt: str
-    rating: int | None
-    deleted: bool
-
-
-@dataclass(frozen=True, slots=True)
 class ReviewResult:
-    """Return canonical review identity and projection scheduling result."""
+    """Return the identity and state of one canonical review mutation."""
 
     review_id: int
     run: int
     deleted: bool
-    job_id: int
 
 
 class ReviewImageResolver(Protocol):
@@ -135,14 +121,6 @@ class ReviewRepository(Protocol):
 
     def append(self, record: ReviewRecord) -> StoredReview:
         """Apply one review mutation and return its canonical revision."""
-        ...
-
-
-class JobQueue(Protocol):
-    """Request coalescing derived-projection catchup work."""
-
-    def request_catchup(self) -> int:
-        """Request catchup and return the queued or coalesced job ID."""
         ...
 
 
@@ -174,13 +152,11 @@ class ReviewService:
         *,
         image_resolver: ReviewImageResolver,
         reviews: ReviewRepository,
-        jobs: JobQueue,
         deletions: OutputDeletionManager,
         preserve_deleted_files: bool,
     ) -> None:
         self._image_resolver = image_resolver
         self._reviews = reviews
-        self._jobs = jobs
         self._deletions = deletions
         self._preserve_deleted_files = preserve_deleted_files
         self._logger = logging.getLogger("comfyreview.review")
@@ -212,23 +188,14 @@ class ReviewService:
                 "Review mutation failed during canonical_write"
             ) from error
 
-        job_id = (
-            self._request_projection_catchup()
-            if image.pair.json_path is not None
-            else 0
-        )
         if staged is not None:
             self._finalize_delete(staged)
 
-        self._logger.info(
-            "review.submission_completed",
-            extra={"job_id": job_id},
-        )
+        self._logger.info("review.submission_completed")
         return ReviewResult(
             review_id=stored.review_id,
             run=stored.run,
             deleted=command.delete,
-            job_id=job_id,
         )
 
     @staticmethod
@@ -238,16 +205,6 @@ class ReviewService:
         if command.rating is None or not 1 <= command.rating <= 10:
             raise ReviewValidationError("rating must be between 1 and 10")
         return command.rating
-
-    def _request_projection_catchup(self) -> int:
-        try:
-            return self._jobs.request_catchup()
-        except Exception:
-            self._logger.exception(
-                "review.projection_queue_failed",
-                extra={"error_category": "projection_queue"},
-            )
-            return 0
 
     def _finalize_delete(self, staged: StagedDeletion) -> None:
         try:

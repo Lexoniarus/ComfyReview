@@ -10,15 +10,12 @@ import pytest
 
 from comfyreview.application import (
     OutputPair,
-    PromptProjection,
     ReviewImage,
     ReviewRecord,
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
-    LegacyProjectionJobQueue,
-    SqlitePromptRepository,
     SqliteReviewRepository,
 )
 from tests.schema_helpers import initialize_legacy_database
@@ -360,60 +357,14 @@ def test_review_repository_does_not_create_unknown_image_identity(
         ).fetchone() == (0,)
 
 
-def test_prompt_repository_is_compatibility_noop(tmp_path: Path) -> None:
-    database_path = tmp_path / "comfyreview.sqlite3"
-    CanonicalSchemaManager(database_path).prepare_startup()
-    repository = SqlitePromptRepository(database_path)
-    projection = PromptProjection(
-        json_path=tmp_path / "image.json",
-        run=4,
-        model_branch="sdxl",
-        positive_prompt="hero",
-        negative_prompt="blur",
-        rating=9,
-        deleted=False,
-    )
-
-    repository.save(projection)
-    repository.delete(projection.json_path, projection.run)
-
-    with sqlite3.connect(database_path) as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM prompt_atoms"
-        ).fetchone() == (0,)
-
-
-def test_projection_queue_coalesces_catchup_requests(tmp_path: Path) -> None:
-    database_path = tmp_path / "mv_jobs.sqlite3"
-    initialize_legacy_database("mv_queue", database_path)
-    queue = LegacyProjectionJobQueue(database_path)
-
-    assert queue.request_catchup() == queue.request_catchup()
-
-    with sqlite3.connect(database_path) as connection:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM mv_jobs"
-        ).fetchone() == (1,)
-
-
-@pytest.mark.parametrize(
-    "adapter_factory",
-    [SqliteReviewRepository, SqlitePromptRepository],
-)
 def test_review_adapters_do_not_create_missing_database(
     tmp_path: Path,
-    adapter_factory: (
-        type[SqliteReviewRepository] | type[SqlitePromptRepository]
-    ),
 ) -> None:
     database_path = tmp_path / "missing.sqlite3"
-    adapter = adapter_factory(database_path)
+    adapter = SqliteReviewRepository(database_path)
 
     with pytest.raises(FileNotFoundError):
-        if isinstance(adapter, SqliteReviewRepository):
-            adapter.append(_review_record(tmp_path / "image.json", 8))
-        else:
-            adapter.delete(tmp_path / "image.json", 1)
+        adapter.append(_review_record(tmp_path / "image.json", 8))
 
     assert not database_path.exists()
 

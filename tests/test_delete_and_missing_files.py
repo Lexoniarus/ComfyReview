@@ -27,11 +27,6 @@ class _FailingReviewRepository:
         raise OSError("database is read-only")
 
 
-class _UnusedJobQueue:
-    def request_catchup(self) -> int:
-        raise AssertionError("queue must not be called")
-
-
 class _ImageResolver:
     def __init__(self, png_path: Path, json_path: Path) -> None:
         self._png_path = png_path
@@ -66,7 +61,6 @@ def test_delete_keeps_files_when_rating_write_fails(tmp_path: Path) -> None:
     service = ReviewService(
         image_resolver=_ImageResolver(png_path, json_path),
         reviews=_FailingReviewRepository(),
-        jobs=_UnusedJobQueue(),
         deletions=OutputFileService(
             output_root=tmp_path,
             trash_root=tmp_path / "_trash",

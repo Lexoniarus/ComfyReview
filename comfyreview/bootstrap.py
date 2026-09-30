@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -23,9 +23,7 @@ from comfyreview.application import (
     PromptSelectionPolicy,
     RankingService,
     ReviewService,
-    WorkerRuntime,
 )
-from comfyreview.infrastructure import LegacyWorkerRuntime
 from comfyreview.observability import (
     RequestTracingMiddleware,
     configure_logging,
@@ -37,7 +35,6 @@ from comfyreview.providers import (
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
-    LegacyProjectionJobQueue,
     LegacySchemaManager,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
@@ -66,7 +63,6 @@ class ApplicationContainer:
     settings: Settings
     canonical_schema: CanonicalSchemaLifecycle
     schema_lifecycle: LegacySchemaLifecycle
-    worker: WorkerRuntime
     output_images: OutputImageCatalog
     analytics_service: AnalyticsService
     analytics_pages: AnalyticsPageService
@@ -97,17 +93,6 @@ def build_application_container(
 ) -> ApplicationContainer:
     """Build the default adapters for one application instance."""
     configured = settings if settings is not None else load_settings()
-    worker = LegacyWorkerRuntime(
-        queue_database_path=configured.worker_queue_database_path,
-        state_database_path=configured.worker_queue_database_path,
-        ratings_database_path=configured.canonical_database_path,
-        prompt_tokens_database_path=configured.canonical_database_path,
-        prompt_ratings_database_path=configured.prompt_ratings_database_path,
-        combo_database_path=configured.combo_prompts_database_path,
-        playground_database_path=configured.playground_database_path,
-        images_database_path=configured.images_database_path,
-        debounce_seconds=configured.worker_debounce_seconds,
-    )
     output_images = CanonicalOutputImageCatalog(
         output_root=configured.output_root,
         canonical_images=SqliteOutputImageRepository(
@@ -117,7 +102,6 @@ def build_application_container(
     review_service = ReviewService(
         image_resolver=output_images,
         reviews=SqliteReviewRepository(configured.canonical_database_path),
-        jobs=LegacyProjectionJobQueue(configured.worker_queue_database_path),
         deletions=OutputFileService(
             output_root=configured.output_root,
             trash_root=configured.trash_root,
@@ -130,17 +114,6 @@ def build_application_container(
             output_root=configured.output_root,
             allowed_set_keys=configured.curation_set_keys,
         )
-    )
-    legacy_runtime_settings = replace(
-        configured,
-        ratings_database_path=(
-            configured.data_directory / "_legacy_runtime" / "ratings.sqlite3"
-        ),
-        prompt_tokens_database_path=(
-            configured.data_directory
-            / "_legacy_runtime"
-            / "prompt_tokens.sqlite3"
-        ),
     )
     prompt_catalog_service = PromptCatalogService(
         repository=SqlitePromptCatalogRepository(
@@ -156,8 +129,10 @@ def build_application_container(
         canonical_schema=CanonicalSchemaManager(
             configured.canonical_database_path
         ),
-        schema_lifecycle=LegacySchemaManager(legacy_runtime_settings),
-        worker=worker,
+        schema_lifecycle=LegacySchemaManager(
+            configured,
+            startup_database_names=("playground",),
+        ),
         output_images=output_images,
         analytics_service=analytics_service,
         analytics_pages=AnalyticsPageService(
@@ -205,13 +180,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
         _prepare_directories(resources.settings)
         resources.canonical_schema.prepare_startup()
         resources.schema_lifecycle.prepare_startup()
-        resources.worker.start()
-        try:
-            yield
-        finally:
-            resources.worker.stop(
-                resources.settings.worker_shutdown_timeout_seconds
-            )
+        yield
 
     configure_logging()
     application = FastAPI(title="Comfy Review", lifespan=lifespan)

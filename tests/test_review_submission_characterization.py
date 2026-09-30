@@ -61,7 +61,7 @@ def test_review_mutation_routes_keep_form_contracts() -> None:
 
 class _SuccessfulReviewService:
     def submit(self, command: SubmitReviewCommand) -> ReviewResult:
-        return ReviewResult(1, 1, command.delete, 1)
+        return ReviewResult(1, 1, command.delete)
 
 
 def _request() -> Request:

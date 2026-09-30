@@ -822,9 +822,19 @@ def _create_backup(source_path: Path, backup_path: Path) -> None:
 class LegacySchemaManager:
     """Validate, initialize, and explicitly upgrade legacy databases."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        startup_database_names: Collection[str] | None = None,
+    ) -> None:
         self._settings = settings
         self._targets = _targets(settings)
+        self._startup_database_names = (
+            tuple(startup_database_names)
+            if startup_database_names is not None
+            else None
+        )
 
     def _select(
         self,
@@ -856,7 +866,7 @@ class LegacySchemaManager:
 
     def prepare_startup(self) -> LegacySchemaReport:
         """Validate existing databases before initializing missing files."""
-        targets = self._select(None)
+        targets = self._select(self._startup_database_names)
         existing_issues = [
             issue
             for target in targets
@@ -887,7 +897,7 @@ class LegacySchemaManager:
         finally:
             for _, temporary_path in temporary_files:
                 temporary_path.unlink(missing_ok=True)
-        final_report = self.validate()
+        final_report = self.validate(self._startup_database_names)
         if final_report.issues:
             raise LegacySchemaValidationError(final_report)
         return LegacySchemaReport(

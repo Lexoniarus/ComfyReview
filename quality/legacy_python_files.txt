@@ -25,12 +25,6 @@ services/comfy_client_core/types.py
 services/comfy_client_core/workflows.py
 services/context_filters.py
 services/file_urls.py
-services/mv_worker_core/__init__.py
-services/mv_worker_core/combo_pipeline.py
-services/mv_worker_core/debounce.py
-services/mv_worker_core/images_pipeline.py
-services/mv_worker_core/prompt_ratings_pipeline.py
-services/mv_worker_core/ratings_io.py
 services/playground_common/__init__.py
 services/playground_common/empty_placeholders.py
 services/playground_generator_ui/__init__.py

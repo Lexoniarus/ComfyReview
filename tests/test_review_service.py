@@ -58,15 +58,6 @@ class _Reviews:
         self._scenario.record("review_delete")
 
 
-class _Jobs:
-    def __init__(self, scenario: _Scenario) -> None:
-        self._scenario = scenario
-
-    def request_catchup(self) -> int:
-        self._scenario.record("queue")
-        return 29
-
-
 class _StagedDeletion:
     def __init__(self, scenario: _Scenario) -> None:
         self._scenario = scenario
@@ -147,7 +138,6 @@ def _fixture(
     service = ReviewService(
         image_resolver=_Resolver(scenario, image),
         reviews=reviews,
-        jobs=_Jobs(scenario),
         deletions=_Deletions(scenario, staged),
         preserve_deleted_files=True,
     )
@@ -174,9 +164,8 @@ def test_review_service_submits_rating_in_order() -> None:
         review_id=17,
         run=3,
         deleted=False,
-        job_id=29,
     )
-    assert fixture.scenario.events == ["resolve", "review_append", "queue"]
+    assert fixture.scenario.events == ["resolve", "review_append"]
     assert fixture.reviews.records[0].rating == 8
 
 
@@ -192,7 +181,6 @@ def test_review_service_stages_and_finalizes_delete() -> None:
         "resolve",
         "stage",
         "review_append",
-        "queue",
         "finalize",
     ]
 
@@ -243,16 +231,6 @@ def test_review_service_rolls_back_staged_delete_when_canonical_write_fails(
     assert fixture.scenario.events == expected_events
 
 
-def test_review_service_keeps_review_when_projection_queue_fails() -> None:
-    fixture = _fixture(fail_at={"queue"})
-
-    result = fixture.service.submit(fixture.command())
-
-    assert result.job_id == 0
-    assert fixture.scenario.events == ["resolve", "review_append", "queue"]
-    assert len(fixture.reviews.records) == 1
-
-
 def test_review_service_keeps_delete_when_finalize_cleanup_fails() -> None:
     fixture = _fixture(fail_at={"finalize"})
 
@@ -277,10 +255,10 @@ def test_output_reference_accepts_canonical_uid() -> None:
     assert reference == OutputImageReference(image_uid="image-native")
 
 
-def test_review_service_sidecarless_rating_skips_legacy_projection() -> None:
+def test_review_service_accepts_sidecarless_canonical_image() -> None:
     fixture = _fixture(sidecarless=True)
 
     result = fixture.service.submit(fixture.command())
 
-    assert result.job_id == 0
+    assert result.deleted is False
     assert fixture.scenario.events == ["resolve", "review_append"]

@@ -44,7 +44,6 @@ from comfyreview.application.lifecycle import (
     LegacySchemaLifecycle,
     LegacySchemaReport,
     LegacySchemaValidationError,
-    WorkerRuntime,
 )
 from comfyreview.application.output_images import (
     CanonicalOutputImageRecord,
@@ -88,13 +87,11 @@ from comfyreview.application.ranking import (
 )
 from comfyreview.application.reviews import (
     InvalidOutputPathError,
-    JobQueue,
     OutputDeletionManager,
     OutputImageReference,
     OutputMutationError,
     OutputPair,
     OutputPairNotFoundError,
-    PromptProjection,
     ReviewImage,
     ReviewImageResolver,
     ReviewMutationError,
@@ -140,7 +137,6 @@ __all__ = [
     "GenerationRequest",
     "GenerationSubmission",
     "InvalidOutputPathError",
-    "JobQueue",
     "LegacySchemaIssue",
     "LegacySchemaLifecycle",
     "LegacySchemaReport",
@@ -159,7 +155,6 @@ __all__ = [
     "PlaygroundService",
     "PromptCatalogReader",
     "PromptDraftOverrides",
-    "PromptProjection",
     "PromptCatalogRepository",
     "PromptCatalogService",
     "PromptCatalogValidationError",
@@ -193,7 +188,6 @@ __all__ = [
     "StagedCurationMove",
     "SubmitReviewCommand",
     "UpdatePromptComponentMetadataCommand",
-    "WorkerRuntime",
     "imported_prompt_component_uid",
     "prompt_revision_identity",
 ]
