@@ -122,8 +122,8 @@ are assigned from returned ComfyUI batches during idempotent collection.
 
 ## Standard SaveImage cutover
 
-After native multi-output collection and provenance are verified, blueprints
-move to standard `SaveImage` or another explicitly supported native output
-node. Canonical metadata comes from the request, compiled workflow and collected
-outputs. The `name_meta_export` runtime requirement is removed only after that
-cutover; historical sidecar import remains supported.
+The active `default-character` blueprint uses standard `SaveImage`. Canonical
+metadata comes from the request, compiled workflow and collected outputs, with
+the actual output index assigned during collection. The former
+`name_meta_export` runtime path has been removed; historical sidecar import
+remains supported.

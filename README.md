@@ -44,8 +44,8 @@ docs/project_status.md
 |---|---|
 | **Core purpose** | Review and curate ComfyUI generations locally |
 | **Best fit** | Character-heavy workflows, especially anime-style image generation |
-| **Main input** | PNG files plus matching JSON sidecars |
-| **Required dependency** | Included ComfyUI custom node `name_meta_export` |
+| **Main input** | Canonical generations and native ComfyUI outputs |
+| **Required dependency** | A reachable ComfyUI API with the blueprint capabilities |
 | **Main views** | Review, Top, Arena, Stats, Playground |
 | **Storage** | Canonical SQLite plus transitional legacy projections |
 | **Main benefit** | Faster selection, cleaner curation, reproducible reuse |
@@ -83,34 +83,15 @@ ComfyReview exists to make that part easier:
 
 ---
 
-## Required ComfyUI custom node
+## ComfyUI integration
 
-A required part of this workflow is the included ComfyUI custom node **`name_meta_export`**.
+New Playground generations use a versioned, role-mapped workflow blueprint,
+standard `SaveImage`, the native ComfyUI HTTP API and canonical output
+collection. No repository-specific ComfyUI custom node is required at runtime.
 
-The historical importer depends on sidecar JSON files generated alongside each
-new PNG. Without that JSON output, ComfyReview cannot reconstruct generation
-provenance reliably and does not invent a canonical image. Images that are
-already canonical can remain usable if a sidecar is later absent.
-
-**Included in this repository**
-
-```text
-custom_node_for_comfyui/alex_nodes.py
-```
-
-**Required node**
-
-```text
-name_meta_export
-```
-
-The node is expected to export:
-
-- the rendered PNG
-- a JSON sidecar with the same base filename
-- prompt text
-- KSampler values such as seed, steps, cfg, sampler, scheduler and denoise
-- prompt graph data for later reuse
+Matching JSON sidecars remain supported as historical import evidence. They
+are not required for newly generated canonical images or for already-canonical
+images whose sidecars are absent.
 
 ---
 
@@ -131,10 +112,8 @@ The node is expected to export:
 ### Requirements
 
 - Python 3.11+
-- ComfyUI outputs with PNG and JSON sidecar files
-- the included ComfyUI custom node `name_meta_export`
-- a ComfyUI workflow that actually uses `name_meta_export`
-- optional: a running ComfyUI instance for Playground Generator features
+- historical PNG/JSON pairs only when importing legacy output
+- a running ComfyUI instance for Playground Generator features
 
 ### Installation
 
@@ -183,7 +162,6 @@ Important settings:
 | `OUTPUT_ROOT` | `COMFYREVIEW_OUTPUT_ROOT` | Root boundary for canonical files and audited output imports |
 | `COMFYUI_BASE_URL` | `COMFYREVIEW_COMFYUI_BASE_URL` | Local ComfyUI API URL |
 | `WORKFLOWS_DIR` | `COMFYREVIEW_WORKFLOWS_DIR` | Folder for workflow files |
-| `DEFAULT_WORKFLOW_PATH` | `COMFYREVIEW_DEFAULT_WORKFLOW` | Default workflow used by Playground features |
 | `DATA_DIR` | `COMFYREVIEW_DATA_DIR` | Local runtime data folder |
 | `WORKER_SHUTDOWN_TIMEOUT_SECONDS` | `COMFYREVIEW_WORKER_SHUTDOWN_TIMEOUT_SECONDS` | Maximum wait for orderly worker shutdown (default: 30 seconds) |
 | `SSL_ENABLED` | `COMFYREVIEW_SSL_ENABLED` | Enables local HTTPS when configured |
@@ -282,14 +260,13 @@ canonical database; remaining legacy projections retain it until migrated.
 
 ## Basic workflow
 
-1. Install the included `name_meta_export` custom node in ComfyUI.
-2. Use a workflow that saves PNG files together with matching JSON sidecars.
-3. Point ComfyReview at the correct ComfyUI output folder.
-4. Audit and import new historical outputs with the maintenance commands above.
-5. Start ComfyReview locally and open the web UI.
-6. Review images with ratings, deletes, filters and Arena comparisons.
-7. Use Top, Stats and Playground pages to reuse and analyze the results.
-8. Build curated character and set selections for later dataset or LoRA-oriented work.
+1. Point ComfyReview at the correct ComfyUI output folder and API endpoint.
+2. Upgrade the canonical database explicitly when the schema command requests it.
+3. Audit and import historical PNG/JSON pairs with the maintenance commands.
+4. Start ComfyReview locally and open the web UI.
+5. Review images with ratings, deletes, filters and Arena comparisons.
+6. Use Top, Stats and Playground pages to generate, reuse and analyze results.
+7. Build curated character and set selections for later dataset or LoRA-oriented work.
 
 ---
 
@@ -340,7 +317,6 @@ ComfyReview/
 ├── templates/                # HTML templates
 ├── static/                   # CSS, JS, assets
 ├── data/                     # local runtime data, ignored where needed
-├── custom_node_for_comfyui/  # required ComfyUI custom node
 ├── tests/                    # test suite
 └── README.md
 ```

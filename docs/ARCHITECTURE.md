@@ -175,14 +175,13 @@ prompt text becomes immutable revisions while name, tags and notes remain
 mutable component metadata. Repeating the audit/import is idempotent and does
 not remove unused catalog content.
 
-Playground preview preparation now reads this catalog through
-`PlaygroundService`, applies `PromptSelectionPolicy` and renders concrete
-revision snapshots through `PromptRenderer`. Draft prompt overrides do not
-mutate catalog revisions. The legacy ComfyUI submit remains isolated until the
-native `GenerationService` exists; there is no interim generation facade or
-dual-write.
+Playground preview preparation reads this catalog through `PlaygroundService`,
+applies `PromptSelectionPolicy` and renders concrete revision snapshots through
+`PromptRenderer`. Draft prompt overrides do not mutate catalog revisions.
+Submission uses the native `GenerationService`; there is no interim generation
+facade or dual-write.
 
-## 8.1 Target generation boundaries
+## 8.1 Generation boundaries
 
 Generation is deliberately split into semantic and technical boundaries:
 
@@ -206,11 +205,12 @@ indices are assigned only when ComfyUI outputs are collected.
 ## 9. Schema lifecycle
 
 Runtime startup validates supported canonical and transitional legacy schemas;
-it never upgrades an unsupported database silently. Canonical v3 through v5
+it never upgrades an unsupported database silently. Canonical v3 through v6
 changes are available only through `python -m comfyreview canonical-db
 upgrade` and are backed up. The v3-to-v4 step migrates writable legacy review
 state into events, projects delete tombstones and replaces old tables with
-read-only views; v5 adds the prompt catalog without changing those facts.
+read-only views; v5 adds the prompt catalog and v6 stores native output role
+and content-hash provenance.
 
 The older multi-file schema lifecycle remains centralized in
 `comfyreview.repositories.sqlite.legacy_schema`. Its explicit
@@ -221,11 +221,9 @@ claim crash atomicity across several SQLite files.
 
 The canonical cutover is intentionally not the end of the wider refactor.
 
-- ComfyUI generation still needs versioned blueprints, semantic compilation,
-  a technical submit/wait/output provider and native multi-output collection.
-- Playground browse/edit and submission still use legacy paths. Preview
-  selection/rendering uses the canonical catalog; submission remains isolated
-  until it can use the real GenerationService.
+- Playground browse/edit still uses transitional legacy catalog routes, while
+  preview and submission use canonical revisions and the native generation
+  lifecycle.
 - Prompt/statistics projections and their worker remain transitional.
 - Frontend logic still needs the planned ES-module/API-client cleanup.
 

@@ -33,7 +33,6 @@ SOFT_DELETE_TO_TRASH = SETTINGS.soft_delete_to_trash
 PLAYGROUND_RULES_ENABLED = SETTINGS.playground_rules_enabled
 COMFYUI_BASE_URL = SETTINGS.comfyui_base_url
 WORKFLOWS_DIR = SETTINGS.workflows_directory
-DEFAULT_WORKFLOW_PATH = SETTINGS.default_workflow_path
 COMFYUI_CHECKPOINTS_DIR = SETTINGS.comfyui_checkpoints_directory
 SSL_ENABLED = SETTINGS.ssl_enabled
 SSL_CERTFILE = SETTINGS.ssl_certificate_path

@@ -50,7 +50,6 @@ class Settings:
     playground_rules_enabled: bool
     comfyui_base_url: str
     workflows_directory: Path
-    default_workflow_path: Path
     comfyui_checkpoints_directory: Path
     ssl_enabled: bool
     ssl_certificate_path: Path
@@ -230,11 +229,6 @@ def load_settings(
             "http://127.0.0.1:8188",
         ),
         workflows_directory=workflows_directory,
-        default_workflow_path=_path(
-            values,
-            "COMFYREVIEW_DEFAULT_WORKFLOW",
-            workflows_directory / "_default_character.json",
-        ),
         comfyui_checkpoints_directory=_path(
             values,
             "COMFYREVIEW_CHECKPOINTS_DIR",

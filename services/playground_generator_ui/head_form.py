@@ -1,123 +1,28 @@
 from __future__ import annotations
 
-import re
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from config import DEFAULT_MAX_TRIES
-from services.ui_state_service import load_json_state
 
 
-def _safe_slug(s: str) -> str:
-    s = (s or "").strip()
-    s = re.sub(r"\s+", "_", s)
-    s = re.sub(r"[^a-zA-Z0-9_\-]", "", s)
-    return s.strip("_")
-
-
-def workflow_render_defaults(*, character_name: Optional[str] = None, character_id: Optional[int] = None) -> Dict[str, str]:
-    """Read render defaults from workflow JSON files.
-
-    Priority
-    1) character specific workflow
-    2) data/workflows/_default_character.json
-
-    Note
-    comfy_seed is intentionally not read from the workflow.
-    """
-
-    defaults: Dict[str, str] = {
-        "checkpoint_name": "",
-        "sampler_name": "",
-        "scheduler_name": "",
-        "steps": "",
-        "cfg": "",
-        "denoise": "",
-    }
-
-    wf_candidates: List[Path] = []
-    if character_name:
-        slug = _safe_slug(character_name)
-        if slug:
-            wf_candidates.extend(
-                [
-                    Path(f"data/workflows/{slug}.json"),
-                    Path(f"data/workflows/characters/{slug}.json"),
-                ]
-            )
-    if character_id is not None:
-        wf_candidates.extend(
-            [
-                Path(f"data/workflows/{int(character_id)}.json"),
-                Path(f"data/workflows/characters/{int(character_id)}.json"),
-            ]
-        )
-
-    wf_candidates.append(Path("data/workflows/_default_character.json"))
-
-    wf: Dict[str, Any] = {}
-    for p in wf_candidates:
-        wf = load_json_state(p) or {}
-        if wf:
-            break
-
-    if not wf:
-        return defaults
-
-    for node in wf.values():
-        if not isinstance(node, dict):
-            continue
-        inp = node.get("inputs") or {}
-        if isinstance(inp, dict) and "ckpt_name" in inp:
-            ck = inp.get("ckpt_name")
-            if isinstance(ck, str) and ck.strip():
-                defaults["checkpoint_name"] = ck.strip()
-                break
-
-    for node in wf.values():
-        if not isinstance(node, dict):
-            continue
-        if node.get("class_type") != "KSampler":
-            continue
-        inp = node.get("inputs") or {}
-        if not isinstance(inp, dict):
-            continue
-
-        st = inp.get("steps")
-        cg = inp.get("cfg")
-        dn = inp.get("denoise")
-        smp = inp.get("sampler_name")
-        sch = inp.get("scheduler")
-
-        if st is not None:
-            defaults["steps"] = str(st)
-        if cg is not None:
-            defaults["cfg"] = str(cg)
-        if dn is not None:
-            defaults["denoise"] = str(dn)
-
-        if isinstance(smp, str) and smp.strip():
-            defaults["sampler_name"] = smp.strip()
-        if isinstance(sch, str) and sch.strip():
-            defaults["scheduler_name"] = sch.strip()
-        break
-
-    return defaults
-
-
-def character_name_from_id(characters: List[Dict[str, Any]], character_id: Optional[int]) -> str:
+def character_name_from_id(
+    characters: list[dict[str, Any]], character_id: int | None
+) -> str:
     if character_id is None:
         return ""
     for c in characters:
         try:
-            if int(c.get("id")) == int(character_id):
+            raw_id = c.get("id")
+            if raw_id is not None and int(str(raw_id)) == int(character_id):
                 return str(c.get("name") or c.get("key") or "").strip()
-        except Exception:
+        except (TypeError, ValueError):
             continue
     return ""
 
 
-def build_form_from_state(*, saved: Dict[str, Any], defaults: Dict[str, str]) -> Dict[str, Any]:
+def build_form_from_state(
+    *, saved: dict[str, Any], defaults: dict[str, str]
+) -> dict[str, Any]:
     """Build the generator page form model from saved state and workflow defaults."""
 
     saved = dict(saved or {})
@@ -135,13 +40,31 @@ def build_form_from_state(*, saved: Dict[str, Any], defaults: Dict[str, str]) ->
         "comfy_seed": str(saved.get("comfy_seed", "")),
         "max_tries": int(saved.get("max_tries", DEFAULT_MAX_TRIES)),
         "batch_runs": str(saved.get("batch_runs", "")),
-        "checkpoint_name": str(saved.get("checkpoint_name", defaults.get("checkpoint_name", ""))),
-        "sampler_name": str(saved.get("sampler_name", defaults.get("sampler_name", ""))),
-        "scheduler_name": str(saved.get("scheduler_name", defaults.get("scheduler_name", ""))),
-        "steps_min": str(saved.get("steps_min", saved.get("steps", defaults.get("steps", "")))),
-        "steps_max": str(saved.get("steps_max", saved.get("steps", defaults.get("steps", "")))),
-        "cfg_min": str(saved.get("cfg_min", saved.get("cfg", defaults.get("cfg", "")))),
-        "cfg_max": str(saved.get("cfg_max", saved.get("cfg", defaults.get("cfg", "")))),
+        "checkpoint_name": str(
+            saved.get("checkpoint_name", defaults.get("checkpoint_name", ""))
+        ),
+        "sampler_name": str(
+            saved.get("sampler_name", defaults.get("sampler_name", ""))
+        ),
+        "scheduler_name": str(
+            saved.get("scheduler_name", defaults.get("scheduler_name", ""))
+        ),
+        "steps_min": str(
+            saved.get(
+                "steps_min", saved.get("steps", defaults.get("steps", ""))
+            )
+        ),
+        "steps_max": str(
+            saved.get(
+                "steps_max", saved.get("steps", defaults.get("steps", ""))
+            )
+        ),
+        "cfg_min": str(
+            saved.get("cfg_min", saved.get("cfg", defaults.get("cfg", "")))
+        ),
+        "cfg_max": str(
+            saved.get("cfg_max", saved.get("cfg", defaults.get("cfg", "")))
+        ),
         "cfg_step": str(saved.get("cfg_step", "0.1")),
         "steps": str(saved.get("steps", defaults.get("steps", ""))),
         "cfg": str(saved.get("cfg", defaults.get("cfg", ""))),
@@ -151,31 +74,31 @@ def build_form_from_state(*, saved: Dict[str, Any], defaults: Dict[str, str]) ->
 
 def build_head_state_from_post(
     *,
-    character_id: Optional[int],
-    scene_id: Optional[int],
-    outfit_id: Optional[int],
-    pose_id: Optional[int],
-    expression_id: Optional[int],
-    lighting_id: Optional[int],
-    modifier_id: Optional[int],
-    include_lighting: Optional[int],
-    include_modifier: Optional[int],
-    gen_seed: Optional[str],
-    comfy_seed: Optional[str],
+    character_id: int | None,
+    scene_id: int | None,
+    outfit_id: int | None,
+    pose_id: int | None,
+    expression_id: int | None,
+    lighting_id: int | None,
+    modifier_id: int | None,
+    include_lighting: int | None,
+    include_modifier: int | None,
+    gen_seed: str | None,
+    comfy_seed: str | None,
     max_tries: int,
-    batch_runs: Optional[int],
-    checkpoint_name: Optional[str],
-    sampler_name: Optional[str],
-    scheduler_name: Optional[str],
-    steps_min: Optional[str],
-    steps_max: Optional[str],
-    cfg_min: Optional[str],
-    cfg_max: Optional[str],
-    cfg_step: Optional[str],
-    steps: Optional[str],
-    cfg: Optional[str],
-    denoise: Optional[str],
-) -> Dict[str, Any]:
+    batch_runs: int | None,
+    checkpoint_name: str | None,
+    sampler_name: str | None,
+    scheduler_name: str | None,
+    steps_min: str | None,
+    steps_max: str | None,
+    cfg_min: str | None,
+    cfg_max: str | None,
+    cfg_step: str | None,
+    steps: str | None,
+    cfg: str | None,
+    denoise: str | None,
+) -> dict[str, Any]:
     """Persistable head state, used for the generator page."""
 
     return {

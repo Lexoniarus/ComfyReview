@@ -1,9 +1,8 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v5 is implemented for images, reviews, Arena,
-Curation and the revisioned prompt catalog on the active refactor branch,
-2026-09-30. Playground execution, generation and some derived statistics
-remain transitional.
+Status: canonical schema v6 is implemented for images, reviews, Arena,
+Curation, revisioned prompts and native generation outputs on the active
+refactor branch, 2026-09-30. Playground catalog editing remains transitional.
 
 ## 1. Source-of-truth rule
 
@@ -21,13 +20,15 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v5
+## 2. Canonical schema v6
 
 The canonical database uses explicit schema metadata and foreign keys. Schema
-v5 contains the v4 identity/review cutover plus the prompt-catalog structures:
+v6 contains the v4 identity/review cutover, the v5 prompt catalog and native
+output provenance:
 
 - `generations` and normalized generation provenance;
-- `images` with stable UID, current paths and `deleted_at`;
+- `images` with stable UID, output role, content hash, current paths and
+  `deleted_at`;
 - append-only `review_events`;
 - `arena_matches` referencing images;
 - `curation_assignments` with one assignment per image;
@@ -37,7 +38,7 @@ v5 contains the v4 identity/review cutover plus the prompt-catalog structures:
 - rebuildable current-state and aggregate views.
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
-a v3-to-v4 or v4-to-v5 migration. The explicit, backed-up command is:
+a v3-to-v4, v4-to-v5 or v5-to-v6 migration. The explicit, backed-up command is:
 
 ```text
 python -m comfyreview canonical-db upgrade [--backup-dir PATH]
@@ -114,9 +115,9 @@ destroy revisions or historical relationships.
 SQLite and stable-ID generation remain technical adapters. Playground preview
 selection and rendering now consume exact catalog revisions and retain their
 UIDs in each draft. A manual draft edit changes only its rendered snapshot. It
-does not create or mutate a revision. Playground submission is still isolated
-on the legacy path, so no temporary generation facade or catalog/legacy
-dual-write exists.
+does not create or mutate a revision. Playground submission uses the native
+`GenerationService`, preserves exact prompt snapshots and revision IDs, and
+does not dual-write legacy generation state.
 
 Legacy prompt migration is explicit:
 

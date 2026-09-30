@@ -32,15 +32,15 @@ Implemented areas include:
 - Arena-style image comparison
 - Stats and analysis pages
 - Playground handoff back toward ComfyUI
-- included ComfyUI custom node for metadata export
+- native ComfyUI provider and standard `SaveImage` blueprint
 - shared lint, type, architecture, test and coverage quality gate
 
 ## Workflow assumptions
 
-ComfyReview currently expects a specific local workflow:
+ComfyReview currently expects a versioned local blueprint:
 
 - ComfyUI generates PNG files
-- the included `name_meta_export` node creates matching JSON sidecars
+- new output uses standard `SaveImage` and canonical output collection
 - image outputs are stored in a local output folder
 - an explicit audit/import workflow records new historical output provenance in
   the canonical database

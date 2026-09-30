@@ -161,9 +161,8 @@ Runtime imports and their reports/backups are deliberately outside Git.
   and binds it plus the canonical database to a checksum-protected report;
 - `legacy-prompts import` revalidates that report, creates a backup and writes
   the accepted catalog idempotently in one transaction;
-- Playground submission remains isolated on the legacy path until Slice E and
-  the final GenerationService wiring; there is no temporary generation facade
-  and no dual-write.
+- Playground submission uses the native GenerationService; there is no
+  temporary generation facade and no dual-write.
 
 ### E. Playground preparation boundary
 
@@ -173,16 +172,14 @@ Runtime imports and their reports/backups are deliberately outside Git.
   immutable revision UIDs;
 - `PlaygroundService` composes catalog reads, selection and rendering without
   submitting external work;
-- `GenerationPort` and typed request/result contracts exist but have no
-  temporary legacy implementation;
+- `GenerationPort` is implemented by the canonical `GenerationService`;
 - preview drafts now use canonical revisions while preserving their existing
   persisted UI shape and legacy numeric form inputs during transition;
 - draft overrides remain non-persisting snapshots and never rewrite catalog
   revisions;
 - the obsolete `PlaygroundGenerator` facade and its helper modules were
   removed;
-- the old ComfyUI submit remains isolated until the real GenerationService is
-  implemented and wired in Slice M.
+- native submission, lifecycle tracking and output collection are wired.
 
 ### F. Legacy projection audit
 
@@ -199,20 +196,11 @@ The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-1. remove remaining multi-database runtime dependencies using the projection
-   audit decisions;
-2. introduce versioned `WorkflowBlueprint` and the semantic
-   `WorkflowCompiler`;
-3. introduce the technical `ComfyUiProvider` for compiled graphs only;
-4. implement `GenerationService` and its canonical asynchronous lifecycle;
-5. collect native multi-output results and assign real output indices only
-    from returned ComfyUI outputs;
-6. apply explicit output policy and migrate to standard `SaveImage`;
-7. wire Playground to the real generation port and delete obsolete legacy
-    clients, stores, workers and compatibility paths;
-8. migrate browser behavior to ES modules and the shared API client;
-9. run the complete architecture, data, browser, quality and documentation
-    acceptance before opening a new pull request.
+1. canonicalize the remaining Playground catalog routes and startup state;
+2. delete obsolete stores, compatibility paths and unused configuration;
+3. migrate browser behavior to ES modules and the shared API client;
+4. run the complete architecture, data, browser, quality and documentation
+   acceptance before opening a new pull request.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the

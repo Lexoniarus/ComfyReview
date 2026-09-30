@@ -1,5 +1,3 @@
-custom_node_for_comfyui/alex_nodes.py
-custom_node_for_comfyui/if_checkpoint_fails_in_comfyui.py
 db_store.py
 meta_view.py
 models.py
@@ -21,7 +19,6 @@ services/playground_generator_ui/__init__.py
 services/playground_generator_ui/best_pictures.py
 services/playground_generator_ui/drafts.py
 services/playground_generator_ui/dropdowns.py
-services/playground_generator_ui/head_form.py
 services/playground_generator_ui/state.py
 services/playground_generator_ui/types.py
 services/playground_label_service.py
