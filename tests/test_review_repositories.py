@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 from pathlib import Path
 
@@ -54,6 +55,90 @@ def _review_record(
     )
 
 
+def _seed_review_target(
+    database_path: Path,
+    json_path: Path,
+    *,
+    image_uid: str = "image",
+    generation_uid: str = "generation",
+    sidecar: bool = True,
+    output_node_id: str = "legacy_sidecar",
+    output_index: int = 0,
+) -> None:
+    prompts = (
+        ("pos", "(hero:1.25), blue sky"),
+        ("neg", "blur"),
+    )
+    with sqlite3.connect(database_path) as connection:
+        prompt_ids: list[int] = []
+        for scope, text in prompts:
+            prompt_hash = hashlib.sha256(
+                f"{scope}\0{text}".encode()
+            ).hexdigest()
+            cursor = connection.execute(
+                "INSERT INTO prompts(scope, prompt_hash, text) VALUES (?, ?, ?)",
+                (scope, prompt_hash, text),
+            )
+            assert cursor.lastrowid is not None
+            prompt_ids.append(int(cursor.lastrowid))
+        atoms = (
+            ("hero", 1250, "(hero:1.25)"),
+            ("blue sky", 1000, "blue sky"),
+            ("blur", 1000, "blur"),
+        )
+        for position, (text, weight, raw_text) in enumerate(atoms):
+            cursor = connection.execute(
+                "INSERT INTO prompt_atoms(canonical_text) VALUES (?)",
+                (text,),
+            )
+            assert cursor.lastrowid is not None
+            prompt_id = prompt_ids[0] if position < 2 else prompt_ids[1]
+            member_position = position if position < 2 else 0
+            connection.execute(
+                """
+                INSERT INTO prompt_memberships(
+                    prompt_id, atom_id, position, weight_milli, raw_text
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    prompt_id,
+                    int(cursor.lastrowid),
+                    member_position,
+                    weight,
+                    raw_text,
+                ),
+            )
+        cursor = connection.execute(
+            """
+            INSERT INTO generations(
+                generation_uid, model_branch, checkpoint, combo_key,
+                steps, cfg, sampler, scheduler, denoise, loras_json,
+                positive_prompt_id, negative_prompt_id
+            ) VALUES (?, 'sdxl', 'model.safetensors', 'combo',
+                      24, 6.5, 'euler', 'normal', 0.8,
+                      '[{"name":"style"}]', ?, ?)
+            """,
+            (generation_uid, *prompt_ids),
+        )
+        assert cursor.lastrowid is not None
+        connection.execute(
+            """
+            INSERT INTO images(
+                image_uid, generation_id, output_node_id, output_index,
+                png_path, json_path
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                image_uid,
+                int(cursor.lastrowid),
+                output_node_id,
+                output_index,
+                str(json_path.with_suffix(".png")),
+                str(json_path) if sidecar else None,
+            ),
+        )
+
+
 def test_canonical_schema_initializes_once_and_exposes_compatibility_views(
     tmp_path: Path,
 ) -> None:
@@ -92,6 +177,7 @@ def test_review_repository_replaces_rating_without_token_journal_growth(
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
     CanonicalSchemaManager(database_path).prepare_startup()
+    _seed_review_target(database_path, tmp_path / "image.json")
     repository = SqliteReviewRepository(database_path)
     record = _review_record(tmp_path / "image.json", 7)
 
@@ -150,6 +236,7 @@ def test_delete_removes_live_link_and_keeps_one_negative_observation(
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
     CanonicalSchemaManager(database_path).prepare_startup()
+    _seed_review_target(database_path, tmp_path / "image.json")
     repository = SqliteReviewRepository(database_path)
     repository.append(_review_record(tmp_path / "image.json", 8))
 
@@ -197,6 +284,7 @@ def test_reappearing_generation_replaces_delete_evidence(
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
     CanonicalSchemaManager(database_path).prepare_startup()
+    _seed_review_target(database_path, tmp_path / "image.json")
     repository = SqliteReviewRepository(database_path)
     path = tmp_path / "image.json"
     repository.append(_review_record(path, 8))
@@ -239,6 +327,7 @@ def test_review_repository_rejects_canonical_event_deletion(
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
     CanonicalSchemaManager(database_path).prepare_startup()
+    _seed_review_target(database_path, tmp_path / "image.json")
     repository = SqliteReviewRepository(database_path)
     stored = repository.append(_review_record(tmp_path / "image.json", 6))
 
@@ -270,6 +359,28 @@ def test_review_repository_rejects_writable_legacy_review_state(
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM ratings"
+        ).fetchone() == (0,)
+
+
+def test_review_repository_does_not_create_unknown_image_identity(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    repository = SqliteReviewRepository(database_path)
+
+    with pytest.raises(RuntimeError, match="identity is unavailable"):
+        repository.append(_review_record(tmp_path / "image.json", 8))
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM generations"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM images"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM review_events"
         ).fetchone() == (0,)
 
 
@@ -336,6 +447,15 @@ def test_canonical_sidecarless_image_preserves_external_identity(
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
     CanonicalSchemaManager(database_path).prepare_startup()
+    _seed_review_target(
+        database_path,
+        tmp_path / "native.json",
+        image_uid="image-native",
+        generation_uid="generation-native",
+        sidecar=False,
+        output_node_id="save-node",
+        output_index=2,
+    )
     repository = SqliteReviewRepository(database_path)
     record = ReviewRecord(
         image=ReviewImage(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import sqlite3
 from pathlib import Path
 from uuid import uuid4
@@ -12,7 +11,6 @@ from comfyreview.application import (
     ReviewRecord,
     StoredReview,
 )
-from comfyreview.domain import parse_prompt_atoms
 from comfyreview.repositories.sqlite.connection import connect_existing
 from stores.mv_jobs_store import enqueue_job
 
@@ -29,28 +27,9 @@ class SqliteReviewRepository:
         try:
             self._require_canonical_schema(connection)
             connection.execute("BEGIN IMMEDIATE")
-            positive_prompt_id = self._ensure_prompt(
-                connection,
-                scope="pos",
-                prompt=record.image.positive_prompt,
-            )
-            negative_prompt_id = self._ensure_prompt(
-                connection,
-                scope="neg",
-                prompt=record.image.negative_prompt,
-            )
-            generation_id = self._upsert_generation(
+            image_id, generation_id = self._resolve_image_identity(
                 connection,
                 record,
-                generation_uid=record.image.generation_uid,
-                positive_prompt_id=positive_prompt_id,
-                negative_prompt_id=negative_prompt_id,
-            )
-            image_id = self._upsert_image(
-                connection,
-                record,
-                generation_id=generation_id,
-                image_uid=record.image.image_uid,
             )
             return self._append_canonical_event(
                 connection,
@@ -68,6 +47,28 @@ class SqliteReviewRepository:
         """Reject deletion because canonical review history is append-only."""
         del review_id
         raise RuntimeError("Canonical review events are append-only")
+
+    @staticmethod
+    def _resolve_image_identity(
+        connection: sqlite3.Connection,
+        record: ReviewRecord,
+    ) -> tuple[int, int]:
+        row = connection.execute(
+            """
+            SELECT image.id AS image_id, generation.id AS generation_id
+            FROM images AS image
+            JOIN generations AS generation
+                ON generation.id = image.generation_id
+            WHERE image.image_uid = ?
+              AND generation.generation_uid = ?
+            """,
+            (record.image.image_uid, record.image.generation_uid),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError(
+                "Canonical review image identity is unavailable"
+            )
+        return int(row["image_id"]), int(row["generation_id"])
 
     def _append_canonical_event(
         self,
@@ -209,205 +210,6 @@ class SqliteReviewRepository:
             "image_reviews": "view",
         }:
             raise RuntimeError("Canonical schema v4 is required for reviews")
-
-    def _ensure_prompt(
-        self,
-        connection: sqlite3.Connection,
-        *,
-        scope: str,
-        prompt: str,
-    ) -> int:
-        prompt_text = str(prompt or "").strip()
-        prompt_hash = hashlib.sha256(
-            f"{scope}\0{prompt_text}".encode()
-        ).hexdigest()
-        connection.execute(
-            """
-            INSERT OR IGNORE INTO prompts(scope, prompt_hash, text)
-            VALUES (?, ?, ?)
-            """,
-            (scope, prompt_hash, prompt_text),
-        )
-        row = connection.execute(
-            """
-            SELECT id, text
-            FROM prompts
-            WHERE scope = ? AND prompt_hash = ?
-            """,
-            (scope, prompt_hash),
-        ).fetchone()
-        if row is None or str(row["text"]) != prompt_text:
-            raise RuntimeError("Prompt identity collision")
-        prompt_id = int(row["id"])
-        membership = connection.execute(
-            """
-            SELECT 1
-            FROM prompt_memberships
-            WHERE prompt_id = ?
-            LIMIT 1
-            """,
-            (prompt_id,),
-        ).fetchone()
-        if membership is None:
-            self._insert_prompt_memberships(
-                connection,
-                prompt_id=prompt_id,
-                prompt=prompt_text,
-            )
-        return prompt_id
-
-    def _insert_prompt_memberships(
-        self,
-        connection: sqlite3.Connection,
-        *,
-        prompt_id: int,
-        prompt: str,
-    ) -> None:
-        for position, atom in enumerate(parse_prompt_atoms(prompt)):
-            connection.execute(
-                """
-                INSERT OR IGNORE INTO prompt_atoms(canonical_text)
-                VALUES (?)
-                """,
-                (atom.text,),
-            )
-            row = connection.execute(
-                "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
-                (atom.text,),
-            ).fetchone()
-            if row is None:
-                raise RuntimeError("Prompt atom could not be persisted")
-            connection.execute(
-                """
-                INSERT INTO prompt_memberships(
-                    prompt_id,
-                    atom_id,
-                    position,
-                    weight_milli,
-                    raw_text
-                )
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    prompt_id,
-                    int(row["id"]),
-                    position,
-                    atom.weight_milli,
-                    atom.raw_text,
-                ),
-            )
-
-    def _upsert_generation(
-        self,
-        connection: sqlite3.Connection,
-        record: ReviewRecord,
-        *,
-        generation_uid: str,
-        positive_prompt_id: int,
-        negative_prompt_id: int,
-    ) -> int:
-        image = record.image
-        connection.execute(
-            """
-            INSERT INTO generations(
-                generation_uid,
-                model_branch,
-                checkpoint,
-                combo_key,
-                seed,
-                steps,
-                cfg,
-                sampler,
-                scheduler,
-                denoise,
-                loras_json,
-                positive_prompt_id,
-                negative_prompt_id
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(generation_uid) DO UPDATE SET
-                model_branch = excluded.model_branch,
-                checkpoint = excluded.checkpoint,
-                combo_key = excluded.combo_key,
-                seed = excluded.seed,
-                steps = excluded.steps,
-                cfg = excluded.cfg,
-                sampler = excluded.sampler,
-                scheduler = excluded.scheduler,
-                denoise = excluded.denoise,
-                loras_json = excluded.loras_json,
-                positive_prompt_id = excluded.positive_prompt_id,
-                negative_prompt_id = excluded.negative_prompt_id
-            """,
-            (
-                generation_uid,
-                image.model_branch,
-                image.checkpoint,
-                image.combo_key,
-                None,
-                image.steps,
-                image.cfg,
-                image.sampler,
-                image.scheduler,
-                image.denoise,
-                image.loras_json,
-                positive_prompt_id,
-                negative_prompt_id,
-            ),
-        )
-        row = connection.execute(
-            "SELECT id FROM generations WHERE generation_uid = ?",
-            (generation_uid,),
-        ).fetchone()
-        if row is None:
-            raise RuntimeError("Generation could not be persisted")
-        return int(row["id"])
-
-    def _upsert_image(
-        self,
-        connection: sqlite3.Connection,
-        record: ReviewRecord,
-        *,
-        generation_id: int,
-        image_uid: str,
-    ) -> int:
-        image = record.image
-        connection.execute(
-            """
-            INSERT INTO images(
-                image_uid,
-                generation_id,
-                output_node_id,
-                output_index,
-                png_path,
-                json_path,
-                last_seen_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-            ON CONFLICT(image_uid) DO UPDATE SET
-                generation_id = excluded.generation_id,
-                output_node_id = excluded.output_node_id,
-                output_index = excluded.output_index,
-                png_path = excluded.png_path,
-                json_path = excluded.json_path,
-                last_seen_at = datetime('now')
-            """,
-            (
-                image_uid,
-                generation_id,
-                image.output_node_id,
-                image.output_index,
-                str(image.pair.png_path),
-                self._path_text(image.pair.json_path),
-            ),
-        )
-        row = connection.execute(
-            "SELECT id FROM images WHERE image_uid = ?",
-            (image_uid,),
-        ).fetchone()
-        if row is None:
-            raise RuntimeError("Live image could not be persisted")
-        return int(row["id"])
 
     def _next_version(self, connection: sqlite3.Connection) -> int:
         connection.execute(
@@ -610,10 +412,6 @@ class SqliteReviewRepository:
             """,
             key,
         )
-
-    @staticmethod
-    def _path_text(path: Path | None) -> str | None:
-        return None if path is None else str(path)
 
     @staticmethod
     def _to_milli(value: object) -> int:
