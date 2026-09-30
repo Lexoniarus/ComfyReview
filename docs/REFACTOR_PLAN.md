@@ -136,30 +136,42 @@ Runtime imports and their reports/backups are deliberately outside Git.
 - canonical runtime readers remain SQLite `mode=ro`, while schema v4
   compatibility views remain read-only.
 
+### C. Review, Ranking, Arena and Curation boundaries
+
+- Review persistence now resolves an existing canonical image/generation pair
+  and never creates or rewrites provenance during a review;
+- legacy PromptProjection writes and impossible append-only compensation were
+  removed from `ReviewService`;
+- Ranking, Arena and Curation SQLite adapters now live in separate
+  responsibility-focused repository modules;
+- legacy projection repositories are isolated from canonical review-event
+  persistence pending the explicit projection audit;
+- routes retain their existing URLs, fields and redirects while passing stable
+  UIDs into application services.
+
 ## Remaining slice order
 
 The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-1. simplify Review, Ranking, Arena and Curation boundaries;
-2. migrate the complete prompt catalog with immutable revisions;
-3. move Playground selection and rendering behind catalog/policy boundaries,
+1. migrate the complete prompt catalog with immutable revisions;
+2. move Playground selection and rendering behind catalog/policy boundaries,
    while leaving legacy submission isolated;
-4. evaluate every legacy projection as direct query, SQL view, materialization
+3. evaluate every legacy projection as direct query, SQL view, materialization
    or deletion;
-5. remove remaining multi-database runtime dependencies;
-6. introduce versioned `WorkflowBlueprint` and the semantic
+4. remove remaining multi-database runtime dependencies;
+5. introduce versioned `WorkflowBlueprint` and the semantic
    `WorkflowCompiler`;
-7. introduce the technical `ComfyUiProvider` for compiled graphs only;
-8. implement `GenerationService` and its canonical asynchronous lifecycle;
-9. collect native multi-output results and assign real output indices only
+6. introduce the technical `ComfyUiProvider` for compiled graphs only;
+7. implement `GenerationService` and its canonical asynchronous lifecycle;
+8. collect native multi-output results and assign real output indices only
     from returned ComfyUI outputs;
-10. apply explicit output policy and migrate to standard `SaveImage`;
-11. wire Playground to the real generation port and delete obsolete legacy
+9. apply explicit output policy and migrate to standard `SaveImage`;
+10. wire Playground to the real generation port and delete obsolete legacy
     clients, stores, workers and compatibility paths;
-12. migrate browser behavior to ES modules and the shared API client;
-13. run the complete architecture, data, browser, quality and documentation
+11. migrate browser behavior to ES modules and the shared API client;
+12. run the complete architecture, data, browser, quality and documentation
     acceptance before opening a new pull request.
 
 Each intermediate commit runs focused tests and static checks for changed

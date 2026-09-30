@@ -90,6 +90,11 @@ canonical image. Delete stages the current files reversibly, writes the event,
 and then finalizes the staged deletion. Ordinary failures trigger compensation
 and remain visible.
 
+`SqliteReviewRepository` accepts only an existing image/generation identity; a
+review can neither create nor rewrite generation or image provenance. Prompt
+normalization belongs to catalog/generation persistence, not to the review
+transaction. Legacy token repair is isolated from the Review application port.
+
 ## 5. Ranking and Arena
 
 `RankingService.list_images()` reads canonical images, review aggregates and
@@ -119,7 +124,8 @@ remain attached to the image UID, so no relinking cascade is required.
 `OutputImageCatalog` and review-resolution ports. It obtains canonical rows
 through `SqliteOutputImageRepository`, whose reader opens SQLite with
 `mode=ro`. It validates current paths against the configured output root and
-loads optional sidecar metadata only as boundary input.
+uses normalized canonical generation metadata. An optional sidecar path is
+provenance and a filesystem attribute, not identity or required runtime input.
 
 Runtime page reads do not recursively rediscover images and do not fall back to
 the removed legacy scanner. Historical PNG/sidecar discovery is restricted to
