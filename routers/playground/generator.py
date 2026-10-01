@@ -44,60 +44,10 @@ def playground_generator_apply_combo(
 
 @router.get("/playground/generator")
 def playground_generator_page(request: Request):
-    dropdowns = get_application_container(
-        request
-    ).prompt_catalog_views.dropdown_items()
-
-    discovery = get_application_container(
-        request
-    ).playground_discovery.discover()
-
-    saved = get_application_container(request).playground_ui_state.load_head()
-    defaults = _render_defaults(
-        get_application_container(request).workflow_defaults.load(
-            "default-character",
-            1,
-        )
-    )
-
-    container = get_application_container(request)
-    form = build_form_from_state(
-        saved=saved,
-        defaults=defaults,
-        default_max_attempts=container.settings.default_max_tries,
-    )
-
-    preview = container.playground_ui_state.load_preview()
-    for draft in preview:
-        if draft.get("best_img_url") and not get_application_container(
-            request
-        ).file_urls.url_exists(str(draft.get("best_img_url"))):
-            draft["best_img_url"] = ""
-            draft["best_avg"] = None
-            draft["best_runs"] = None
-            draft["best_hits"] = None
-
     return templates.TemplateResponse(
         request=request,
         name="playground_generator.html",
-        context={
-            "request": request,
-            "default_max_tries": container.settings.default_max_tries,
-            "form": form,
-            "error": None,
-            "enqueue": None,
-            "characters": dropdowns["characters"],
-            "scenes": dropdowns["scenes"],
-            "outfits": dropdowns["outfits"],
-            "poses": dropdowns["poses"],
-            "expressions": dropdowns["expressions"],
-            "lightings": dropdowns["lightings"],
-            "modifiers": dropdowns["modifiers"],
-            "checkpoints": discovery.checkpoints,
-            "samplers": discovery.samplers,
-            "schedulers": discovery.schedulers,
-            "preview": preview,
-        },
+        context={"request": request},
     )
 
 

@@ -294,14 +294,23 @@ def catalog_components(
 @router.get("/playground/capabilities")
 def playground_capabilities(request: Request) -> JSONResponse:
     """Return cached-or-live native ComfyUI enum capabilities."""
-    discovery = get_application_container(
-        request
-    ).playground_discovery.discover()
+    container = get_application_container(request)
+    discovery = container.playground_discovery.discover()
+    defaults = container.workflow_defaults.load("default-character", 1)
     return JSONResponse(
         {
             "checkpoints": discovery.checkpoints,
             "samplers": discovery.samplers,
             "schedulers": discovery.schedulers,
+            "defaults": {
+                "checkpoint": defaults.checkpoint,
+                "seed": 1,
+                "steps": defaults.sampler.steps,
+                "cfg": defaults.sampler.cfg,
+                "sampler": defaults.sampler.sampler,
+                "scheduler": defaults.sampler.scheduler,
+                "denoise": defaults.sampler.denoise,
+            },
         }
     )
 

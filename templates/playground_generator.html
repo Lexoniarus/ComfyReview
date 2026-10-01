@@ -1,456 +1,71 @@
-{% extends "_base.html" %}
-{% set page_title = "Playground Generator" %}
+{% extends "_v2_base.html" %} {% set page_title = "Playground · ComfyReview" %}
+{% set active_nav = "playground" %} {% block styles %}
+<link rel="stylesheet" href="/static/css/v2/playground.css" />
+{% endblock %} {% block content %}
+<div class="playground-shell" data-v2-surface="playground">
+  <header class="v2-panel playground-header">
+    <div>
+      <p class="playground-kicker">Kanonischer Prompt-Entwurf</p>
+      <h1>Playground</h1>
+      <p class="muted">
+        Kombiniere konkrete Katalogrevisionen, prüfe den Snapshot und sende
+        ihn anschließend als reproduzierbare Generierung.
+      </p>
+    </div>
+    <span class="playground-status" data-playground-status aria-live="polite"
+      >Katalog wird geladen …</span
+    >
+  </header>
 
-{% block head %}
-<style>
-  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-  .grid3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; }
-  .grid1{ display:grid; grid-template-columns: 1fr; gap:10px; }
-  .hint{ color:var(--muted); font-size:12px; margin-top:6px; }
-  textarea{
-    width:100%;
-    min-height:110px;
-    resize: vertical;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    padding: 10px;
-    background: rgba(255,255,255,0.04);
-    color: var(--text);
-  }
-  input[type="number"],
-  input[type="text"],
-  select{
-    padding: 8px 10px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: rgba(255,255,255,0.04);
-    color: var(--text);
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .panel{
-    padding: 12px;
-    border-radius: 14px;
-    border: 1px solid var(--border);
-    background: rgba(255,255,255,0.02);
-  }
-  .draftCard{
-    border: 1px solid var(--border);
-    background: rgba(255,255,255,0.03);
-    border-radius: 14px;
-    padding: 12px;
-    margin-top: 12px;
-  }
-  .rowActions{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; }
-  .small{ font-size:12px; color:var(--muted); }
-</style>
-{% endblock %}
+  <div class="playground-workspace">
+    <section class="v2-panel playground-selection" aria-labelledby="selection-title">
+      <div class="playground-section-heading">
+        <div>
+          <p class="playground-kicker">01 · Auswahl</p>
+          <h2 id="selection-title">Prompt-Bausteine</h2>
+        </div>
+        <label class="seed-field">
+          Auswahl-Seed
+          <input type="number" value="17" data-selection-seed />
+        </label>
+      </div>
+      <div data-prompt-modes></div>
+      <button class="primary-button" type="button" data-prepare-draft>
+        Entwurf erstellen
+      </button>
+    </section>
 
-{% block body %}
-<div class="top">
-  <div>
-    <div class="pill">Playground</div>
-    <div class="pill">Generator</div>
+    <section class="v2-panel playground-draft" aria-labelledby="draft-title">
+      <div class="playground-section-heading">
+        <div>
+          <p class="playground-kicker">02 · Snapshot</p>
+          <h2 id="draft-title">Generierungsentwurf</h2>
+        </div>
+        <span class="draft-state" data-draft-state>Kein Entwurf</span>
+      </div>
+      <div data-draft-preview>
+        <p class="playground-empty">
+          Wähle deine Modi und erstelle einen Entwurf. Manuelle Änderungen
+          bleiben Draft-Overrides und verändern keine Katalogrevision.
+        </p>
+      </div>
+    </section>
+
+    <aside class="v2-panel playground-generation" aria-labelledby="generation-title">
+      <div class="playground-section-heading">
+        <div>
+          <p class="playground-kicker">03 · Ausgabe</p>
+          <h2 id="generation-title">Generierung</h2>
+        </div>
+      </div>
+      <div data-generation-controls></div>
+      <button class="primary-button" type="button" data-submit-generation disabled>
+        An ComfyUI senden
+      </button>
+      <div class="generation-result" data-generation-result aria-live="polite"></div>
+    </aside>
   </div>
-  {% include "_nav.html" %}
 </div>
-
-<div class="panel">
-  <div style="font-size:20px; font-weight:800;">Batch Preview Generator</div>
-  <div class="hint">
-    Generate erzeugt eine Preview Liste. Submit sendet exakt die Preview Liste. Preview wird danach geleert.
-  </div>
-
-  {% if enqueue %}
-    <div class="hint" style="margin-top:10px;">{{ enqueue }}</div>
-  {% endif %}
-
-  {% if error %}
-    <div class="hint" style="margin-top:10px;">{{ error }}</div>
-  {% endif %}
-
-  <form method="post" action="/playground/generator" class="grid1" style="margin-top:12px;">
-    
-    <div class="grid2">
-      <div>
-        <div class="small">Character</div>
-        <select name="character_id">
-          <option value="" {% if not form.character_id %}selected{% endif %}>random</option>
-          {% for c in characters %}
-            <option value="{{ c['id'] }}" {% if form.character_id == (c['id'] ~ '') %}selected{% endif %}>{{ c['name'] }}</option>
-          {% endfor %}
-        </select>
-        <div class="hint">Leer bedeutet random pro Draft.</div>
-      </div>
-
-      <div>
-        <div class="small">Generator Seed (nur Slot Randomness)</div>
-        <input type="number" name="gen_seed" step="1" value="{{ form.gen_seed }}" placeholder="zB 12345">
-        <div class="hint">Wenn gesetzt, wird pro Draft gen_seed plus index verwendet.</div>
-      </div>
-    </div>
-
-    <div class="grid3">
-      <div>
-        <div class="small">Scene</div>
-        <select name="scene_id">
-          <option value="" {% if not form.scene_id %}selected{% endif %}>random</option>
-          {% for x in scenes %}
-            <option value="{{ x['id'] }}" {% if form.scene_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div>
-        <div class="small">Outfit</div>
-        <select name="outfit_id">
-          <option value="" {% if not form.outfit_id %}selected{% endif %}>random</option>
-          {% for x in outfits %}
-            <option value="{{ x['id'] }}" {% if form.outfit_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div>
-        <div class="small">Pose</div>
-        <select name="pose_id">
-          <option value="" {% if not form.pose_id %}selected{% endif %}>random</option>
-          {% for x in poses %}
-            <option value="{{ x['id'] }}" {% if form.pose_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <div class="grid3">
-      <div>
-        <div class="small">Expression</div>
-        <select name="expression_id">
-          <option value="" {% if not form.expression_id %}selected{% endif %}>random</option>
-          {% for x in expressions %}
-            <option value="{{ x['id'] }}" {% if form.expression_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div>
-        <div class="small">Lighting</div>
-        <select name="lighting_id">
-          <option value="" {% if not form.lighting_id %}selected{% endif %}>random</option>
-          {% for x in lightings %}
-            <option value="{{ x['id'] }}" {% if form.lighting_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
-          {% endfor %}
-        </select>
-        <div class="hint">
-          <label><input type="checkbox" name="include_lighting" value="1" {% if form.include_lighting %}checked{% endif %}> include</label>
-        </div>
-      </div>
-
-      <div>
-        <div class="small">Modifier</div>
-        <select name="modifier_id">
-          <option value="" {% if not form.modifier_id %}selected{% endif %}>random</option>
-          {% for x in modifiers %}
-            <option value="{{ x['id'] }}" {% if form.modifier_id == (x['id'] ~ '') %}selected{% endif %}>{{ x['name'] }}</option>
-          {% endfor %}
-        </select>
-        <div class="hint">
-          <label><input type="checkbox" name="include_modifier" value="1" {% if form.include_modifier %}checked{% endif %}> include</label>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid3">
-      <div>
-        <div class="small">batch runs</div>
-        <input type="number" name="batch_runs" min="1" value="{{ form.batch_runs or 1 }}">
-      </div>
-
-      <div>
-        <div class="small">comfy seed seq</div>
-        <input type="text" name="comfy_seed" value="{{ form.comfy_seed }}" placeholder="zB 37-40 oder 1,2,3">
-        <div class="hint">Leer bedeutet Workflow Seed bleibt unberuehrt.</div>
-      </div>
-
-      <div>
-        <div class="small">max tries</div>
-        <input type="number" name="max_tries" min="1" value="{{ form.max_tries or default_max_tries }}">
-      </div>
-    </div>
-
-    <div class="grid3">
-      <div>
-        <div class="small">steps (min/max)</div>
-        <div class="grid2" style="gap:8px;">
-          <input type="number" name="steps_min" step="1" value="{{ form.steps_min }}" placeholder="min">
-          <input type="number" name="steps_max" step="1" value="{{ form.steps_max }}" placeholder="max">
-        </div>
-        <div class="hint">Optional. Wenn leer, wird der Workflow Default genutzt.</div>
-      </div>
-
-      <div>
-        <div class="small">cfg (min/max/step)</div>
-        <div class="grid3" style="gap:8px; grid-template-columns: 1fr 1fr 1fr;">
-          <input type="number" name="cfg_min" step="0.1" value="{{ form.cfg_min }}" placeholder="min" oninput="this.value = this.value.replace(',', '.')">
-          <input type="number" name="cfg_max" step="0.1" value="{{ form.cfg_max }}" placeholder="max" oninput="this.value = this.value.replace(',', '.')">
-          <input type="number" name="cfg_step" step="0.1" value="{{ form.cfg_step }}" placeholder="step" oninput="this.value = this.value.replace(',', '.')">
-        </div>
-        <div class="hint">Optional. Wenn leer, wird der Workflow Default genutzt. Schrittweite typischerweise 0.1.</div>
-      </div>
-
-      <div>
-        <div class="small">denoise seq</div>
-        <input type="text" name="denoise" value="{{ form.denoise }}" placeholder="zB 0.35-0.55:0.05">
-      </div>
-    </div>
-
-    <div class="grid3">
-      <div>
-        <div class="small">checkpoint</div>
-        <select name="checkpoint_name">
-          <option value="" {% if not form.checkpoint_name %}selected{% endif %}>random / auto</option>
-          {% for x in checkpoints %}
-            <option value="{{ x }}" {% if form.checkpoint_name == x %}selected{% endif %}>{{ x }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div>
-        <div class="small">sampler</div>
-        <select name="sampler_name">
-          <option value="" {% if not form.sampler_name %}selected{% endif %}>random / auto</option>
-          {% for x in samplers %}
-            <option value="{{ x }}" {% if form.sampler_name == x %}selected{% endif %}>{{ x }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div>
-        <div class="small">scheduler</div>
-        <select name="scheduler_name">
-          <option value="" {% if not form.scheduler_name %}selected{% endif %}>random / auto</option>
-          {% for x in schedulers %}
-            <option value="{{ x }}" {% if form.scheduler_name == x %}selected{% endif %}>{{ x }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <div class="rowActions">
-      <button type="submit" name="action" value="preview_generate">Generate Preview</button>
-      {% if preview and preview|length > 0 %}
-        <button type="submit" name="action" value="submit_preview">Submit Preview</button>
-      {% endif %}
-    </div>
-  </form>
-</div>
-
-<div class="panel" style="margin-top:14px;">
-  <div style="font-weight:800;">Preview Batch</div>
-  {% if not preview or preview|length == 0 %}
-    <div class="hint">Leer. Generate Preview erzeugt Drafts.</div>
-  {% else %}
-    <div class="hint">Drafts: {{ preview|length }}</div>
-
-    {% for d in preview %}
-      <div class="draftCard">
-        <div style="font-weight:800;">draft {{ d.draft_id }}</div>
-
-        <div class="hint">
-          <span class="crBadge crBadgeStrong">{{ d.character_name }}</span>
-          {% if d.scene_name %}<span class="crBadge">{{ d.scene_name }}</span>{% endif %}
-          {% if d.outfit_name %}<span class="crBadge">{{ d.outfit_name }}</span>{% endif %}
-          {% if d.pose_name %}<span class="crBadge">{{ d.pose_name }}</span>{% endif %}
-          {% if d.expression_name %}<span class="crBadge">{{ d.expression_name }}</span>{% endif %}
-          {% if d.light_name %}<span class="crBadge">{{ d.light_name }}</span>{% endif %}
-          {% if d.modifier_name %}<span class="crBadge">{{ d.modifier_name }}</span>{% endif %}
-        </div>
-
-
-        <div id="bestbox-{{ d.draft_id }}" {% if not d.best_img_url %}data-cr-draft="{{ d.draft_id }}"{% endif %}>
-          <div class="hint" style="margin-top:10px;">Best Picture (scene match)</div>
-          {% if d.best_img_url %}
-            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:6px;">
-              <img src="{{ d.best_img_url }}" alt="best" style="width:220px; max-width:100%; border-radius:12px; border:1px solid var(--border);" data-cr-zoom="{{ d.best_img_url }}">
-              <div class="small">
-                {% if d.best_avg is not none %}Ø {{ "%.2f"|format(d.best_avg) }}{% endif %}
-                {% if d.best_runs is not none %} / {{ d.best_runs }}{% endif %}
-                {% if d.best_hits is not none %}<br>hits {{ d.best_hits }}{% endif %}
-              </div>
-            </div>
-          {% else %}
-            <div class="small" data-cr-best-status>loading...</div>
-          {% endif %}
-        </div>
-
-        <form method="post" action="/playground/generator" class="grid1" style="margin-top:10px;">
-                    <input type="hidden" name="draft_id" value="{{ d.draft_id }}">
-
-          <div class="grid3">
-            <div>
-              <div class="small">seed</div>
-              <input type="number" name="draft_seed" value="{{ d.seed }}" step="1">
-            </div>
-            <div>
-              <div class="small">steps</div>
-              <input type="number" name="draft_steps" value="{{ d.steps }}" step="1">
-            </div>
-            <div>
-              <div class="small">cfg</div>
-              <input type="number" name="draft_cfg" value="{{ d.cfg }}" step="0.1" oninput="this.value = this.value.replace(',', '.')">
-            </div>
-          </div>
-
-          <div class="grid3">
-            <div>
-              <div class="small">sampler</div>
-              <select name="draft_sampler">
-                <option value="" {% if not d.sampler %}selected{% endif %}>random / auto</option>
-                {% for x in samplers %}
-                  <option value="{{ x }}" {% if d.sampler == x %}selected{% endif %}>{{ x }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <div class="small">scheduler</div>
-              <select name="draft_scheduler">
-                <option value="" {% if not d.scheduler %}selected{% endif %}>random / auto</option>
-                {% for x in schedulers %}
-                  <option value="{{ x }}" {% if d.scheduler == x %}selected{% endif %}>{{ x }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <div class="small">denoise</div>
-              <input type="number" name="draft_denoise" value="{{ d.denoise }}" step="0.01" oninput="this.value = this.value.replace(',', '.')">
-            </div>
-          </div>
-
-          <div>
-            <div class="small">checkpoint</div>
-            <select name="draft_checkpoint">
-              <option value="" {% if not d.checkpoint %}selected{% endif %}>random / auto</option>
-              {% for x in checkpoints %}
-                <option value="{{ x }}" {% if d.checkpoint == x %}selected{% endif %}>{{ x }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="grid2">
-            <div>
-              <div class="small">prompt positive</div>
-              <textarea name="draft_pos">{{ d.prompt_positive }}</textarea>
-            </div>
-            <div>
-              <div class="small">prompt negative</div>
-              <textarea name="draft_neg">{{ d.prompt_negative }}</textarea>
-            </div>
-          </div>
-
-          <div class="rowActions">
-            <button type="submit" name="action" value="draft_update">Update Draft</button>
-            <button type="submit" name="action" value="draft_remove">Remove</button>
-          </div>
-        </form>
-      </div>
-    {% endfor %}
-  {% endif %}
-</div>
-
-<script>
-(function(){
-  const boxes = Array.from(document.querySelectorAll('[data-cr-draft]'));
-  if (!boxes.length) return;
-
-  const endpoint = '/playground/generator/preview_draft_best';
-  const concurrency = 3;
-  const maxAttempts = 20;
-
-  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-
-  async function loadBest(box){
-    const draftId = (box.dataset.crDraft || '').trim();
-    if (!draftId) return;
-
-    const statusEl = box.querySelector('[data-cr-best-status]');
-    let attempt = 0;
-
-    while(attempt < maxAttempts){
-      attempt += 1;
-      try{
-        const url = endpoint + '?draft_id=' + encodeURIComponent(draftId);
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
-        if(!res.ok){
-          if(statusEl) statusEl.textContent = 'error';
-          return;
-        }
-        const data = await res.json();
-
-        if(data && data.status === 'ok' && data.best_img_url){
-          const avg = (data.best_avg !== null && data.best_avg !== undefined) ? Number(data.best_avg).toFixed(2) : '';
-          const runs = (data.best_runs !== null && data.best_runs !== undefined) ? String(data.best_runs) : '';
-          const hits = (data.best_hits !== null && data.best_hits !== undefined) ? String(data.best_hits) : '';
-
-          let meta = '';
-          if(avg) meta += 'Ø ' + avg;
-          if(runs) meta += (meta ? ' / ' : '') + runs;
-          if(hits) meta += (meta ? '<br>' : '') + 'hits ' + hits;
-
-          box.innerHTML =
-            '<div class="hint" style="margin-top:10px;">Best Picture (scene match)</div>' +
-            '<div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:6px;">' +
-              '<img src="' + data.best_img_url + '" alt="best" style="width:220px; max-width:100%; border-radius:12px; border:1px solid var(--border);" data-cr-zoom="' + data.best_img_url + '">' +
-              '<div class="small">' + meta + '</div>' +
-            '</div>';
-
-          if (window.crInitZoom) {
-            window.crInitZoom();
-          }
-          return;
-        }
-
-        const retry = data && data.retry;
-        if(!retry){
-          if(statusEl) statusEl.textContent = 'no match';
-          return;
-        }
-
-        const waitMs = (data && data.retry_after_ms) ? Number(data.retry_after_ms) : 2000;
-        if(statusEl) statusEl.textContent = 'loading...';
-        await sleep(waitMs);
-      }catch(e){
-        if(statusEl) statusEl.textContent = 'error';
-        return;
-      }
-    }
-
-    if(statusEl) statusEl.textContent = 'no match';
-  }
-
-  async function runQueue(){
-    const queue = boxes.slice();
-    let running = 0;
-
-    return new Promise(resolve => {
-      const next = () => {
-        if(queue.length === 0 && running === 0){
-          resolve();
-          return;
-        }
-        while(running < concurrency && queue.length > 0){
-          const box = queue.shift();
-          running += 1;
-          loadBest(box).finally(() => {
-            running -= 1;
-            next();
-          });
-        }
-      };
-      next();
-    });
-  }
-
-  runQueue();
-})();
-</script>
+{% endblock %} {% block scripts %}
+<script type="module" src="/static/js/entries/playground.js"></script>
 {% endblock %}

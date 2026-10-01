@@ -9,9 +9,13 @@ static/js/images/pagination-controls.js
 static/js/layout/responsive-rails.js
 static/js/review/review-keyboard.js
 static/js/review/review-stage.js
+static/js/playground/prompt-mode-editor.js
+static/js/playground/generation-controls.js
+static/js/playground/draft-preview.js
 static/js/scopes/active-scope-chips.js
 static/js/scopes/url-state.js
 static/js/scopes/scope-state-controller.js
 static/js/surfaces/top-worst-controller.js
 static/js/surfaces/review-controller.js
 static/js/surfaces/arena-controller.js
+static/js/surfaces/playground-controller.js

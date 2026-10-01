@@ -195,6 +195,21 @@ class _PlaygroundDiscovery:
         )
 
 
+class _WorkflowDefaults:
+    def load(self, blueprint_uid, version):
+        assert (blueprint_uid, version) == ("default-character", 1)
+        return SimpleNamespace(
+            checkpoint="model.safetensors",
+            sampler=SimpleNamespace(
+                steps=24,
+                cfg=6.5,
+                sampler="euler",
+                scheduler="normal",
+                denoise=1.0,
+            ),
+        )
+
+
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
     client, container = _client()
 
@@ -342,6 +357,15 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "checkpoints": ["model.safetensors"],
         "samplers": ["euler"],
         "schedulers": ["normal"],
+        "defaults": {
+            "checkpoint": "model.safetensors",
+            "seed": 1,
+            "steps": 24,
+            "cfg": 6.5,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "denoise": 1.0,
+        },
     }
 
 
@@ -495,6 +519,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         playground_service=_Playground(),
         playground_submission_service=_PlaygroundSubmission(),
         playground_discovery=_PlaygroundDiscovery(),
+        workflow_defaults=_WorkflowDefaults(),
     )
     application = FastAPI()
     application.state.container = container

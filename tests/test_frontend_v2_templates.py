@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from routers.arena_router import router as arena_router
 from routers.index_router import router as review_router
+from routers.playground.generator import router as playground_generator_router
 from routers.top_router import router as top_router
 from templates import ARENA_HTML, INDEX_HTML, TOP_PICTURES_HTML
 
@@ -68,3 +69,17 @@ def test_arena_template_and_url_use_uid_based_v2_controls() -> None:
     assert "<style" not in rendered
     assert "onclick=" not in rendered
     assert 'data-v2-surface="arena"' in response.text
+
+
+def test_playground_generator_url_renders_the_canonical_v2_shell() -> None:
+    application = FastAPI()
+    application.include_router(playground_generator_router)
+
+    response = TestClient(application).get("/playground/generator")
+
+    assert response.status_code == 200
+    assert 'data-v2-surface="playground"' in response.text
+    assert "/static/js/entries/playground.js" in response.text
+    assert "/static/css/v2/playground.css" in response.text
+    assert "/api/v2" not in response.text
+    assert "inline" not in response.text.casefold()
