@@ -24,6 +24,15 @@ class CurationRequest(BaseModel):
     set_key: str
 
 
+@router.get("/curation/sets")
+def list_curation_sets(request: Request) -> JSONResponse:
+    """Expose the configured canonical curation choices."""
+    container = get_application_container(request)
+    return JSONResponse(
+        {"set_keys": list(container.settings.curation_set_keys)}
+    )
+
+
 @router.put("/images/{image_uid}/curation")
 def assign_curation(
     request: Request,

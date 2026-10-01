@@ -510,6 +510,17 @@ def test_v2_mutations_submit_only_stable_image_identities() -> None:
     assert container.arena_service.command.right_image_uid == "image-2"
 
 
+def test_v2_curation_sets_come_from_typed_application_settings() -> None:
+    client, _container = _client()
+
+    response = client.get("/api/v2/curation/sets")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "set_keys": ["character_face", "outfit", "pose"]
+    }
+
+
 def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
     client, _container = _client()
 
@@ -822,7 +833,11 @@ def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() ->
 
 def _client() -> tuple[TestClient, SimpleNamespace]:
     container = SimpleNamespace(
-        settings=SimpleNamespace(minimum_runs=2, pool_limit=128),
+        settings=SimpleNamespace(
+            minimum_runs=2,
+            pool_limit=128,
+            curation_set_keys=("character_face", "outfit", "pose"),
+        ),
         image_contexts=_ImageContexts(),
         scope_facets=_Facets(),
         review_candidates=_Candidates(),

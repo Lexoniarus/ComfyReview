@@ -349,6 +349,40 @@
   margin-top: var(--space-4);
 }
 
+.inspector-curation {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 0.0625rem solid var(--color-border);
+}
+
+.inspector-curation h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-body);
+}
+
+.inspector-curation-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+}
+
+.inspector-curation select {
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.inspector-curation-status {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-caption);
+}
+
+.inspector-curation-status[hidden] {
+  display: none;
+}
+
 .ranking-inspector details {
   margin-top: var(--space-4);
 }

@@ -1,5 +1,6 @@
 import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
+import { ImageCurationController } from "../curation/image-curation-controller.js";
 import { ImageGrid } from "../images/image-grid.js";
 import { ImageViewer } from "../images/image-viewer.js";
 import { PaginationControls } from "../images/pagination-controls.js";
@@ -29,6 +30,12 @@ if (root instanceof HTMLElement) {
   ) {
     /** @type {TopWorstController | null} */
     let controller = null;
+    /** @type {ImageCurationController | null} */
+    let curation = null;
+    const api = new ApiClient();
+    const inspector = new ImageInspector(inspectorRoot, {
+      onCuration: (imageUid, setKey) => void curation?.assign(imageUid, setKey),
+    });
     const viewer = new ImageViewer(viewerRoot);
     const grid = new ImageGrid(gridRoot, {
       onSelect: (uid) => controller?.selectImage(uid),
@@ -63,13 +70,13 @@ if (root instanceof HTMLElement) {
       },
     });
     controller = new TopWorstController({
-      api: new ApiClient(),
+      api,
       state,
       navigator,
       activeScopes,
       grid,
       pagination,
-      inspector: new ImageInspector(inspectorRoot),
+      inspector,
       viewer,
       rails: new ResponsiveRails(root),
       facetRequests: new RequestLifecycle(),
@@ -77,9 +84,22 @@ if (root instanceof HTMLElement) {
       contextRequests: new RequestLifecycle(),
       root,
     });
-    controller.start();
-    window.addEventListener("pagehide", () => controller?.dispose(), {
-      once: true,
+    curation = new ImageCurationController({
+      api,
+      inspector,
+      requests: new RequestLifecycle(),
+      onAssigned: (imageUid) =>
+        controller?.refresh(imageUid) || Promise.resolve(),
     });
+    controller.start();
+    void curation.start();
+    window.addEventListener(
+      "pagehide",
+      () => {
+        curation?.dispose();
+        controller?.dispose();
+      },
+      { once: true },
+    );
   }
 }

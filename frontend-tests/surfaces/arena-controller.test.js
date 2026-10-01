@@ -34,10 +34,13 @@ describe("ArenaController", () => {
     expect(fixture.rails.open).toHaveBeenCalledWith("inspector");
     fixture.controller.expand("/right.png");
     expect(fixture.viewer.open).toHaveBeenCalledWith("/right.png");
+    await fixture.controller.refresh("right");
+    expect(fixture.board.render).toHaveBeenCalledTimes(3);
 
     fixture.controller.dispose();
     expect(fixture.unsubscribe).toHaveBeenCalledOnce();
     expect(fixture.keyboard.dispose).toHaveBeenCalledOnce();
+    expect(fixture.inspector.dispose).toHaveBeenCalledOnce();
   });
 
   it("handles empty, failed, aborted, and idle operations", async () => {
@@ -51,6 +54,18 @@ describe("ArenaController", () => {
     await settle();
     await failing.controller.recordDecision("left");
     expect(failing.status.textContent).toBe("kaputt");
+
+    const refreshFailure = createFixture();
+    refreshFailure.controller.start();
+    await settle();
+    refreshFailure.api.get.mockRejectedValueOnce(new Error("refresh kaputt"));
+    await refreshFailure.controller.refresh("left");
+    expect(refreshFailure.inspector.error).toHaveBeenCalledWith(
+      "refresh kaputt",
+    );
+    expect(refreshFailure.status.textContent).toBe(
+      "Aktualisierung fehlgeschlagen",
+    );
 
     const readError = createFixture({ readError: "unknown" });
     readError.controller.start();
@@ -67,6 +82,7 @@ describe("ArenaController", () => {
     expect(aborted.board.error).not.toHaveBeenCalled();
 
     const idle = createFixture();
+    await idle.controller.refresh("left");
     await idle.controller.recordDecision("left");
     expect(idle.api.post).not.toHaveBeenCalled();
   });
@@ -94,6 +110,11 @@ function createFixture(options = {}) {
     get: vi.fn((path) => {
       if (options.readError) return Promise.reject(options.readError);
       if (path.startsWith("scopes/")) return Promise.resolve({ facets: [] });
+      if (path.startsWith("images/")) {
+        return Promise.resolve({
+          image_uid: decodeURIComponent(path.slice(7)),
+        });
+      }
       return Promise.resolve(pair);
     }),
     post: vi.fn(() =>
@@ -115,6 +136,7 @@ function createFixture(options = {}) {
     render: vi.fn(),
     empty: vi.fn(),
     error: vi.fn(),
+    dispose: vi.fn(),
   };
   const viewer = disposable({ open: vi.fn() });
   const rails = disposable({ open: vi.fn() });
@@ -141,6 +163,7 @@ function createFixture(options = {}) {
     viewer,
     rails,
     keyboard,
+    inspector,
     status,
     unsubscribe,
   };

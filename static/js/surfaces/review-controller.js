@@ -4,7 +4,7 @@
 /** @typedef {{render: (facets: any[], selected: string[], classification: string) => void, dispose: () => void}} ScopeNavigatorBoundary */
 /** @typedef {{render: (facets: any[], selected: string[]) => void, dispose: () => void}} ActiveScopesBoundary */
 /** @typedef {{loading: (message?: string) => void, render: (image: any) => void, empty: () => void, error: (message: string) => void, setBusy: (busy: boolean) => void, dispose: () => void}} ReviewStageBoundary */
-/** @typedef {{render: (image: any) => void, empty: () => void, error: (message: string) => void}} InspectorBoundary */
+/** @typedef {{render: (image: any) => void, empty: () => void, error: (message: string) => void, dispose: () => void}} InspectorBoundary */
 /** @typedef {{open: (url: string) => void, dispose: () => void}} ViewerBoundary */
 /** @typedef {{open: (rail: "scope" | "inspector") => void, dispose: () => void}} RailsBoundary */
 /** @typedef {{confirm: (message: string) => Promise<boolean>, dispose: () => void}} DialogBoundary */
@@ -81,6 +81,26 @@ export class ReviewController {
     this.viewer.open(url);
   }
 
+  /** @param {string} imageUid */
+  async refresh(imageUid) {
+    if (!this.currentImage || this.currentImage.image_uid !== imageUid) return;
+    this.readRequests.cancelRequests();
+    this.stage.loading("Bild wird aktualisiert …");
+    try {
+      const image = await this.readRequests.run((signal) =>
+        this.api.get(`images/${encodeURIComponent(imageUid)}`, { signal }),
+      );
+      this.#showCandidate(image);
+    } catch (error) {
+      if (!isAbortError(error)) {
+        const message = errorMessage(error);
+        this.stage.error(message);
+        this.inspector.error(message);
+        this.status.textContent = "Aktualisierung fehlgeschlagen";
+      }
+    }
+  }
+
   /** Abort requests and release every owned collaborator. */
   dispose() {
     if (this.unsubscribe) this.unsubscribe();
@@ -89,6 +109,7 @@ export class ReviewController {
     this.navigator.dispose();
     this.activeScopes.dispose();
     this.stage.dispose();
+    this.inspector.dispose();
     this.viewer.dispose();
     this.rails.dispose();
     this.dialog.dispose();
@@ -118,9 +139,7 @@ export class ReviewController {
       this.activeScopes.render(facetPayload.facets, state.scopes);
       this.currentImage = candidate;
       if (candidate) {
-        this.stage.render(candidate);
-        this.inspector.render(candidate);
-        this.status.textContent = "Bereit für deine Bewertung";
+        this.#showCandidate(candidate);
       } else {
         this.stage.empty();
         this.inspector.empty();
@@ -135,6 +154,14 @@ export class ReviewController {
         this.status.textContent = "Laden fehlgeschlagen";
       }
     }
+  }
+
+  /** @param {Record<string, unknown>} candidate */
+  #showCandidate(candidate) {
+    this.currentImage = candidate;
+    this.stage.render(candidate);
+    this.inspector.render(candidate);
+    this.status.textContent = "Bereit für deine Bewertung";
   }
 
   /** @param {string} message @param {(signal: AbortSignal) => Promise<any>} operation */

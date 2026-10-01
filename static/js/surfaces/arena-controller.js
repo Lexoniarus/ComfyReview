@@ -4,7 +4,7 @@
 /** @typedef {{render: (facets: any[], selected: string[], classification: string) => void, dispose: () => void}} NavigatorBoundary */
 /** @typedef {{render: (facets: any[], selected: string[]) => void, dispose: () => void}} ActiveScopesBoundary */
 /** @typedef {{loading: () => void, render: (pair: any) => void, empty: () => void, error: (message: string) => void, setBusy: (busy: boolean) => void, dispose: () => void}} BoardBoundary */
-/** @typedef {{render: (image: any) => void, empty: () => void, error: (message: string) => void}} InspectorBoundary */
+/** @typedef {{render: (image: any) => void, empty: () => void, error: (message: string) => void, dispose: () => void}} InspectorBoundary */
 /** @typedef {{open: (url: string) => void, dispose: () => void}} ViewerBoundary */
 /** @typedef {{open: (rail: "scope" | "inspector") => void, dispose: () => void}} RailsBoundary */
 /** @typedef {{dispose: () => void}} DisposableBoundary */
@@ -33,6 +33,7 @@ export class ArenaController {
     this.currentPair = null;
     /** @type {(() => void) | null} */
     this.unsubscribe = null;
+    this.currentInspectedImageUid = "";
     this.isMutating = false;
   }
 
@@ -76,6 +77,7 @@ export class ArenaController {
 
   /** @param {Record<string, unknown>} image */
   inspect(image) {
+    this.currentInspectedImageUid = String(image.image_uid || "");
     this.inspector.render(image);
     this.rails.open("inspector");
   }
@@ -83,6 +85,34 @@ export class ArenaController {
   /** @param {string} url */
   expand(url) {
     this.viewer.open(url);
+  }
+
+  /** @param {string} imageUid */
+  async refresh(imageUid) {
+    if (!this.currentPair) return;
+    try {
+      const image = await this.readRequests.run((signal) =>
+        this.api.get(`images/${encodeURIComponent(imageUid)}`, { signal }),
+      );
+      const left =
+        this.currentPair.left.image_uid === imageUid
+          ? image
+          : this.currentPair.left;
+      const right =
+        this.currentPair.right.image_uid === imageUid
+          ? image
+          : this.currentPair.right;
+      this.currentPair = { left, right };
+      this.board.render(this.currentPair);
+      if (this.currentInspectedImageUid === imageUid) {
+        this.inspector.render(image);
+      }
+    } catch (error) {
+      if (!isAbortError(error)) {
+        this.inspector.error(errorMessage(error));
+        this.status.textContent = "Aktualisierung fehlgeschlagen";
+      }
+    }
   }
 
   /** Abort work and release every collaborator. */
@@ -93,6 +123,7 @@ export class ArenaController {
     this.navigator.dispose();
     this.activeScopes.dispose();
     this.board.dispose();
+    this.inspector.dispose();
     this.viewer.dispose();
     this.rails.dispose();
     this.keyboard.dispose();
@@ -121,6 +152,7 @@ export class ArenaController {
       this.currentPair = pair;
       if (pair) {
         this.board.render(pair);
+        this.currentInspectedImageUid = String(pair.left.image_uid || "");
         this.inspector.render(pair.left);
         this.status.textContent = "Wähle das stärkere Bild";
       } else {

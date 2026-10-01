@@ -47,6 +47,8 @@ describe("TopWorstController", () => {
       image_uid: "image/1",
     });
     expect(fixture.rails.open).toHaveBeenCalledWith("inspector");
+    await fixture.controller.refresh("image/1");
+    expect(fixture.grid.render).toHaveBeenCalledTimes(2);
 
     fixture.root.querySelector("[data-surface-action='worst']")?.click();
     fixture.root.click();
@@ -64,6 +66,7 @@ describe("TopWorstController", () => {
     expect(fixture.activeScopes.dispose).toHaveBeenCalledOnce();
     expect(fixture.pagination.dispose).toHaveBeenCalledOnce();
     expect(fixture.rails.dispose).toHaveBeenCalledOnce();
+    expect(fixture.inspector.dispose).toHaveBeenCalledOnce();
   });
 
   it("surfaces request errors but ignores aborted work", async () => {
@@ -90,6 +93,10 @@ describe("TopWorstController", () => {
     aborted.controller.start();
     await settle();
     expect(aborted.grid.error).not.toHaveBeenCalled();
+
+    const idle = createFixture();
+    await idle.controller.refresh("image-1");
+    expect(idle.api.get).not.toHaveBeenCalled();
   });
 });
 
@@ -137,7 +144,12 @@ function createFixture(options = {}) {
     error: vi.fn(),
     dispose: vi.fn(),
   };
-  const inspector = { loading: vi.fn(), render: vi.fn(), error: vi.fn() };
+  const inspector = {
+    loading: vi.fn(),
+    render: vi.fn(),
+    error: vi.fn(),
+    dispose: vi.fn(),
+  };
   const viewer = { dispose: vi.fn() };
   const rails = { open: vi.fn(), dispose: vi.fn() };
   const pagination = { render: vi.fn(), dispose: vi.fn() };

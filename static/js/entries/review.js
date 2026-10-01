@@ -1,6 +1,7 @@
 import { ConfirmationDialog } from "../components/confirmation-dialog.js";
 import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
+import { ImageCurationController } from "../curation/image-curation-controller.js";
 import { ImageViewer } from "../images/image-viewer.js";
 import { ImageInspector } from "../inspector/image-inspector.js";
 import { ResponsiveRails } from "../layout/responsive-rails.js";
@@ -34,6 +35,12 @@ if (root instanceof HTMLElement) {
     const dialog = new ConfirmationDialog(dialogRoot);
     /** @type {ReviewController | null} */
     let controller = null;
+    /** @type {ImageCurationController | null} */
+    let curation = null;
+    const api = new ApiClient();
+    const inspector = new ImageInspector(inspectorRoot, {
+      onCuration: (imageUid, setKey) => void curation?.assign(imageUid, setKey),
+    });
     const navigator = new ScopeNavigator(scopeRoot, {
       onToggle: (uid) => {
         const scopes = state.state.scopes.includes(uid)
@@ -67,12 +74,12 @@ if (root instanceof HTMLElement) {
       isDialogOpen: () => dialog.isOpen(),
     });
     controller = new ReviewController({
-      api: new ApiClient(),
+      api,
       state,
       navigator,
       activeScopes,
       stage,
-      inspector: new ImageInspector(inspectorRoot),
+      inspector,
       viewer,
       rails: new ResponsiveRails(root),
       dialog,
@@ -81,9 +88,22 @@ if (root instanceof HTMLElement) {
       mutationRequests: new RequestLifecycle(),
       status,
     });
-    controller.start();
-    window.addEventListener("pagehide", () => controller?.dispose(), {
-      once: true,
+    curation = new ImageCurationController({
+      api,
+      inspector,
+      requests: new RequestLifecycle(),
+      onAssigned: (imageUid) =>
+        controller?.refresh(imageUid) || Promise.resolve(),
     });
+    controller.start();
+    void curation.start();
+    window.addEventListener(
+      "pagehide",
+      () => {
+        curation?.dispose();
+        controller?.dispose();
+      },
+      { once: true },
+    );
   }
 }

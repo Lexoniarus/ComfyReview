@@ -3,11 +3,13 @@ static/js/core/api-error.js
 static/js/core/api-client.js
 static/js/core/request-lifecycle.js
 static/js/components/confirmation-dialog.js
+static/js/curation/image-curation-controller.js
 static/js/catalog/catalog-browser.js
 static/js/catalog/catalog-editor.js
 static/js/arena/arena-board.js
 static/js/arena/arena-keyboard.js
 static/js/images/pagination-controls.js
+static/js/inspector/image-inspector.js
 static/js/layout/responsive-rails.js
 static/js/review/review-keyboard.js
 static/js/review/review-stage.js

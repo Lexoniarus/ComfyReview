@@ -82,9 +82,10 @@ describe("V2 view components", () => {
     grid.dispose();
   });
 
-  it("renders image details and each inspector status", () => {
+  it("renders image details, curation controls, and each inspector status", () => {
     const root = document.createElement("aside");
-    const inspector = new ImageInspector(root);
+    const onCuration = vi.fn();
+    const inspector = new ImageInspector(root, { onCuration });
     const image = {
       image_uid: "image-1",
       generation_uid: "generation-1",
@@ -96,8 +97,10 @@ describe("V2 view components", () => {
         negative: "blur",
         draft_overridden: true,
       },
+      curation: { set_key: "outfit" },
     };
 
+    inspector.setCurationOptions(["character_face", "outfit"]);
     inspector.empty();
     expect(root.textContent).toContain("Wähle");
     inspector.loading();
@@ -105,10 +108,46 @@ describe("V2 view components", () => {
     inspector.error("");
     expect(root.textContent).toContain("konnten nicht");
     inspector.render(image);
+    inspector.setCurationOptions(["character_face", "outfit", "custom_set"]);
 
     expect(root.textContent).toContain("Ø 9,0 / 10 · 2×");
     expect(root.textContent).toContain("Draft-Override");
     expect(root.querySelector("img")?.src).toContain("/files/image.png");
+    const select = root.querySelector("[data-curation-set]");
+    expect(select.value).toBe("outfit");
+    select.value = "character_face";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    root.querySelector("[data-curation-assign]")?.click();
+    expect(onCuration).toHaveBeenCalledWith("image-1", "character_face");
+
+    select.value = "";
+    root.querySelector("[data-curation-assign]")?.click();
+    expect(onCuration).toHaveBeenCalledOnce();
+
+    inspector.setCurationBusy(true);
+    expect(root.querySelector("[data-curation-assign]")?.disabled).toBe(true);
+    inspector.showCurationError("Zuweisung fehlgeschlagen");
+    expect(root.textContent).toContain("Zuweisung fehlgeschlagen");
+    inspector.setCurationBusy(false);
+    root.click();
+    const textTarget = document.createTextNode("text");
+    root.append(textTarget);
+    textTarget.dispatchEvent(new Event("click", { bubbles: true }));
+    inspector.dispose();
+    root.querySelector("[data-curation-assign]")?.click();
+    expect(onCuration).toHaveBeenCalledOnce();
+
+    const defaultRoot = document.createElement("aside");
+    const defaultInspector = new ImageInspector(defaultRoot);
+    defaultInspector.setCurationOptions(["custom_set"]);
+    defaultInspector.render({ image_uid: "image-2" });
+    defaultRoot.querySelector("select").value = "custom_set";
+    defaultRoot
+      .querySelector("select")
+      .dispatchEvent(new Event("change", { bubbles: true }));
+    defaultRoot.querySelector("button").click();
+    expect(defaultRoot.textContent).toContain("custom set");
+    defaultInspector.dispose();
   });
 
   it("opens, closes, and disposes the image viewer", () => {

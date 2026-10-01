@@ -5,7 +5,7 @@
 /** @typedef {{render: (facets: any[], selected: string[]) => void, dispose: () => void}} ActiveScopesBoundary */
 /** @typedef {{loading: () => void, render: (items: any[], offset: number) => void, error: (message: string) => void, dispose: () => void}} ImageGridBoundary */
 /** @typedef {{render: (total: number, offset: number, limit: number) => void, dispose: () => void}} PaginationBoundary */
-/** @typedef {{loading: () => void, render: (image: any) => void, error: (message: string) => void}} InspectorBoundary */
+/** @typedef {{loading: () => void, render: (image: any) => void, error: (message: string) => void, dispose: () => void}} InspectorBoundary */
 /** @typedef {{dispose: () => void}} ViewerBoundary */
 /** @typedef {{open: (rail: "scope" | "inspector") => void, dispose: () => void}} RailsBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, cancelRequests: () => void, dispose: () => void}} RequestBoundary */
@@ -31,17 +31,27 @@ export class TopWorstController {
     this.events = new AbortController();
     /** @type {(() => void) | null} */
     this.unsubscribe = null;
+    /** @type {ScopeUrlState | null} */
+    this.currentState = null;
   }
 
   /** Bind state and load the current surface. */
   start() {
     this.unsubscribe = this.state.subscribe((state) => {
+      this.currentState = state;
       void this.#load(state);
     });
     this.root.addEventListener("click", (event) => this.#handleAction(event), {
       signal: this.events.signal,
     });
     this.state.start();
+  }
+
+  /** @param {string} imageUid */
+  async refresh(imageUid) {
+    if (!this.currentState) return;
+    await this.#load(this.currentState);
+    await this.selectImage(imageUid);
   }
 
   /** @param {string} imageUid */
@@ -72,6 +82,7 @@ export class TopWorstController {
     this.activeScopes.dispose();
     this.grid.dispose();
     this.pagination.dispose();
+    this.inspector.dispose();
     this.viewer.dispose();
     this.rails.dispose();
     this.state.dispose();
