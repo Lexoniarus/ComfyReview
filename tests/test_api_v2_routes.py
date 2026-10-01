@@ -14,12 +14,20 @@ from comfyreview.application import (
     ArenaResult,
     CurationResult,
     GenerationSettings,
+    GenerationSubmission,
     ImageClassification,
     ImageContext,
     ImageContextNotFoundError,
     ImagePage,
     ImageScope,
+    PlaygroundDraft,
+    PlaygroundSubmissionBatch,
+    PlaygroundSubmissionFailure,
+    PromptComponent,
+    PromptRevision,
+    PromptSelection,
     PromptSnapshot,
+    RenderedPrompt,
     ReviewResult,
     ReviewSummary,
     ScopeFacet,
@@ -108,6 +116,83 @@ class _Arena:
     def record_decision(self, command):
         self.command = command
         return ArenaResult("match-1", command.left_image_uid, 10, 4)
+
+
+def _prompt_component(
+    uid: str = "character-a",
+    kind: str = "character",
+) -> PromptComponent:
+    return PromptComponent(
+        component_uid=uid,
+        kind=kind,
+        component_key=f"{uid}-key",
+        name="Aiko" if kind == "character" else uid,
+        tags=("anime",),
+        notes="note",
+        archived=False,
+        latest_revision=PromptRevision(
+            f"revision-{uid}", 1, f"positive {uid}", "negative", "hash"
+        ),
+    )
+
+
+class _PromptCatalog:
+    def list_components(self, *, include_archived=False):
+        assert include_archived is False
+        return (_prompt_component(), _prompt_component("scene-a", "scene"))
+
+    def get_component(self, component_uid):
+        if component_uid == "missing":
+            raise KeyError("missing")
+        return _prompt_component(component_uid)
+
+
+class _Playground:
+    command = None
+    overrides = None
+
+    def prepare_draft(self, command, *, overrides=None):
+        self.command = command
+        self.overrides = overrides
+        return PlaygroundDraft(
+            PromptSelection(
+                (_prompt_component(), _prompt_component("scene-a", "scene"))
+            ),
+            RenderedPrompt(
+                overrides.positive_text
+                if overrides and overrides.positive_text is not None
+                else "rendered positive",
+                "rendered negative",
+                "notes",
+                ("revision-character-a", "revision-scene-a"),
+                overrides is not None,
+            ),
+        )
+
+
+class _PlaygroundSubmission:
+    draft = None
+    fail = False
+
+    def submit(self, drafts):
+        self.draft = drafts[0]
+        if self.fail:
+            return PlaygroundSubmissionBatch(
+                (), (PlaygroundSubmissionFailure("draft-1", "submit failed"),)
+            )
+        return PlaygroundSubmissionBatch(
+            (GenerationSubmission("generation-1", "submitted", "prompt-1"),),
+            (),
+        )
+
+
+class _PlaygroundDiscovery:
+    def discover(self):
+        return SimpleNamespace(
+            checkpoints=["model.safetensors"],
+            samplers=["euler"],
+            schedulers=["normal"],
+        )
 
 
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
@@ -239,6 +324,163 @@ def test_v2_mutations_submit_only_stable_image_identities() -> None:
     assert container.arena_service.command.right_image_uid == "image-2"
 
 
+def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
+    client, _container = _client()
+
+    catalog = client.get("/api/v2/catalog/components")
+    capabilities = client.get("/api/v2/playground/capabilities")
+
+    assert catalog.status_code == 200
+    assert catalog.json()["components"][0]["component_uid"] == "character-a"
+    assert catalog.json()["components"][0]["latest_revision"] == {
+        "revision_uid": "revision-character-a",
+        "revision_number": 1,
+        "positive_text": "positive character-a",
+        "negative_text": "negative",
+    }
+    assert capabilities.json() == {
+        "checkpoints": ["model.safetensors"],
+        "samplers": ["euler"],
+        "schedulers": ["normal"],
+    }
+
+
+def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
+    client, container = _client()
+    selections = [
+        {"kind": "character", "mode": "fixed", "component_uid": "character-a"},
+        {"kind": "scene", "mode": "fixed", "component_uid": "scene-a"},
+        {"kind": "outfit", "mode": "random"},
+        {"kind": "pose", "mode": "off"},
+        {"kind": "expression", "mode": "random"},
+        {"kind": "lighting", "mode": "off"},
+        {"kind": "modifier", "mode": "random"},
+    ]
+
+    response = client.post(
+        "/api/v2/playground/drafts",
+        json={
+            "selections": selections,
+            "seed": 17,
+            "positive_override": "draft positive",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["positive_prompt"] == "draft positive"
+    assert response.json()["revision_uids"] == [
+        "revision-character-a",
+        "revision-scene-a",
+    ]
+    assert container.playground_service.command.character_component_uid == (
+        "character-a"
+    )
+    assert container.playground_service.command.disabled_kinds == (
+        "pose",
+        "lighting",
+    )
+
+
+def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
+    None
+):
+    client, _container = _client()
+
+    incomplete = client.post(
+        "/api/v2/playground/drafts",
+        json={"selections": [{"kind": "character", "mode": "random"}]},
+    )
+    selections = [
+        {"kind": kind, "mode": "off"}
+        for kind in (
+            "character",
+            "scene",
+            "outfit",
+            "pose",
+            "expression",
+            "lighting",
+            "modifier",
+        )
+    ]
+    disabled = client.post(
+        "/api/v2/playground/drafts", json={"selections": selections}
+    )
+
+    assert incomplete.status_code == 400
+    assert incomplete.json()["error"]["code"] == (
+        "invalid_playground_selection"
+    )
+    assert disabled.status_code == 400
+
+
+def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() -> (
+    None
+):
+    client, container = _client()
+    payload = {
+        "draft_uid": "draft-1",
+        "character_component_uid": "character-a",
+        "positive_prompt": "edited positive",
+        "negative_prompt": "edited negative",
+        "revision_uids": ["revision-character-a"],
+        "draft_overridden": True,
+        "checkpoint": "model.safetensors",
+        "sampler": {
+            "seed": 42,
+            "steps": 24,
+            "cfg": 6.5,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "denoise": 1.0,
+        },
+    }
+
+    response = client.post("/api/v2/generations", json=payload)
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "generation_uid": "generation-1",
+        "status": "submitted",
+        "prompt_id": "prompt-1",
+    }
+    draft = container.playground_submission_service.draft
+    assert draft.prompt.positive_text == "edited positive"
+    assert draft.prompt.revision_uids == ("revision-character-a",)
+    assert draft.output_subdirectory == "playground/character-a-key"
+
+
+def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
+    None
+):
+    client, container = _client()
+    payload = {
+        "draft_uid": "draft-1",
+        "character_component_uid": "missing",
+        "positive_prompt": "positive",
+        "negative_prompt": "negative",
+        "revision_uids": ["revision-character-a"],
+        "checkpoint": "model.safetensors",
+        "sampler": {
+            "seed": 42,
+            "steps": 24,
+            "cfg": 6.5,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "denoise": 1.0,
+        },
+    }
+
+    invalid = client.post("/api/v2/generations", json=payload)
+    payload["character_component_uid"] = "character-a"
+    container.playground_submission_service.fail = True
+    failed = client.post("/api/v2/generations", json=payload)
+
+    assert invalid.status_code == 400
+    assert invalid.json()["error"]["code"] == "invalid_generation"
+    assert failed.status_code == 500
+    assert failed.json()["error"]["code"] == "generation_failed"
+
+
 def _client() -> tuple[TestClient, SimpleNamespace]:
     container = SimpleNamespace(
         settings=SimpleNamespace(minimum_runs=2, pool_limit=128),
@@ -249,6 +491,10 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         review_service=_Reviews(),
         curation_service=_Curation(),
         arena_service=_Arena(),
+        prompt_catalog_service=_PromptCatalog(),
+        playground_service=_Playground(),
+        playground_submission_service=_PlaygroundSubmission(),
+        playground_discovery=_PlaygroundDiscovery(),
     )
     application = FastAPI()
     application.state.container = container

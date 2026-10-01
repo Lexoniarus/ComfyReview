@@ -105,6 +105,75 @@ def test_prompt_selection_policy_selects_reproducible_compatible_revisions() -> 
     assert first.components[-1].component_uid == "modifier-a"
 
 
+def test_prompt_selection_policy_supports_random_character_and_disabled_kinds() -> (
+    None
+):
+    command = PromptSelectionCommand(
+        character_component_uid="",
+        disabled_kinds=("outfit", "lighting", "modifier"),
+        seed=9,
+    )
+
+    selection = PromptSelectionPolicy().select(_catalog(), command)
+
+    assert tuple(component.kind for component in selection.components) == (
+        "character",
+        "scene",
+        "pose",
+        "expression",
+    )
+    assert selection.components[0].component_uid == "character-a"
+
+
+@pytest.mark.parametrize(
+    ("command", "message"),
+    (
+        (
+            PromptSelectionCommand(
+                "character-a",
+                disabled_kinds=("character",),
+            ),
+            "character selection cannot be disabled",
+        ),
+        (
+            PromptSelectionCommand(
+                "character-a",
+                disabled_kinds=("unknown",),
+            ),
+            "unsupported disabled prompt kind",
+        ),
+        (
+            PromptSelectionCommand(
+                "character-a",
+                manual_selections=(
+                    ManualPromptSelection("scene", "scene-night"),
+                ),
+                disabled_kinds=("scene",),
+            ),
+            "disabled prompt kinds cannot have manual selections",
+        ),
+    ),
+)
+def test_prompt_selection_policy_rejects_invalid_disabled_kinds(
+    command: PromptSelectionCommand,
+    message: str,
+) -> None:
+    with pytest.raises(PromptSelectionError, match=message):
+        PromptSelectionPolicy().select(_catalog(), command)
+
+
+def test_prompt_selection_policy_requires_an_active_character() -> None:
+    catalog = tuple(
+        component for component in _catalog() if component.kind != "character"
+    )
+
+    with pytest.raises(PromptSelectionError, match="no active character"):
+        PromptSelectionPolicy().select(
+            catalog,
+            PromptSelectionCommand("", seed=1),
+        )
+
+
 @pytest.mark.parametrize(
     ("command", "message"),
     (

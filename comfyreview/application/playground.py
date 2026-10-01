@@ -99,6 +99,7 @@ class PromptSelectionCommand:
 
     character_component_uid: str
     manual_selections: tuple[ManualPromptSelection, ...] = ()
+    disabled_kinds: tuple[str, ...] = ()
     include_lighting: bool = True
     include_modifier: bool = True
     seed: int | None = None
@@ -153,22 +154,26 @@ class PromptSelectionPolicy:
         catalog = {
             component.component_uid: component for component in components
         }
-        character = self._required_component(
-            catalog,
-            command.character_component_uid,
-            "character",
-        )
         manual = self._manual_components(catalog, command.manual_selections)
+        disabled = self._disabled_kinds(command)
+        if any(kind in disabled for kind in manual):
+            raise PromptSelectionError(
+                "disabled prompt kinds cannot have manual selections"
+            )
         candidates = self._candidates_by_kind(components)
         rng = random.Random(command.seed)
         for _attempt in range(command.max_attempts):
+            character = self._character_component(
+                catalog,
+                candidates,
+                command.character_component_uid,
+                rng,
+            )
             selected = [character]
             active_tags = self._effective_tags(character)
             complete = True
             for kind in _SELECTION_ORDER[1:]:
-                if kind == "lighting" and not command.include_lighting:
-                    continue
-                if kind == "modifier" and not command.include_modifier:
+                if kind in disabled:
                     continue
                 component = manual.get(kind)
                 if component is None:
@@ -188,6 +193,42 @@ class PromptSelectionPolicy:
         raise PromptSelectionError(
             "no compatible prompt selection within max_attempts"
         )
+
+    @staticmethod
+    def _disabled_kinds(command: PromptSelectionCommand) -> set[str]:
+        disabled = {str(kind or "").strip() for kind in command.disabled_kinds}
+        if "character" in disabled:
+            raise PromptSelectionError(
+                "character selection cannot be disabled"
+            )
+        unknown = disabled - set(_SELECTION_ORDER)
+        if unknown:
+            raise PromptSelectionError(
+                f"unsupported disabled prompt kind: {sorted(unknown)[0]}"
+            )
+        if not command.include_lighting:
+            disabled.add("lighting")
+        if not command.include_modifier:
+            disabled.add("modifier")
+        return disabled
+
+    def _character_component(
+        self,
+        catalog: dict[str, PromptComponent],
+        candidates: dict[str, tuple[PromptComponent, ...]],
+        component_uid: str,
+        rng: random.Random,
+    ) -> PromptComponent:
+        if str(component_uid or "").strip():
+            return self._required_component(
+                catalog,
+                component_uid,
+                "character",
+            )
+        available = candidates.get("character", ())
+        if not available:
+            raise PromptSelectionError("no active character components")
+        return rng.choice(available)
 
     def _manual_components(
         self,
