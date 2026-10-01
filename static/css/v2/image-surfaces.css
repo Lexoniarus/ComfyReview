@@ -329,6 +329,23 @@
   border-radius: var(--radius-media);
 }
 
+.inspector-section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 0.0625rem solid var(--color-border);
+}
+
+.inspector-context {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.inspector-section h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-body);
+}
+
 .inspector-detail {
   display: grid;
   grid-template-columns: 5.5rem minmax(0, 1fr);
@@ -350,14 +367,7 @@
 }
 
 .inspector-curation {
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 0.0625rem solid var(--color-border);
-}
-
-.inspector-curation h3 {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-body);
+  padding-bottom: var(--space-2);
 }
 
 .inspector-curation-controls {
@@ -383,12 +393,62 @@
   display: none;
 }
 
-.ranking-inspector details {
-  margin-top: var(--space-4);
+.inspector-compact-facts {
+  display: grid;
+  grid-template-columns: minmax(4.75rem, auto) minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-caption);
 }
 
-.ranking-inspector details p {
+.inspector-compact-facts dt {
+  color: var(--color-text-muted);
+}
+
+.inspector-compact-facts dd {
+  margin: 0;
   overflow-wrap: anywhere;
+}
+
+.inspector-empty,
+.inspector-inline-status {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.inspector-prompts details {
+  margin-top: var(--space-2);
+}
+
+.inspector-prompts details p {
+  max-height: 12rem;
+  margin: var(--space-2) 0 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-caption);
+  line-height: 1.55;
+}
+
+.inspector-review-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inspector-review-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-size-caption);
+}
+
+.inspector-review-list time {
+  color: var(--color-text-muted);
+  text-align: right;
 }
 
 .image-viewer {

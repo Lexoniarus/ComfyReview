@@ -9,7 +9,14 @@ static/js/catalog/catalog-editor.js
 static/js/arena/arena-board.js
 static/js/arena/arena-keyboard.js
 static/js/images/pagination-controls.js
+static/js/inspector/context-view.js
+static/js/inspector/curation-view.js
+static/js/inspector/generation-view.js
 static/js/inspector/image-inspector.js
+static/js/inspector/image-inspector-controller.js
+static/js/inspector/prompt-view.js
+static/js/inspector/reviews-view.js
+static/js/inspector/workflow-view.js
 static/js/layout/responsive-rails.js
 static/js/review/review-keyboard.js
 static/js/review/review-stage.js

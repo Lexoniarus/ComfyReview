@@ -5,6 +5,7 @@ import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { ImageCurationController } from "../curation/image-curation-controller.js";
 import { ImageViewer } from "../images/image-viewer.js";
 import { ImageInspector } from "../inspector/image-inspector.js";
+import { ImageInspectorController } from "../inspector/image-inspector-controller.js";
 import { ResponsiveRails } from "../layout/responsive-rails.js";
 import { ActiveScopeChips } from "../scopes/active-scope-chips.js";
 import { ScopeNavigator } from "../scopes/scope-navigator.js";
@@ -34,8 +35,13 @@ if (root instanceof HTMLElement) {
     /** @type {ImageCurationController | null} */
     let curation = null;
     const api = new ApiClient();
-    const inspector = new ImageInspector(inspectorRoot, {
+    const inspectorView = new ImageInspector(inspectorRoot, {
       onCuration: (imageUid, setKey) => void curation?.assign(imageUid, setKey),
+    });
+    const inspector = new ImageInspectorController({
+      api,
+      view: inspectorView,
+      requests: new RequestLifecycle(),
     });
     const navigator = new ScopeNavigator(scopeRoot, {
       onToggle: (uid) => {
@@ -83,7 +89,7 @@ if (root instanceof HTMLElement) {
     });
     curation = new ImageCurationController({
       api,
-      inspector,
+      inspector: inspectorView,
       requests: new RequestLifecycle(),
       onAssigned: (imageUid) =>
         controller?.refresh(imageUid) || Promise.resolve(),
