@@ -22,6 +22,7 @@ export default [
     languageOptions: {
       ecmaVersion: 2024,
       globals: {
+        ...globals.browser,
         ...globals.node,
       },
       sourceType: "module",

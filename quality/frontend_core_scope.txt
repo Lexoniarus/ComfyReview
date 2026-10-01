@@ -2,3 +2,5 @@
 static/js/core/api-error.js
 static/js/core/api-client.js
 static/js/core/request-lifecycle.js
+static/js/scopes/url-state.js
+static/js/scopes/scope-state-controller.js
