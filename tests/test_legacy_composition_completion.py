@@ -305,6 +305,69 @@ def test_composition_audit_imports_only_unique_renderer_exact_matches(
     assert repeated.already_exact == 1
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="variable historical compositions are not implemented yet",
+)
+def test_composition_audit_accepts_variable_ordered_memberships(
+    tmp_path: Path,
+) -> None:
+    source, canonical, report = _prepare_completion_paths(tmp_path)
+    _insert_generation(
+        canonical,
+        "generation-variable",
+        positive_text="hero, rooftop",
+        negative_text="crowd, indoors",
+    )
+
+    result = LegacyCompositionAuditor(
+        source_database_path=source,
+        canonical_database_path=canonical,
+    ).audit(report)
+
+    assert result.summary["exactly_reconstructable"] == 1
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["format_version"] == 2
+    assert payload["items"][0]["classification"] == "exactly_reconstructable"
+    assert [
+        membership["slot"] for membership in payload["items"][0]["memberships"]
+    ] == ["character", "scene"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="historical draft overrides are not implemented yet",
+)
+def test_composition_audit_retains_unique_memberships_with_draft_override(
+    tmp_path: Path,
+) -> None:
+    source, canonical, report = _prepare_completion_paths(tmp_path)
+    _insert_generation(
+        canonical,
+        "generation-override",
+        positive_text="hero, handwritten emphasis, rooftop",
+        negative_text="crowd, indoors, custom exclusion",
+    )
+
+    result = LegacyCompositionAuditor(
+        source_database_path=source,
+        canonical_database_path=canonical,
+    ).audit(report)
+
+    assert result.summary["reconstructable_with_draft_override"] == 1
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    [item] = payload["items"]
+    assert item["classification"] == "reconstructable_with_draft_override"
+    assert item["reason"] == "unique_memberships_with_draft_override"
+    assert item["draft_override"] is True
+    assert "positive_text" not in json.dumps(item)
+    assert "negative_text" not in json.dumps(item)
+    assert [membership["slot"] for membership in item["memberships"]] == [
+        "character",
+        "scene",
+    ]
+
+
 def test_composition_audit_reports_ambiguity_without_guessing(
     tmp_path: Path,
 ) -> None:
