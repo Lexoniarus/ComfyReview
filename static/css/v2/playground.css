@@ -156,22 +156,6 @@
   font-weight: 750;
 }
 
-.primary-button {
-  min-height: 2.65rem;
-  padding: 0.55rem 0.85rem;
-  border: 0;
-  border-radius: var(--radius-control);
-  color: #fff;
-  background: var(--color-accent-strong);
-  cursor: pointer;
-  font-weight: 750;
-}
-
-.primary-button:disabled {
-  cursor: wait;
-  opacity: 0.48;
-}
-
 .draft-memberships {
   display: flex;
   flex-wrap: wrap;

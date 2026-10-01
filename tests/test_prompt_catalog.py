@@ -160,6 +160,11 @@ class _CatalogRepository:
         self.include_archived = include_archived
         return () if self.component is None else (self.component,)
 
+    def list_revisions(self, component_uid: str) -> tuple[PromptRevision, ...]:
+        assert self.component is not None
+        assert component_uid == self.component.component_uid
+        return (self.component.latest_revision,)
+
 
 def _service() -> tuple[PromptCatalogService, _CatalogRepository]:
     repository = _CatalogRepository()
@@ -357,14 +362,18 @@ def test_prompt_catalog_service_archives_restores_and_lists() -> None:
     archived = service.set_archived(component.component_uid, archived=True)
     restored = service.set_archived(component.component_uid, archived=False)
     listed = service.list_components(include_archived=True)
+    revisions = service.list_revisions(component.component_uid)
 
     assert archived.archived is True
     assert restored.archived is False
     assert listed == (restored,)
+    assert revisions == (restored.latest_revision,)
     assert repository.include_archived is True
 
     with pytest.raises(PromptCatalogValidationError, match="component_uid"):
         service.set_archived("", archived=True)
+    with pytest.raises(PromptCatalogValidationError, match="component_uid"):
+        service.list_revisions("")
 
 
 def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
@@ -408,6 +417,12 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
     assert service.list_components() == ()
     [archived] = service.list_components(include_archived=True)
     assert archived.archived is True
+    assert service.list_revisions(created.component_uid) == (
+        created.latest_revision,
+        revision,
+    )
+    with pytest.raises(KeyError, match="Unknown prompt component"):
+        service.list_revisions("missing")
     assert archived.name == "Rainy Rooftop"
     updated = service.update_component(
         UpdatePromptComponentCommand(

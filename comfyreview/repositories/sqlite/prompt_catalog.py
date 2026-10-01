@@ -294,6 +294,35 @@ class SqlitePromptCatalogRepository:
         finally:
             connection.close()
 
+    def list_revisions(
+        self,
+        component_uid: str,
+    ) -> tuple[PromptRevision, ...]:
+        """Read every immutable revision for one component."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                """
+                SELECT
+                    revision.revision_uid,
+                    revision.revision_number,
+                    revision.positive_text,
+                    revision.negative_text,
+                    revision.content_hash
+                FROM prompt_revisions AS revision
+                JOIN prompt_components AS component
+                    ON component.id = revision.component_id
+                WHERE component.component_uid = ?
+                ORDER BY revision.revision_number
+                """,
+                (component_uid,),
+            ).fetchall()
+            if not rows:
+                raise KeyError(f"Unknown prompt component: {component_uid}")
+            return tuple(self._revision(row) for row in rows)
+        finally:
+            connection.close()
+
     @staticmethod
     def _insert_revision(
         connection: sqlite3.Connection,

@@ -174,6 +174,13 @@ class PromptCatalogRepository(Protocol):
         """Return catalog components with their latest revisions."""
         ...
 
+    def list_revisions(
+        self,
+        component_uid: str,
+    ) -> tuple[PromptRevision, ...]:
+        """Return every immutable revision in ascending order."""
+        ...
+
 
 def prompt_revision_identity(
     component_uid: str,
@@ -375,6 +382,15 @@ class PromptCatalogService:
         """List active components, optionally including archived entries."""
         return self._repository.list_components(
             include_archived=include_archived
+        )
+
+    def list_revisions(
+        self,
+        component_uid: str,
+    ) -> tuple[PromptRevision, ...]:
+        """List immutable revisions for one stable component identity."""
+        return self._repository.list_revisions(
+            self._required(component_uid, "component_uid")
         )
 
     @staticmethod

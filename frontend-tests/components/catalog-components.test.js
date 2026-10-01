@@ -1,0 +1,94 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { CatalogBrowser } from "../../static/js/catalog/catalog-browser.js";
+import { CatalogEditor } from "../../static/js/catalog/catalog-editor.js";
+
+const components = [
+  component("character-a", "character", "Aiko", false, ["hero"]),
+  component("scene-a", "scene", "Rainy Street", true, ["rain"]),
+];
+
+describe("Catalog browser components", () => {
+  beforeEach(() => document.body.replaceChildren());
+
+  it("filters searchable catalog entries and owns selection listeners", () => {
+    const kinds = document.createElement("nav");
+    const list = document.createElement("div");
+    const search = document.createElement("input");
+    const onSelect = vi.fn();
+    const browser = new CatalogBrowser(kinds, list, search, { onSelect });
+
+    browser.render(components);
+    expect(list.querySelectorAll(".catalog-item")).toHaveLength(2);
+    kinds.querySelectorAll("button")[2].click();
+    expect(list.querySelectorAll(".catalog-item")).toHaveLength(1);
+    list.querySelector("button").click();
+    expect(onSelect).toHaveBeenCalledWith("scene-a");
+
+    browser.select("scene-a");
+    expect(list.querySelector("button").getAttribute("aria-current")).toBe(
+      "true",
+    );
+    search.value = "nicht vorhanden";
+    search.dispatchEvent(new Event("input"));
+    expect(list.textContent).toContain("Keine Einträge");
+    browser.dispose();
+  });
+
+  it("creates, edits, archives and renders immutable history", () => {
+    const root = document.createElement("div");
+    const onSave = vi.fn();
+    const onArchive = vi.fn();
+    const editor = new CatalogEditor(root, { onSave, onArchive });
+
+    editor.create();
+    const createInputs = root.querySelectorAll("input");
+    createInputs[0].value = "Neue Szene";
+    createInputs[1].value = "rain, night";
+    root.querySelectorAll("textarea")[1].value = "rainy street";
+    root
+      .querySelector("form")
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "scene",
+        name: "Neue Szene",
+        tags: ["rain", "night"],
+        positive_text: "rainy street",
+      }),
+    );
+
+    editor.render(components[1], [revision(1), revision(2)]);
+    expect(root.querySelectorAll(".catalog-revision")).toHaveLength(2);
+    expect(root.querySelector("select").disabled).toBe(true);
+    root.querySelector(".archive-button").click();
+    expect(onArchive).toHaveBeenCalledWith(false);
+    editor.setBusy(true);
+    expect(root.querySelector("input").disabled).toBe(true);
+    editor.setBusy(false);
+    expect(root.querySelector("select").disabled).toBe(true);
+    editor.dispose();
+  });
+});
+
+function component(componentUid, kind, name, archived, tags) {
+  return {
+    component_uid: componentUid,
+    component_key: `${kind}-key`,
+    kind,
+    name,
+    tags,
+    notes: "notes",
+    archived,
+    latest_revision: revision(2),
+  };
+}
+
+function revision(number) {
+  return {
+    revision_uid: `revision-${number}`,
+    revision_number: number,
+    positive_text: `positive ${number}`,
+    negative_text: "",
+  };
+}

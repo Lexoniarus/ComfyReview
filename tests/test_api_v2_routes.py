@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -137,14 +138,56 @@ def _prompt_component(
 
 
 class _PromptCatalog:
+    def __init__(self) -> None:
+        self.component = _prompt_component()
+
     def list_components(self, *, include_archived=False):
-        assert include_archived is False
-        return (_prompt_component(), _prompt_component("scene-a", "scene"))
+        return (
+            self.component,
+            _prompt_component("scene-a", "scene"),
+        )
 
     def get_component(self, component_uid):
         if component_uid == "missing":
             raise KeyError("missing")
+        if component_uid == self.component.component_uid:
+            return self.component
         return _prompt_component(component_uid)
+
+    def list_revisions(self, component_uid):
+        component = self.get_component(component_uid)
+        return (component.latest_revision,)
+
+    def create_component(self, command):
+        self.component = _prompt_component("created", command.kind)
+        return replace(
+            self.component,
+            name=command.name,
+            tags=command.tags,
+            notes=command.notes,
+        )
+
+    def update_component(self, command):
+        self.component = replace(
+            self.get_component(command.component_uid),
+            name=command.name,
+            tags=command.tags,
+            notes=command.notes,
+            latest_revision=PromptRevision(
+                "revision-updated",
+                2,
+                command.positive_text,
+                command.negative_text,
+                "updated-hash",
+            ),
+        )
+        return self.component
+
+    def set_archived(self, component_uid, *, archived):
+        self.component = replace(
+            self.get_component(component_uid), archived=archived
+        )
+        return self.component
 
 
 class _Playground:
@@ -367,6 +410,72 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
             "denoise": 1.0,
         },
     }
+
+
+def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
+    None
+):
+    client, _container = _client()
+
+    detail = client.get("/api/v2/catalog/components/character-a")
+    revisions = client.get("/api/v2/catalog/components/character-a/revisions")
+    created = client.post(
+        "/api/v2/catalog/components",
+        json={
+            "kind": "scene",
+            "name": "Rainy street",
+            "tags": ["rain"],
+            "notes": "note",
+            "positive_text": "rainy street",
+            "negative_text": "sun",
+        },
+    )
+    updated = client.put(
+        "/api/v2/catalog/components/created",
+        json={
+            "kind": "scene",
+            "name": "Rainy street night",
+            "tags": ["rain", "night"],
+            "positive_text": "rainy street at night",
+            "negative_text": "sun",
+        },
+    )
+    archived = client.patch(
+        "/api/v2/catalog/components/created", json={"archived": True}
+    )
+
+    assert detail.status_code == 200
+    assert revisions.json()["revisions"][0]["revision_uid"] == (
+        "revision-character-a"
+    )
+    assert created.status_code == 201
+    assert created.json()["name"] == "Rainy street"
+    assert updated.json()["latest_revision"]["revision_number"] == 2
+    assert archived.json()["archived"] is True
+
+
+def test_v2_catalog_rejects_missing_components_and_kind_changes() -> None:
+    client, _container = _client()
+    payload = {
+        "kind": "scene",
+        "name": "Scene",
+        "positive_text": "scene",
+    }
+
+    missing = client.get("/api/v2/catalog/components/missing")
+    missing_revisions = client.get(
+        "/api/v2/catalog/components/missing/revisions"
+    )
+    invalid_kind = client.put(
+        "/api/v2/catalog/components/character-a", json=payload
+    )
+
+    assert missing.status_code == 404
+    assert missing_revisions.status_code == 404
+    assert invalid_kind.status_code == 400
+    assert invalid_kind.json()["error"]["code"] == (
+        "invalid_catalog_component"
+    )
 
 
 def test_v2_playground_draft_preserves_modes_and_overrides() -> None:

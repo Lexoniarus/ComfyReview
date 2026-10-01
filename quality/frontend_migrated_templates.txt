@@ -2,5 +2,6 @@
 templates/_v2_base.html
 templates/arena.html
 templates/playground_generator.html
+templates/playground.html
 templates/index.html
 templates/top_pictures.html

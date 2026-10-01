@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from routers.arena_router import router as arena_router
 from routers.index_router import router as review_router
+from routers.playground.browse import router as playground_catalog_router
 from routers.playground.generator import router as playground_generator_router
 from routers.top_router import router as top_router
 from templates import ARENA_HTML, INDEX_HTML, TOP_PICTURES_HTML
@@ -83,3 +84,17 @@ def test_playground_generator_url_renders_the_canonical_v2_shell() -> None:
     assert "/static/css/v2/playground.css" in response.text
     assert "/api/v2" not in response.text
     assert "inline" not in response.text.casefold()
+
+
+def test_catalog_url_renders_the_revisioned_v2_shell() -> None:
+    application = FastAPI()
+    application.include_router(playground_catalog_router)
+
+    response = TestClient(application).get("/playground/browse")
+
+    assert response.status_code == 200
+    assert 'data-v2-surface="catalog"' in response.text
+    assert "/static/js/entries/catalog.js" in response.text
+    assert "/static/css/v2/catalog.css" in response.text
+    assert "/api/v2" not in response.text
+    assert "<style" not in response.text

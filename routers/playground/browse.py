@@ -24,15 +24,12 @@ def playground_browse(
     kind: str = "",
     q: str = "",
 ):
-    """Render canonical prompt components and immutable latest revisions."""
-    rows = get_application_container(request).prompt_catalog_views.list_items(
-        kind=kind,
-        query=q,
-    )
+    """Render the API-backed canonical catalog shell."""
+    del kind, q
     return templates.TemplateResponse(
         request=request,
         name="playground.html",
-        context={"request": request, "rows": rows, "kind": kind, "q": q},
+        context={"request": request},
     )
 
 
