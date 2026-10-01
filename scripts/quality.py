@@ -21,6 +21,7 @@ TARGETED_CONTRACT_TESTS = (
     "tests/test_architecture.py",
     "tests/test_function_test_manifest.py",
 )
+FRONTEND_MANIFEST_PATH = ROOT / "package.json"
 
 
 class QualityError(RuntimeError):
@@ -465,6 +466,20 @@ def run_targeted_pytest(requested: Sequence[str]) -> None:
         raise QualityError("targeted pytest failed")
 
 
+def run_frontend_quality() -> None:
+    """Run the pinned browser-code quality and coverage gate."""
+    if not FRONTEND_MANIFEST_PATH.is_file():
+        return
+    executable = "npm.cmd" if os.name == "nt" else "npm"
+    result = subprocess.run(
+        [executable, "run", "quality"],
+        cwd=ROOT,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise QualityError("frontend quality gate failed")
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse quality-gate command-line options."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -515,6 +530,7 @@ def main() -> int:
             if changed_files:
                 diagnostics = collect_diagnostics(changed_files)
                 validate_strict_files(diagnostics, changed_files)
+            run_frontend_quality()
             run_targeted_pytest(arguments.tests)
             print("targeted quality gate passed")
             return 0
@@ -534,6 +550,7 @@ def main() -> int:
             current_files - legacy_files
         ) | list_changed_python_files(base_commit)
         validate_strict_files(diagnostics, strict_files)
+        run_frontend_quality()
         run_pytest()
     except (OSError, ValueError, QualityError, json.JSONDecodeError) as error:
         print(f"quality gate failed: {error}", file=sys.stderr)
