@@ -77,6 +77,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_normalizes_canonical_queries"
     ),
+    "comfyreview.application.reviews:ReviewHistoryService.list_for_image": (
+        "tests/test_review_service.py::"
+        "test_review_history_service_validates_identity_and_reports_missing"
+    ),
     "comfyreview.application.analytics:AnalyticsService.token_statistics_for": (
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_normalizes_selected_tokens_and_matches"

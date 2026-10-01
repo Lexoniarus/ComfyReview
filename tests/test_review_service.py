@@ -10,6 +10,9 @@ import pytest
 from comfyreview.application import (
     OutputImageReference,
     OutputPair,
+    ReviewHistoryEntry,
+    ReviewHistoryNotFoundError,
+    ReviewHistoryService,
     ReviewImage,
     ReviewMutationError,
     ReviewRecord,
@@ -19,6 +22,18 @@ from comfyreview.application import (
     StoredReview,
     SubmitReviewCommand,
 )
+
+
+class _HistoryRepository:
+    def __init__(self, entries: tuple[ReviewHistoryEntry, ...] | None) -> None:
+        self.entries = entries
+        self.image_uid = ""
+
+    def list_for_image(
+        self, image_uid: str
+    ) -> tuple[ReviewHistoryEntry, ...] | None:
+        self.image_uid = image_uid
+        return self.entries
 
 
 @dataclass
@@ -262,3 +277,20 @@ def test_review_service_accepts_sidecarless_canonical_image() -> None:
 
     assert result.deleted is False
     assert fixture.scenario.events == ["resolve", "review_append"]
+
+
+def test_review_history_service_validates_identity_and_reports_missing() -> (
+    None
+):
+    entry = ReviewHistoryEntry("event-1", "rating", 9, 3, "2026-01-01")
+    repository = _HistoryRepository((entry,))
+    service = ReviewHistoryService(repository)
+
+    assert service.list_for_image(" image-1 ") == (entry,)
+    assert repository.image_uid == "image-1"
+    with pytest.raises(ReviewValidationError, match="image_uid is required"):
+        service.list_for_image(" ")
+
+    repository.entries = None
+    with pytest.raises(ReviewHistoryNotFoundError, match="unknown canonical"):
+        service.list_for_image("missing")

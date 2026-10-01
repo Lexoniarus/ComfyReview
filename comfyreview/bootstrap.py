@@ -31,6 +31,7 @@ from comfyreview.application import (
     PromptRenderer,
     PromptSelectionPolicy,
     ReviewCandidateService,
+    ReviewHistoryService,
     ReviewService,
     ScopeFacetService,
     WorkflowCompiler,
@@ -69,6 +70,7 @@ from comfyreview.repositories.sqlite import (
     SqliteOutputImageRepository,
     SqlitePromptCatalogRepository,
     SqliteReviewCandidateRepository,
+    SqliteReviewHistoryRepository,
     SqliteReviewRepository,
     SqliteScopeFacetRepository,
 )
@@ -114,6 +116,7 @@ class ApplicationContainer:
     playground_submission_service: PlaygroundSubmissionService
     workflow_defaults: WorkflowDefaultsService
     review_service: ReviewService
+    review_history: ReviewHistoryService
     arena_service: ArenaService
     curation_service: CurationService
 
@@ -273,6 +276,9 @@ def build_application_container(
         ),
         workflow_defaults=WorkflowDefaultsService(blueprints),
         review_service=review_service,
+        review_history=ReviewHistoryService(
+            SqliteReviewHistoryRepository(configured.canonical_database_path)
+        ),
         arena_service=ArenaService(
             images=image_contexts,
             repository=SqliteArenaRepository(

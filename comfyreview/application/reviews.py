@@ -16,6 +16,10 @@ class ReviewMutationError(RuntimeError):
     """Report a failed canonical review mutation."""
 
 
+class ReviewHistoryNotFoundError(LookupError):
+    """Report that no canonical image exists for a history query."""
+
+
 class InvalidOutputPathError(ValueError):
     """Reject a submitted path outside the configured output boundary."""
 
@@ -108,6 +112,17 @@ class ReviewResult:
     deleted: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ReviewHistoryEntry:
+    """Describe one immutable canonical review event."""
+
+    event_uid: str
+    event_type: str
+    rating: int | None
+    sequence: int
+    reviewed_at: str
+
+
 class ReviewImageResolver(Protocol):
     """Resolve client references into authoritative generation data."""
 
@@ -121,6 +136,16 @@ class ReviewRepository(Protocol):
 
     def append(self, record: ReviewRecord) -> StoredReview:
         """Apply one review mutation and return its canonical revision."""
+        ...
+
+
+class ReviewHistoryRepository(Protocol):
+    """Read append-only review history by canonical image identity."""
+
+    def list_for_image(
+        self, image_uid: str
+    ) -> tuple[ReviewHistoryEntry, ...] | None:
+        """Return ordered events or None when the image does not exist."""
         ...
 
 
@@ -225,3 +250,22 @@ class ReviewService:
                 "review.delete_rollback_failed",
                 extra={"error_category": "delete_rollback"},
             )
+
+
+class ReviewHistoryService:
+    """Expose canonical review history without mutation concerns."""
+
+    def __init__(self, repository: ReviewHistoryRepository) -> None:
+        self._repository = repository
+
+    def list_for_image(self, image_uid: str) -> tuple[ReviewHistoryEntry, ...]:
+        """Return review events for one validated canonical image UID."""
+        normalized_uid = str(image_uid or "").strip()
+        if not normalized_uid:
+            raise ReviewValidationError("image_uid is required")
+        entries = self._repository.list_for_image(normalized_uid)
+        if entries is None:
+            raise ReviewHistoryNotFoundError(
+                f"unknown canonical image: {normalized_uid}"
+            )
+        return entries

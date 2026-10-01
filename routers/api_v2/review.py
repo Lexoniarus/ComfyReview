@@ -12,6 +12,7 @@ from comfyreview.application import (
     InvalidOutputPathError,
     OutputImageReference,
     OutputPairNotFoundError,
+    ReviewHistoryNotFoundError,
     ReviewMutationError,
     ReviewValidationError,
     SubmitReviewCommand,
@@ -26,6 +27,33 @@ class ReviewRequest(BaseModel):
 
     image_uid: str
     rating: int
+
+
+@router.get("/images/{image_uid}/reviews")
+def review_history(request: Request, image_uid: str) -> JSONResponse:
+    """Return append-only canonical review events for one image."""
+    container = get_application_container(request)
+    try:
+        entries = container.review_history.list_for_image(image_uid)
+    except ReviewValidationError as error:
+        return error_response(400, "invalid_image_uid", str(error))
+    except ReviewHistoryNotFoundError as error:
+        return error_response(404, "image_not_found", str(error))
+    return JSONResponse(
+        {
+            "image_uid": image_uid,
+            "events": [
+                {
+                    "event_uid": entry.event_uid,
+                    "event_type": entry.event_type,
+                    "rating": entry.rating,
+                    "sequence": entry.sequence,
+                    "reviewed_at": entry.reviewed_at,
+                }
+                for entry in entries
+            ],
+        }
+    )
 
 
 @router.get("/review/candidate")

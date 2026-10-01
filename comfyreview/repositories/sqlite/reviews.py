@@ -7,10 +7,64 @@ from pathlib import Path
 from uuid import uuid4
 
 from comfyreview.application import (
+    ReviewHistoryEntry,
     ReviewRecord,
     StoredReview,
 )
-from comfyreview.repositories.sqlite.connection import connect_existing
+from comfyreview.repositories.sqlite.connection import (
+    connect_existing,
+    connect_read_only,
+)
+
+
+class SqliteReviewHistoryRepository:
+    """Read append-only review events from canonical SQLite facts."""
+
+    def __init__(self, database_path: Path) -> None:
+        self._database_path = Path(database_path)
+
+    def list_for_image(
+        self, image_uid: str
+    ) -> tuple[ReviewHistoryEntry, ...] | None:
+        """Return ordered review events or None for an unknown image."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            image = connection.execute(
+                "SELECT id FROM images WHERE image_uid = ?",
+                (image_uid,),
+            ).fetchone()
+            if image is None:
+                return None
+            rows = connection.execute(
+                """
+                SELECT
+                    event_uid,
+                    event_type,
+                    rating,
+                    sequence,
+                    COALESCE(source_created_at, created_at) AS reviewed_at
+                FROM review_events
+                WHERE image_id = ?
+                ORDER BY sequence DESC, id DESC
+                """,
+                (int(image["id"]),),
+            ).fetchall()
+            return tuple(
+                ReviewHistoryEntry(
+                    event_uid=str(row["event_uid"]),
+                    event_type=str(row["event_type"]),
+                    rating=(
+                        int(row["rating"])
+                        if row["rating"] is not None
+                        else None
+                    ),
+                    sequence=int(row["sequence"]),
+                    reviewed_at=str(row["reviewed_at"]),
+                )
+                for row in rows
+            )
+        finally:
+            connection.close()
 
 
 class SqliteReviewRepository:

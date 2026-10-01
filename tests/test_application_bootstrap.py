@@ -25,6 +25,7 @@ from comfyreview.application import (
     PlaygroundSubmissionService,
     PromptCatalogService,
     ReviewCandidateService,
+    ReviewHistoryService,
     ReviewResult,
     ReviewService,
     ScopeFacetService,
@@ -136,6 +137,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         ),
         workflow_defaults=cast(WorkflowDefaultsService, object()),
         review_service=cast(ReviewService, _RecordingReviewService()),
+        review_history=cast(ReviewHistoryService, object()),
         arena_service=ArenaService(
             images=cast(ImageContextQueryService, object()),
             repository=_EmptyArenaRepository(),

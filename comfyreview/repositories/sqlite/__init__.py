@@ -37,7 +37,10 @@ from comfyreview.repositories.sqlite.prompt_catalog import (
     SqlitePromptCatalogRepository,
 )
 from comfyreview.repositories.sqlite.ranking import SqliteRankingRepository
-from comfyreview.repositories.sqlite.reviews import SqliteReviewRepository
+from comfyreview.repositories.sqlite.reviews import (
+    SqliteReviewHistoryRepository,
+    SqliteReviewRepository,
+)
 
 __all__ = [
     "SqliteAnalyticsRepository",
@@ -56,6 +59,7 @@ __all__ = [
     "SqliteImageFileRepository",
     "SqliteRankingRepository",
     "SqliteReviewRepository",
+    "SqliteReviewHistoryRepository",
     "SqliteReviewCandidateRepository",
     "SqliteScopeFacetRepository",
     "connect_existing",

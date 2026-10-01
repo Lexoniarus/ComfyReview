@@ -97,6 +97,25 @@ class _Reviews:
         return ReviewResult(1, 7, command.delete)
 
 
+class _ReviewHistory:
+    def list_for_image(self, image_uid):
+        if image_uid == "missing":
+            from comfyreview.application import ReviewHistoryNotFoundError
+
+            raise ReviewHistoryNotFoundError(
+                "unknown canonical image: missing"
+            )
+        return (
+            SimpleNamespace(
+                event_uid="event-1",
+                event_type="rating",
+                rating=9,
+                sequence=7,
+                reviewed_at="2026-01-01 00:00:00",
+            ),
+        )
+
+
 class _Curation:
     command = None
 
@@ -441,6 +460,28 @@ def test_v2_image_context_has_url_but_never_exposes_local_path() -> None:
     assert response.json()["prompt_snapshot"]["positive"] == "positive"
     assert "png_path" not in response.text
     assert "json_path" not in response.text
+
+
+def test_v2_review_history_exposes_append_only_events() -> None:
+    client, _container = _client()
+
+    response = client.get("/api/v2/images/image-1/reviews")
+    missing = client.get("/api/v2/images/missing/reviews")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "image_uid": "image-1",
+        "events": [
+            {
+                "event_uid": "event-1",
+                "event_type": "rating",
+                "rating": 9,
+                "sequence": 7,
+                "reviewed_at": "2026-01-01 00:00:00",
+            }
+        ],
+    }
+    assert missing.status_code == 404
 
 
 def test_v2_errors_use_stable_envelope_and_request_trace() -> None:
@@ -859,6 +900,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         review_candidates=_Candidates(),
         image_responses=ImageResponseMapper(files=_Files(), urls=_Urls()),
         review_service=_Reviews(),
+        review_history=_ReviewHistory(),
         curation_service=_Curation(),
         arena_service=_Arena(),
         prompt_catalog_service=_PromptCatalog(),

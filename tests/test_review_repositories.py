@@ -5,17 +5,20 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 from pathlib import Path
+from unittest.mock import ANY
 
 import pytest
 
 from comfyreview.application import (
     OutputPair,
+    ReviewHistoryEntry,
     ReviewImage,
     ReviewRecord,
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
+    SqliteReviewHistoryRepository,
     SqliteReviewRepository,
 )
 from tests.schema_helpers import initialize_legacy_database
@@ -226,6 +229,37 @@ def test_review_repository_replaces_rating_without_token_journal_growth(
             """
         ).fetchone()
     assert tuple(hero) == ("hero", 1250, 1, 9.0)
+
+
+def test_review_history_repository_reads_events_newest_first(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _seed_review_target(database_path, tmp_path / "image.json")
+    writer = SqliteReviewRepository(database_path)
+    first = writer.append(_review_record(tmp_path / "image.json", 7))
+    second = writer.append(_review_record(tmp_path / "image.json", 9))
+
+    history = SqliteReviewHistoryRepository(database_path)
+
+    assert history.list_for_image("image") == (
+        ReviewHistoryEntry(
+            event_uid=ANY,
+            event_type="rating",
+            rating=9,
+            sequence=second.run,
+            reviewed_at=ANY,
+        ),
+        ReviewHistoryEntry(
+            event_uid=ANY,
+            event_type="rating",
+            rating=7,
+            sequence=first.run,
+            reviewed_at=ANY,
+        ),
+    )
+    assert history.list_for_image("missing") is None
 
 
 def test_delete_removes_live_link_and_keeps_one_negative_observation(
