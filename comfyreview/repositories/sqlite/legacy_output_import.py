@@ -136,6 +136,7 @@ class SqliteLegacyOutputImportRepository:
                 image.json_path,
                 image.output_node_id,
                 image.output_index,
+                image.content_hash,
                 generation.generation_uid,
                 generation.workflow_hash
             FROM images AS image
@@ -159,6 +160,11 @@ class SqliteLegacyOutputImportRepository:
             if actual != expected:
                 raise LegacyOutputImportValidationError(
                     "Canonical image identity no longer matches its audit"
+                )
+            stored_content_hash = by_uid["content_hash"]
+            if stored_content_hash not in (None, "", record.content_hash):
+                raise LegacyOutputImportValidationError(
+                    "Canonical image content hash conflicts with the audit"
                 )
         elif record.existing_image_uid is not None:
             raise LegacyOutputImportValidationError(
@@ -362,9 +368,10 @@ class SqliteLegacyOutputImportRepository:
         ).fetchone()
         if existing is not None:
             connection.execute(
-                "UPDATE images SET last_seen_at = datetime('now') "
+                "UPDATE images SET last_seen_at = datetime('now'), "
+                "content_hash = ? "
                 "WHERE image_uid = ?",
-                (record.image_uid,),
+                (record.content_hash, record.image_uid),
             )
             return
         connection.execute(
@@ -376,10 +383,12 @@ class SqliteLegacyOutputImportRepository:
                 output_index,
                 png_path,
                 json_path,
+                output_role,
+                content_hash,
                 last_seen_at
             )
             VALUES (
-                ?, ?, ?, ?, ?, ?, datetime('now')
+                ?, ?, ?, ?, ?, ?, 'primary', ?, datetime('now')
             )
             """,
             (
@@ -389,6 +398,7 @@ class SqliteLegacyOutputImportRepository:
                 record.output_index,
                 str(record.png_path),
                 str(record.json_path),
+                record.content_hash,
             ),
         )
 

@@ -298,7 +298,8 @@ class LocalLegacyOutputImportSource:
             item.get("json_path"),
             ".json",
         )
-        self._verify_hash(png_path, str(item.get("png_sha256") or ""))
+        content_hash = str(item.get("png_sha256") or "")
+        self._verify_hash(png_path, content_hash)
         self._verify_hash(json_path, str(item.get("sidecar_sha256") or ""))
 
         raw_metadata_json = json_path.read_text(encoding="utf-8-sig")
@@ -354,6 +355,7 @@ class LocalLegacyOutputImportSource:
             generation_uid=generation_uid,
             png_path=png_path,
             json_path=json_path,
+            content_hash=content_hash,
             output_index=output_index,
             model_branch=self._model_branch(metadata, checkpoint),
             checkpoint=checkpoint,

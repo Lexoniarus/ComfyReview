@@ -37,6 +37,7 @@ class LegacyImageImport:
     generation_uid: str
     png_path: Path
     json_path: Path
+    content_hash: str
     output_index: int
     model_branch: str
     checkpoint: str

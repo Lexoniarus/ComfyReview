@@ -339,10 +339,6 @@ def test_import_enriches_existing_identity_without_duplicate(
         ).fetchone() == ("save-node", 7)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="legacy output import does not persist verified PNG hashes yet",
-)
 @pytest.mark.parametrize("existing", [False, True])
 def test_import_persists_content_hash_without_replacing_output_slot(
     tmp_path: Path,
