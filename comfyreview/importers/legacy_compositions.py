@@ -21,26 +21,28 @@ from comfyreview.application import (
     PromptSelection,
     prompt_composition_identity,
 )
+from comfyreview.domain import parse_prompt_atoms
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
     connect_read_only,
 )
 
-_AUDIT_FORMAT = 1
+_AUDIT_FORMAT = 2
 _LEGACY_SOURCE = "legacy_playground"
-_SLOTS = (
-    ("character", True),
-    ("scene", True),
-    ("outfit", True),
-    ("pose", True),
-    ("expression", True),
-    ("lighting", False),
-    ("modifier", False),
+_SLOT_ORDER = (
+    "character",
+    "scene",
+    "outfit",
+    "pose",
+    "expression",
+    "lighting",
+    "modifier",
 )
 _CLASSIFICATIONS = (
     "already_exact",
     "exactly_reconstructable",
+    "reconstructable_with_draft_override",
     "ambiguous",
     "insufficient_evidence",
     "conflict",
@@ -88,8 +90,14 @@ class _StoredComposition:
     memberships: tuple[PromptCompositionMembership, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _Reconstruction:
+    components: tuple[PromptComponent, ...]
+    ambiguous_slot: str | None = None
+
+
 class HistoricalCompositionReconstructor:
-    """Find unique renderer-exact catalog compositions for old snapshots."""
+    """Find uniquely evidenced catalog memberships in old prompt snapshots."""
 
     def __init__(
         self,
@@ -118,91 +126,37 @@ class HistoricalCompositionReconstructor:
         self,
         positive_text: str,
         negative_text: str,
-    ) -> tuple[tuple[PromptComponent, ...], ...]:
-        """Return up to two exact compositions, enough to prove uniqueness."""
-        solutions: list[tuple[PromptComponent, ...]] = []
-        self._search(
-            slot_index=0,
-            selected=(),
-            rendered_positive="",
-            rendered_negative="",
-            target_positive=positive_text,
-            target_negative=negative_text,
-            solutions=solutions,
-        )
-        return tuple(solutions)
+    ) -> _Reconstruction:
+        """Return ordered unique memberships and any ambiguous slot."""
+        selected: list[PromptComponent] = []
+        for kind in _SLOT_ORDER:
+            matches = tuple(
+                component
+                for component in self._components_by_kind.get(kind, ())
+                if _component_matches_snapshots(
+                    component,
+                    positive_text=positive_text,
+                    negative_text=negative_text,
+                )
+            )
+            if len(matches) > 1:
+                return _Reconstruction((), ambiguous_slot=kind)
+            if matches:
+                selected.append(matches[0])
+        return _Reconstruction(tuple(selected))
 
-    def _search(
+    def has_draft_override(
         self,
-        *,
-        slot_index: int,
-        selected: tuple[PromptComponent, ...],
-        rendered_positive: str,
-        rendered_negative: str,
-        target_positive: str,
-        target_negative: str,
-        solutions: list[tuple[PromptComponent, ...]],
-    ) -> None:
-        if len(solutions) >= 2:
-            return
-        if slot_index == len(_SLOTS):
-            self._record_exact_solution(
-                selected,
-                target_positive,
-                target_negative,
-                solutions,
-            )
-            return
-        kind, required = _SLOTS[slot_index]
-        if not required:
-            self._search(
-                slot_index=slot_index + 1,
-                selected=selected,
-                rendered_positive=rendered_positive,
-                rendered_negative=rendered_negative,
-                target_positive=target_positive,
-                target_negative=target_negative,
-                solutions=solutions,
-            )
-        for component in self._components_by_kind.get(kind, ()):
-            revision = component.latest_revision
-            next_positive = _append_prompt(
-                rendered_positive,
-                revision.positive_text,
-            )
-            next_negative = _append_prompt(
-                rendered_negative,
-                revision.negative_text,
-            )
-            if not _is_prompt_prefix(next_positive, target_positive):
-                continue
-            if not _is_prompt_prefix(next_negative, target_negative):
-                continue
-            self._search(
-                slot_index=slot_index + 1,
-                selected=(*selected, component),
-                rendered_positive=next_positive,
-                rendered_negative=next_negative,
-                target_positive=target_positive,
-                target_negative=target_negative,
-                solutions=solutions,
-            )
-
-    def _record_exact_solution(
-        self,
-        selected: tuple[PromptComponent, ...],
+        components: tuple[PromptComponent, ...],
         positive_text: str,
         negative_text: str,
-        solutions: list[tuple[PromptComponent, ...]],
-    ) -> None:
-        if not selected:
-            return
-        rendered = self._renderer.render(PromptSelection(selected))
-        if (
-            rendered.positive_text == positive_text
-            and rendered.negative_text == negative_text
-        ):
-            solutions.append(selected)
+    ) -> bool:
+        """Return whether snapshots contain content beyond the memberships."""
+        rendered = self._renderer.render(PromptSelection(components))
+        return (
+            rendered.positive_text != positive_text
+            or rendered.negative_text != negative_text
+        )
 
 
 class LegacyCompositionAuditor:
@@ -224,7 +178,7 @@ class LegacyCompositionAuditor:
         CanonicalSchemaManager(self._canonical_path).validate()
         connection = connect_read_only(self._canonical_path, rows=True)
         try:
-            components = self._read_components(connection)
+            components = _read_components(connection)
             self._validate_legacy_catalog(connection, components)
             compositions = self._read_compositions(connection, components)
             reconstructor = HistoricalCompositionReconstructor(
@@ -336,51 +290,6 @@ class LegacyCompositionAuditor:
             )
 
     @staticmethod
-    def _read_components(
-        connection: sqlite3.Connection,
-    ) -> tuple[PromptComponent, ...]:
-        rows = connection.execute(
-            """
-            SELECT component.component_uid, component.kind,
-                   component.component_key, component.name, component.tags,
-                   component.notes, component.archived_at,
-                   revision.revision_uid, revision.revision_number,
-                   revision.positive_text, revision.negative_text,
-                   revision.content_hash
-            FROM prompt_components AS component
-            JOIN prompt_revisions AS revision
-                ON revision.component_id = component.id
-            ORDER BY component.component_uid, revision.revision_number
-            """
-        ).fetchall()
-        components: list[PromptComponent] = []
-        for row in rows:
-            raw_tags = json.loads(str(row["tags"] or "[]"))
-            if not isinstance(raw_tags, list):
-                raise LegacyCompositionValidationError(
-                    "Canonical prompt component tags are invalid"
-                )
-            components.append(
-                PromptComponent(
-                    component_uid=str(row["component_uid"]),
-                    kind=str(row["kind"]),
-                    component_key=str(row["component_key"]),
-                    name=str(row["name"]),
-                    tags=tuple(str(tag) for tag in raw_tags),
-                    notes=str(row["notes"] or ""),
-                    archived=row["archived_at"] is not None,
-                    latest_revision=PromptRevision(
-                        revision_uid=str(row["revision_uid"]),
-                        revision_number=int(row["revision_number"]),
-                        positive_text=str(row["positive_text"]),
-                        negative_text=str(row["negative_text"]),
-                        content_hash=str(row["content_hash"]),
-                    ),
-                )
-            )
-        return tuple(components)
-
-    @staticmethod
     def _read_generations(
         connection: sqlite3.Connection,
     ) -> tuple[_GenerationEvidence, ...]:
@@ -480,10 +389,9 @@ class LegacyCompositionAuditor:
                     "conflict",
                     "missing_composition",
                 )
-            if not _stored_composition_is_exact(
+            if not _stored_composition_is_consistent(
                 composition,
                 generation,
-                self._renderer,
             ):
                 return _audit_item(
                     generation,
@@ -502,28 +410,43 @@ class LegacyCompositionAuditor:
                 "insufficient_evidence",
                 "missing_prompt_snapshot",
             )
-        solutions = reconstructor.reconstruct(
+        reconstruction = reconstructor.reconstruct(
             generation.positive_text,
             generation.negative_text,
         )
-        if not solutions:
+        if reconstruction.ambiguous_slot is not None:
+            return _audit_item(
+                generation,
+                "ambiguous",
+                "multiple_revision_candidates_for_slot",
+                ambiguous_slot=reconstruction.ambiguous_slot,
+            )
+        if not reconstruction.components:
             return _audit_item(
                 generation,
                 "insufficient_evidence",
-                "no_renderer_exact_composition",
+                "no_unique_revision_membership",
             )
-        if len(solutions) == 1:
-            composition = _composition_from_components(solutions[0])
+        composition = _composition_from_components(reconstruction.components)
+        draft_override = reconstructor.has_draft_override(
+            reconstruction.components,
+            generation.positive_text,
+            generation.negative_text,
+        )
+        if draft_override:
             return _audit_item(
                 generation,
-                "exactly_reconstructable",
-                "unique_renderer_exact_composition",
+                "reconstructable_with_draft_override",
+                "unique_memberships_with_draft_override",
                 composition=composition,
+                draft_override=True,
             )
         return _audit_item(
             generation,
-            "ambiguous",
-            "multiple_renderer_exact_compositions",
+            "exactly_reconstructable",
+            "unique_memberships_exact_snapshot",
+            composition=composition,
+            draft_override=False,
         )
 
 
@@ -550,7 +473,11 @@ class LegacyCompositionImporter:
         exact_items = [
             item
             for item in payload["items"]
-            if item["classification"] == "exactly_reconstructable"
+            if item["classification"]
+            in {
+                "exactly_reconstructable",
+                "reconstructable_with_draft_override",
+            }
         ]
         self._prevalidate_exact_items(exact_items)
         backup_path = self._create_backup(backup_directory)
@@ -590,7 +517,10 @@ class LegacyCompositionImporter:
             raise LegacyCompositionValidationError(
                 "Legacy composition audit is unreadable"
             ) from error
-        if not isinstance(payload, dict) or payload.get("format_version") != 1:
+        if (
+            not isinstance(payload, dict)
+            or payload.get("format_version") != _AUDIT_FORMAT
+        ):
             raise LegacyCompositionValidationError(
                 "Unsupported legacy composition audit format"
             )
@@ -647,6 +577,10 @@ class LegacyCompositionImporter:
     def _prevalidate_exact_items(self, items: list[dict[str, Any]]) -> None:
         connection = connect_read_only(self._canonical_path, rows=True)
         try:
+            reconstructor = HistoricalCompositionReconstructor(
+                renderer=PromptRenderer(),
+                components=_read_components(connection),
+            )
             for item in items:
                 generation = connection.execute(
                     """
@@ -670,14 +604,38 @@ class LegacyCompositionImporter:
                         "Generation composition state changed after audit"
                     )
                 components = self._components_for_item(connection, item)
-                rendered = PromptRenderer().render(PromptSelection(components))
-                if rendered.positive_text != str(
-                    generation["positive_text"]
-                ) or rendered.negative_text != str(
-                    generation["negative_text"]
+                positive_text = str(generation["positive_text"])
+                negative_text = str(generation["negative_text"])
+                reconstruction = reconstructor.reconstruct(
+                    positive_text,
+                    negative_text,
+                )
+                if reconstruction.ambiguous_slot is not None or tuple(
+                    component.latest_revision.revision_uid
+                    for component in reconstruction.components
+                ) != tuple(
+                    component.latest_revision.revision_uid
+                    for component in components
                 ):
                     raise LegacyCompositionValidationError(
-                        "Composition no longer reproduces prompt snapshots"
+                        "Composition membership evidence changed after audit"
+                    )
+                draft_override = reconstructor.has_draft_override(
+                    components,
+                    positive_text,
+                    negative_text,
+                )
+                expected_classification = (
+                    "reconstructable_with_draft_override"
+                    if draft_override
+                    else "exactly_reconstructable"
+                )
+                if (
+                    item.get("classification") != expected_classification
+                    or item.get("draft_override") is not draft_override
+                ):
+                    raise LegacyCompositionValidationError(
+                        "Composition override state changed after audit"
                     )
                 memberships = _memberships_from_item(item)
                 if prompt_composition_identity(memberships) != str(
@@ -863,6 +821,51 @@ class LegacyCompositionImporter:
             ) from original_error
 
 
+def _read_components(
+    connection: sqlite3.Connection,
+) -> tuple[PromptComponent, ...]:
+    rows = connection.execute(
+        """
+        SELECT component.component_uid, component.kind,
+               component.component_key, component.name, component.tags,
+               component.notes, component.archived_at,
+               revision.revision_uid, revision.revision_number,
+               revision.positive_text, revision.negative_text,
+               revision.content_hash
+        FROM prompt_components AS component
+        JOIN prompt_revisions AS revision
+            ON revision.component_id = component.id
+        ORDER BY component.component_uid, revision.revision_number
+        """
+    ).fetchall()
+    components: list[PromptComponent] = []
+    for row in rows:
+        raw_tags = json.loads(str(row["tags"] or "[]"))
+        if not isinstance(raw_tags, list):
+            raise LegacyCompositionValidationError(
+                "Canonical prompt component tags are invalid"
+            )
+        components.append(
+            PromptComponent(
+                component_uid=str(row["component_uid"]),
+                kind=str(row["kind"]),
+                component_key=str(row["component_key"]),
+                name=str(row["name"]),
+                tags=tuple(str(tag) for tag in raw_tags),
+                notes=str(row["notes"] or ""),
+                archived=row["archived_at"] is not None,
+                latest_revision=PromptRevision(
+                    revision_uid=str(row["revision_uid"]),
+                    revision_number=int(row["revision_number"]),
+                    positive_text=str(row["positive_text"]),
+                    negative_text=str(row["negative_text"]),
+                    content_hash=str(row["content_hash"]),
+                ),
+            )
+        )
+    return tuple(components)
+
+
 def _composition_from_components(
     components: tuple[PromptComponent, ...],
 ) -> _StoredComposition:
@@ -881,10 +884,9 @@ def _composition_from_components(
     )
 
 
-def _stored_composition_is_exact(
+def _stored_composition_is_consistent(
     composition: _StoredComposition,
     generation: _GenerationEvidence,
-    renderer: PromptRenderer,
 ) -> bool:
     if not composition.memberships or len(composition.memberships) != len(
         composition.components
@@ -904,10 +906,13 @@ def _stored_composition_is_exact(
         != composition.composition_uid
     ):
         return False
-    rendered = renderer.render(PromptSelection(composition.components))
-    return (
-        rendered.positive_text == generation.positive_text
-        and rendered.negative_text == generation.negative_text
+    return all(
+        _component_matches_snapshots(
+            component,
+            positive_text=generation.positive_text,
+            negative_text=generation.negative_text,
+        )
+        for component in composition.components
     )
 
 
@@ -938,6 +943,8 @@ def _audit_item(
     reason: str,
     *,
     composition: _StoredComposition | None = None,
+    draft_override: bool | None = None,
+    ambiguous_slot: str | None = None,
 ) -> dict[str, Any]:
     item: dict[str, Any] = {
         "generation_uid": generation.generation_uid,
@@ -954,6 +961,10 @@ def _audit_item(
             }
             for membership in composition.memberships
         ]
+    if draft_override is not None:
+        item["draft_override"] = draft_override
+    if ambiguous_slot is not None:
+        item["ambiguous_slot"] = ambiguous_slot
     return item
 
 
@@ -988,16 +999,42 @@ def _memberships_from_item(
     return memberships
 
 
-def _append_prompt(rendered: str, block: str) -> str:
-    normalized = str(block or "").strip()
-    if not normalized:
-        return rendered
-    return f"{rendered}, {normalized}" if rendered else normalized
+def _component_matches_snapshots(
+    component: PromptComponent,
+    *,
+    positive_text: str,
+    negative_text: str,
+) -> bool:
+    revision = component.latest_revision
+    positive_atoms = _prompt_atom_sequence(revision.positive_text)
+    negative_atoms = _prompt_atom_sequence(revision.negative_text)
+    if not positive_atoms and not negative_atoms:
+        return False
+    return _contains_atom_sequence(
+        _prompt_atom_sequence(positive_text),
+        positive_atoms,
+    ) and _contains_atom_sequence(
+        _prompt_atom_sequence(negative_text),
+        negative_atoms,
+    )
 
 
-def _is_prompt_prefix(rendered: str, target: str) -> bool:
-    return rendered == target or (
-        not rendered or target.startswith(rendered + ", ")
+def _prompt_atom_sequence(value: str) -> tuple[tuple[str, int], ...]:
+    return tuple(
+        (atom.text, atom.weight_milli) for atom in parse_prompt_atoms(value)
+    )
+
+
+def _contains_atom_sequence(
+    prompt_atoms: tuple[tuple[str, int], ...],
+    component_atoms: tuple[tuple[str, int], ...],
+) -> bool:
+    if not component_atoms:
+        return True
+    last_start = len(prompt_atoms) - len(component_atoms)
+    return any(
+        prompt_atoms[start : start + len(component_atoms)] == component_atoms
+        for start in range(last_start + 1)
     )
 
 

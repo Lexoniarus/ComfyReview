@@ -252,6 +252,7 @@ def test_composition_audit_imports_only_unique_renderer_exact_matches(
     assert result.summary == {
         "already_exact": 0,
         "exactly_reconstructable": 1,
+        "reconstructable_with_draft_override": 0,
         "ambiguous": 0,
         "insufficient_evidence": 0,
         "conflict": 0,
@@ -305,10 +306,6 @@ def test_composition_audit_imports_only_unique_renderer_exact_matches(
     assert repeated.already_exact == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="variable historical compositions are not implemented yet",
-)
 def test_composition_audit_accepts_variable_ordered_memberships(
     tmp_path: Path,
 ) -> None:
@@ -334,10 +331,6 @@ def test_composition_audit_accepts_variable_ordered_memberships(
     ] == ["character", "scene"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="historical draft overrides are not implemented yet",
-)
 def test_composition_audit_retains_unique_memberships_with_draft_override(
     tmp_path: Path,
 ) -> None:
@@ -367,6 +360,29 @@ def test_composition_audit_retains_unique_memberships_with_draft_override(
         "scene",
     ]
 
+    imported = LegacyCompositionImporter(
+        source_database_path=source,
+        canonical_database_path=canonical,
+    ).import_report(report, backup_directory=tmp_path / "backups")
+
+    assert imported.linked_generations == 1
+    with sqlite3.connect(canonical) as connection:
+        snapshot = connection.execute(
+            """
+            SELECT positive.text, negative.text
+            FROM generations AS generation
+            JOIN prompts AS positive
+                ON positive.id = generation.positive_prompt_id
+            JOIN prompts AS negative
+                ON negative.id = generation.negative_prompt_id
+            WHERE generation.generation_uid = 'generation-override'
+            """
+        ).fetchone()
+    assert snapshot == (
+        "hero, handwritten emphasis, rooftop",
+        "crowd, indoors, custom exclusion",
+    )
+
 
 def test_composition_audit_reports_ambiguity_without_guessing(
     tmp_path: Path,
@@ -387,7 +403,8 @@ def test_composition_audit_reports_ambiguity_without_guessing(
     assert payload["items"][0] == {
         "generation_uid": "generation-ambiguous",
         "classification": "ambiguous",
-        "reason": "multiple_renderer_exact_compositions",
+        "reason": "multiple_revision_candidates_for_slot",
+        "ambiguous_slot": "character",
     }
 
 
@@ -436,6 +453,16 @@ def test_composition_import_rejects_tampered_and_stale_audits(
         source_database_path=source,
         canonical_database_path=canonical,
     )
+    auditor.audit(report)
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    payload["format_version"] = 1
+    report.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(
+        LegacyCompositionValidationError,
+        match="Unsupported legacy composition audit format",
+    ):
+        importer.import_report(report)
+
     auditor.audit(report)
     payload = json.loads(report.read_text(encoding="utf-8"))
     payload["items"][0]["reason"] = "tampered"
