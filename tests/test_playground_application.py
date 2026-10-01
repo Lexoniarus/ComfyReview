@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 from comfyreview.application import (
+    ConfirmPlaygroundDraftCommand,
     ManualPromptSelection,
     PlaygroundService,
     PromptComponent,
@@ -123,6 +124,44 @@ def test_prompt_selection_policy_supports_random_character_and_disabled_kinds() 
         "expression",
     )
     assert selection.components[0].component_uid == "character-a"
+
+
+def test_prompt_selection_policy_confirms_exact_components_in_domain_order() -> (
+    None
+):
+    selection = PromptSelectionPolicy().confirm(
+        _catalog(),
+        ("outfit-red", "character-a", "scene-night"),
+    )
+
+    assert tuple(
+        component.component_uid for component in selection.components
+    ) == (
+        "character-a",
+        "scene-night",
+        "outfit-red",
+    )
+
+
+@pytest.mark.parametrize(
+    ("component_uids", "message"),
+    (
+        ((), "required"),
+        (("character-a", "character-a"), "duplicate prompt component"),
+        (("missing",), "unknown active prompt component"),
+        (("scene-night",), "character component is required"),
+        (("character-a", "scene-night", "scene-archived"), "unknown active"),
+    ),
+)
+def test_prompt_selection_policy_rejects_invalid_exact_confirmation(
+    component_uids: tuple[str, ...],
+    message: str,
+) -> None:
+    active_catalog = tuple(
+        component for component in _catalog() if not component.archived
+    )
+    with pytest.raises(PromptSelectionError, match=message):
+        PromptSelectionPolicy().confirm(active_catalog, component_uids)
 
 
 @pytest.mark.parametrize(
@@ -422,3 +461,32 @@ def test_playground_service_prepares_draft_without_generation_submission() -> (
         "pose",
         "expression",
     )
+
+
+def test_playground_service_revalidates_confirmed_draft_and_derives_revisions() -> (
+    None
+):
+    catalog = _CatalogService(
+        tuple(component for component in _catalog() if not component.archived)
+    )
+    service = PlaygroundService(
+        catalog=catalog,
+        selection_policy=PromptSelectionPolicy(),
+        renderer=PromptRenderer(),
+    )
+
+    draft = service.confirm_draft(
+        ConfirmPlaygroundDraftCommand(
+            component_uids=("character-a", "scene-night"),
+            positive_prompt="person, city, manual emphasis",
+            negative_prompt="bad anatomy",
+        )
+    )
+
+    assert draft.prompt.revision_uids == (
+        "revision-character-a",
+        "revision-scene-night",
+    )
+    assert draft.prompt.positive_text == "person, city, manual emphasis"
+    assert draft.prompt.draft_overridden is True
+    assert catalog.calls == [False]

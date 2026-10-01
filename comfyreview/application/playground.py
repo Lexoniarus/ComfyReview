@@ -107,6 +107,15 @@ class PromptSelectionCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class ConfirmPlaygroundDraftCommand:
+    """Confirm exact catalog components and reviewed prompt snapshots."""
+
+    component_uids: tuple[str, ...]
+    positive_prompt: str
+    negative_prompt: str
+
+
+@dataclass(frozen=True, slots=True)
 class PromptSelection:
     """Keep the ordered concrete catalog revisions selected for a draft."""
 
@@ -193,6 +202,61 @@ class PromptSelectionPolicy:
         raise PromptSelectionError(
             "no compatible prompt selection within max_attempts"
         )
+
+    def confirm(
+        self,
+        components: tuple[PromptComponent, ...],
+        component_uids: tuple[str, ...],
+    ) -> PromptSelection:
+        """Validate and order one exact active catalog selection."""
+        normalized_uids = tuple(
+            str(component_uid or "").strip()
+            for component_uid in component_uids
+        )
+        if not normalized_uids or any(not uid for uid in normalized_uids):
+            raise PromptSelectionError("component_uids are required")
+        if len(set(normalized_uids)) != len(normalized_uids):
+            raise PromptSelectionError("duplicate prompt component")
+        catalog = {
+            component.component_uid: component for component in components
+        }
+        unknown = tuple(uid for uid in normalized_uids if uid not in catalog)
+        if unknown:
+            raise PromptSelectionError(
+                f"unknown active prompt component: {unknown[0]}"
+            )
+        selected_by_kind: dict[str, PromptComponent] = {}
+        for uid in normalized_uids:
+            component = catalog[uid]
+            if component.kind not in _SELECTION_ORDER:
+                raise PromptSelectionError(
+                    f"unsupported prompt component kind: {component.kind}"
+                )
+            if component.kind in selected_by_kind:
+                raise PromptSelectionError(
+                    f"duplicate prompt component kind: {component.kind}"
+                )
+            selected_by_kind[component.kind] = component
+        if "character" not in selected_by_kind:
+            raise PromptSelectionError("character component is required")
+        ordered = tuple(
+            selected_by_kind[kind]
+            for kind in _SELECTION_ORDER
+            if kind in selected_by_kind
+        )
+        active_tags: set[str] = set()
+        for component in ordered:
+            if component.kind != "character" and not self._candidate_allowed(
+                component,
+                active_tags,
+            ):
+                raise PromptSelectionError(
+                    f"incompatible prompt component: {component.component_uid}"
+                )
+            active_tags |= self._effective_tags(component)
+        if not self._selection_allowed(active_tags):
+            raise PromptSelectionError("incompatible prompt selection")
+        return PromptSelection(ordered)
 
     @staticmethod
     def _disabled_kinds(command: PromptSelectionCommand) -> set[str]:
@@ -422,6 +486,37 @@ class PlaygroundService:
         """Select concrete revisions and render a non-persisting draft."""
         components = self._catalog.list_components(include_archived=False)
         selection = self._selection_policy.select(components, command)
+        return PlaygroundDraft(
+            selection=selection,
+            prompt=self._renderer.render(selection, overrides),
+        )
+
+    def confirm_draft(
+        self,
+        command: ConfirmPlaygroundDraftCommand,
+    ) -> PlaygroundDraft:
+        """Revalidate a reviewed draft against current canonical revisions."""
+        components = self._catalog.list_components(include_archived=False)
+        selection = self._selection_policy.confirm(
+            components,
+            command.component_uids,
+        )
+        canonical = self._renderer.render(selection)
+        positive_override = (
+            command.positive_prompt
+            if command.positive_prompt != canonical.positive_text
+            else None
+        )
+        negative_override = (
+            command.negative_prompt
+            if command.negative_prompt != canonical.negative_text
+            else None
+        )
+        overrides = (
+            PromptDraftOverrides(positive_override, negative_override)
+            if positive_override is not None or negative_override is not None
+            else None
+        )
         return PlaygroundDraft(
             selection=selection,
             prompt=self._renderer.render(selection, overrides),

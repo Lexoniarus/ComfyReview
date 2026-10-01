@@ -73,6 +73,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_application.py::"
         "test_playground_service_prepares_draft_without_generation_submission"
     ),
+    "comfyreview.application.playground:PlaygroundService.confirm_draft": (
+        "tests/test_playground_application.py::"
+        "test_playground_service_revalidates_confirmed_draft_and_derives_revisions"
+    ),
     "comfyreview.application.playground_generation:PlaygroundGenerationPolicy.build_request": (
         "tests/test_playground_generation.py::"
         "test_playground_generation_policy_builds_reproducible_request"
@@ -116,6 +120,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     "comfyreview.application.playground:PromptSelectionPolicy.select": (
         "tests/test_playground_application.py::"
         "test_prompt_selection_policy_selects_reproducible_compatible_revisions"
+    ),
+    "comfyreview.application.playground:PromptSelectionPolicy.confirm": (
+        "tests/test_playground_application.py::"
+        "test_prompt_selection_policy_confirms_exact_components_in_domain_order"
     ),
     "comfyreview.application.prompt_catalog:PromptCatalogService.add_revision": (
         "tests/test_prompt_catalog.py::"

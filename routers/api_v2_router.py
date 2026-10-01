@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from comfyreview.api import get_application_container
 from comfyreview.application import (
@@ -14,6 +14,7 @@ from comfyreview.application import (
     ArenaQuery,
     ArenaValidationError,
     AssignCurationCommand,
+    ConfirmPlaygroundDraftCommand,
     CreatePromptComponentCommand,
     CurationMutationError,
     CurationValidationError,
@@ -36,7 +37,6 @@ from comfyreview.application import (
     PromptSelectionCommand,
     PromptSelectionError,
     RecordArenaDecisionCommand,
-    RenderedPrompt,
     ReviewMutationError,
     ReviewValidationError,
     ScopeSelection,
@@ -100,6 +100,8 @@ class PlaygroundDraftRequest(BaseModel):
 class PlaygroundSamplerRequest(BaseModel):
     """Carry one explicit native sampler configuration."""
 
+    model_config = ConfigDict(extra="forbid")
+
     seed: int
     steps: int
     cfg: float
@@ -109,14 +111,14 @@ class PlaygroundSamplerRequest(BaseModel):
 
 
 class PlaygroundGenerationRequest(BaseModel):
-    """Submit one reviewed Playground draft by canonical revision IDs."""
+    """Submit reviewed domain intent without workflow graph semantics."""
+
+    model_config = ConfigDict(extra="forbid")
 
     draft_uid: str
-    character_component_uid: str
+    component_uids: list[str]
     positive_prompt: str
     negative_prompt: str
-    revision_uids: list[str]
-    draft_overridden: bool = False
     checkpoint: str
     sampler: PlaygroundSamplerRequest
 
@@ -480,25 +482,24 @@ def submit_generation(
     """Submit one reviewed Playground draft through GenerationService."""
     container = get_application_container(request)
     try:
-        character = container.prompt_catalog_service.get_component(
-            payload.character_component_uid
-        )
-        if character.kind != "character":
-            raise PromptSelectionError(
-                "character_component_uid must identify a character"
+        confirmed = container.playground_service.confirm_draft(
+            ConfirmPlaygroundDraftCommand(
+                component_uids=tuple(payload.component_uids),
+                positive_prompt=payload.positive_prompt,
+                negative_prompt=payload.negative_prompt,
             )
+        )
+        character = next(
+            component
+            for component in confirmed.selection.components
+            if component.kind == "character"
+        )
         batch = container.playground_submission_service.submit(
             (
                 PlaygroundGenerationDraft(
                     draft_uid=payload.draft_uid,
                     character_name=character.name,
-                    prompt=RenderedPrompt(
-                        positive_text=payload.positive_prompt,
-                        negative_text=payload.negative_prompt,
-                        notes="",
-                        revision_uids=tuple(payload.revision_uids),
-                        draft_overridden=payload.draft_overridden,
-                    ),
+                    prompt=confirmed.prompt,
                     checkpoint=payload.checkpoint,
                     sampler=GenerationSamplerSettings(
                         role="base_sampler",
@@ -515,7 +516,7 @@ def submit_generation(
                 ),
             )
         )
-    except (KeyError, PromptSelectionError) as error:
+    except (KeyError, PromptSelectionError, StopIteration) as error:
         return _error(400, "invalid_generation", str(error))
     if batch.failures:
         return _error(

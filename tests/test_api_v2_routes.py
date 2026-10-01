@@ -192,6 +192,7 @@ class _PromptCatalog:
 
 class _Playground:
     command = None
+    confirm_command = None
     overrides = None
 
     def prepare_draft(self, command, *, overrides=None):
@@ -209,6 +210,23 @@ class _Playground:
                 "notes",
                 ("revision-character-a", "revision-scene-a"),
                 overrides is not None,
+            ),
+        )
+
+    def confirm_draft(self, command):
+        self.confirm_command = command
+        if "missing" in command.component_uids:
+            raise KeyError("missing")
+        return PlaygroundDraft(
+            PromptSelection(
+                (_prompt_component(), _prompt_component("scene-a", "scene"))
+            ),
+            RenderedPrompt(
+                command.positive_prompt,
+                command.negative_prompt,
+                "notes",
+                ("revision-character-a", "revision-scene-a"),
+                command.positive_prompt != "rendered positive",
             ),
         )
 
@@ -552,11 +570,9 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
     client, container = _client()
     payload = {
         "draft_uid": "draft-1",
-        "character_component_uid": "character-a",
+        "component_uids": ["character-a", "scene-a"],
         "positive_prompt": "edited positive",
         "negative_prompt": "edited negative",
-        "revision_uids": ["revision-character-a"],
-        "draft_overridden": True,
         "checkpoint": "model.safetensors",
         "sampler": {
             "seed": 42,
@@ -578,8 +594,15 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
     }
     draft = container.playground_submission_service.draft
     assert draft.prompt.positive_text == "edited positive"
-    assert draft.prompt.revision_uids == ("revision-character-a",)
+    assert draft.prompt.revision_uids == (
+        "revision-character-a",
+        "revision-scene-a",
+    )
     assert draft.output_subdirectory == "playground/character-a-key"
+    assert container.playground_service.confirm_command.component_uids == (
+        "character-a",
+        "scene-a",
+    )
 
 
 def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
@@ -588,10 +611,9 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     client, container = _client()
     payload = {
         "draft_uid": "draft-1",
-        "character_component_uid": "missing",
+        "component_uids": ["missing"],
         "positive_prompt": "positive",
         "negative_prompt": "negative",
-        "revision_uids": ["revision-character-a"],
         "checkpoint": "model.safetensors",
         "sampler": {
             "seed": 42,
@@ -604,14 +626,19 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     }
 
     invalid = client.post("/api/v2/generations", json=payload)
-    payload["character_component_uid"] = "character-a"
+    payload["component_uids"] = ["character-a", "scene-a"]
     container.playground_submission_service.fail = True
     failed = client.post("/api/v2/generations", json=payload)
+
+    graph_payload = dict(payload)
+    graph_payload["workflow_graph"] = {"42": {"class_type": "SaveImage"}}
+    graph = client.post("/api/v2/generations", json=graph_payload)
 
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "invalid_generation"
     assert failed.status_code == 500
     assert failed.json()["error"]["code"] == "generation_failed"
+    assert graph.status_code == 422
 
 
 def _client() -> tuple[TestClient, SimpleNamespace]:

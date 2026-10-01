@@ -119,6 +119,7 @@ from comfyreview.application.output_images import (
     OutputImageReadModel,
 )
 from comfyreview.application.playground import (
+    ConfirmPlaygroundDraftCommand,
     ManualPromptSelection,
     PlaygroundDraft,
     PlaygroundService,
@@ -231,6 +232,7 @@ __all__ = [
     "ComfyUiRejectionError",
     "ComfyUiSubmission",
     "ComfyUiTimeoutError",
+    "ConfirmPlaygroundDraftCommand",
     "CreatePromptComponentCommand",
     "CurationSummary",
     "DraftOverridePolicy",

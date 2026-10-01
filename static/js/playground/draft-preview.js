@@ -51,18 +51,14 @@ export class DraftPreview {
     const components = Array.isArray(this.draft.components)
       ? this.draft.components
       : [];
-    const character = components.find(
-      (component) => component.kind === "character",
-    );
-    if (!character) return null;
-    const edited = this.#isEdited();
+    if (!components.some((component) => component.kind === "character")) {
+      return null;
+    }
     return {
       draft_uid: this.draftUid,
-      character_component_uid: character.component_uid,
+      component_uids: components.map((component) => component.component_uid),
       positive_prompt: this.positive.control.value,
       negative_prompt: this.negative.control.value,
-      revision_uids: this.draft.revision_uids || [],
-      draft_overridden: Boolean(this.draft.draft_overridden) || edited,
       checkpoint: settings.checkpoint,
       sampler: settings.sampler,
     };

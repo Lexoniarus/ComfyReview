@@ -115,10 +115,8 @@ describe("Playground browser components", () => {
     ).toEqual(
       expect.objectContaining({
         draft_uid: "draft-1",
-        character_component_uid: "character-a",
+        component_uids: components.map((item) => item.component_uid),
         positive_prompt: "edited",
-        revision_uids: ["revision-character-a"],
-        draft_overridden: true,
       }),
     );
 
