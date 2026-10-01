@@ -339,6 +339,39 @@ def test_import_enriches_existing_identity_without_duplicate(
         ).fetchone() == ("save-node", 7)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="legacy output import does not persist verified PNG hashes yet",
+)
+@pytest.mark.parametrize("existing", [False, True])
+def test_import_persists_content_hash_without_replacing_output_slot(
+    tmp_path: Path,
+    existing: bool,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    output_root = tmp_path / "output"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    png_path, json_path = _write_source(output_root)
+    if existing:
+        _seed_existing(database_path, png_path, json_path)
+    report_path = _write_report(
+        tmp_path,
+        output_root,
+        png_path,
+        json_path,
+        existing=existing,
+    )
+
+    _importer(database_path).import_audit(report_path)
+
+    with sqlite3.connect(database_path) as connection:
+        image = connection.execute(
+            "SELECT content_hash, output_node_id, output_index FROM images"
+        ).fetchone()
+    expected_slot = ("save-node", 7) if existing else ("legacy_sidecar", 0)
+    assert image == (_sha(png_path), *expected_slot)
+
+
 def test_import_rejects_source_changed_since_audit(tmp_path: Path) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
     output_root = tmp_path / "output"
