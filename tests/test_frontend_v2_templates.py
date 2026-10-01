@@ -7,6 +7,7 @@ from routers.arena_router import router as arena_router
 from routers.index_router import router as review_router
 from routers.playground.browse import router as playground_catalog_router
 from routers.playground.generator import router as playground_generator_router
+from routers.stats_router import router as analytics_router
 from routers.top_router import router as top_router
 from templates import ARENA_HTML, INDEX_HTML, TOP_PICTURES_HTML
 
@@ -98,3 +99,22 @@ def test_catalog_url_renders_the_revisioned_v2_shell() -> None:
     assert "/static/css/v2/catalog.css" in response.text
     assert "/api/v2" not in response.text
     assert "<style" not in response.text
+
+
+def test_all_analytics_urls_render_one_canonical_v2_shell() -> None:
+    application = FastAPI()
+    application.include_router(analytics_router)
+
+    expected_sections = {
+        "/recommendations": "overview",
+        "/prompt_tokens": "scopes",
+        "/param_stats": "parameters",
+        "/stats": "combinations",
+    }
+    for path, section in expected_sections.items():
+        response = TestClient(application).get(path)
+        assert response.status_code == 200
+        assert 'data-v2-surface="analytics"' in response.text
+        assert f'data-section="{section}"' in response.text
+        assert "/static/js/entries/analytics.js" in response.text
+        assert "<style" not in response.text

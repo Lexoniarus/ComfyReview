@@ -16,6 +16,7 @@ static/js/playground/generation-controls.js
 static/js/playground/draft-preview.js
 static/js/generations/generation-list.js
 static/js/generations/generation-detail.js
+static/js/analytics/analytics-view.js
 static/js/scopes/active-scope-chips.js
 static/js/scopes/url-state.js
 static/js/scopes/scope-state-controller.js
@@ -25,3 +26,4 @@ static/js/surfaces/arena-controller.js
 static/js/surfaces/playground-controller.js
 static/js/surfaces/catalog-controller.js
 static/js/surfaces/generations-controller.js
+static/js/surfaces/analytics-controller.js

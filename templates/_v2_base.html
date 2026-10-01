@@ -39,8 +39,11 @@
         <a href="/playground" aria-current="page">Generierungen</a>
         {% else %}
         <a href="/playground">Generierungen</a>
-        {% endif %}
+        {% endif %} {% if active_nav == "analytics" %}
+        <a href="/stats" aria-current="page">Analysen</a>
+        {% else %}
         <a href="/stats">Analysen</a>
+        {% endif %}
       </nav>
     </header>
     <main class="v2-page">{% block content %}{% endblock %}</main>

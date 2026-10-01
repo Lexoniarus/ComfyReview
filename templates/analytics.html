@@ -1,0 +1,69 @@
+{% extends "_v2_base.html" %} {% set page_title = "Analysen · ComfyReview" %} {%
+set active_nav = "analytics" %} {% block styles %}
+<link rel="stylesheet" href="/static/css/v2/analytics.css" />
+{% endblock %} {% block content %}
+<section
+  class="analytics-page"
+  data-v2-surface="analytics"
+  data-section="{{ initial_section }}"
+>
+  <header class="analytics-hero v2-panel">
+    <div>
+      <p class="analytics-kicker">Kanonische Evidenz</p>
+      <h1>Analysen</h1>
+      <p>
+        Bewertungen, Scopes und Renderparameter direkt aus der kanonischen
+        Datenbank.
+      </p>
+    </div>
+    <!-- prettier-ignore -->
+    <nav class="analytics-tabs" aria-label="Analysebereiche">
+      {% if initial_section == "overview" %}
+      <a href="/recommendations" aria-current="page">Übersicht</a>
+      {% else %}
+      <a href="/recommendations">Übersicht</a>
+      {% endif %} {% if initial_section == "scopes" %}
+      <a href="/prompt_tokens" aria-current="page">Scopes</a>
+      {% else %}
+      <a href="/prompt_tokens">Scopes</a>
+      {% endif %} {% if initial_section == "parameters" %}
+      <a href="/param_stats" aria-current="page">Parameter</a>
+      {% else %}
+      <a href="/param_stats">Parameter</a>
+      {% endif %} {% if initial_section == "combinations" %}
+      <a href="/stats" aria-current="page">Kombinationen</a>
+      {% else %}
+      <a href="/stats">Kombinationen</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <form class="analytics-filters v2-panel" data-analytics-filters>
+    <label
+      >Modell <input type="search" data-analytics-model autocomplete="off"
+    /></label>
+    <label
+      >Mindestbelege <input type="number" min="0" data-analytics-minimum
+    /></label>
+    <label
+      >Prompt-Seite
+      <select data-analytics-scope>
+        <option value="pos">Positiv</option>
+        <option value="neg">Negativ</option>
+      </select>
+    </label>
+    <button class="primary-button" type="submit">Anwenden</button>
+  </form>
+
+  <section
+    class="analytics-report v2-panel"
+    aria-live="polite"
+    data-analytics-report
+  ></section>
+  <p class="analytics-status" role="status" data-analytics-status>
+    Analyse wird geladen …
+  </p>
+</section>
+{% endblock %} {% block scripts %}
+<script type="module" src="/static/js/entries/analytics.js"></script>
+{% endblock %}
