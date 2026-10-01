@@ -165,6 +165,50 @@ def test_prompt_selection_policy_rejects_invalid_exact_confirmation(
 
 
 @pytest.mark.parametrize(
+    ("catalog", "component_uids", "message"),
+    (
+        (
+            (
+                _component("character-a", "character"),
+                _component("odd", "unknown"),
+            ),
+            ("character-a", "odd"),
+            "unsupported prompt component kind",
+        ),
+        (
+            (
+                _component("character-a", "character"),
+                _component("scene-a", "scene"),
+                _component("scene-b", "scene"),
+            ),
+            ("character-a", "scene-a", "scene-b"),
+            "duplicate prompt component kind",
+        ),
+        (
+            (
+                _component("character-a", "character", tags=("adult",)),
+                _component("modifier-wind", "modifier", tags=("wind",)),
+            ),
+            ("character-a", "modifier-wind"),
+            "incompatible prompt component",
+        ),
+        (
+            (_component("character-mystery", "character", tags=("mystery",)),),
+            ("character-mystery",),
+            "incompatible prompt selection",
+        ),
+    ),
+)
+def test_prompt_selection_policy_rejects_invalid_confirmed_semantics(
+    catalog: tuple[PromptComponent, ...],
+    component_uids: tuple[str, ...],
+    message: str,
+) -> None:
+    with pytest.raises(PromptSelectionError, match=message):
+        PromptSelectionPolicy().confirm(catalog, component_uids)
+
+
+@pytest.mark.parametrize(
     ("command", "message"),
     (
         (

@@ -176,6 +176,23 @@ def test_review_candidate_service_returns_unclassified_without_inference() -> (
     assert result.classification is ImageClassification.UNCLASSIFIED
 
 
+def test_review_candidate_service_returns_none_when_repository_is_empty() -> (
+    None
+):
+    class Repository:
+        def unknown_scope_uids(self, component_uids):
+            return ()
+
+        def next_candidate(self, filters):
+            return None
+
+    result = ReviewCandidateService(
+        Repository(), _draft_overrides()
+    ).next_candidate(ImageFilter())
+
+    assert result is None
+
+
 def test_image_context_service_gets_by_uid_and_reports_missing_images() -> (
     None
 ):
