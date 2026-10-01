@@ -20,6 +20,11 @@ from comfyreview.repositories.sqlite.generation_outputs import (
 from comfyreview.repositories.sqlite.generations import (
     SqliteGenerationRepository,
 )
+from comfyreview.repositories.sqlite.image_queries import (
+    SqliteImageContextRepository,
+    SqliteReviewCandidateRepository,
+    SqliteScopeFacetRepository,
+)
 from comfyreview.repositories.sqlite.legacy_schema import LegacySchemaManager
 from comfyreview.repositories.sqlite.output_images import (
     SqliteOutputImageRepository,
@@ -42,8 +47,11 @@ __all__ = [
     "SqliteCurationRepository",
     "SqliteGenerationRepository",
     "SqliteGenerationOutputRepository",
+    "SqliteImageContextRepository",
     "SqliteRankingRepository",
     "SqliteReviewRepository",
+    "SqliteReviewCandidateRepository",
+    "SqliteScopeFacetRepository",
     "connect_existing",
     "connect_read_only",
 ]
