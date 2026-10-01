@@ -8,6 +8,7 @@ from pathlib import Path
 from comfyreview.application.image_queries import (
     ImageClassification,
     ImageFilter,
+    ImageOrder,
     ImageQuery,
     ScopeKind,
     ScopeSelection,
@@ -166,6 +167,29 @@ def test_sqlite_image_filters_cover_model_checkpoint_rating_and_sets(
     assert classified.total == 3
 
 
+def test_sqlite_image_query_orders_rankings_with_stable_uid_tiebreaker(
+    tmp_path: Path,
+) -> None:
+    repository = SqliteImageContextRepository(_seed_scope_database(tmp_path))
+
+    rated = ImageFilter(minimum_rating_count=1)
+    top = repository.list_images(
+        ImageQuery(filters=rated, order=ImageOrder.TOP)
+    )
+    worst = repository.list_images(
+        ImageQuery(filters=rated, order=ImageOrder.WORST)
+    )
+
+    assert [image.image_uid for image in top.entries[:2]] == [
+        "image-1",
+        "image-2",
+    ]
+    assert [image.image_uid for image in worst.entries[:2]] == [
+        "image-2",
+        "image-1",
+    ]
+
+
 def _seed_scope_database(tmp_path: Path) -> Path:
     database_path = tmp_path / "comfyreview.sqlite3"
     CanonicalSchemaManager(database_path).prepare_startup()
@@ -280,7 +304,7 @@ def _seed_scope_database(tmp_path: Path) -> Path:
             graph_hash=None,
         )
         for sequence, (image_uid, rating) in enumerate(
-            (("image-1", 9), ("image-1", 9), ("image-2", 8), ("image-2", 10)),
+            (("image-1", 9), ("image-1", 9), ("image-2", 8), ("image-2", 8)),
             1,
         ):
             image_id = int(

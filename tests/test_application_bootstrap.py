@@ -8,6 +8,7 @@ from typing import cast
 import pytest
 from fastapi.testclient import TestClient
 
+from comfyreview.api.v2_presenters import ImageResponseMapper
 from comfyreview.application import (
     AnalyticsReportService,
     AnalyticsService,
@@ -17,13 +18,16 @@ from comfyreview.application import (
     CurationService,
     GenerationReconciliationService,
     GenerationService,
+    ImageContextQueryService,
     OutputImageReadModel,
     PlaygroundService,
     PlaygroundSubmissionService,
     PromptCatalogService,
     RankingService,
+    ReviewCandidateService,
     ReviewResult,
     ReviewService,
+    ScopeFacetService,
     SubmitReviewCommand,
     WorkflowDefaultsService,
 )
@@ -111,6 +115,10 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         canonical_schema=_RecordingCanonicalSchema(settings, events),
         output_images=_EmptyOutputImageCatalog(),
         file_urls=OutputFileUrlMapper(settings.output_root),
+        image_contexts=cast(ImageContextQueryService, object()),
+        scope_facets=cast(ScopeFacetService, object()),
+        review_candidates=cast(ReviewCandidateService, object()),
+        image_responses=cast(ImageResponseMapper, object()),
         analytics_service=cast(AnalyticsService, object()),
         analytics_reports=cast(AnalyticsReportService, object()),
         analytics_pages=cast(AnalyticsPageService, object()),

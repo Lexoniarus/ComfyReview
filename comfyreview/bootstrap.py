@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from comfyreview.api.v2_presenters import ImageResponseMapper
 from comfyreview.application import (
     AnalyticsReportService,
     AnalyticsService,
@@ -19,6 +20,7 @@ from comfyreview.application import (
     GenerationOutputCollector,
     GenerationReconciliationService,
     GenerationService,
+    ImageContextQueryService,
     OutputImageCatalog,
     PlaygroundGenerationPolicy,
     PlaygroundService,
@@ -27,7 +29,9 @@ from comfyreview.application import (
     PromptRenderer,
     PromptSelectionPolicy,
     RankingService,
+    ReviewCandidateService,
     ReviewService,
+    ScopeFacetService,
     WorkflowCompiler,
     WorkflowDefaultsService,
 )
@@ -58,12 +62,17 @@ from comfyreview.repositories.sqlite import (
     SqliteCurationRepository,
     SqliteGenerationOutputRepository,
     SqliteGenerationRepository,
+    SqliteImageContextRepository,
+    SqliteImageFileRepository,
     SqliteOutputImageRepository,
     SqlitePromptCatalogRepository,
     SqliteRankingRepository,
+    SqliteReviewCandidateRepository,
     SqliteReviewRepository,
+    SqliteScopeFacetRepository,
 )
 from comfyreview.settings import Settings, load_settings
+from routers.api_v2_router import router as api_v2_router
 from routers.arena_router import router as arena_router
 from routers.index_router import router as index_router
 from routers.playground import router as playground_router
@@ -86,6 +95,10 @@ class ApplicationContainer:
     canonical_schema: CanonicalSchemaLifecycle
     output_images: OutputImageCatalog
     file_urls: OutputFileUrlMapper
+    image_contexts: ImageContextQueryService
+    scope_facets: ScopeFacetService
+    review_candidates: ReviewCandidateService
+    image_responses: ImageResponseMapper
     analytics_service: AnalyticsService
     analytics_reports: AnalyticsReportService
     analytics_pages: AnalyticsPageService
@@ -131,6 +144,9 @@ def build_application_container(
         ),
     )
     file_urls = OutputFileUrlMapper(configured.output_root)
+    image_contexts = ImageContextQueryService(
+        SqliteImageContextRepository(configured.canonical_database_path)
+    )
     review_service = ReviewService(
         image_resolver=output_images,
         reviews=SqliteReviewRepository(configured.canonical_database_path),
@@ -196,6 +212,19 @@ def build_application_container(
         ),
         output_images=output_images,
         file_urls=file_urls,
+        image_contexts=image_contexts,
+        scope_facets=ScopeFacetService(
+            SqliteScopeFacetRepository(configured.canonical_database_path)
+        ),
+        review_candidates=ReviewCandidateService(
+            SqliteReviewCandidateRepository(configured.canonical_database_path)
+        ),
+        image_responses=ImageResponseMapper(
+            files=SqliteImageFileRepository(
+                configured.canonical_database_path
+            ),
+            urls=file_urls,
+        ),
         analytics_service=analytics_service,
         analytics_reports=analytics_reports,
         analytics_pages=AnalyticsPageService(
@@ -298,6 +327,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
         name="static",
     )
     application.include_router(index_router)
+    application.include_router(api_v2_router)
     application.include_router(top_router)
     application.include_router(arena_router)
     application.include_router(stats_router)

@@ -13,6 +13,7 @@ from comfyreview.application.image_queries import (
     ImageClassification,
     ImageContext,
     ImageFilter,
+    ImageOrder,
     ImagePage,
     ImageQuery,
     ImageScope,
@@ -101,7 +102,8 @@ class SqliteImageContextRepository(_CanonicalScopeLookup):
             )
             rows = connection.execute(
                 _context_statement(filters.statement)
-                + " ORDER BY image.id DESC LIMIT ? OFFSET ?",
+                + _order_clause(query.order)
+                + " LIMIT ? OFFSET ?",
                 (*filters.parameters, query.limit, query.offset),
             ).fetchall()
             contexts = _map_context_rows(connection, rows)
@@ -168,6 +170,26 @@ class SqliteReviewCandidateRepository(_CanonicalScopeLookup):
             ).fetchall()
             contexts = _map_context_rows(connection, rows)
             return contexts[0] if contexts else None
+        finally:
+            connection.close()
+
+
+class SqliteImageFileRepository:
+    """Resolve canonical image identities to current file attributes."""
+
+    def __init__(self, database_path: Path) -> None:
+        self._database_path = Path(database_path)
+
+    def get_png_path(self, image_uid: str) -> Path | None:
+        """Return the current live PNG path for a canonical image."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            row = connection.execute(
+                "SELECT png_path FROM images "
+                "WHERE image_uid = ? AND deleted_at IS NULL",
+                (image_uid,),
+            ).fetchone()
+            return Path(str(row["png_path"])) if row is not None else None
         finally:
             connection.close()
 
@@ -283,6 +305,20 @@ def _count_statement(where: str) -> str:
         JOIN image_review_summary AS summary ON summary.image_id = image.id
         WHERE {where}
     """
+
+
+def _order_clause(order: ImageOrder) -> str:
+    if order is ImageOrder.TOP:
+        return (
+            " ORDER BY summary.average_rating DESC, "
+            "summary.rating_count DESC, image.image_uid"
+        )
+    if order is ImageOrder.WORST:
+        return (
+            " ORDER BY summary.average_rating ASC, "
+            "summary.rating_count DESC, image.image_uid"
+        )
+    return " ORDER BY image.id DESC"
 
 
 def _facet_statement(where: str) -> str:

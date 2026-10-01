@@ -27,6 +27,14 @@ class ImageClassification(StrEnum):
     UNCLASSIFIED = "unclassified"
 
 
+class ImageOrder(StrEnum):
+    """Select one stable database-side image ordering."""
+
+    RECENT = "recent"
+    TOP = "top"
+    WORST = "worst"
+
+
 class ImageQueryValidationError(ValueError):
     """Reject invalid canonical image-query input."""
 
@@ -71,6 +79,7 @@ class ImageQuery:
     """Describe one paginated canonical image query."""
 
     filters: ImageFilter = ImageFilter()
+    order: ImageOrder = ImageOrder.RECENT
     offset: int = 0
     limit: int = 48
 

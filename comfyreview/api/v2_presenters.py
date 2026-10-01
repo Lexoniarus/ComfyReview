@@ -1,0 +1,112 @@
+"""HTTP response mapping for canonical V2 image queries."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Protocol
+
+from comfyreview.application import ImageContext, ImageScope, ScopeFacet
+
+
+class ImageFileRepository(Protocol):
+    """Resolve stable image identities to current file attributes."""
+
+    def get_png_path(self, image_uid: str) -> Path | None:
+        """Return the current live PNG path when available."""
+        ...
+
+
+class FileUrlMapper(Protocol):
+    """Map one validated output path to its mounted HTTP URL."""
+
+    def to_url(self, png_path: str | Path) -> str:
+        """Return the mounted output URL."""
+        ...
+
+
+class ImageResponseMapper:
+    """Add presentation URLs to path-free application read models."""
+
+    def __init__(
+        self,
+        *,
+        files: ImageFileRepository,
+        urls: FileUrlMapper,
+    ) -> None:
+        self._files = files
+        self._urls = urls
+
+    def context(self, image: ImageContext) -> dict[str, Any]:
+        """Map a complete image context to snake-case JSON data."""
+        path = self._files.get_png_path(image.image_uid)
+        return {
+            **self.summary(image),
+            "image_url": self._urls.to_url(path) if path is not None else "",
+            "prompt_snapshot": {
+                "positive": image.prompt_snapshot.positive,
+                "negative": image.prompt_snapshot.negative,
+                "draft_overridden": image.prompt_snapshot.draft_overridden,
+            },
+            "generation_settings": {
+                "model": image.generation_settings.model,
+                "checkpoint": image.generation_settings.checkpoint,
+                "seed": image.generation_settings.seed,
+                "steps": image.generation_settings.steps,
+                "cfg": image.generation_settings.cfg,
+                "sampler": image.generation_settings.sampler,
+                "scheduler": image.generation_settings.scheduler,
+                "denoise": image.generation_settings.denoise,
+            },
+            "workflow_provenance": {
+                "blueprint_uid": image.workflow.blueprint_uid,
+                "blueprint_version": image.workflow.blueprint_version,
+                "graph_hash": image.workflow.graph_hash,
+            },
+            "output_role": image.output_role,
+            "output_index": image.output_index,
+        }
+
+    def summary(self, image: ImageContext) -> dict[str, Any]:
+        """Map image-card fields without exposing prompt or local path data."""
+        return {
+            "image_uid": image.image_uid,
+            "generation_uid": image.generation_uid,
+            "classification": image.classification.value,
+            "scopes": [self.scope(scope) for scope in image.scopes],
+            "review_summary": {
+                "current_rating": image.review.current_rating,
+                "rating_count": image.review.rating_count,
+                "average_rating": image.review.average_rating,
+            },
+            "curation": (
+                {
+                    "set_key": image.curation.set_key,
+                    "assigned_at": image.curation.assigned_at,
+                }
+                if image.curation is not None
+                else None
+            ),
+        }
+
+    @staticmethod
+    def scope(scope: ImageScope) -> dict[str, Any]:
+        """Map one application scope to JSON-safe values."""
+        return {
+            "kind": scope.kind.value,
+            "component_uid": scope.component_uid,
+            "revision_uid": scope.revision_uid,
+            "name": scope.name,
+            "position": scope.position,
+        }
+
+    @staticmethod
+    def facet(facet: ScopeFacet) -> dict[str, Any]:
+        """Map one canonical scope facet to JSON-safe values."""
+        return {
+            "kind": facet.kind.value,
+            "component_uid": facet.component_uid,
+            "revision_uid": facet.revision_uid,
+            "name": facet.name,
+            "archived": facet.archived,
+            "count": facet.count,
+        }
