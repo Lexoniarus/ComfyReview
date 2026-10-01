@@ -94,6 +94,52 @@ class PromptSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class PromptCompositionEvidence:
+    """Carry ordered immutable revision blocks for prompt comparison."""
+
+    positive_blocks: tuple[str, ...]
+    negative_blocks: tuple[str, ...]
+
+
+class PromptBlockRenderer(Protocol):
+    """Render ordered catalog revision blocks using canonical semantics."""
+
+    def render_blocks(
+        self,
+        positive_blocks: tuple[str, ...],
+        negative_blocks: tuple[str, ...],
+    ) -> tuple[str, str]:
+        """Return canonical positive and negative prompt text."""
+        ...
+
+
+class DraftOverridePolicy:
+    """Derive draft-override state from canonical prompt evidence."""
+
+    def __init__(self, renderer: PromptBlockRenderer) -> None:
+        self._renderer = renderer
+
+    def apply(
+        self,
+        snapshot: PromptSnapshot,
+        evidence: PromptCompositionEvidence | None,
+    ) -> PromptSnapshot:
+        """Return a snapshot with deterministic override state."""
+        if evidence is None:
+            return replace(snapshot, draft_overridden=False)
+        positive, negative = self._renderer.render_blocks(
+            evidence.positive_blocks,
+            evidence.negative_blocks,
+        )
+        return replace(
+            snapshot,
+            draft_overridden=(
+                snapshot.positive != positive or snapshot.negative != negative
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationSettings:
     """Expose normalized generation settings for inspection."""
 
@@ -141,6 +187,7 @@ class ImageContext:
     generation_uid: str
     classification: ImageClassification
     scopes: tuple[ImageScope, ...]
+    prompt_evidence: PromptCompositionEvidence | None
     prompt_snapshot: PromptSnapshot
     generation_settings: GenerationSettings
     workflow: WorkflowProvenance
@@ -224,8 +271,13 @@ class ReviewCandidateRepository(Protocol):
 class ImageContextQueryService:
     """Validate and orchestrate canonical image-context queries."""
 
-    def __init__(self, repository: ImageContextRepository) -> None:
+    def __init__(
+        self,
+        repository: ImageContextRepository,
+        draft_overrides: DraftOverridePolicy,
+    ) -> None:
         self._repository = repository
+        self._draft_overrides = draft_overrides
 
     def list_images(self, query: ImageQuery) -> ImagePage:
         """Return one validated canonical image page."""
@@ -235,7 +287,13 @@ class ImageContextQueryService:
             raise ImageQueryValidationError("limit must be between 1 and 100")
         filters = _normalize_filter(query.filters)
         _validate_scope_selection(self._repository, filters.scopes)
-        return self._repository.list_images(replace(query, filters=filters))
+        page = self._repository.list_images(replace(query, filters=filters))
+        return replace(
+            page,
+            entries=tuple(
+                self._apply_prompt_policy(item) for item in page.entries
+            ),
+        )
 
     def get_image(self, image_uid: str) -> ImageContext:
         """Return one canonical image or report a missing stable identity."""
@@ -247,7 +305,16 @@ class ImageContextQueryService:
             raise ImageContextNotFoundError(
                 f"unknown canonical image: {normalized_uid}"
             )
-        return image
+        return self._apply_prompt_policy(image)
+
+    def _apply_prompt_policy(self, image: ImageContext) -> ImageContext:
+        return replace(
+            image,
+            prompt_snapshot=self._draft_overrides.apply(
+                image.prompt_snapshot,
+                image.prompt_evidence,
+            ),
+        )
 
 
 class ScopeFacetService:
@@ -266,14 +333,28 @@ class ScopeFacetService:
 class ReviewCandidateService:
     """Select review candidates without presentation or path heuristics."""
 
-    def __init__(self, repository: ReviewCandidateRepository) -> None:
+    def __init__(
+        self,
+        repository: ReviewCandidateRepository,
+        draft_overrides: DraftOverridePolicy,
+    ) -> None:
         self._repository = repository
+        self._draft_overrides = draft_overrides
 
     def next_candidate(self, filters: ImageFilter) -> ImageContext | None:
         """Return the next candidate matching one canonical filter."""
         normalized = _normalize_filter(filters)
         _validate_scope_selection(self._repository, normalized.scopes)
-        return self._repository.next_candidate(normalized)
+        image = self._repository.next_candidate(normalized)
+        if image is None:
+            return None
+        return replace(
+            image,
+            prompt_snapshot=self._draft_overrides.apply(
+                image.prompt_snapshot,
+                image.prompt_evidence,
+            ),
+        )
 
 
 def _normalize_filter(filters: ImageFilter) -> ImageFilter:

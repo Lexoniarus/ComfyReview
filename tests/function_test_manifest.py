@@ -1,6 +1,10 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.image_queries:DraftOverridePolicy.apply": (
+        "tests/test_image_query_contracts.py::"
+        "test_draft_override_policy_uses_canonical_renderer_semantics"
+    ),
     "comfyreview.application.image_queries:ImageContextQueryService.list_images": (
         "tests/test_image_query_contracts.py::"
         "test_image_query_service_delegates_normalized_canonical_filter"
@@ -102,6 +106,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "test_generation_output_identity_does_not_depend_on_path"
     ),
     "comfyreview.application.playground:PromptRenderer.render": (
+        "tests/test_playground_application.py::"
+        "test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate"
+    ),
+    "comfyreview.application.playground:PromptRenderer.render_blocks": (
         "tests/test_playground_application.py::"
         "test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate"
     ),

@@ -80,6 +80,7 @@ from comfyreview.application.generation_reconciliation import (
 )
 from comfyreview.application.image_queries import (
     CurationSummary,
+    DraftOverridePolicy,
     GenerationSettings,
     ImageClassification,
     ImageContext,
@@ -92,6 +93,7 @@ from comfyreview.application.image_queries import (
     ImageQuery,
     ImageQueryValidationError,
     ImageScope,
+    PromptCompositionEvidence,
     PromptSnapshot,
     ReviewCandidateRepository,
     ReviewCandidateService,
@@ -231,6 +233,7 @@ __all__ = [
     "ComfyUiTimeoutError",
     "CreatePromptComponentCommand",
     "CurationSummary",
+    "DraftOverridePolicy",
     "CurationAssignment",
     "CurationFileManager",
     "CurationImage",
@@ -317,6 +320,7 @@ __all__ = [
     "PromptTokenStatistic",
     "PromptMatchPreview",
     "PromptSnapshot",
+    "PromptCompositionEvidence",
     "RankedImage",
     "RankingQuery",
     "RankingRepository",

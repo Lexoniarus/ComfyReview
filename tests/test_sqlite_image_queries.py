@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from comfyreview.application.image_queries import (
+    DraftOverridePolicy,
     ImageClassification,
     ImageFilter,
     ImageOrder,
@@ -13,6 +14,7 @@ from comfyreview.application.image_queries import (
     ScopeKind,
     ScopeSelection,
 )
+from comfyreview.application.playground import PromptRenderer
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteImageContextRepository,
@@ -65,9 +67,10 @@ def test_sqlite_image_queries_keep_unclassified_images_without_inference(
     assert context.classification is ImageClassification.UNCLASSIFIED
     assert context.scopes == ()
     assert context.prompt_snapshot.draft_overridden is False
+    assert context.prompt_evidence is None
 
 
-def test_sqlite_image_context_exposes_exact_scopes_and_draft_override(
+def test_sqlite_image_context_exposes_exact_scopes_and_prompt_evidence(
     tmp_path: Path,
 ) -> None:
     database_path = _seed_scope_database(tmp_path)
@@ -82,13 +85,23 @@ def test_sqlite_image_context_exposes_exact_scopes_and_draft_override(
         ScopeKind.OUTFIT,
     ]
     assert exact.prompt_snapshot.draft_overridden is False
+    assert exact.prompt_evidence is not None
+    assert exact.prompt_evidence.positive_blocks == ("Aiko", "dress")
     assert exact.workflow.blueprint_uid == "default-character"
     assert exact.workflow.blueprint_version == 1
     assert exact.workflow.graph_hash == "graph-1"
     assert exact.curation is not None
     assert exact.curation.set_key == "favorites"
     assert overridden is not None
-    assert overridden.prompt_snapshot.draft_overridden is True
+    assert overridden.prompt_snapshot.draft_overridden is False
+    policy = DraftOverridePolicy(PromptRenderer())
+    assert (
+        policy.apply(
+            overridden.prompt_snapshot,
+            overridden.prompt_evidence,
+        ).draft_overridden
+        is True
+    )
     assert repository.get_image("missing") is None
 
 

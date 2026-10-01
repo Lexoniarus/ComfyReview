@@ -368,6 +368,12 @@ def test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate() -
     assert overridden.negative_text == "draft negative"
     assert overridden.revision_uids == rendered.revision_uids
     assert overridden.draft_overridden is True
+    assert renderer.render_blocks(
+        (" person ", "city"), ("bad anatomy", "")
+    ) == (
+        "person, city",
+        "bad anatomy",
+    )
 
 
 class _CatalogService:

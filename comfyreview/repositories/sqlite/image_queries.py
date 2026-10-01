@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +17,7 @@ from comfyreview.application.image_queries import (
     ImagePage,
     ImageQuery,
     ImageScope,
+    PromptCompositionEvidence,
     PromptSnapshot,
     ReviewSummary,
     ScopeFacet,
@@ -434,8 +435,6 @@ def _map_context(
     scopes = tuple(record[0] for record in scope_records)
     positive = str(row["positive_prompt"] or "")
     negative = str(row["negative_prompt"] or "")
-    rendered_positive = _render_blocks(record[1] for record in scope_records)
-    rendered_negative = _render_blocks(record[2] for record in scope_records)
     classified = row["prompt_composition_id"] is not None
     return ImageContext(
         image_uid=str(row["image_uid"]),
@@ -446,13 +445,18 @@ def _map_context(
             else ImageClassification.UNCLASSIFIED
         ),
         scopes=scopes,
+        prompt_evidence=(
+            PromptCompositionEvidence(
+                positive_blocks=tuple(record[1] for record in scope_records),
+                negative_blocks=tuple(record[2] for record in scope_records),
+            )
+            if classified
+            else None
+        ),
         prompt_snapshot=PromptSnapshot(
             positive=positive,
             negative=negative,
-            draft_overridden=classified
-            and (
-                positive != rendered_positive or negative != rendered_negative
-            ),
+            draft_overridden=False,
         ),
         generation_settings=GenerationSettings(
             model=str(row["model_branch"] or ""),
@@ -495,12 +499,6 @@ def _map_facet(row: sqlite3.Row) -> ScopeFacet:
         name=str(row["name"]),
         archived=row["archived_at"] is not None,
         count=int(row["image_count"]),
-    )
-
-
-def _render_blocks(blocks: Iterable[str]) -> str:
-    return ", ".join(
-        block for value in blocks if (block := str(value or "").strip())
     )
 
 

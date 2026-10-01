@@ -17,6 +17,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaLifecycle,
     CurationService,
+    DraftOverridePolicy,
     GenerationOutputCollector,
     GenerationReconciliationService,
     GenerationService,
@@ -141,8 +142,11 @@ def build_application_container(
         ),
     )
     file_urls = OutputFileUrlMapper(configured.output_root)
+    prompt_renderer = PromptRenderer()
+    draft_overrides = DraftOverridePolicy(prompt_renderer)
     image_contexts = ImageContextQueryService(
-        SqliteImageContextRepository(configured.canonical_database_path)
+        SqliteImageContextRepository(configured.canonical_database_path),
+        draft_overrides,
     )
     review_service = ReviewService(
         image_resolver=output_images,
@@ -207,7 +211,10 @@ def build_application_container(
             SqliteScopeFacetRepository(configured.canonical_database_path)
         ),
         review_candidates=ReviewCandidateService(
-            SqliteReviewCandidateRepository(configured.canonical_database_path)
+            SqliteReviewCandidateRepository(
+                configured.canonical_database_path
+            ),
+            draft_overrides,
         ),
         image_responses=ImageResponseMapper(
             files=SqliteImageFileRepository(
@@ -255,7 +262,7 @@ def build_application_container(
         playground_service=PlaygroundService(
             catalog=prompt_catalog_service,
             selection_policy=PromptSelectionPolicy(),
-            renderer=PromptRenderer(),
+            renderer=prompt_renderer,
         ),
         playground_submission_service=PlaygroundSubmissionService(
             generation=generation_service,

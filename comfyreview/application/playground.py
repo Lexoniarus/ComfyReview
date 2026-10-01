@@ -349,13 +349,15 @@ class PromptRenderer:
         overrides: PromptDraftOverrides | None = None,
     ) -> RenderedPrompt:
         """Return exact positive/negative snapshots without catalog writes."""
-        positive = self._join(
-            component.latest_revision.positive_text
-            for component in selection.components
-        )
-        negative = self._join(
-            component.latest_revision.negative_text
-            for component in selection.components
+        positive, negative = self.render_blocks(
+            tuple(
+                component.latest_revision.positive_text
+                for component in selection.components
+            ),
+            tuple(
+                component.latest_revision.negative_text
+                for component in selection.components
+            ),
         )
         notes = " | ".join(
             component.notes.strip()
@@ -381,6 +383,14 @@ class PromptRenderer:
                 or overrides.negative_text is not None
             ),
         )
+
+    def render_blocks(
+        self,
+        positive_blocks: tuple[str, ...],
+        negative_blocks: tuple[str, ...],
+    ) -> tuple[str, str]:
+        """Render ordered revision blocks using canonical join semantics."""
+        return self._join(positive_blocks), self._join(negative_blocks)
 
     @staticmethod
     def _join(blocks: Iterable[str]) -> str:

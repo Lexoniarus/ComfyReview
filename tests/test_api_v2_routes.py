@@ -647,6 +647,7 @@ def _context(image_uid: str = "image-1") -> ImageContext:
                 ScopeKind.CHARACTER, "character-a", "revision-a", "Aiko", 0
             ),
         ),
+        prompt_evidence=None,
         prompt_snapshot=PromptSnapshot("positive", "negative", False),
         generation_settings=GenerationSettings(
             "anime", "checkpoint", 1, 20, 7.0, "euler", "normal", 1.0
