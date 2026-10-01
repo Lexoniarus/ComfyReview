@@ -1,6 +1,22 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.image_queries:ImageContextQueryService.list_images": (
+        "tests/test_image_query_contracts.py::"
+        "test_image_query_service_delegates_normalized_canonical_filter"
+    ),
+    "comfyreview.application.image_queries:ImageContextQueryService.get_image": (
+        "tests/test_image_query_contracts.py::"
+        "test_image_context_service_gets_by_uid_and_reports_missing_images"
+    ),
+    "comfyreview.application.image_queries:ScopeFacetService.list_facets": (
+        "tests/test_image_query_contracts.py::"
+        "test_scope_facet_service_keeps_repository_side_counting"
+    ),
+    "comfyreview.application.image_queries:ReviewCandidateService.next_candidate": (
+        "tests/test_image_query_contracts.py::"
+        "test_review_candidate_service_returns_unclassified_without_inference"
+    ),
     "comfyreview.application.analytics:AnalyticsReportService.combo_statistics": (
         "tests/test_canonical_analytics.py::"
         "test_analytics_report_service_normalizes_queries"
