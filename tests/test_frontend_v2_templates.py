@@ -3,9 +3,10 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from routers.arena_router import router as arena_router
 from routers.index_router import router as review_router
 from routers.top_router import router as top_router
-from templates import INDEX_HTML, TOP_PICTURES_HTML
+from templates import ARENA_HTML, INDEX_HTML, TOP_PICTURES_HTML
 
 
 def test_top_worst_template_is_a_script_free_jinja_shell() -> None:
@@ -51,3 +52,19 @@ def test_review_template_and_url_use_the_v2_api_surface() -> None:
     assert "<style" not in rendered
     assert "onclick=" not in rendered
     assert 'data-v2-surface="review"' in response.text
+
+
+def test_arena_template_and_url_use_uid_based_v2_controls() -> None:
+    rendered = ARENA_HTML.render()
+    application = FastAPI()
+    application.include_router(arena_router)
+
+    response = TestClient(application).get("/arena?scope=character-a")
+
+    assert response.status_code == 200
+    assert 'data-v2-surface="arena"' in rendered
+    assert "/static/js/entries/arena.js" in rendered
+    assert "left_image_uid" not in rendered
+    assert "<style" not in rendered
+    assert "onclick=" not in rendered
+    assert 'data-v2-surface="arena"' in response.text

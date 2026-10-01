@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from comfyreview.api.v2_presenters import ImageResponseMapper
 from comfyreview.application import (
+    ArenaPair,
     ArenaResult,
     CurationResult,
     GenerationSettings,
@@ -100,6 +101,10 @@ class _Curation:
 class _Arena:
     command = None
 
+    def next_pair(self, query):
+        self.query = query
+        return ArenaPair(_context("left"), _context("right"))
+
     def record_decision(self, command):
         self.command = command
         return ArenaResult("match-1", command.left_image_uid, 10, 4)
@@ -187,6 +192,24 @@ def test_v2_review_candidate_supports_empty_and_loaded_states() -> None:
     assert empty.status_code == 204
 
 
+def test_v2_arena_pair_uses_the_canonical_filtered_pool() -> None:
+    client, container = _client()
+
+    response = client.get(
+        "/api/v2/arena/pair",
+        params=[("scope", "character-a"), ("classification", "classified")],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["left"]["image_uid"] == "left"
+    assert response.json()["right"]["image_uid"] == "right"
+    assert container.arena_service.query.images.limit == 100
+    assert (
+        container.arena_service.query.images.filters.scopes.component_uids
+        == ("character-a",)
+    )
+
+
 def test_v2_mutations_submit_only_stable_image_identities() -> None:
     client, container = _client()
 
@@ -218,7 +241,7 @@ def test_v2_mutations_submit_only_stable_image_identities() -> None:
 
 def _client() -> tuple[TestClient, SimpleNamespace]:
     container = SimpleNamespace(
-        settings=SimpleNamespace(minimum_runs=2),
+        settings=SimpleNamespace(minimum_runs=2, pool_limit=128),
         image_contexts=_ImageContexts(),
         scope_facets=_Facets(),
         review_candidates=_Candidates(),

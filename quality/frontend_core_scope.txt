@@ -3,6 +3,8 @@ static/js/core/api-error.js
 static/js/core/api-client.js
 static/js/core/request-lifecycle.js
 static/js/components/confirmation-dialog.js
+static/js/arena/arena-board.js
+static/js/arena/arena-keyboard.js
 static/js/images/pagination-controls.js
 static/js/layout/responsive-rails.js
 static/js/review/review-keyboard.js
@@ -12,3 +14,4 @@ static/js/scopes/url-state.js
 static/js/scopes/scope-state-controller.js
 static/js/surfaces/top-worst-controller.js
 static/js/surfaces/review-controller.js
+static/js/surfaces/arena-controller.js

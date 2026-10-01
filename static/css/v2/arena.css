@@ -1,0 +1,164 @@
+.arena-shell {
+  display: grid;
+  min-height: calc(100vh - var(--app-bar-height));
+  grid-template-columns: var(--scope-rail-width) minmax(0, 1fr) var(
+      --inspector-width
+    );
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.arena-scope,
+.arena-inspector {
+  position: sticky;
+  top: calc(var(--app-bar-height) + var(--space-3));
+  align-self: start;
+  max-height: calc(100vh - var(--app-bar-height) - var(--space-6));
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.arena-main {
+  min-width: 0;
+}
+
+.arena-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.arena-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.arena-title-group h1 {
+  margin: 0;
+  font-size: var(--font-size-heading);
+}
+
+.arena-status {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.arena-board {
+  display: grid;
+  min-height: calc(100vh - var(--app-bar-height) - 7rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.arena-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.arena-image-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-media);
+  background: var(--color-surface-subtle);
+  cursor: zoom-in;
+}
+
+.arena-image-button img {
+  display: block;
+  width: 100%;
+  max-height: calc(100vh - 16rem);
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+}
+
+.arena-card-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+}
+
+.arena-decision,
+.arena-inspect {
+  min-height: 2.75rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.arena-decision:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
+  background: var(--color-surface-selected);
+}
+
+.arena-decision:disabled,
+.arena-inspect:disabled {
+  cursor: wait;
+  opacity: 0.48;
+}
+
+.arena-empty {
+  grid-column: 1 / -1;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+@media (width >= 85.4375rem) and (width < 112.5rem) {
+  .arena-shell {
+    grid-template-columns: 13.5rem minmax(0, 1fr) 19rem;
+  }
+}
+
+@media (width <= 85.375rem), (pointer: coarse) {
+  .arena-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .arena-scope,
+  .arena-inspector {
+    position: fixed;
+    z-index: 40;
+    top: var(--app-bar-height);
+    bottom: 0;
+    width: min(21rem, 90vw);
+    max-height: none;
+    border-radius: 0;
+    transition: transform var(--motion-normal);
+  }
+
+  .arena-scope {
+    left: 0;
+    transform: translateX(-105%);
+  }
+
+  .arena-inspector {
+    right: 0;
+    transform: translateX(105%);
+  }
+
+  .arena-shell.is-scope-open .arena-scope,
+  .arena-shell.is-inspector-open .arena-inspector {
+    transform: translateX(0);
+  }
+}
+
+@media (width <= 50rem) {
+  .arena-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .arena-shell {
+    padding: var(--space-2);
+  }
+}

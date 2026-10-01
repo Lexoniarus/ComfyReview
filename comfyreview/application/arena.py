@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from comfyreview.application.ranking import (
-    RankedImage,
-    RankingQuery,
-    RankingService,
+from comfyreview.application.image_queries import (
+    ImageContext,
+    ImageContextQueryService,
+    ImageQuery,
 )
 
 
@@ -22,17 +22,17 @@ class ArenaMutationError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class ArenaQuery:
-    """Describe the ranked pool used for pair selection."""
+    """Describe one bounded canonical image pool for pair selection."""
 
-    ranking: RankingQuery
+    images: ImageQuery
 
 
 @dataclass(frozen=True, slots=True)
 class ArenaPair:
     """Present one directed pair of canonical images."""
 
-    left: RankedImage
-    right: RankedImage
+    left: ImageContext
+    right: ImageContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,15 +100,15 @@ class ArenaService:
     def __init__(
         self,
         *,
-        rankings: RankingService,
+        images: ImageContextQueryService,
         repository: ArenaRepository,
     ) -> None:
-        self._rankings = rankings
+        self._images = images
         self._repository = repository
 
     def next_pair(self, query: ArenaQuery) -> ArenaPair | None:
         """Return the next unplayed directed pair from the ranked pool."""
-        images = self._rankings.list_images(query.ranking)
+        images = self._images.list_images(query.images).entries
         directions = self._repository.list_played_directions(
             tuple(image.image_uid for image in images)
         )

@@ -1,0 +1,82 @@
+import { ArenaBoard } from "../arena/arena-board.js";
+import { ArenaKeyboard } from "../arena/arena-keyboard.js";
+import { ApiClient } from "../core/api-client.js";
+import { RequestLifecycle } from "../core/request-lifecycle.js";
+import { ImageViewer } from "../images/image-viewer.js";
+import { ImageInspector } from "../inspector/image-inspector.js";
+import { ResponsiveRails } from "../layout/responsive-rails.js";
+import { ActiveScopeChips } from "../scopes/active-scope-chips.js";
+import { ScopeNavigator } from "../scopes/scope-navigator.js";
+import { ScopeStateController } from "../scopes/scope-state-controller.js";
+import { ArenaController } from "../surfaces/arena-controller.js";
+
+const root = document.querySelector("[data-v2-surface='arena']");
+if (root instanceof HTMLElement) {
+  const scopeRoot = root.querySelector("[data-scope-navigator]");
+  const activeScopesRoot = root.querySelector("[data-active-scopes]");
+  const boardRoot = root.querySelector("[data-arena-board]");
+  const inspectorRoot = root.querySelector("[data-image-inspector]");
+  const viewerRoot = root.querySelector("[data-image-viewer]");
+  const status = root.querySelector("[data-arena-status]");
+  if (
+    scopeRoot instanceof HTMLElement &&
+    activeScopesRoot instanceof HTMLElement &&
+    boardRoot instanceof HTMLElement &&
+    inspectorRoot instanceof HTMLElement &&
+    viewerRoot instanceof HTMLDialogElement &&
+    status instanceof HTMLElement
+  ) {
+    const state = new ScopeStateController(window);
+    const viewer = new ImageViewer(viewerRoot);
+    /** @type {ArenaController | null} */
+    let controller = null;
+    const navigator = new ScopeNavigator(scopeRoot, {
+      onToggle: (uid) => {
+        const scopes = state.state.scopes.includes(uid)
+          ? state.state.scopes.filter((candidate) => candidate !== uid)
+          : [...state.state.scopes, uid];
+        state.update({ scopes });
+      },
+      onClassification: (classification) =>
+        state.update({
+          classification:
+            classification === "classified" || classification === "unclassified"
+              ? classification
+              : "all",
+        }),
+    });
+    const activeScopes = new ActiveScopeChips(activeScopesRoot, {
+      onRemove: (uid) =>
+        state.update({
+          scopes: state.state.scopes.filter((candidate) => candidate !== uid),
+        }),
+      onClear: () => state.update({ scopes: [] }),
+    });
+    const board = new ArenaBoard(boardRoot, {
+      onDecision: (side) => void controller?.recordDecision(side),
+      onInspect: (image) => controller?.inspect(image),
+      onExpand: (url) => controller?.expand(url),
+    });
+    const keyboard = new ArenaKeyboard(document, {
+      onDecision: (side) => void controller?.recordDecision(side),
+    });
+    controller = new ArenaController({
+      api: new ApiClient(),
+      state,
+      navigator,
+      activeScopes,
+      board,
+      inspector: new ImageInspector(inspectorRoot),
+      viewer,
+      rails: new ResponsiveRails(root),
+      keyboard,
+      readRequests: new RequestLifecycle(),
+      mutationRequests: new RequestLifecycle(),
+      status,
+    });
+    controller.start();
+    window.addEventListener("pagehide", () => controller?.dispose(), {
+      once: true,
+    });
+  }
+}

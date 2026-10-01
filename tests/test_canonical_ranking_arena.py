@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -15,6 +16,8 @@ from comfyreview.application import (
     ArenaResult,
     ArenaService,
     ArenaValidationError,
+    ImageContextQueryService,
+    ImageQuery,
     RankedImage,
     RankingQuery,
     RankingService,
@@ -106,6 +109,28 @@ class _ArenaRepository:
         )
 
 
+class _ImageContexts:
+    def __init__(self, images: tuple[RankedImage, ...]) -> None:
+        self.images = images
+
+    def list_images(self, query):
+        return type(
+            "Page",
+            (),
+            {"entries": self.images, "query": query},
+        )()
+
+
+def _arena_service(
+    repository: _ArenaRepository | SqliteArenaRepository,
+    images: tuple[RankedImage, ...] = (),
+) -> ArenaService:
+    return ArenaService(
+        images=cast(ImageContextQueryService, _ImageContexts(images)),
+        repository=repository,
+    )
+
+
 def test_ranking_service_filters_and_sorts_canonical_images() -> None:
     service = RankingService(
         _RankingRepository(
@@ -162,25 +187,21 @@ def test_ranking_service_supports_worst_and_unsorted_filters() -> None:
 
 
 def test_arena_service_selects_forward_then_reverse_pair() -> None:
-    rankings = RankingService(
-        _RankingRepository(
-            (_image("a", average=9.0), _image("b", average=8.0))
-        )
+    images = (
+        _image("a", average=9.0),
+        _image("b", average=8.0),
     )
-    forward = ArenaService(
-        rankings=rankings,
-        repository=_ArenaRepository(),
-    ).next_pair(ArenaQuery(RankingQuery()))
-    reverse = ArenaService(
-        rankings=rankings,
-        repository=_ArenaRepository(directions=frozenset({("a", "b")})),
-    ).next_pair(ArenaQuery(RankingQuery()))
-    complete = ArenaService(
-        rankings=rankings,
-        repository=_ArenaRepository(
-            directions=frozenset({("a", "b"), ("b", "a")})
-        ),
-    ).next_pair(ArenaQuery(RankingQuery()))
+    query = ImageQuery()
+    forward = _arena_service(_ArenaRepository(), images).next_pair(
+        ArenaQuery(query)
+    )
+    reverse = _arena_service(
+        _ArenaRepository(directions=frozenset({("a", "b")})), images
+    ).next_pair(ArenaQuery(query))
+    complete = _arena_service(
+        _ArenaRepository(directions=frozenset({("a", "b"), ("b", "a")})),
+        images,
+    ).next_pair(ArenaQuery(query))
 
     assert isinstance(forward, ArenaPair)
     assert (forward.left.image_uid, forward.right.image_uid) == ("a", "b")
@@ -191,10 +212,7 @@ def test_arena_service_selects_forward_then_reverse_pair() -> None:
 
 def test_arena_service_records_clamped_target_ratings() -> None:
     repository = _ArenaRepository()
-    service = ArenaService(
-        rankings=RankingService(_RankingRepository(())),
-        repository=repository,
-    )
+    service = _arena_service(repository)
 
     result = service.record_decision(
         RecordArenaDecisionCommand("left", "right", "right")
@@ -218,10 +236,7 @@ def test_arena_service_rejects_invalid_commands(
     command: RecordArenaDecisionCommand,
     message: str,
 ) -> None:
-    service = ArenaService(
-        rankings=RankingService(_RankingRepository(())),
-        repository=_ArenaRepository(),
-    )
+    service = _arena_service(_ArenaRepository())
 
     with pytest.raises(ArenaValidationError, match=message):
         service.record_decision(command)
@@ -309,10 +324,9 @@ def test_sqlite_ranking_and_arena_use_canonical_facts_atomically(
     arena = SqliteArenaRepository(database_path)
 
     images = rankings.list_ranked_images()
-    result = ArenaService(
-        rankings=RankingService(rankings),
-        repository=arena,
-    ).record_decision(RecordArenaDecisionCommand("left", "right", "left"))
+    result = _arena_service(arena).record_decision(
+        RecordArenaDecisionCommand("left", "right", "left")
+    )
 
     assert [image.image_uid for image in images] == ["left", "right"]
     assert all(image.json_path is None for image in images)
@@ -335,10 +349,9 @@ def test_sqlite_ranking_and_arena_use_canonical_facts_atomically(
         )
 
     with pytest.raises(ArenaValidationError, match="already decided"):
-        ArenaService(
-            rankings=RankingService(rankings),
-            repository=arena,
-        ).record_decision(RecordArenaDecisionCommand("left", "right", "left"))
+        _arena_service(arena).record_decision(
+            RecordArenaDecisionCommand("left", "right", "left")
+        )
     with sqlite3.connect(database_path) as connection:
         assert (
             connection.execute(

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from comfyreview.api import get_application_container
@@ -7,50 +7,15 @@ from comfyreview.application import (
     ArenaValidationError,
     RecordArenaDecisionCommand,
 )
-from services.arena_page_service import build_arena_page_context
-from services.context_filters import build_gallery_context
 from templates import ARENA_HTML
 
 router = APIRouter()
 
 
 @router.get("/arena", response_class=HTMLResponse)
-def arena(
-    request: Request,
-    model: str = Query(""),
-    mode: str = Query("top"),
-    set_key: str = Query(""),
-    subdir: str = Query(""),
-):
-    ctx = build_gallery_context(
-        model=model, subdir=subdir, set_key=set_key, mode=mode
-    )
-
-    container = get_application_container(request)
-    vm = build_arena_page_context(
-        ranking_service=container.ranking_service,
-        arena_service=container.arena_service,
-        prompt_labels=container.prompt_labels,
-        image_url=container.file_urls.to_url,
-        context=ctx,
-        min_runs=container.settings.minimum_runs,
-        pool_limit=container.settings.pool_limit,
-    )
-
-    return ARENA_HTML.render(
-        left=vm["left"],
-        right=vm["right"],
-        message=vm["message"],
-        model=vm["model"],
-        subdir=vm["subdir"],
-        model_list=vm["model_list"],
-        subdir_list=vm["subdir_list"],
-        mode=vm["mode"],
-        character_options=vm["character_options"],
-        set_key=vm["set_key"],
-        pool_limit=container.settings.pool_limit,
-        min_runs=container.settings.minimum_runs,
-    )
+def arena(request: Request):
+    del request
+    return ARENA_HTML.render()
 
 
 @router.post("/arena_result")

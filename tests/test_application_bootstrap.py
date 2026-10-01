@@ -23,7 +23,6 @@ from comfyreview.application import (
     PlaygroundService,
     PlaygroundSubmissionService,
     PromptCatalogService,
-    RankingService,
     ReviewCandidateService,
     ReviewResult,
     ReviewService,
@@ -77,11 +76,6 @@ class _RecordingReviewService:
         return ReviewResult(review_id=1, run=1, deleted=False)
 
 
-class _EmptyRankingRepository:
-    def list_ranked_images(self):
-        return ()
-
-
 class _EmptyArenaRepository:
     def list_played_directions(self, image_uids):
         del image_uids
@@ -109,7 +103,6 @@ class _EmptyCurationFiles:
 
 def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
-    rankings = RankingService(_EmptyRankingRepository())
     return ApplicationContainer(
         settings=settings,
         canonical_schema=_RecordingCanonicalSchema(settings, events),
@@ -143,9 +136,8 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         ),
         workflow_defaults=cast(WorkflowDefaultsService, object()),
         review_service=cast(ReviewService, _RecordingReviewService()),
-        ranking_service=rankings,
         arena_service=ArenaService(
-            rankings=rankings,
+            images=cast(ImageContextQueryService, object()),
             repository=_EmptyArenaRepository(),
         ),
         curation_service=CurationService(
@@ -236,7 +228,6 @@ def test_default_container_wires_canonical_review_runtime(
         container.playground_submission_service,
         PlaygroundSubmissionService,
     )
-    assert isinstance(container.ranking_service, RankingService)
     assert isinstance(container.arena_service, ArenaService)
     assert isinstance(container.curation_service, CurationService)
     assert isinstance(container.canonical_schema, CanonicalSchemaManager)

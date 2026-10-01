@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from comfyreview.api import get_application_container
 from comfyreview.application import (
     ArenaMutationError,
+    ArenaQuery,
     ArenaValidationError,
     AssignCurationCommand,
     CurationMutationError,
@@ -174,6 +175,47 @@ def review_candidate(
     if image is None:
         return Response(status_code=204)
     return JSONResponse(container.image_responses.context(image))
+
+
+@router.get("/arena/pair")
+def arena_pair(
+    request: Request,
+    scope: Annotated[list[str] | None, Query()] = None,
+    classification: str = Query("all"),
+    model: str = Query(""),
+    checkpoint: str = Query(""),
+    set_key: str = Query(""),
+) -> Response:
+    """Return the next UID-based Arena pair in one canonical scope."""
+    container = get_application_container(request)
+    try:
+        filters = _image_filter(
+            scope or [],
+            classification,
+            model,
+            checkpoint,
+            set_key,
+            minimum_rating_count=container.settings.minimum_runs,
+        )
+        pair = container.arena_service.next_pair(
+            ArenaQuery(
+                ImageQuery(
+                    filters=filters,
+                    order=ImageOrder.TOP,
+                    limit=min(100, container.settings.pool_limit),
+                )
+            )
+        )
+    except ImageQueryValidationError as error:
+        return _error(400, "invalid_arena_query", str(error))
+    if pair is None:
+        return Response(status_code=204)
+    return JSONResponse(
+        {
+            "left": container.image_responses.context(pair.left),
+            "right": container.image_responses.context(pair.right),
+        }
+    )
 
 
 @router.post("/reviews")

@@ -28,7 +28,6 @@ from comfyreview.application import (
     PromptCatalogService,
     PromptRenderer,
     PromptSelectionPolicy,
-    RankingService,
     ReviewCandidateService,
     ReviewService,
     ScopeFacetService,
@@ -66,7 +65,6 @@ from comfyreview.repositories.sqlite import (
     SqliteImageFileRepository,
     SqliteOutputImageRepository,
     SqlitePromptCatalogRepository,
-    SqliteRankingRepository,
     SqliteReviewCandidateRepository,
     SqliteReviewRepository,
     SqliteScopeFacetRepository,
@@ -114,7 +112,6 @@ class ApplicationContainer:
     playground_submission_service: PlaygroundSubmissionService
     workflow_defaults: WorkflowDefaultsService
     review_service: ReviewService
-    ranking_service: RankingService
     arena_service: ArenaService
     curation_service: CurationService
 
@@ -155,13 +152,6 @@ def build_application_container(
             trash_root=configured.trash_root,
         ),
         preserve_deleted_files=configured.soft_delete_to_trash,
-    )
-    ranking_service = RankingService(
-        SqliteRankingRepository(
-            configured.canonical_database_path,
-            output_root=configured.output_root,
-            allowed_set_keys=configured.curation_set_keys,
-        )
     )
     prompt_catalog_service = PromptCatalogService(
         repository=SqlitePromptCatalogRepository(
@@ -277,9 +267,8 @@ def build_application_container(
         ),
         workflow_defaults=WorkflowDefaultsService(blueprints),
         review_service=review_service,
-        ranking_service=ranking_service,
         arena_service=ArenaService(
-            rankings=ranking_service,
+            images=image_contexts,
             repository=SqliteArenaRepository(
                 configured.canonical_database_path
             ),
