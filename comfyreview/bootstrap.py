@@ -19,6 +19,7 @@ from comfyreview.application import (
     CurationService,
     DraftOverridePolicy,
     GenerationOutputCollector,
+    GenerationQueryService,
     GenerationReconciliationService,
     GenerationService,
     ImageContextQueryService,
@@ -61,6 +62,7 @@ from comfyreview.repositories.sqlite import (
     SqliteArenaRepository,
     SqliteCurationRepository,
     SqliteGenerationOutputRepository,
+    SqliteGenerationQueryRepository,
     SqliteGenerationRepository,
     SqliteImageContextRepository,
     SqliteImageFileRepository,
@@ -105,6 +107,7 @@ class ApplicationContainer:
     playground_discovery: PlaygroundDiscoveryService
     playground_ui_state: PlaygroundGeneratorState
     generation_service: GenerationService
+    generation_queries: GenerationQueryService
     generation_reconciliation: GenerationReconciliationService
     prompt_catalog_service: PromptCatalogService
     prompt_catalog_views: PromptCatalogViewService
@@ -255,6 +258,9 @@ def build_application_container(
             ),
         ),
         generation_service=generation_service,
+        generation_queries=GenerationQueryService(
+            SqliteGenerationQueryRepository(configured.canonical_database_path)
+        ),
         generation_reconciliation=generation_reconciliation,
         prompt_catalog_service=prompt_catalog_service,
         prompt_catalog_views=PromptCatalogViewService(prompt_catalog_service),

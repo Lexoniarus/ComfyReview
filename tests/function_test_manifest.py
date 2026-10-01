@@ -1,6 +1,14 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.generation_queries:GenerationQueryService.list_generations": (
+        "tests/test_generation_queries.py::"
+        "test_generation_query_service_reads_persisted_lifecycle_state"
+    ),
+    "comfyreview.application.generation_queries:GenerationQueryService.get_generation": (
+        "tests/test_generation_queries.py::"
+        "test_generation_query_service_reads_persisted_lifecycle_state"
+    ),
     "comfyreview.application.image_queries:DraftOverridePolicy.apply": (
         "tests/test_image_query_contracts.py::"
         "test_draft_override_policy_uses_canonical_renderer_semantics"

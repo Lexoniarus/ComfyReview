@@ -17,6 +17,9 @@ from comfyreview.repositories.sqlite.curation import SqliteCurationRepository
 from comfyreview.repositories.sqlite.generation_outputs import (
     SqliteGenerationOutputRepository,
 )
+from comfyreview.repositories.sqlite.generation_queries import (
+    SqliteGenerationQueryRepository,
+)
 from comfyreview.repositories.sqlite.generations import (
     SqliteGenerationRepository,
 )
@@ -48,6 +51,7 @@ __all__ = [
     "SqliteCurationRepository",
     "SqliteGenerationRepository",
     "SqliteGenerationOutputRepository",
+    "SqliteGenerationQueryRepository",
     "SqliteImageContextRepository",
     "SqliteImageFileRepository",
     "SqliteRankingRepository",

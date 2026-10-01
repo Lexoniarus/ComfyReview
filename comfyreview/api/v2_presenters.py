@@ -38,10 +38,9 @@ class ImageResponseMapper:
 
     def context(self, image: ImageContext) -> dict[str, Any]:
         """Map a complete image context to snake-case JSON data."""
-        path = self._files.get_png_path(image.image_uid)
         return {
             **self.summary(image),
-            "image_url": self._urls.to_url(path) if path is not None else "",
+            "image_url": self.image_url(image.image_uid),
             "prompt_snapshot": {
                 "positive": image.prompt_snapshot.positive,
                 "negative": image.prompt_snapshot.negative,
@@ -65,6 +64,11 @@ class ImageResponseMapper:
             "output_role": image.output_role,
             "output_index": image.output_index,
         }
+
+    def image_url(self, image_uid: str) -> str:
+        """Map one stable image identity to its current presentation URL."""
+        path = self._files.get_png_path(image_uid)
+        return self._urls.to_url(path) if path is not None else ""
 
     def summary(self, image: ImageContext) -> dict[str, Any]:
         """Map image-card fields without exposing prompt or local path data."""

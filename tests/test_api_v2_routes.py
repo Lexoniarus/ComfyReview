@@ -247,6 +247,80 @@ class _PlaygroundSubmission:
         )
 
 
+class _GenerationQueries:
+    def list_generations(self, *, status, offset, limit):
+        if status == "invalid":
+            from comfyreview.application import GenerationQueryValidationError
+
+            raise GenerationQueryValidationError("unknown generation status")
+        summary = _generation_summary()
+        return SimpleNamespace(
+            entries=(summary,), total=1, offset=offset, limit=limit
+        )
+
+    def get_generation(self, generation_uid):
+        if generation_uid == "missing":
+            from comfyreview.application import GenerationNotFoundError
+
+            raise GenerationNotFoundError("missing")
+        return SimpleNamespace(
+            summary=_generation_summary(),
+            positive_prompt="positive",
+            negative_prompt="negative",
+            revision_uids=("revision-character-a",),
+            sampler_stages=(
+                SimpleNamespace(
+                    role="base_sampler",
+                    node_id="12",
+                    order=0,
+                    seed=1,
+                    steps=20,
+                    cfg=7.0,
+                    sampler="euler",
+                    scheduler="normal",
+                    denoise=1.0,
+                ),
+            ),
+            outputs=(
+                SimpleNamespace(
+                    image_uid="image-1",
+                    role="primary",
+                    node_id="42",
+                    output_index=0,
+                    content_hash="hash",
+                ),
+            ),
+        )
+
+
+class _GenerationReconciliation:
+    def __init__(self) -> None:
+        self.arguments = None
+
+    def reconcile(self, generation_uid, *, prompt_id=None):
+        self.arguments = (generation_uid, prompt_id)
+        return GenerationSubmission(generation_uid, "running", prompt_id)
+
+
+def _generation_summary():
+    return SimpleNamespace(
+        generation_uid="generation-1",
+        status="completed",
+        prompt_id="prompt-1",
+        source="native_comfyui",
+        model="anime",
+        checkpoint="model.safetensors",
+        blueprint_uid="default-character",
+        blueprint_version=1,
+        graph_hash="graph-hash",
+        created_at="2026-01-01 00:00:00",
+        submitted_at=None,
+        started_at=None,
+        completed_at="2026-01-01 00:01:00",
+        output_count=1,
+    )
+
+
 class _PlaygroundDiscovery:
     def discover(self):
         return SimpleNamespace(
@@ -641,6 +715,45 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     assert graph.status_code == 422
 
 
+def test_v2_generation_reads_expose_lifecycle_outputs_and_urls() -> None:
+    client, _container = _client()
+
+    listing = client.get("/api/v2/generations", params={"status": "completed"})
+    detail = client.get("/api/v2/generations/generation-1")
+    missing = client.get("/api/v2/generations/missing")
+    invalid = client.get("/api/v2/generations", params={"status": "invalid"})
+
+    assert listing.status_code == 200
+    assert listing.json()["items"][0]["status"] == "completed"
+    assert detail.status_code == 200
+    assert detail.json()["outputs"][0] == {
+        "image_uid": "image-1",
+        "role": "primary",
+        "node_id": "42",
+        "output_index": 0,
+        "content_hash": "hash",
+        "image_url": "/files/output/image-1.png",
+    }
+    assert missing.status_code == 404
+    assert invalid.status_code == 400
+
+
+def test_v2_generation_reconcile_uses_existing_lifecycle_service() -> None:
+    client, container = _client()
+
+    response = client.post(
+        "/api/v2/generations/generation-1/reconcile",
+        json={"prompt_id": "prompt-recovered"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "running"
+    assert container.generation_reconciliation.arguments == (
+        "generation-1",
+        "prompt-recovered",
+    )
+
+
 def _client() -> tuple[TestClient, SimpleNamespace]:
     container = SimpleNamespace(
         settings=SimpleNamespace(minimum_runs=2, pool_limit=128),
@@ -654,6 +767,8 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         prompt_catalog_service=_PromptCatalog(),
         playground_service=_Playground(),
         playground_submission_service=_PlaygroundSubmission(),
+        generation_queries=_GenerationQueries(),
+        generation_reconciliation=_GenerationReconciliation(),
         playground_discovery=_PlaygroundDiscovery(),
         workflow_defaults=_WorkflowDefaults(),
     )

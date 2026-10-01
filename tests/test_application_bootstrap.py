@@ -16,6 +16,7 @@ from comfyreview.application import (
     CanonicalSchemaReport,
     CurationImage,
     CurationService,
+    GenerationQueryService,
     GenerationReconciliationService,
     GenerationService,
     ImageContextQueryService,
@@ -122,6 +123,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
             preview_path=tmp_path / "preview.json",
         ),
         generation_service=cast(GenerationService, object()),
+        generation_queries=cast(GenerationQueryService, object()),
         generation_reconciliation=cast(
             GenerationReconciliationService,
             object(),
