@@ -1,0 +1,51 @@
+{% extends "_v2_base.html" %} {% set page_title = "Generierungen · ComfyReview"
+%} {% set active_nav = "generations" %} {% block styles %}
+<link rel="stylesheet" href="/static/css/v2/generations.css" />
+{% endblock %} {% block content %}
+<div class="generations-shell" data-v2-surface="generations">
+  <header class="v2-panel generations-header">
+    <div>
+      <p class="generations-kicker">Kanonischer Lifecycle</p>
+      <h1>Generierungen</h1>
+      <p class="muted">
+        Persistierte Generationen, ComfyUI-Zustände und alle kanonischen
+        Outputs. Diese Ansicht erzeugt keine zweite Job-Queue.
+      </p>
+    </div>
+    <label class="generation-status-filter">
+      Status
+      <select data-generation-status-filter>
+        <option value="">Alle</option>
+        <option value="submitted">Übergeben</option>
+        <option value="running">Läuft</option>
+        <option value="completed">Abgeschlossen</option>
+        <option value="failed">Fehlgeschlagen</option>
+        <option value="reconciliation_required">Abgleich nötig</option>
+      </select>
+    </label>
+  </header>
+
+  <div class="generations-workspace">
+    <section
+      class="v2-panel generation-list-panel"
+      aria-labelledby="generation-list-title"
+    >
+      <div class="generations-section-heading">
+        <div>
+          <p class="generations-kicker">Verlauf</p>
+          <h2 id="generation-list-title">Lifecycle-Einträge</h2>
+        </div>
+      </div>
+      <div class="generation-list" data-generation-list></div>
+    </section>
+
+    <aside class="v2-panel generation-detail" data-generation-detail></aside>
+  </div>
+
+  <p class="generation-page-status" data-generation-status aria-live="polite">
+    Generierungen werden geladen …
+  </p>
+</div>
+{% endblock %} {% block scripts %}
+<script type="module" src="/static/js/entries/generations.js"></script>
+{% endblock %}

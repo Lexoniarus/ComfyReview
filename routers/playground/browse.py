@@ -35,11 +35,12 @@ def playground_browse(
 
 @router.get("/playground/create")
 def playground_create_page(request: Request, kind: str = "scene"):
-    """Render the existing empty create form."""
+    """Render the canonical catalog shell for legacy create URLs."""
+    del kind
     return templates.TemplateResponse(
         request=request,
         name="playground.html",
-        context={"request": request, "rows": [], "kind": kind, "q": ""},
+        context={"request": request},
     )
 
 

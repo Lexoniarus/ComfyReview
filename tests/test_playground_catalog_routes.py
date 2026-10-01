@@ -12,6 +12,7 @@ from starlette.requests import Request
 from comfyreview.application import PromptCatalogValidationError
 
 browse = importlib.import_module("routers.playground.browse")
+hub = importlib.import_module("routers.playground.hub")
 
 
 class _CatalogViews:
@@ -59,9 +60,7 @@ def _request(views: _CatalogViews) -> Request:
     return Request({"type": "http", "app": application})
 
 
-def test_playground_catalog_browse_and_create_page_keep_template_contracts() -> (
-    None
-):
+def test_playground_catalog_browse_and_create_urls_render_v2_shell() -> None:
     views = _CatalogViews()
     response = browse.playground_browse(
         _request(views),
@@ -74,11 +73,17 @@ def test_playground_catalog_browse_and_create_page_keep_template_contracts() -> 
     )
 
     assert response.template.name == "playground.html"
-    assert response.context["rows"][0]["id"] == "scene-a"
-    assert response.context["kind"] == "scene"
-    assert create_response.context["rows"] == []
-    assert create_response.context["kind"] == "pose"
-    assert views.calls == [("list", "scene", "moon")]
+    assert create_response.template.name == "playground.html"
+    assert set(response.context) == {"request"}
+    assert set(create_response.context) == {"request"}
+    assert views.calls == []
+
+
+def test_playground_home_renders_canonical_generation_shell() -> None:
+    response = hub.playground_home(_request(_CatalogViews()))
+
+    assert response.template.name == "generations.html"
+    assert set(response.context) == {"request"}
 
 
 def test_playground_catalog_mutations_use_uids_and_compatible_redirects() -> (
