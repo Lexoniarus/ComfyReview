@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from comfyreview.api import get_application_container
@@ -18,46 +18,15 @@ from services.context_filters import (
     normalize_subdir,
     normalize_unrated_flag,
 )
-from services.review_page_service import build_review_page_context
 from templates import INDEX_HTML
 
 router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-def index(
-    request: Request,
-    unrated: int | None = Query(None),
-    model: str = Query(""),
-    subdir: str = Query(""),
-    set_key: str = Query(""),
-):
-    container = get_application_container(request)
-    unrated_value = (
-        int(container.settings.default_unrated_only)
-        if unrated is None
-        else unrated
-    )
-    ctx = build_review_page_context(
-        output_images=container.output_images,
-        prompt_labels=container.prompt_labels,
-        image_url=container.file_urls.to_url,
-        unrated=unrated_value,
-        model=model,
-        subdir=subdir,
-        set_key=set_key,
-        output_root=container.settings.output_root,
-        allowed_set_keys=container.settings.curation_set_keys,
-    )
-
-    return INDEX_HTML.render(
-        **ctx,
-        set_key_list=[
-            "",
-            "unsorted",
-            *list(container.settings.curation_set_keys),
-        ],
-    )
+def index(request: Request):
+    del request
+    return INDEX_HTML.render()
 
 
 @router.post("/rate")

@@ -15,13 +15,21 @@
     <header class="v2-app-bar">
       <a class="v2-brand" href="/">ComfyReview</a>
       <nav class="v2-navigation" aria-label="Hauptnavigation">
-        <a href="/">Prüfen</a>
+        {% if active_nav == "review" %}
+          <a href="/" aria-current="page">Prüfen</a>
+        {% else %}
+          <a href="/">Prüfen</a>
+        {% endif %}
         {% if active_nav == "ranking" %}
           <a href="/top_pictures" aria-current="page">Top / Worst</a>
         {% else %}
           <a href="/top_pictures">Top / Worst</a>
         {% endif %}
-        <a href="/arena">Arena</a>
+        {% if active_nav == "arena" %}
+          <a href="/arena" aria-current="page">Arena</a>
+        {% else %}
+          <a href="/arena">Arena</a>
+        {% endif %}
         <a href="/playground">Playground</a>
         <a href="/playground/browse">Katalog</a>
         <a href="/playground/generator">Generierungen</a>

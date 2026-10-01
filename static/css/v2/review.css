@@ -1,0 +1,206 @@
+.review-shell {
+  display: grid;
+  min-height: calc(100vh - var(--app-bar-height));
+  grid-template-columns: var(--scope-rail-width) minmax(0, 1fr) var(
+      --inspector-width
+    );
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.review-scope,
+.review-inspector {
+  position: sticky;
+  top: calc(var(--app-bar-height) + var(--space-3));
+  align-self: start;
+  max-height: calc(100vh - var(--app-bar-height) - var(--space-6));
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.review-main {
+  min-width: 0;
+}
+
+.review-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.review-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.review-title-group h1 {
+  margin: 0;
+  font-size: var(--font-size-heading);
+}
+
+.review-status {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.review-stage {
+  display: grid;
+  min-height: calc(100vh - var(--app-bar-height) - 7rem);
+  place-items: center;
+}
+
+.review-card {
+  display: grid;
+  width: min(100%, 62rem);
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.review-image-button {
+  display: block;
+  max-width: min(100%, 48rem);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-media);
+  background: var(--color-surface-subtle);
+  cursor: zoom-in;
+}
+
+.review-image-button img {
+  display: block;
+  width: 100%;
+  max-height: calc(100vh - 15rem);
+  object-fit: contain;
+}
+
+.review-score-row {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(2.25rem, 1fr));
+  gap: var(--space-2);
+}
+
+.review-score-button,
+.review-delete-button,
+.confirm-actions button {
+  min-height: 2.5rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.review-score-button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-strong);
+  background: var(--color-surface-selected);
+}
+
+.review-delete-button,
+.danger-button {
+  color: var(--status-failed);
+}
+
+.review-delete-button:disabled,
+.review-score-button:disabled {
+  cursor: wait;
+  opacity: 0.48;
+}
+
+.review-empty {
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.confirm-dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-overlay);
+}
+
+.confirm-dialog::backdrop {
+  background: rgb(35 31 28 / 55%);
+  backdrop-filter: blur(0.2rem);
+}
+
+.confirm-dialog form {
+  padding: var(--space-5);
+}
+
+.confirm-dialog h2 {
+  margin: 0;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.confirm-actions button {
+  padding-inline: var(--space-4);
+}
+
+@media (width >= 85.4375rem) and (width < 112.5rem) {
+  .review-shell {
+    grid-template-columns: 13.5rem minmax(0, 1fr) 19rem;
+  }
+}
+
+@media (width <= 85.375rem), (pointer: coarse) {
+  .review-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-scope,
+  .review-inspector {
+    position: fixed;
+    z-index: 40;
+    top: var(--app-bar-height);
+    bottom: 0;
+    width: min(21rem, 90vw);
+    max-height: none;
+    border-radius: 0;
+    transition: transform var(--motion-normal);
+  }
+
+  .review-scope {
+    left: 0;
+    transform: translateX(-105%);
+  }
+
+  .review-inspector {
+    right: 0;
+    transform: translateX(105%);
+  }
+
+  .review-shell.is-scope-open .review-scope,
+  .review-shell.is-inspector-open .review-inspector {
+    transform: translateX(0);
+  }
+}
+
+@media (width <= 42rem) {
+  .review-shell {
+    padding: var(--space-2);
+  }
+
+  .review-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .review-score-row {
+    grid-template-columns: repeat(5, minmax(2.25rem, 1fr));
+  }
+}

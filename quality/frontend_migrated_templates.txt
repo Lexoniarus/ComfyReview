@@ -1,3 +1,4 @@
 # Templates are added only after their V2 route cutover.
 templates/_v2_base.html
+templates/index.html
 templates/top_pictures.html
