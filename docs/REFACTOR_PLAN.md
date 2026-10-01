@@ -1,8 +1,9 @@
 # ComfyReview Refactor Plan
 
-Status: canonical Review, Ranking, Arena and Curation cutover plus Slice D's
-revisioned prompt catalog are implemented on `refactor/review-boundary`,
-2026-09-30. The branch remains the unmerged integration branch until the full
+Status: the canonical backend cutover and its revisioned prompt catalog are
+implemented on `refactor/review-boundary`, 2026-10-01. Canonical Data
+Completion is the blocking active slice before ImageContext, scopes or
+Frontend V2. The branch remains the unmerged integration branch until the full
 refactor is accepted.
 
 The goal is a maintainable local application with one canonical writable
@@ -188,7 +189,26 @@ prompt performance, prompt-token statistics, combo statistics,
 recommendations and best-image lookup can all be replaced by canonical
 repository queries with bounded deterministic aggregation. No replacement
 materialized worker is currently justified. `mv_jobs` and `mv_state` therefore
-exist only until the canonical query cutover removes their final consumers.
+remain historical offline evidence only; the runtime worker and its consumers
+have been removed.
+
+### Slice 0. Canonical Data Completion (active)
+
+- the explicit `legacy-compositions audit/import` workflow is implemented;
+- the audit requires renderer-exact positive and negative prompt roundtrips,
+  unique ordered revision slots and consistent retained provenance;
+- only unique exact relationships are imported; ambiguity and missing evidence
+  remain diagnostics rather than guessed data;
+- every import is hash-bound, backed up, idempotent and transactional;
+- the full rehearsal on a v4 database copy successfully upgraded to v6 and
+  reran Output, Prompt and Feature imports;
+- that rehearsal classified 20 of 379 historical generations as uniquely
+  reconstructable and 359 as insufficient evidence, with zero ambiguities and
+  zero conflicts.
+
+The production database is not considered complete until the fresh live
+sequence, final parity report, one-database startup check and full quality gate
+have succeeded. Rehearsal counts are observations rather than code constants.
 
 ## Remaining slice order
 
@@ -196,11 +216,18 @@ The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-1. canonicalize the remaining Playground catalog routes and startup state;
-2. delete obsolete stores, compatibility paths and unused configuration;
-3. migrate browser behavior to ES modules and the shared API client;
-4. run the complete architecture, data, browser, quality and documentation
-   acceptance before opening a new pull request.
+0. complete and validate the live canonical v4-to-v6 data sequence;
+1. add Frontend/Design quality tooling and architecture gates;
+2. add URL-free ImageContext, SQL-backed scopes/facets and API V2;
+3. build the shared V2 shell and lifecycle-owned browser components;
+4. cut over Top/Worst without changing ranking semantics;
+5. cut over Review and Arena to UID-only API V2 payloads;
+6. cut over Playground while preserving catalog revisions and draft semantics;
+7. add Catalog and Generation surfaces;
+8. add Analytics and Curation surfaces;
+9. complete responsive/accessibility work and remove old presentation paths;
+10. run the complete architecture, data, browser, ComfyUI, quality and
+    documentation acceptance before opening a new pull request.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the

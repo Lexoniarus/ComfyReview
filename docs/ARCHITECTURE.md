@@ -181,6 +181,14 @@ applies `PromptSelectionPolicy` and renders concrete revision snapshots through
 Submission uses the native `GenerationService`; there is no interim generation
 facade or dual-write.
 
+Historical generation relationships are completed only through the explicit
+`legacy-compositions audit/import` tool. The audit reads both databases in
+SQLite read-only mode, binds them by SHA-256 and delegates exact snapshot
+roundtrips to `PromptRenderer`. The importer links only one uniquely determined
+ordered revision composition and never overwrites prompt snapshots, generation
+lifecycle or output provenance. Ambiguous and insufficient evidence stays
+unlinked and is available only as a migration diagnostic.
+
 ## 8.1 Generation boundaries
 
 Generation is deliberately split into semantic and technical boundaries:
@@ -225,6 +233,10 @@ The canonical cutover is intentionally not the end of the wider refactor.
   audit; active HTTP/view preparation stays, obsolete compatibility facades do
   not.
 - Frontend logic still needs the planned ES-module/API-client cleanup.
+- ImageContext and scope queries do not begin until the live canonical data
+  completion sequence is validated. Application ImageContext will remain free
+  of HTTP URLs; a response mapper combines it with `OutputFileUrlMapper` at the
+  presentation boundary.
 
 Existing projection workers are not migration targets by default. Each derived
 dataset is first evaluated for replacement by a direct query or canonical SQL

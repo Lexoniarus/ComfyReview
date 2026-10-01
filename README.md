@@ -227,6 +227,20 @@ python -m comfyreview legacy-features audit
 python -m comfyreview legacy-features import --backup-dir data/backups/legacy-features
 ```
 
+The legacy Playground catalog and provably exact historical composition links
+are completed separately:
+
+```bash
+python -m comfyreview legacy-prompts audit
+python -m comfyreview legacy-prompts import --backup-dir data/backups/legacy-prompts
+python -m comfyreview legacy-compositions audit
+python -m comfyreview legacy-compositions import --backup-dir data/backups/legacy-compositions
+```
+
+Composition completion links only a unique ordered set of immutable revisions
+that reproduces both stored prompt snapshots exactly. Ambiguous or incomplete
+historical evidence remains unlinked and is reported rather than guessed.
+
 Audit reports bind source files and databases by hash. Import commands
 revalidate that evidence, create a backup before writing, and commit all writes
 in one canonical SQLite transaction. A normal transaction failure is rolled
@@ -361,9 +375,9 @@ The Playground Generator is designed to carry values back into ComfyUI in a repr
 <details>
 <summary><strong>Canonical and legacy projections</strong></summary>
 
-Top/Worst and Arena now use canonical review aggregates and image UIDs. The
-legacy worker remains for statistics and prompt projections that have not yet
-been migrated.
+Top/Worst, Arena and analytics use canonical review facts and image UIDs. The
+legacy projection worker is no longer part of runtime startup; legacy database
+files are accepted only by explicit offline maintenance commands.
 
 </details>
 
@@ -397,14 +411,15 @@ audited import input for local testing.
 
 - This is a local prototype, not a packaged desktop application
 - Configuration still requires direct path and environment setup
-- The metadata workflow depends on the included ComfyUI custom node
+- Historical output import depends on retained sidecar metadata; native
+  generation uses standard ComfyUI nodes and canonical output collection
 - New historical output imports require a JSON sidecar; already-canonical
   sidecarless images remain usable in Review, Top/Worst, Arena, Curation and
   Delete
 - Export and dataset-building workflows are not final production pipelines
-- Playground previews now select and render immutable canonical prompt
-  revisions; browse/edit, submission, generation and some statistics/projection
-  paths remain transitional until the native GenerationService cutover
+- Playground previews and submission use immutable canonical prompt revisions
+  and the native GenerationService; the current HTML/inline-JavaScript
+  presentation remains transitional until Frontend V2
 - Public documentation may lag behind internal workflow experiments
 
 ---

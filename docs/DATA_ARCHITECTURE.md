@@ -131,6 +131,28 @@ read-only mode. The import revalidates the snapshot, creates a backup and
 writes the complete accepted set in one transaction. It is idempotent, retains
 unused items and never mutates the source database.
 
+Historical generation-to-composition completion is a separate explicit step:
+
+```text
+python -m comfyreview legacy-compositions audit
+python -m comfyreview legacy-compositions import [--backup-dir PATH]
+```
+
+The audit considers every immutable canonical revision but accepts a historical
+composition only when the production `PromptRenderer` reproduces both stored
+prompt snapshots exactly, the ordered slots are unique and the retained source
+provenance agrees. Results are classified as `already_exact`,
+`exactly_reconstructable`, `ambiguous`, `insufficient_evidence` or `conflict`.
+Only `exactly_reconstructable` rows are linked. Ambiguous or incomplete
+evidence never creates a guessed relationship. Composition UIDs are derived
+from ordered slot, position and revision-UID tuples; paths are not involved.
+
+The 2026-10-01 rehearsal on a full database copy found 20 uniquely
+reconstructable generations and 359 with insufficient retained evidence, with
+no ambiguous or conflicting generation. These are observed data results, not
+hard-coded importer expectations. The live database remains authoritative only
+after the same fresh audit/import sequence and final validation complete.
+
 ## 6. Audited historical output import
 
 Historical output migration has two explicit steps:
@@ -172,9 +194,11 @@ are operational control values, not hard-coded schema expectations.
 
 ## 8. Backup, rollback and restore
 
-Both import workflows complete validation before opening the write transaction
-and create a SQLite backup before the first write. All accepted facts then
-commit in exactly one transaction.
+Every import workflow completes validation before opening the write
+transaction and creates a SQLite backup before the first write. All accepted
+facts for that import then commit in exactly one transaction. A fresh audit and
+new backup are required after each preceding import because the canonical hash
+has changed.
 
 On an ordinary exception the transaction is rolled back first. The production
 database is validated after rollback and is not overwritten merely because an
@@ -205,14 +229,26 @@ Normal runtime startup neither opens nor initializes these files. Known
 additive changes require the explicit `python -m comfyreview legacy-db upgrade`
 command.
 
-## 10. Remaining canonical design
+## 10. Canonical completion and remaining design
 
-The target still needs normalized prompt/content components, compositions,
-exact prompts and atom memberships, plus canonical operational job/projection
-state. The design must not duplicate prompt atoms per review or materialize the
-full Cartesian product of possible prompt combinations. Persist combinations
-when they are explicitly authored or otherwise become domain-relevant. An
+Schema v6 already contains normalized prompt components, immutable revisions,
+compositions, exact prompt snapshots and atom memberships. The operational
+completion sequence is deliberately offline and ordered: explicit schema
+upgrade, fresh output audit/import, fresh prompt audit/import, fresh feature
+audit/import, then fresh composition audit/import. Every stage is validated
+before the next begins. Normal startup never performs this sequence and never
+opens a legacy database.
+
+The design must not duplicate prompt atoms per review or materialize the full
+Cartesian product of possible prompt combinations. Persist combinations when
+they are explicitly authored, generated, curated or uniquely reconstructed. An
 unused authored template or revision remains canonical catalog data.
+
+Frontend V2 scope work begins only after the live completion run passes
+integrity, foreign-key, parity, provenance and one-database startup checks. Any
+remaining scope inference will be the smallest read-only policy justified by
+the completion report; it will not read legacy databases, paths, directory
+names or sidecars as runtime truth.
 
 Before migrating a derived projection, prefer a direct canonical query, then a
 SQL view. Only measured needs justify a materialized projection and worker.
