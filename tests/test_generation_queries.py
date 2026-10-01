@@ -66,20 +66,26 @@ def test_generation_query_service_reads_persisted_lifecycle_state() -> None:
 
 
 @pytest.mark.parametrize(
-    ("arguments", "message"),
+    ("status", "offset", "limit", "message"),
     (
-        ({"status": "queued"}, "unknown generation status"),
-        ({"offset": -1}, "offset"),
-        ({"limit": 0}, "limit"),
-        ({"limit": 101}, "limit"),
+        ("queued", 0, 50, "unknown generation status"),
+        ("", -1, 50, "offset"),
+        ("", 0, 0, "limit"),
+        ("", 0, 101, "limit"),
     ),
 )
 def test_generation_query_service_rejects_invalid_pages(
-    arguments: dict[str, object],
+    status: str,
+    offset: int,
+    limit: int,
     message: str,
 ) -> None:
     with pytest.raises(GenerationQueryValidationError, match=message):
-        GenerationQueryService(_Repository()).list_generations(**arguments)
+        GenerationQueryService(_Repository()).list_generations(
+            status=status,
+            offset=offset,
+            limit=limit,
+        )
 
 
 def test_generation_query_service_reports_missing_identity() -> None:

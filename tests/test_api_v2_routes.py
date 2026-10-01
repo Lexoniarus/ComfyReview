@@ -295,7 +295,7 @@ class _GenerationQueries:
 
 class _GenerationReconciliation:
     def __init__(self) -> None:
-        self.arguments = None
+        self.arguments: tuple[str, str | None] | None = None
 
     def reconcile(self, generation_uid, *, prompt_id=None):
         self.arguments = (generation_uid, prompt_id)
