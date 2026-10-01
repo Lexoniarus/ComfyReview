@@ -1,0 +1,133 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 20rem;
+  background: var(--color-canvas);
+}
+
+body {
+  margin: 0;
+  color: var(--color-text);
+  background: var(--color-canvas);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+
+button,
+input,
+select {
+  color: inherit;
+  font: inherit;
+}
+
+button,
+a,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 0.1875rem solid
+    color-mix(in srgb, var(--color-focus) 38%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.v2-app-bar {
+  position: sticky;
+  z-index: 30;
+  top: 0;
+  display: flex;
+  min-height: var(--app-bar-height);
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0 var(--space-5);
+  border-bottom: 0.0625rem solid var(--color-border);
+  background: rgb(255 255 255 / 92%);
+  backdrop-filter: blur(1rem);
+}
+
+.v2-brand {
+  color: var(--color-text);
+  font-size: var(--font-size-title);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.v2-navigation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-1);
+  overflow-x: auto;
+}
+
+.v2-navigation a {
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-control);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.v2-navigation a[aria-current="page"],
+.v2-navigation a:hover {
+  color: var(--color-accent-strong);
+  background: var(--color-surface-selected);
+}
+
+.v2-page {
+  min-height: calc(100vh - var(--app-bar-height));
+}
+
+.v2-panel {
+  min-width: 0;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+}
+
+.v2-panel-heading {
+  font-size: var(--font-size-title);
+  font-weight: 720;
+  letter-spacing: -0.015em;
+}
+
+.icon-button {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  padding: 0;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+@media (width <= 50rem) {
+  .v2-app-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-block: var(--space-3);
+  }
+
+  .v2-navigation {
+    width: 100%;
+  }
+}

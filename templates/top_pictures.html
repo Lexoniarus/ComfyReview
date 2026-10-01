@@ -1,328 +1,78 @@
-{% extends "_base.html" %}
-{% set page_title = "Top Pictures" %}
-{% from "_label_badges.html" import render_labels %}
+{% extends "_v2_base.html" %} {% set page_title = "Top / Worst · ComfyReview" %}
+{% set active_nav = "ranking" %} {% block styles %}
+<link rel="stylesheet" href="/static/css/v2/top-worst.css" />
+{% endblock %} {% block content %}
+<div class="ranking-shell" data-v2-surface="top-worst">
+  <aside
+    class="v2-panel ranking-scope"
+    data-scope-navigator
+    aria-label="Bildbereiche"
+  ></aside>
 
-{% block head %}
-<style>
-  .grid{
-    margin-top: 16px;
-    display:grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 14px;
-  }
-
-  @media (min-width: 1600px){
-    .grid{ grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
-  }
-  @media (min-width: 2200px){
-    .grid{ grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
-  }
-
-  .card{
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: rgba(255,255,255,0.02);
-    overflow:hidden;
-    padding: 10px;
-    display:flex;
-    flex-direction:column;
-    gap: 10px;
-    box-shadow: var(--shadow);
-    transition: transform 0.12s ease, border 0.12s ease, background 0.12s ease;
-  }
-  .card:hover{
-    transform: translateY(-3px);
-    border-color: rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.03);
-  }
-
-  .thumb{
-    width:100%;
-    height:auto;
-    border-radius: 12px;
-    border:1px solid var(--border);
-    cursor: zoom-in;
-  }
-
-  .meta{
-    display:grid;
-    grid-template-columns: 120px 1fr;
-    gap: 6px;
-  }
-
-  .title{
-    display:flex;
-    justify-content:space-between;
-    align-items:baseline;
-    gap: 10px;
-  }
-  .rank{ font-weight:700; }
-
-  .modal{
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.72);
-    backdrop-filter: blur(6px);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    padding: 18px;
-  }
-  .modal.open{ display:flex; }
-
-  .modalCard{
-    width: min(1200px, 96vw);
-    max-height: 92vh;
-    border: 1px solid rgba(255,255,255,0.14);
-    border-radius: 16px;
-    background: rgba(15,22,36,0.86);
-    box-shadow: var(--shadow);
-    overflow: hidden;
-    display:flex;
-    flex-direction: column;
-  }
-
-  .modalTop{
-    display:flex;
-    justify-content: space-between;
-    align-items:center;
-    gap: 12px;
-    padding: 10px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.10);
-  }
-
-  .modalTop .left{
-    display:flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items:center;
-  }
-
-  .modalImgWrap{
-    padding: 12px;
-    overflow: auto;
-  }
-
-  .modalImg{
-    width: 100%;
-    height: auto;
-    border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.12);
-    cursor: zoom-out;
-  }
-
-  .closeBtn{
-    padding: 8px 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.12);
-    background: rgba(255,255,255,0.04);
-    color: var(--text);
-    cursor: pointer;
-  }
-  .closeBtn:hover{ background: rgba(255,255,255,0.08); }
-
-</style>
-{% endblock %}
-
-{% block body %}
-  <div class="top">
-    <div>
-      <div class="pill">{% if mode=='worst' %}Worst{% else %}Top{% endif %} Pictures</div>
-      <div class="pill">Top {{ pool_limit }}, min {{ min_runs }} Bewertungen</div>
-      <div class="pill">klick auf bild zum zoomen</div>
-    </div>
-    {% include "_nav.html" %}
-  </div>
-
-  <form class="filter" method="get" action="/top_pictures">
-    <label class="small">Mode</label>
-    <select name="mode">
-      <option value="top" {% if mode!='worst' %}selected{% endif %}>top</option>
-      <option value="worst" {% if mode=='worst' %}selected{% endif %}>worst</option>
-    </select>
-
-    <label class="small">Character</label>
-    <select name="subdir">
-      <option value="" {% if not subdir %}selected{% endif %}>alle</option>
-      {% for o in character_options %}
-        <option value="{{ o.value }}" {% if subdir==o.value %}selected{% endif %}>{{ o.label }}</option>
-      {% endfor %}
-    </select>
-
-
-    <label class="small">Set</label>
-    <select name="set_key">
-      <option value="" {% if not set_key %}selected{% endif %}>alle</option>
-      <option value="unsorted" {% if set_key=='unsorted' %}selected{% endif %}>unsorted</option>
-      <option value="character_face" {% if set_key=='character_face' %}selected{% endif %}>character face</option>
-      <option value="character_body" {% if set_key=='character_body' %}selected{% endif %}>character body</option>
-      <option value="scene" {% if set_key=='scene' %}selected{% endif %}>scene</option>
-      <option value="outfit" {% if set_key=='outfit' %}selected{% endif %}>outfit</option>
-      <option value="pose" {% if set_key=='pose' %}selected{% endif %}>pose</option>
-      <option value="expression" {% if set_key=='expression' %}selected{% endif %}>expression</option>
-    </select>
-
-    <label class="small">Modell</label>
-    <select name="model">
-      <option value="" {% if not model %}selected{% endif %}>alle</option>
-      {% for m in model_list %}
-        <option value="{{ m }}" {% if model==m %}selected{% endif %}>{{ m }}</option>
-      {% endfor %}
-    </select>
-
-    <button type="submit">anwenden</button>
-  </form>
-
-  {% if not cards %}
-    <p class="small" style="margin-top:14px;">Keine Kandidaten. Du brauchst mindestens 2 Bilder mit je mindestens {{ min_runs }} Bewertungen.</p>
-  {% else %}
-    <div class="grid">
-      {% for c in cards %}
-        <div class="card">
-          <div class="title">
-            <div class="rank">#{{ loop.index }}</div>
-            <div class="small">Ø {{ "%.2f"|format(c.avg) }} / {{ c.runs }}</div>
-          </div>
-          <img
-            class="thumb"
-            src="{{ c.img_url }}"
-            alt="top"
-            data-full="{{ c.img_url }}"
-            data-title="#{{ loop.index }}  Ø {{ "%.2f"|format(c.avg) }}  runs {{ c.runs }}"
-            data-sub="{{ c.model_branch }}  {{ c.checkpoint }}"
+  <section class="ranking-main" aria-labelledby="ranking-title">
+    <header class="v2-panel ranking-toolbar">
+      <div class="ranking-title-group">
+        <button
+          class="rail-toggle"
+          type="button"
+          data-surface-action="toggle-scopes"
+          aria-expanded="false"
+        >
+          Bereiche
+        </button>
+        <h1 id="ranking-title">Top / Worst</h1>
+        <span class="result-count" data-result-count aria-live="polite"
+          >Bilder werden geladen …</span
+        >
+      </div>
+      <div class="ranking-actions">
+        <div class="mode-switch" aria-label="Rankingmodus">
+          <button type="button" data-surface-action="top" aria-pressed="true">
+            Top
+          </button>
+          <button
+            type="button"
+            data-surface-action="worst"
+            aria-pressed="false"
           >
-
-          {{ render_labels(c, modifier_limit=4, boxed=True) }}
-
-
-          <div class="meta small">
-            <div>model</div><div>{{ c.model_branch }}</div>
-            <div>ckpt</div><div>{{ c.checkpoint }}</div>
-            <div>sampler</div><div>{{ c.sampler }}</div>
-            <div>sched</div><div>{{ c.scheduler }}</div>
-            <div>steps</div><div>{{ c.steps }}</div>
-            <div>cfg</div><div>{{ c.cfg }}</div>
-            <div>denoise</div><div>{{ c.denoise }}</div>
-          </div>
-
-          <form method="post" action="/assign_set" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="hidden" name="image_uid" value="{{ c.image_uid }}">
-            <input type="hidden" name="model" value="{{ model }}">
-            <input type="hidden" name="mode" value="{{ mode }}">
-            <input type="hidden" name="subdir" value="{{ subdir }}">
-            <input type="hidden" name="view_set_key" value="{{ set_key }}">
-
-            <select name="set_key">
-              <option value="unsorted" {% if c.assigned_set_key == 'unsorted' %}selected{% endif %}>unsorted</option>
-              <option value="character_face" {% if c.assigned_set_key == 'character_face' %}selected{% endif %}>character face</option>
-              <option value="character_body" {% if c.assigned_set_key == 'character_body' %}selected{% endif %}>character body</option>
-              <option value="scene" {% if c.assigned_set_key == 'scene' %}selected{% endif %}>scene</option>
-              <option value="outfit" {% if c.assigned_set_key == 'outfit' %}selected{% endif %}>outfit</option>
-              <option value="pose" {% if c.assigned_set_key == 'pose' %}selected{% endif %}>pose</option>
-              <option value="expression" {% if c.assigned_set_key == 'expression' %}selected{% endif %}>expression</option>
-            </select>
-            <button type="submit">assign</button>
-          </form>
-
-<form method="post" action="/top_delete" onsubmit="return confirm('wirklich löschen? png+json werden entfernt, db bekommt deleted=1 (neuer run).');">
-  <input type="hidden" name="image_uid" value="{{ c.image_uid }}">
-  <input type="hidden" name="combo_key" value="{{ c.combo_key }}">
-  <input type="hidden" name="model_branch" value="{{ c.model_branch }}">
-  <input type="hidden" name="checkpoint" value="{{ c.checkpoint }}">
-  <input type="hidden" name="filter_model" value="{{ model }}">
-  <input type="hidden" name="filter_subdir" value="{{ subdir }}">
-  <input type="hidden" name="filter_mode" value="{{ mode }}">
-  <input type="hidden" name="filter_set_key" value="{{ set_key }}">
-  <button class="danger" type="submit">löschen</button>
-</form>
-
-          <details>
-            <summary class="small">paths</summary>
-            <div class="small" style="word-break:break-word;">{{ c.json_path }}</div>
-          </details>
+            Worst
+          </button>
         </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
-  <div id="imgModal" class="modal" aria-hidden="true">
-    <div class="modalCard">
-      <div class="modalTop">
-        <div class="left">
-          <span id="mTitle" class="pill"></span>
-          <span id="mSub" class="pill"></span>
-        </div>
-        <button id="mClose" class="closeBtn" type="button">schließen</button>
+        <button
+          class="rail-toggle"
+          type="button"
+          data-surface-action="toggle-inspector"
+          aria-expanded="false"
+        >
+          Details
+        </button>
       </div>
-      <div class="modalImgWrap">
-        <img id="mImg" class="modalImg" src="" alt="preview">
-      </div>
-    </div>
-  </div>
-{% endblock %}
+    </header>
+    <div class="active-scopes" data-active-scopes hidden></div>
+    <div class="image-grid" data-image-grid aria-live="polite"></div>
+    <nav class="pagination" data-pagination aria-label="Galerieseiten"></nav>
+  </section>
 
-{% block scripts %}
+  <aside
+    class="v2-panel ranking-inspector"
+    data-image-inspector
+    aria-label="Bilddetails"
+  >
+    <p class="inspector-status">Wähle ein Bild aus, um Details zu sehen.</p>
+  </aside>
 
-<script>
-(function () {
-  const KEY = "comfyreview:last_query";
-
-  if (window.location.search && window.location.search.length > 1) return;
-
-  let qs = "";
-  try { qs = localStorage.getItem(KEY) || ""; } catch (e) { qs = ""; }
-
-  if (!qs || qs === "?") return;
-
-  window.location.replace(window.location.pathname + qs);
-})();
-</script>
-
-<script>
-(function(){
-  const modal = document.getElementById("imgModal");
-  const mImg = document.getElementById("mImg");
-  const mTitle = document.getElementById("mTitle");
-  const mSub = document.getElementById("mSub");
-  const mClose = document.getElementById("mClose");
-
-  function openModal(src, title, sub){
-    mImg.src = src;
-    mTitle.textContent = title || "";
-    mSub.textContent = sub || "";
-    modal.classList.add("open");
-    modal.setAttribute("aria-hidden", "false");
-    if(window.toast) window.toast("zoom");
-  }
-
-  function closeModal(){
-    modal.classList.remove("open");
-    modal.setAttribute("aria-hidden", "true");
-    mImg.src = "";
-  }
-
-  document.querySelectorAll("img.thumb").forEach(img => {
-    img.addEventListener("click", () => {
-      openModal(
-        img.dataset.full || img.src,
-        img.dataset.title || "",
-        img.dataset.sub || ""
-      );
-    });
-  });
-
-  mClose.addEventListener("click", closeModal);
-
-  modal.addEventListener("click", (e) => {
-    if(e.target === modal) closeModal();
-  });
-
-  mImg.addEventListener("click", closeModal);
-
-  document.addEventListener("keydown", (e) => {
-    if(e.key === "Escape" && modal.classList.contains("open")) closeModal();
-  });
-})();
-</script>
+  <dialog class="image-viewer" data-image-viewer aria-label="Bildansicht">
+    <button
+      class="icon-button"
+      type="button"
+      data-viewer-close
+      aria-label="Bildansicht schließen"
+    >
+      ×
+    </button>
+    <img alt="Vergrößerte Bildansicht" />
+  </dialog>
+</div>
+{% endblock %} {% block scripts %}
+<script type="module" src="/static/js/entries/top-worst.js"></script>
 {% endblock %}

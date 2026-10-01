@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f3f2ef">
+    <title>{{ page_title or "ComfyReview" }}</title>
+    <link rel="icon" href="/static/icons/favicon.ico">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="stylesheet" href="/static/css/v2/tokens.css">
+    <link rel="stylesheet" href="/static/css/v2/app-shell.css">
+    {% block styles %}{% endblock %}
+  </head>
+  <body>
+    <header class="v2-app-bar">
+      <a class="v2-brand" href="/">ComfyReview</a>
+      <nav class="v2-navigation" aria-label="Hauptnavigation">
+        <a href="/">Prüfen</a>
+        {% if active_nav == "ranking" %}
+          <a href="/top_pictures" aria-current="page">Top / Worst</a>
+        {% else %}
+          <a href="/top_pictures">Top / Worst</a>
+        {% endif %}
+        <a href="/arena">Arena</a>
+        <a href="/playground">Playground</a>
+        <a href="/playground/browse">Katalog</a>
+        <a href="/playground/generator">Generierungen</a>
+        <a href="/stats">Analysen</a>
+      </nav>
+    </header>
+    <main class="v2-page">
+      {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

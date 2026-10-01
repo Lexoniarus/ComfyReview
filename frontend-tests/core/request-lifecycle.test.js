@@ -38,6 +38,21 @@ describe("RequestLifecycle", () => {
     lifecycle.dispose();
   });
 
+  it("cancels active requests while remaining reusable", async () => {
+    const lifecycle = new RequestLifecycle();
+    const pending = lifecycle.run(
+      (signal) =>
+        new Promise((resolve) => {
+          signal.addEventListener("abort", () => resolve("aborted"));
+        }),
+    );
+
+    lifecycle.cancelRequests();
+
+    await expect(pending).resolves.toBe("aborted");
+    await expect(lifecycle.run(async () => "next")).resolves.toBe("next");
+  });
+
   it("owns scheduled callbacks and cancellation", () => {
     const lifecycle = new RequestLifecycle();
     const callback = vi.fn();

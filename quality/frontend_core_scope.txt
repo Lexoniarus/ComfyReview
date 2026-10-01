@@ -2,5 +2,8 @@
 static/js/core/api-error.js
 static/js/core/api-client.js
 static/js/core/request-lifecycle.js
+static/js/images/pagination-controls.js
+static/js/scopes/active-scope-chips.js
 static/js/scopes/url-state.js
 static/js/scopes/scope-state-controller.js
+static/js/surfaces/top-worst-controller.js

@@ -51,16 +51,21 @@ export class RequestLifecycle {
     this.timers.delete(timer);
   }
 
+  /** Abort active requests while keeping this lifecycle reusable. */
+  cancelRequests() {
+    for (const controller of this.controllers) {
+      controller.abort();
+    }
+    this.controllers.clear();
+  }
+
   /** Abort every owned request and clear every owned timer. */
   dispose() {
     if (this.isDisposed) {
       return;
     }
     this.isDisposed = true;
-    for (const controller of this.controllers) {
-      controller.abort();
-    }
-    this.controllers.clear();
+    this.cancelRequests();
     for (const timer of this.timers) {
       window.clearTimeout(timer);
     }

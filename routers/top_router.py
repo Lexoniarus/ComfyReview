@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from comfyreview.api import get_application_container
@@ -15,8 +15,6 @@ from comfyreview.application import (
     ReviewValidationError,
     SubmitReviewCommand,
 )
-from services.context_filters import build_gallery_context
-from services.gallery_view_service import build_top_pictures_page
 from services.output_file_service import OutputMutationError
 from templates import TOP_PICTURES_HTML
 
@@ -24,40 +22,9 @@ router = APIRouter()
 
 
 @router.get("/top_pictures", response_class=HTMLResponse)
-def top_pictures(
-    request: Request,
-    model: str = Query(""),
-    mode: str = Query("top"),
-    set_key: str = Query(""),
-    subdir: str = Query(""),
-):
-    ctx = build_gallery_context(
-        model=model, subdir=subdir, set_key=set_key, mode=mode
-    )
-
-    container = get_application_container(request)
-    vm = build_top_pictures_page(
-        ranking_service=container.ranking_service,
-        prompt_labels=container.prompt_labels,
-        image_url=container.file_urls.to_url,
-        context=ctx,
-        min_runs=container.settings.minimum_runs,
-        limit=container.settings.pool_limit,
-    )
-
-    return TOP_PICTURES_HTML.render(
-        cards=vm["cards"],
-        model=vm["model"],
-        subdir=vm["subdir"],
-        model_list=vm["model_list"],
-        subdir_list=vm["subdir_list"],
-        mode=vm["mode"],
-        character_options=vm["character_options"],
-        set_key=vm["set_key"],
-        set_keys=container.settings.curation_set_keys,
-        pool_limit=container.settings.pool_limit,
-        min_runs=container.settings.minimum_runs,
-    )
+def top_pictures(request: Request):
+    del request
+    return TOP_PICTURES_HTML.render()
 
 
 @router.post("/assign_set")
