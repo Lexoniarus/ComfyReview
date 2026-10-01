@@ -151,9 +151,30 @@
   padding-inline: var(--space-4);
 }
 
-@media (width >= 85.4375rem) and (width < 112.5rem) {
+@media (width >= 85.4375rem) and (width < 112.5rem) and (pointer: fine) {
   .review-shell {
     grid-template-columns: 13.5rem minmax(0, 1fr) 19rem;
+  }
+
+  .review-shell .rail-toggle {
+    display: inline-flex;
+  }
+
+  .review-shell.is-scope-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr) 19rem;
+  }
+
+  .review-shell.is-inspector-collapsed {
+    grid-template-columns: 13.5rem minmax(0, 1fr) 0;
+  }
+
+  .review-shell.is-scope-collapsed.is-inspector-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr) 0;
+  }
+
+  .review-shell.is-scope-collapsed .review-scope,
+  .review-shell.is-inspector-collapsed .review-inspector {
+    display: none;
   }
 }
 

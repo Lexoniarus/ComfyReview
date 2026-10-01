@@ -5,6 +5,7 @@
 <div class="ranking-shell" data-v2-surface="top-worst">
   <aside
     class="v2-panel ranking-scope"
+    id="ranking-scope"
     data-scope-navigator
     aria-label="Bildbereiche"
   ></aside>
@@ -16,6 +17,7 @@
           class="rail-toggle"
           type="button"
           data-rail-action="scope"
+          aria-controls="ranking-scope"
           aria-expanded="false"
         >
           Bereiche
@@ -42,6 +44,7 @@
           class="rail-toggle"
           type="button"
           data-rail-action="inspector"
+          aria-controls="ranking-inspector"
           aria-expanded="false"
         >
           Details
@@ -55,6 +58,7 @@
 
   <aside
     class="v2-panel ranking-inspector"
+    id="ranking-inspector"
     data-image-inspector
     aria-label="Bilddetails"
   >

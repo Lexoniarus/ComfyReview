@@ -481,9 +481,30 @@
   right: var(--space-4);
 }
 
-@media (width >= 85.4375rem) and (width < 112.5rem) {
+@media (width >= 85.4375rem) and (width < 112.5rem) and (pointer: fine) {
   .ranking-shell {
     grid-template-columns: 13.5rem minmax(0, 1fr) 19rem;
+  }
+
+  .ranking-shell .rail-toggle {
+    display: inline-flex;
+  }
+
+  .ranking-shell.is-scope-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr) 19rem;
+  }
+
+  .ranking-shell.is-inspector-collapsed {
+    grid-template-columns: 13.5rem minmax(0, 1fr) 0;
+  }
+
+  .ranking-shell.is-scope-collapsed.is-inspector-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr) 0;
+  }
+
+  .ranking-shell.is-scope-collapsed .ranking-scope,
+  .ranking-shell.is-inspector-collapsed .ranking-inspector {
+    display: none;
   }
 }
 

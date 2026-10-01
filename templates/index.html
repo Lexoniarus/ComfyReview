@@ -6,6 +6,7 @@
 <div class="review-shell" data-v2-surface="review">
   <aside
     class="v2-panel review-scope"
+    id="review-scope"
     data-scope-navigator
     aria-label="Bildbereiche"
   ></aside>
@@ -17,6 +18,7 @@
           class="rail-toggle"
           type="button"
           data-rail-action="scope"
+          aria-controls="review-scope"
           aria-expanded="false"
         >
           Bereiche
@@ -30,6 +32,7 @@
         class="rail-toggle"
         type="button"
         data-rail-action="inspector"
+        aria-controls="review-inspector"
         aria-expanded="false"
       >
         Details
@@ -41,6 +44,7 @@
 
   <aside
     class="v2-panel review-inspector"
+    id="review-inspector"
     data-image-inspector
     aria-label="Bilddetails"
   >

@@ -114,9 +114,30 @@
   text-align: center;
 }
 
-@media (width >= 85.4375rem) and (width < 112.5rem) {
+@media (width >= 85.4375rem) and (width < 112.5rem) and (pointer: fine) {
   .arena-shell {
     grid-template-columns: 13.5rem minmax(0, 1fr) 19rem;
+  }
+
+  .arena-shell .rail-toggle {
+    display: inline-flex;
+  }
+
+  .arena-shell.is-scope-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr) 19rem;
+  }
+
+  .arena-shell.is-inspector-collapsed {
+    grid-template-columns: 13.5rem minmax(0, 1fr) 0;
+  }
+
+  .arena-shell.is-scope-collapsed.is-inspector-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr) 0;
+  }
+
+  .arena-shell.is-scope-collapsed .arena-scope,
+  .arena-shell.is-inspector-collapsed .arena-inspector {
+    display: none;
   }
 }
 
