@@ -55,6 +55,7 @@ class AnalyticsPageService:
                     "image_count": item.image_count,
                     "rating_count": item.rating_count,
                     "average_rating": item.average_rating,
+                    "best_images": self._image_views(item.best_images),
                 }
                 for item in rows
             ],
@@ -88,6 +89,7 @@ class AnalyticsPageService:
                     "image_count": item.image_count,
                     "rating_count": item.rating_count,
                     "average_rating": item.average_rating,
+                    "best_images": self._image_views(item.best_images),
                 }
                 for item in rows
             ],

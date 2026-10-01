@@ -67,6 +67,7 @@ class ScopeStatistic:
     image_count: int
     rating_count: int
     average_rating: float | None
+    best_images: tuple[AnalyticsImage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +79,7 @@ class CompositionStatistic:
     image_count: int
     rating_count: int
     average_rating: float | None
+    best_images: tuple[AnalyticsImage, ...] = ()
 
 
 class AnalyticsRepository(Protocol):

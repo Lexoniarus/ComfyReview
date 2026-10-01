@@ -601,6 +601,14 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
             1,
             1,
             8.0,
+            (
+                AnalyticsImage(
+                    tmp_path / "image.png",
+                    tmp_path / "image.json",
+                    8.0,
+                    1,
+                ),
+            ),
         ),
         ScopeStatistic(
             ScopeKind.OUTFIT,
@@ -610,6 +618,14 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
             1,
             1,
             8.0,
+            (
+                AnalyticsImage(
+                    tmp_path / "image.png",
+                    tmp_path / "image.json",
+                    8.0,
+                    1,
+                ),
+            ),
         ),
         ScopeStatistic(
             ScopeKind.SCENE,
@@ -619,6 +635,14 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
             1,
             1,
             8.0,
+            (
+                AnalyticsImage(
+                    tmp_path / "image.png",
+                    tmp_path / "image.json",
+                    8.0,
+                    1,
+                ),
+            ),
         ),
     )
     assert compositions == (
@@ -628,6 +652,14 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
             1,
             1,
             8.0,
+            (
+                AnalyticsImage(
+                    tmp_path / "image.png",
+                    tmp_path / "image.json",
+                    8.0,
+                    1,
+                ),
+            ),
         ),
     )
     assert repository.list_models() == ("sdxl",)

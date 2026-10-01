@@ -60,6 +60,9 @@ class _Analytics:
 
 
 class _Reports:
+    def __init__(self, image: AnalyticsImage) -> None:
+        self.image = image
+
     def combo_statistics(self, **values):
         del values
         return [{"combo_key": "character:1|scene:2"}]
@@ -75,6 +78,7 @@ class _Reports:
                 2,
                 4,
                 8.5,
+                (self.image,),
             ),
         )
 
@@ -87,6 +91,7 @@ class _Reports:
                 2,
                 4,
                 8.5,
+                (self.image,),
             ),
         )
 
@@ -122,10 +127,10 @@ def _analytics(tmp_path: Path) -> tuple[_Analytics, AnalyticsImage]:
 def test_analytics_pages_build_combo_and_recommendation_contexts(
     tmp_path: Path,
 ) -> None:
-    analytics, _ = _analytics(tmp_path)
+    analytics, image = _analytics(tmp_path)
     service = AnalyticsPageService(
         analytics=cast(AnalyticsService, analytics),
-        reports=cast(AnalyticsReportService, _Reports()),
+        reports=cast(AnalyticsReportService, _Reports(image)),
         image_url=lambda path: f"url:{Path(path).name}",
     )
 
@@ -139,6 +144,9 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
             "image_count": 2,
             "rating_count": 4,
             "average_rating": 8.5,
+            "best_images": [
+                {"url": "url:image.png", "avg_rating": 8.5, "runs": 4}
+            ],
         }
     ]
     assert stats["model_list"] == ["sdxl"]
@@ -153,10 +161,10 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
 def test_analytics_pages_build_parameter_and_scope_contexts(
     tmp_path: Path,
 ) -> None:
-    analytics, _ = _analytics(tmp_path)
+    analytics, image = _analytics(tmp_path)
     service = AnalyticsPageService(
         analytics=cast(AnalyticsService, analytics),
-        reports=cast(AnalyticsReportService, _Reports()),
+        reports=cast(AnalyticsReportService, _Reports(image)),
         image_url=lambda path: "" if "missing" in path else "url:image.png",
     )
 
@@ -178,5 +186,8 @@ def test_analytics_pages_build_parameter_and_scope_contexts(
             "image_count": 2,
             "rating_count": 4,
             "average_rating": 8.5,
+            "best_images": [
+                {"url": "url:image.png", "avg_rating": 8.5, "runs": 4}
+            ],
         }
     ]

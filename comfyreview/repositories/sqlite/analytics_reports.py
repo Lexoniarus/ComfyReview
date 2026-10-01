@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from comfyreview.application.analytics import (
+    AnalyticsImage,
     CompositionStatistic,
     ScopeStatistic,
 )
@@ -61,6 +62,11 @@ class SqliteAnalyticsReportRepository:
                 _scope_statistics_statement(bool(model)),
                 (*((model,) if model else ()), min_n, limit),
             ).fetchall()
+            examples = _scope_example_images(
+                connection,
+                tuple(int(row["component_id"]) for row in rows),
+                model,
+            )
             return tuple(
                 ScopeStatistic(
                     kind=ScopeKind(str(row["kind"])),
@@ -70,6 +76,7 @@ class SqliteAnalyticsReportRepository:
                     image_count=int(row["image_count"]),
                     rating_count=int(row["rating_count"]),
                     average_rating=_optional_float(row["average_rating"]),
+                    best_images=examples.get(int(row["component_id"]), ()),
                 )
                 for row in rows
             )
@@ -92,6 +99,11 @@ class SqliteAnalyticsReportRepository:
             ).fetchall()
             composition_ids = tuple(int(row["composition_id"]) for row in rows)
             names = _composition_component_names(connection, composition_ids)
+            examples = _composition_example_images(
+                connection,
+                composition_ids,
+                model,
+            )
             return tuple(
                 CompositionStatistic(
                     composition_uid=str(row["composition_uid"]),
@@ -99,6 +111,7 @@ class SqliteAnalyticsReportRepository:
                     image_count=int(row["image_count"]),
                     rating_count=int(row["rating_count"]),
                     average_rating=_optional_float(row["average_rating"]),
+                    best_images=examples.get(int(row["composition_id"]), ()),
                 )
                 for row in rows
             )
@@ -201,6 +214,7 @@ def _scope_statistics_statement(filter_model: bool) -> str:
               {model_filter}
         )
         SELECT
+            component.id AS component_id,
             component.kind,
             component.component_uid,
             component.name,
@@ -290,6 +304,127 @@ def _composition_component_names(
             str(row["name"])
         )
     return {key: tuple(values) for key, values in grouped.items()}
+
+
+def _scope_example_images(
+    connection: sqlite3.Connection,
+    component_ids: tuple[int, ...],
+    model: str,
+) -> dict[int, tuple[AnalyticsImage, ...]]:
+    """Return up to three highest-rated live images per component."""
+    if not component_ids:
+        return {}
+    placeholders = ", ".join("?" for _id in component_ids)
+    model_filter = "AND generation.model_branch = ?" if model else ""
+    arguments: tuple[object, ...] = (
+        *component_ids,
+        *((model,) if model else ()),
+    )
+    rows = connection.execute(
+        f"""
+        WITH ranked AS (
+            SELECT DISTINCT
+                component.id AS group_id,
+                image.image_uid,
+                image.png_path,
+                image.json_path,
+                summary.average_rating,
+                summary.rating_count,
+                ROW_NUMBER() OVER (
+                    PARTITION BY component.id
+                    ORDER BY
+                        summary.average_rating IS NULL,
+                        summary.average_rating DESC,
+                        summary.rating_count DESC,
+                        image.image_uid
+                ) AS example_rank
+            FROM prompt_components AS component
+            JOIN prompt_revisions AS revision
+                ON revision.component_id = component.id
+            JOIN prompt_composition_revisions AS membership
+                ON membership.revision_id = revision.id
+            JOIN generations AS generation
+                ON generation.prompt_composition_id = membership.composition_id
+            JOIN images AS image ON image.generation_id = generation.id
+            JOIN image_review_summary AS summary ON summary.image_id = image.id
+            WHERE component.id IN ({placeholders})
+              AND image.deleted_at IS NULL
+              {model_filter}
+        )
+        SELECT * FROM ranked
+        WHERE example_rank <= 3
+        ORDER BY group_id, example_rank
+        """,
+        arguments,
+    ).fetchall()
+    return _group_example_images(rows)
+
+
+def _composition_example_images(
+    connection: sqlite3.Connection,
+    composition_ids: tuple[int, ...],
+    model: str,
+) -> dict[int, tuple[AnalyticsImage, ...]]:
+    """Return up to three highest-rated live images per composition."""
+    if not composition_ids:
+        return {}
+    placeholders = ", ".join("?" for _id in composition_ids)
+    model_filter = "AND generation.model_branch = ?" if model else ""
+    arguments: tuple[object, ...] = (
+        *composition_ids,
+        *((model,) if model else ()),
+    )
+    rows = connection.execute(
+        f"""
+        WITH ranked AS (
+            SELECT
+                composition.id AS group_id,
+                image.image_uid,
+                image.png_path,
+                image.json_path,
+                summary.average_rating,
+                summary.rating_count,
+                ROW_NUMBER() OVER (
+                    PARTITION BY composition.id
+                    ORDER BY
+                        summary.average_rating IS NULL,
+                        summary.average_rating DESC,
+                        summary.rating_count DESC,
+                        image.image_uid
+                ) AS example_rank
+            FROM prompt_compositions AS composition
+            JOIN generations AS generation
+                ON generation.prompt_composition_id = composition.id
+            JOIN images AS image ON image.generation_id = generation.id
+            JOIN image_review_summary AS summary ON summary.image_id = image.id
+            WHERE composition.id IN ({placeholders})
+              AND image.deleted_at IS NULL
+              {model_filter}
+        )
+        SELECT * FROM ranked
+        WHERE example_rank <= 3
+        ORDER BY group_id, example_rank
+        """,
+        arguments,
+    ).fetchall()
+    return _group_example_images(rows)
+
+
+def _group_example_images(
+    rows: list[sqlite3.Row],
+) -> dict[int, tuple[AnalyticsImage, ...]]:
+    grouped: dict[int, list[AnalyticsImage]] = {}
+    for row in rows:
+        json_path = str(row["json_path"] or "").strip()
+        grouped.setdefault(int(row["group_id"]), []).append(
+            AnalyticsImage(
+                png_path=Path(str(row["png_path"])),
+                json_path=Path(json_path) if json_path else None,
+                average_rating=_optional_float(row["average_rating"]),
+                rating_count=int(row["rating_count"]),
+            )
+        )
+    return {key: tuple(images) for key, images in grouped.items()}
 
 
 def _optional_float(value: object) -> float | None:
