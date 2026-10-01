@@ -209,6 +209,16 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
         memberships = connection.execute(
             "SELECT COUNT(*) FROM prompt_memberships"
         ).fetchone()[0]
+        composition_memberships = connection.execute(
+            """
+            SELECT membership.slot, membership.position,
+                   revision.revision_uid
+            FROM prompt_composition_revisions AS membership
+            JOIN prompt_revisions AS revision
+                ON revision.id = membership.revision_id
+            ORDER BY membership.position
+            """
+        ).fetchall()
     assert generation[:4] == (
         "native_comfyui",
         "completed",
@@ -221,6 +231,7 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
         ("base_sampler", "sampler", 0),
     ]
     assert memberships == 3
+    assert composition_memberships == [("character", 0, revision_uid)]
 
 
 def test_generation_repository_enforces_transitions_and_missing_database(

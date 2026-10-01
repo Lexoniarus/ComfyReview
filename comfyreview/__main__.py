@@ -16,6 +16,10 @@ from comfyreview.application import (
     LegacySchemaValidationError,
 )
 from comfyreview.importers import (
+    LegacyCompositionAuditor,
+    LegacyCompositionImporter,
+    LegacyCompositionRecoveryError,
+    LegacyCompositionValidationError,
     LegacyFeatureImportRecoveryError,
     LegacyFeatureImportValidationError,
     LegacyOutputAuditor,
@@ -116,6 +120,21 @@ def _parser() -> argparse.ArgumentParser:
     prompt_import.add_argument("--database", type=Path)
     prompt_import.add_argument("--report", type=Path)
     prompt_import.add_argument("--backup-dir", type=Path)
+
+    legacy_compositions = commands.add_parser("legacy-compositions")
+    composition_actions = legacy_compositions.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    composition_audit = composition_actions.add_parser("audit")
+    composition_audit.add_argument("--source", type=Path)
+    composition_audit.add_argument("--database", type=Path)
+    composition_audit.add_argument("--report", type=Path)
+    composition_import = composition_actions.add_parser("import")
+    composition_import.add_argument("--source", type=Path)
+    composition_import.add_argument("--database", type=Path)
+    composition_import.add_argument("--report", type=Path)
+    composition_import.add_argument("--backup-dir", type=Path)
 
     generation = commands.add_parser("generation")
     generation_actions = generation.add_subparsers(
@@ -347,6 +366,45 @@ def _run_legacy_prompts(options: argparse.Namespace) -> int:
     return 0
 
 
+def _run_legacy_compositions(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    legacy = load_legacy_migration_settings()
+    source_path = options.source or legacy.playground_database_path
+    canonical_path = options.database or settings.canonical_database_path
+    report_path = options.report or (
+        settings.data_directory / "reports" / "legacy-composition-audit.json"
+    )
+    if options.action == "audit":
+        audit_result = LegacyCompositionAuditor(
+            source_database_path=source_path,
+            canonical_database_path=canonical_path,
+        ).audit(report_path)
+        payload = {
+            "report_path": str(audit_result.report_path),
+            **audit_result.summary,
+        }
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        return 2 if audit_result.summary["conflict"] else 0
+    import_result = LegacyCompositionImporter(
+        source_database_path=source_path,
+        canonical_database_path=canonical_path,
+    ).import_report(
+        report_path,
+        backup_directory=options.backup_dir,
+    )
+    print(
+        json.dumps(
+            {
+                "backup_path": str(import_result.backup_path),
+                "linked_generations": import_result.linked_generations,
+                "already_exact": import_result.already_exact,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _run_generation(options: argparse.Namespace) -> int:
     from comfyreview.bootstrap import build_application_container
 
@@ -381,6 +439,8 @@ def main(arguments: list[str] | None = None) -> int:
             return _run_legacy_features(options)
         if options.command == "legacy-prompts":
             return _run_legacy_prompts(options)
+        if options.command == "legacy-compositions":
+            return _run_legacy_compositions(options)
         if options.command == "generation":
             return _run_generation(options)
         return _run_legacy_output(options)
@@ -406,6 +466,12 @@ def main(arguments: list[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
     except LegacyPromptImportRecoveryError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    except LegacyCompositionValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except LegacyCompositionRecoveryError as error:
         print(str(error), file=sys.stderr)
         return 1
     except GenerationValidationError as error:

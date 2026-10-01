@@ -14,6 +14,7 @@ from comfyreview.application import (
     PromptCatalogService,
     PromptCatalogValidationError,
     PromptComponent,
+    PromptCompositionMembership,
     PromptRevision,
     PromptRevisionDraft,
     RevisePromptComponentCommand,
@@ -21,6 +22,7 @@ from comfyreview.application import (
     UpdatePromptComponentMetadataCommand,
     imported_prompt_component_uid,
     prompt_component_key,
+    prompt_composition_identity,
     prompt_revision_identity,
 )
 from comfyreview.repositories.sqlite import (
@@ -32,6 +34,37 @@ from comfyreview.repositories.sqlite import (
 class _FixedIdentities:
     def new_component_uid(self) -> str:
         return "prompt-component-fixed"
+
+
+def test_prompt_composition_identity_uses_slots_positions_and_revisions() -> (
+    None
+):
+    memberships = (
+        PromptCompositionMembership("scene", 1, "revision-scene"),
+        PromptCompositionMembership("character", 0, "revision-character"),
+    )
+
+    identity = prompt_composition_identity(memberships)
+
+    assert identity.startswith("prompt-composition-")
+    assert identity == prompt_composition_identity(reversed(memberships))
+    assert identity != prompt_composition_identity(
+        (
+            PromptCompositionMembership(
+                "character", 0, "revision-character-v2"
+            ),
+            PromptCompositionMembership("scene", 1, "revision-scene"),
+        )
+    )
+    with pytest.raises(PromptCatalogValidationError, match="memberships"):
+        prompt_composition_identity(())
+    with pytest.raises(PromptCatalogValidationError, match="positions"):
+        prompt_composition_identity(
+            (
+                PromptCompositionMembership("character", 0, "revision-a"),
+                PromptCompositionMembership("scene", 0, "revision-b"),
+            )
+        )
 
 
 class _CatalogRepository:

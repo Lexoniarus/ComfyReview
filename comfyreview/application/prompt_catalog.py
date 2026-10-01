@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -22,6 +23,15 @@ class PromptRevision:
     positive_text: str
     negative_text: str
     content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class PromptCompositionMembership:
+    """Identify one immutable revision at one ordered composition slot."""
+
+    slot: str
+    position: int
+    revision_uid: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,6 +187,43 @@ def prompt_revision_identity(
         f"{component_uid}\0{content_hash}".encode()
     ).hexdigest()
     return f"prompt-revision-{revision_hash}", content_hash
+
+
+def prompt_composition_identity(
+    memberships: Iterable[PromptCompositionMembership],
+) -> str:
+    """Return a stable identity from ordered slots and revision identities."""
+    normalized = tuple(
+        sorted(
+            (
+                (
+                    str(membership.slot).strip(),
+                    int(membership.position),
+                    str(membership.revision_uid).strip(),
+                )
+                for membership in memberships
+            ),
+            key=lambda item: (item[1], item[0], item[2]),
+        )
+    )
+    if not normalized or any(
+        not slot or position < 0 or not revision_uid
+        for slot, position, revision_uid in normalized
+    ):
+        raise PromptCatalogValidationError(
+            "prompt composition requires valid ordered memberships"
+        )
+    if len({position for _slot, position, _revision_uid in normalized}) != len(
+        normalized
+    ):
+        raise PromptCatalogValidationError(
+            "prompt composition positions must be unique"
+        )
+    content = "\n".join(
+        f"{slot}\0{position}\0{revision_uid}"
+        for slot, position, revision_uid in normalized
+    )
+    return f"prompt-composition-{hashlib.sha256(content.encode()).hexdigest()}"
 
 
 def imported_prompt_component_uid(source: str, source_key: str) -> str:

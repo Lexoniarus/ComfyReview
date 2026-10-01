@@ -118,6 +118,7 @@ from comfyreview.application.prompt_catalog import (
     PromptCatalogService,
     PromptCatalogValidationError,
     PromptComponent,
+    PromptCompositionMembership,
     PromptIdentitySource,
     PromptRevision,
     PromptRevisionDraft,
@@ -126,6 +127,7 @@ from comfyreview.application.prompt_catalog import (
     UpdatePromptComponentMetadataCommand,
     imported_prompt_component_uid,
     prompt_component_key,
+    prompt_composition_identity,
     prompt_revision_identity,
 )
 from comfyreview.application.ranking import (
@@ -264,6 +266,7 @@ __all__ = [
     "PromptCatalogRepository",
     "PromptCatalogService",
     "PromptCatalogValidationError",
+    "PromptCompositionMembership",
     "PromptComponent",
     "PromptIdentitySource",
     "PromptRenderer",
@@ -305,6 +308,7 @@ __all__ = [
     "WorkflowInputBinding",
     "WorkflowOutputBinding",
     "imported_prompt_component_uid",
+    "prompt_composition_identity",
     "prompt_component_key",
     "generation_output_identity",
     "prompt_revision_identity",

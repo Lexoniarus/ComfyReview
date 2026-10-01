@@ -1,5 +1,14 @@
 """Explicit offline import and audit adapters."""
 
+from comfyreview.importers.legacy_compositions import (
+    HistoricalCompositionReconstructor,
+    LegacyCompositionAuditor,
+    LegacyCompositionAuditResult,
+    LegacyCompositionImporter,
+    LegacyCompositionImportResult,
+    LegacyCompositionRecoveryError,
+    LegacyCompositionValidationError,
+)
 from comfyreview.importers.legacy_features import (
     LegacyFeatureAuditResult,
     LegacyFeatureImportObserver,
@@ -33,6 +42,13 @@ from comfyreview.importers.legacy_prompts import (
 )
 
 __all__ = [
+    "HistoricalCompositionReconstructor",
+    "LegacyCompositionAuditor",
+    "LegacyCompositionAuditResult",
+    "LegacyCompositionImporter",
+    "LegacyCompositionImportResult",
+    "LegacyCompositionRecoveryError",
+    "LegacyCompositionValidationError",
     "LegacyFeatureAuditResult",
     "LegacyFeatureImportObserver",
     "LegacyFeatureImportRecoveryError",

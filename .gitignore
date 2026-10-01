@@ -16,6 +16,7 @@ htmlcov/
 data/ui_state/
 data/reports/
 data/backups/
+data/rehearsals/
 output/
 
 # databases and artifacts

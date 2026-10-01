@@ -10,6 +10,8 @@ from pathlib import Path
 from comfyreview.application import (
     GenerationRecord,
     PreparedGeneration,
+    PromptCompositionMembership,
+    prompt_composition_identity,
 )
 from comfyreview.domain import parse_prompt_atoms
 from comfyreview.repositories.sqlite.connection import connect_existing
@@ -343,8 +345,33 @@ class SqliteGenerationRepository:
     ) -> int | None:
         if not revision_uids:
             return None
-        digest = hashlib.sha256("\0".join(revision_uids).encode()).hexdigest()
-        composition_uid = f"prompt-composition-{digest}"
+        revisions: list[tuple[int, PromptCompositionMembership]] = []
+        for position, revision_uid in enumerate(revision_uids):
+            revision = connection.execute(
+                """
+                SELECT revision.id, component.kind
+                FROM prompt_revisions AS revision
+                JOIN prompt_components AS component
+                    ON component.id = revision.component_id
+                WHERE revision.revision_uid = ?
+                """,
+                (revision_uid,),
+            ).fetchone()
+            if revision is None:
+                raise RuntimeError(f"Unknown prompt revision: {revision_uid}")
+            revisions.append(
+                (
+                    int(revision["id"]),
+                    PromptCompositionMembership(
+                        slot=str(revision["kind"]),
+                        position=position,
+                        revision_uid=revision_uid,
+                    ),
+                )
+            )
+        composition_uid = prompt_composition_identity(
+            membership for _revision_id, membership in revisions
+        )
         connection.execute(
             "INSERT OR IGNORE INTO prompt_compositions(composition_uid) VALUES (?)",
             (composition_uid,),
@@ -357,25 +384,44 @@ class SqliteGenerationRepository:
             raise RuntimeError("Prompt composition could not be persisted")
         composition_id = int(composition_row["id"])
         existing = connection.execute(
-            "SELECT COUNT(*) FROM prompt_composition_revisions WHERE composition_id = ?",
+            """
+            SELECT revision.revision_uid, membership.slot,
+                   membership.position
+            FROM prompt_composition_revisions AS membership
+            JOIN prompt_revisions AS revision
+                ON revision.id = membership.revision_id
+            WHERE membership.composition_id = ?
+            ORDER BY membership.position
+            """,
             (composition_id,),
-        ).fetchone()
-        if existing is not None and int(existing[0]) == 0:
-            for position, revision_uid in enumerate(revision_uids):
-                revision = connection.execute(
-                    "SELECT id FROM prompt_revisions WHERE revision_uid = ?",
-                    (revision_uid,),
-                ).fetchone()
-                if revision is None:
-                    raise RuntimeError(
-                        f"Unknown prompt revision: {revision_uid}"
-                    )
+        ).fetchall()
+        expected = tuple(
+            (
+                membership.revision_uid,
+                membership.slot,
+                membership.position,
+            )
+            for _revision_id, membership in revisions
+        )
+        observed = tuple(
+            (str(row["revision_uid"]), str(row["slot"]), int(row["position"]))
+            for row in existing
+        )
+        if observed and observed != expected:
+            raise RuntimeError("Prompt composition identity collision")
+        if not observed:
+            for revision_id, membership in revisions:
                 connection.execute(
                     """
                     INSERT INTO prompt_composition_revisions(
                         composition_id, revision_id, slot, position
-                    ) VALUES (?, ?, 'selected', ?)
+                    ) VALUES (?, ?, ?, ?)
                     """,
-                    (composition_id, int(revision["id"]), position),
+                    (
+                        composition_id,
+                        revision_id,
+                        membership.slot,
+                        membership.position,
+                    ),
                 )
         return composition_id

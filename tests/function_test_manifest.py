@@ -125,6 +125,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_prompt_catalog.py::"
         "test_prompt_revision_identity_is_content_and_component_stable"
     ),
+    "comfyreview.application.prompt_catalog:prompt_composition_identity": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_composition_identity_uses_slots_positions_and_revisions"
+    ),
     "comfyreview.application.prompt_catalog:prompt_component_key": (
         "tests/test_prompt_catalog.py::"
         "test_prompt_component_key_is_readable_and_identity_scoped"
