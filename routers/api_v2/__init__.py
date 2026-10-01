@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from routers.api_v2.analytics import router as analytics_router
 from routers.api_v2.arena import router as arena_router
 from routers.api_v2.catalog import router as catalog_router
 from routers.api_v2.curation import router as curation_router
@@ -20,5 +21,6 @@ router.include_router(catalog_router)
 router.include_router(playground_router)
 router.include_router(generations_router)
 router.include_router(curation_router)
+router.include_router(analytics_router)
 
 __all__ = ["router"]

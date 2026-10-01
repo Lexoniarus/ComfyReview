@@ -155,6 +155,7 @@ def test_v2_router_is_a_focused_composition_module() -> None:
 
     assert "@router." not in aggregator
     assert feature_modules == {
+        "analytics",
         "arena",
         "catalog",
         "curation",

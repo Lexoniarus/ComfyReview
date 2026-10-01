@@ -345,6 +345,42 @@ class _WorkflowDefaults:
         )
 
 
+class _AnalyticsPages:
+    def __init__(self) -> None:
+        self.call: tuple[str, dict[str, object]] | None = None
+
+    def recommendations_context(self, **values):
+        self.call = ("overview", values)
+        return {
+            "stable": [{"label": "stable"}],
+            "avoid": [],
+            "approx": {"rows": []},
+            "model_list": ["anime"],
+        }
+
+    def prompt_tokens_context(self, **values):
+        self.call = ("scopes", values)
+        return {
+            "rows": [
+                {"token": "hero", "n": 4, "mean_score": 8.5, "lb05": 7.25}
+            ],
+            "model_list": ["anime"],
+        }
+
+    def parameter_context(self, **values):
+        self.call = ("parameters", values)
+        return {
+            "stats": [{"key": "steps", "title": "Steps", "rows": []}],
+            "best": [],
+            "best_tested": [],
+            "model_list": ["anime"],
+        }
+
+    def stats_context(self, **values):
+        self.call = ("combinations", values)
+        return {"rows": [{"combo_key": "a|b"}], "model_list": ["anime"]}
+
+
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
     client, container = _client()
 
@@ -754,6 +790,36 @@ def test_v2_generation_reconcile_uses_existing_lifecycle_service() -> None:
     )
 
 
+def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() -> (
+    None
+):
+    client, container = _client()
+
+    overview = client.get(
+        "/api/v2/analytics/overview", params={"model": "anime"}
+    )
+    scopes = client.get("/api/v2/analytics/scopes", params={"scope": "neg"})
+    parameters = client.get("/api/v2/analytics/parameters")
+    combinations = client.get(
+        "/api/v2/analytics/combinations", params={"min_n": 2}
+    )
+
+    assert overview.json()["stable"] == [{"label": "stable"}]
+    assert scopes.json()["rows"][0]["token"] == "hero"
+    assert parameters.json()["stats"][0]["key"] == "steps"
+    assert combinations.json()["rows"][0]["combo_key"] == "a|b"
+    assert container.analytics_pages.call == (
+        "combinations",
+        {
+            "model": "",
+            "min_n": 2,
+            "limit": 200,
+            "success_threshold": 4,
+            "delete_weight": 5,
+        },
+    )
+
+
 def _client() -> tuple[TestClient, SimpleNamespace]:
     container = SimpleNamespace(
         settings=SimpleNamespace(minimum_runs=2, pool_limit=128),
@@ -771,6 +837,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         generation_reconciliation=_GenerationReconciliation(),
         playground_discovery=_PlaygroundDiscovery(),
         workflow_defaults=_WorkflowDefaults(),
+        analytics_pages=_AnalyticsPages(),
     )
     application = FastAPI()
     application.state.container = container
