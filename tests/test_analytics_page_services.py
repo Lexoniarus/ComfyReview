@@ -13,7 +13,6 @@ from comfyreview.application import (
     PromptTokenStatistic,
 )
 from services.analytics_page_service import AnalyticsPageService
-from services.playground_hub_service import PlaygroundHubService
 
 
 class _Analytics:
@@ -139,44 +138,3 @@ def test_analytics_pages_build_parameter_and_token_contexts(
     assert tokens["rows"] == [
         {"token": "hero", "n": 4, "mean_score": 8.5, "lb05": 7.25}
     ]
-
-
-def test_playground_hub_uses_observed_canonical_combinations(
-    tmp_path: Path,
-) -> None:
-    analytics, _ = _analytics(tmp_path)
-    service = PlaygroundHubService(
-        analytics=cast(AnalyticsService, analytics),
-        image_url=lambda path: f"url:{Path(path).name}",
-        default_max_attempts=7,
-    )
-
-    context = service.build_context()
-
-    assert context["default_max_tries"] == 7
-    assert context["max_rating_id"] == 42
-    assert context["mv_status"] == []
-    assert context["top2"][0]["outfit_id"] is None
-    assert context["top3"][0]["outfit_id"] == 3
-    assert context["top2"][0]["best_images"] == [
-        {
-            "url": "url:image.png",
-            "png_path": str(tmp_path / "image.png"),
-            "json_path": "",
-            "avg_rating": 8.5,
-            "runs": 4,
-        }
-    ]
-
-
-def test_playground_hub_drops_images_without_public_url(
-    tmp_path: Path,
-) -> None:
-    analytics, _ = _analytics(tmp_path)
-    service = PlaygroundHubService(
-        analytics=cast(AnalyticsService, analytics),
-        image_url=lambda path: "",
-        default_max_attempts=1,
-    )
-
-    assert service.build_context()["top2"][0]["best_images"] == []
