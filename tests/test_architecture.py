@@ -141,3 +141,26 @@ def test_target_core_has_no_legacy_exceptions() -> None:
     }
 
     assert core_exceptions == {}
+
+
+def test_v2_router_is_a_focused_composition_module() -> None:
+    aggregator = (ROOT / "routers" / "api_v2_router.py").read_text(
+        encoding="utf-8"
+    )
+    feature_modules = {
+        path.stem
+        for path in (ROOT / "routers" / "api_v2").glob("*.py")
+        if path.stem not in {"__init__", "common"}
+    }
+
+    assert "@router." not in aggregator
+    assert feature_modules == {
+        "arena",
+        "catalog",
+        "curation",
+        "generations",
+        "images",
+        "playground",
+        "review",
+        "scopes",
+    }
