@@ -1,5 +1,8 @@
 """Presentation contracts for migrated Frontend V2 shells."""
 
+import re
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -10,6 +13,8 @@ from routers.playground.generator import router as playground_generator_router
 from routers.stats_router import router as analytics_router
 from routers.top_router import router as top_router
 from templates import ARENA_HTML, INDEX_HTML, TOP_PICTURES_HTML
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_top_worst_template_is_a_script_free_jinja_shell() -> None:
@@ -118,3 +123,25 @@ def test_all_analytics_urls_render_one_canonical_v2_shell() -> None:
         assert f'data-section="{section}"' in response.text
         assert "/static/js/entries/analytics.js" in response.text
         assert "<style" not in response.text
+
+
+def test_only_external_asset_v2_templates_remain() -> None:
+    templates = sorted((ROOT / "templates").glob("*.html"))
+
+    assert {path.name for path in templates} == {
+        "_v2_base.html",
+        "analytics.html",
+        "arena.html",
+        "generations.html",
+        "index.html",
+        "playground.html",
+        "playground_generator.html",
+        "top_pictures.html",
+    }
+    for path in templates:
+        source = path.read_text(encoding="utf-8")
+        assert "<style" not in source
+        assert " style=" not in source
+        for script_tag in re.findall(r"<script\b[^>]*>", source):
+            assert 'type="module"' in script_tag
+            assert " src=" in script_tag
