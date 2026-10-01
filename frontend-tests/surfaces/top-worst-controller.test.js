@@ -46,16 +46,9 @@ describe("TopWorstController", () => {
     expect(fixture.inspector.render).toHaveBeenCalledWith({
       image_uid: "image/1",
     });
-    expect(fixture.root.classList.contains("is-inspector-open")).toBe(true);
+    expect(fixture.rails.open).toHaveBeenCalledWith("inspector");
 
     fixture.root.querySelector("[data-surface-action='worst']")?.click();
-    fixture.root
-      .querySelector("[data-surface-action='toggle-scopes']")
-      ?.click();
-    expect(fixture.root.classList.contains("is-scope-open")).toBe(true);
-    fixture.root
-      .querySelector("[data-surface-action='toggle-inspector']")
-      ?.click();
     fixture.root.click();
     const textTarget = document.createTextNode("text target");
     fixture.root.append(textTarget);
@@ -65,22 +58,12 @@ describe("TopWorstController", () => {
     fixture.root.append(unknown);
     unknown.click();
     expect(fixture.state.update).toHaveBeenCalledWith({ mode: "worst" });
-    expect(fixture.root.classList.contains("is-scope-open")).toBe(false);
-    expect(fixture.root.classList.contains("is-inspector-open")).toBe(true);
-    expect(
-      fixture.root
-        .querySelector("[data-surface-action='toggle-scopes']")
-        ?.getAttribute("aria-expanded"),
-    ).toBe("false");
-    fixture.root
-      .querySelector("[data-surface-action='toggle-inspector']")
-      ?.click();
-    expect(fixture.root.classList.contains("is-inspector-open")).toBe(false);
     fixture.controller.dispose();
     expect(fixture.unsubscribe).toHaveBeenCalledOnce();
     expect(fixture.state.dispose).toHaveBeenCalledOnce();
     expect(fixture.activeScopes.dispose).toHaveBeenCalledOnce();
     expect(fixture.pagination.dispose).toHaveBeenCalledOnce();
+    expect(fixture.rails.dispose).toHaveBeenCalledOnce();
   });
 
   it("surfaces request errors but ignores aborted work", async () => {
@@ -116,8 +99,6 @@ function createFixture(options = {}) {
     "beforeend",
     "<button data-surface-action='top'></button>" +
       "<button data-surface-action='worst'></button>" +
-      "<button data-surface-action='toggle-scopes'></button>" +
-      "<button data-surface-action='toggle-inspector'></button>" +
       "<span data-result-count></span>",
   );
   document.body.append(root);
@@ -158,6 +139,7 @@ function createFixture(options = {}) {
   };
   const inspector = { loading: vi.fn(), render: vi.fn(), error: vi.fn() };
   const viewer = { dispose: vi.fn() };
+  const rails = { open: vi.fn(), dispose: vi.fn() };
   const pagination = { render: vi.fn(), dispose: vi.fn() };
   const controller = new TopWorstController({
     api,
@@ -168,6 +150,7 @@ function createFixture(options = {}) {
     pagination,
     inspector,
     viewer,
+    rails,
     facetRequests: new RequestLifecycle(),
     rankingRequests: new RequestLifecycle(),
     contextRequests: new RequestLifecycle(),
@@ -180,6 +163,7 @@ function createFixture(options = {}) {
     navigator,
     activeScopes,
     pagination,
+    rails,
     grid,
     inspector,
     root,

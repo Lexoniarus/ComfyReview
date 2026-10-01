@@ -4,6 +4,7 @@ import { ImageGrid } from "../images/image-grid.js";
 import { ImageViewer } from "../images/image-viewer.js";
 import { PaginationControls } from "../images/pagination-controls.js";
 import { ImageInspector } from "../inspector/image-inspector.js";
+import { ResponsiveRails } from "../layout/responsive-rails.js";
 import { ActiveScopeChips } from "../scopes/active-scope-chips.js";
 import { ScopeNavigator } from "../scopes/scope-navigator.js";
 import { ScopeStateController } from "../scopes/scope-state-controller.js";
@@ -70,6 +71,7 @@ if (root instanceof HTMLElement) {
       pagination,
       inspector: new ImageInspector(inspectorRoot),
       viewer,
+      rails: new ResponsiveRails(root),
       facetRequests: new RequestLifecycle(),
       rankingRequests: new RequestLifecycle(),
       contextRequests: new RequestLifecycle(),

@@ -7,8 +7,9 @@
 /** @typedef {{render: (total: number, offset: number, limit: number) => void, dispose: () => void}} PaginationBoundary */
 /** @typedef {{loading: () => void, render: (image: any) => void, error: (message: string) => void}} InspectorBoundary */
 /** @typedef {{dispose: () => void}} ViewerBoundary */
+/** @typedef {{open: (rail: "scope" | "inspector") => void, dispose: () => void}} RailsBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, cancelRequests: () => void, dispose: () => void}} RequestBoundary */
-/** @typedef {{api: ApiBoundary, state: ScopeStateBoundary, navigator: ScopeNavigatorBoundary, activeScopes: ActiveScopesBoundary, grid: ImageGridBoundary, pagination: PaginationBoundary, inspector: InspectorBoundary, viewer: ViewerBoundary, facetRequests: RequestBoundary, rankingRequests: RequestBoundary, contextRequests: RequestBoundary, root: HTMLElement}} TopWorstDependencies */
+/** @typedef {{api: ApiBoundary, state: ScopeStateBoundary, navigator: ScopeNavigatorBoundary, activeScopes: ActiveScopesBoundary, grid: ImageGridBoundary, pagination: PaginationBoundary, inspector: InspectorBoundary, viewer: ViewerBoundary, rails: RailsBoundary, facetRequests: RequestBoundary, rankingRequests: RequestBoundary, contextRequests: RequestBoundary, root: HTMLElement}} TopWorstDependencies */
 
 /** Orchestrate the Top/Worst surface through focused collaborators. */
 export class TopWorstController {
@@ -22,6 +23,7 @@ export class TopWorstController {
     this.pagination = dependencies.pagination;
     this.inspector = dependencies.inspector;
     this.viewer = dependencies.viewer;
+    this.rails = dependencies.rails;
     this.facetRequests = dependencies.facetRequests;
     this.rankingRequests = dependencies.rankingRequests;
     this.contextRequests = dependencies.contextRequests;
@@ -51,7 +53,7 @@ export class TopWorstController {
         this.api.get(`images/${encodeURIComponent(imageUid)}`, { signal }),
       );
       this.inspector.render(image);
-      this.root.classList.add("is-inspector-open");
+      this.rails.open("inspector");
     } catch (error) {
       if (!isAbortError(error)) {
         this.inspector.error(errorMessage(error));
@@ -71,6 +73,7 @@ export class TopWorstController {
     this.grid.dispose();
     this.pagination.dispose();
     this.viewer.dispose();
+    this.rails.dispose();
     this.state.dispose();
   }
 
@@ -122,34 +125,6 @@ export class TopWorstController {
     const value = action.dataset.surfaceAction;
     if (value === "top" || value === "worst") {
       this.state.update({ mode: value });
-    } else if (value === "toggle-scopes") {
-      this.#toggleRail("scope");
-    } else if (value === "toggle-inspector") {
-      this.#toggleRail("inspector");
-    }
-  }
-
-  /** @param {"scope" | "inspector"} rail */
-  #toggleRail(rail) {
-    const openedClass =
-      rail === "scope" ? "is-scope-open" : "is-inspector-open";
-    const otherClass = rail === "scope" ? "is-inspector-open" : "is-scope-open";
-    const shouldOpen = !this.root.classList.contains(openedClass);
-    this.root.classList.toggle(openedClass, shouldOpen);
-    if (shouldOpen) this.root.classList.remove(otherClass);
-    this.#reflectRailState("scope", "is-scope-open");
-    this.#reflectRailState("inspector", "is-inspector-open");
-  }
-
-  /** @param {string} rail @param {string} openedClass */
-  #reflectRailState(rail, openedClass) {
-    const action = rail === "scope" ? "toggle-scopes" : "toggle-inspector";
-    const button = this.root.querySelector(`[data-surface-action='${action}']`);
-    if (button) {
-      button.setAttribute(
-        "aria-expanded",
-        String(this.root.classList.contains(openedClass)),
-      );
     }
   }
 
