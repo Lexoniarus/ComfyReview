@@ -1,8 +1,9 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v6 is implemented for images, reviews, Arena,
-Curation, revisioned prompts and native generation outputs on the active
-refactor branch, 2026-09-30. Playground catalog editing remains transitional.
+Status: canonical schema v6 and the live historical-data completion are
+implemented for images, reviews, Arena, Curation, revisioned prompts and
+native generation outputs on the active refactor branch, 2026-10-01.
+Playground catalog editing remains transitional.
 
 ## 1. Source-of-truth rule
 
@@ -138,20 +139,28 @@ python -m comfyreview legacy-compositions audit
 python -m comfyreview legacy-compositions import [--backup-dir PATH]
 ```
 
-The audit considers every immutable canonical revision but accepts a historical
-composition only when the production `PromptRenderer` reproduces both stored
-prompt snapshots exactly, the ordered slots are unique and the retained source
-provenance agrees. Results are classified as `already_exact`,
-`exactly_reconstructable`, `ambiguous`, `insufficient_evidence` or `conflict`.
-Only `exactly_reconstructable` rows are linked. Ambiguous or incomplete
-evidence never creates a guessed relationship. Composition UIDs are derived
-from ordered slot, position and revision-UID tuples; paths are not involved.
+The version-2 audit considers every immutable canonical revision and recognizes
+complete positive/negative prompt-atom sequences. Historical compositions may
+contain any non-empty, ordered subset of catalog slots; the importer does not
+require all catalog kinds to be present. A slot is accepted only when its
+revision match is unique and consistent. Additional historical prompt text is
+retained solely in the unchanged generation snapshot and is classified as a
+draft override rather than invented as a component or revision.
 
-The 2026-10-01 rehearsal on a full database copy found 20 uniquely
-reconstructable generations and 359 with insufficient retained evidence, with
-no ambiguous or conflicting generation. These are observed data results, not
-hard-coded importer expectations. The live database remains authoritative only
-after the same fresh audit/import sequence and final validation complete.
+Results are classified as `already_exact`, `exactly_reconstructable`,
+`reconstructable_with_draft_override`, `ambiguous`, `insufficient_evidence` or
+`conflict`. Both reconstructable categories may be linked. Ambiguous or
+incomplete evidence never creates a guessed relationship. Composition UIDs are
+derived from ordered slot, position and revision-UID tuples; paths are not
+involved. Audit format version 2 prevents the discarded fixed-slot report from
+being imported.
+
+The completed 2026-10-01 live run linked 363 of 379 generations: 29 rendered
+exactly from their recovered memberships and 334 retained additional historical
+draft text in the canonical prompt snapshot. Sixteen generations remain
+unlinked: two have ambiguous expression evidence and fourteen have no
+sufficient catalog evidence. There were no conflicts. These are observed data
+results, not hard-coded importer expectations.
 
 ## 6. Audited historical output import
 
@@ -229,26 +238,37 @@ Normal runtime startup neither opens nor initializes these files. Known
 additive changes require the explicit `python -m comfyreview legacy-db upgrade`
 command.
 
-## 10. Canonical completion and remaining design
+## 10. Completed canonical data migration and remaining design
 
-Schema v6 already contains normalized prompt components, immutable revisions,
-compositions, exact prompt snapshots and atom memberships. The operational
-completion sequence is deliberately offline and ordered: explicit schema
-upgrade, fresh output audit/import, fresh prompt audit/import, fresh feature
-audit/import, then fresh composition audit/import. Every stage is validated
-before the next begins. Normal startup never performs this sequence and never
-opens a legacy database.
+The live schema-v6 database now contains 379 generations, 379 images, 379
+sampler stages, 729 prompt components, 729 immutable first revisions, 275
+recovered compositions and 1,280 ordered composition memberships. All 379
+images have output role, output index and a verified content hash. The existing
+5,468 review events, 1,224 Arena matches and three Curation assignments remain
+canonical facts.
+
+Completion was rehearsed from a verified v4 backup through the full v4-to-v6
+upgrade and all four fresh audit/import stages. The same ordered sequence then
+ran against the already-upgraded live v6 database. Each live import created its
+own validated backup before writing. Final `integrity_check`, foreign-key,
+schema, identity, protected-field, provenance, read-only-reader and
+canonical-only startup checks passed. Repeated rehearsal imports created no
+additional facts.
+
+Normal startup never performs this sequence and never opens a legacy database.
+The ignored detailed reports and backups remain the operational evidence; this
+document records only non-sensitive aggregate results.
 
 The design must not duplicate prompt atoms per review or materialize the full
 Cartesian product of possible prompt combinations. Persist combinations when
 they are explicitly authored, generated, curated or uniquely reconstructed. An
 unused authored template or revision remains canonical catalog data.
 
-Frontend V2 scope work begins only after the live completion run passes
-integrity, foreign-key, parity, provenance and one-database startup checks. Any
-remaining scope inference will be the smallest read-only policy justified by
-the completion report; it will not read legacy databases, paths, directory
-names or sidecars as runtime truth.
+Frontend V2 scope work may now begin. Exact memberships are authoritative for
+the 363 linked generations. Any scope fallback for the sixteen unresolved
+generations must be the smallest read-only policy justified by their explicit
+diagnostics; it must not read legacy databases, paths, directory names or
+sidecars as runtime truth.
 
 Before migrating a derived projection, prefer a direct canonical query, then a
 SQL view. Only measured needs justify a materialized projection and worker.

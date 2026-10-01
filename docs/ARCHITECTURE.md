@@ -1,8 +1,9 @@
 # ComfyReview Architecture
 
-Status: canonical Review, Ranking, Arena, Curation, Prompt Catalog, analytics
-and native Generation are implemented on the active refactor branch,
-2026-09-30. The frontend and final service-boundary cleanup remain open.
+Status: canonical Review, Ranking, Arena, Curation, Prompt Catalog, analytics,
+native Generation and live schema-v6 data completion are implemented on the
+active refactor branch, 2026-10-01. Frontend V2 and final presentation cleanup
+remain open.
 
 ## 1. Product boundary
 
@@ -40,10 +41,11 @@ only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v5 is the active
-shape: it retains the v4 identity/review cutover and adds the revisioned prompt
-catalog. Stable `image_uid` and `generation_uid` values are identity; PNG and
-optional sidecar paths are mutable attributes.
+The canonical database has an explicit schema version. Schema v6 is the active
+shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
+catalog and records native output roles and content hashes. Stable `image_uid`
+and `generation_uid` values are identity; PNG and optional sidecar paths are
+mutable attributes.
 
 Canonical v4 facts include:
 
@@ -183,11 +185,12 @@ facade or dual-write.
 
 Historical generation relationships are completed only through the explicit
 `legacy-compositions audit/import` tool. The audit reads both databases in
-SQLite read-only mode, binds them by SHA-256 and delegates exact snapshot
-roundtrips to `PromptRenderer`. The importer links only one uniquely determined
-ordered revision composition and never overwrites prompt snapshots, generation
-lifecycle or output provenance. Ambiguous and insufficient evidence stays
-unlinked and is available only as a migration diagnostic.
+SQLite read-only mode, binds them by SHA-256 and recognizes complete canonical
+prompt-atom sequences in variable ordered slot sets. The importer links only
+uniquely determined revision memberships and never overwrites prompt snapshots,
+generation lifecycle or output provenance. Extra historical text remains a
+draft override in the immutable snapshot; ambiguous and insufficient evidence
+stays unlinked and is available only as a migration diagnostic.
 
 ## 8.1 Generation boundaries
 
@@ -233,10 +236,11 @@ The canonical cutover is intentionally not the end of the wider refactor.
   audit; active HTTP/view preparation stays, obsolete compatibility facades do
   not.
 - Frontend logic still needs the planned ES-module/API-client cleanup.
-- ImageContext and scope queries do not begin until the live canonical data
-  completion sequence is validated. Application ImageContext will remain free
-  of HTTP URLs; a response mapper combines it with `OutputFileUrlMapper` at the
-  presentation boundary.
+- Live canonical data completion is validated. ImageContext and scope queries
+  can now use exact composition memberships for 363 generations; the sixteen
+  unresolved cases remain explicit diagnostics rather than guessed relations.
+  Application ImageContext will remain free of HTTP URLs; a response mapper
+  combines it with `OutputFileUrlMapper` at the presentation boundary.
 
 Existing projection workers are not migration targets by default. Each derived
 dataset is first evaluated for replacement by a direct query or canonical SQL

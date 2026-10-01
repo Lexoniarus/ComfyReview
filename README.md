@@ -26,7 +26,7 @@ Instead of treating that step like endless file cleanup, ComfyReview turns it in
 
 ComfyReview is a public prototype and local workflow tool.
 
-The current repository demonstrates a usable local review system with audited image import, rating, filtering, statistics, Arena comparison, Playground handoff, SQLite persistence and a ComfyUI metadata export node.
+The current repository demonstrates a usable local review system with audited image import, rating, filtering, statistics, Arena comparison, Playground handoff, canonical SQLite persistence and native ComfyUI output collection.
 
 It should not be treated as a polished packaged desktop application. The project is best understood as a practical tool and portfolio project that documents a real local AI workflow.
 
@@ -47,7 +47,7 @@ docs/project_status.md
 | **Main input** | Canonical generations and native ComfyUI outputs |
 | **Required dependency** | A reachable ComfyUI API with the blueprint capabilities |
 | **Main views** | Review, Top, Arena, Stats, Playground |
-| **Storage** | Canonical SQLite plus transitional legacy projections |
+| **Storage** | One canonical writable SQLite database; legacy sources are offline migration evidence |
 | **Main benefit** | Faster selection, cleaner curation, reproducible reuse |
 
 ---
@@ -238,8 +238,10 @@ python -m comfyreview legacy-compositions import --backup-dir data/backups/legac
 ```
 
 Composition completion links only a unique ordered set of immutable revisions
-that reproduces both stored prompt snapshots exactly. Ambiguous or incomplete
-historical evidence remains unlinked and is reported rather than guessed.
+identified as complete prompt-atom blocks. Additional historical draft text
+remains in the unchanged generation snapshot; it is not invented as a new
+catalog revision. Ambiguous or incomplete evidence remains unlinked and is
+reported rather than guessed.
 
 Audit reports bind source files and databases by hash. Import commands
 revalidate that evidence, create a backup before writing, and commit all writes

@@ -1,9 +1,9 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover and its revisioned prompt catalog are
-implemented on `refactor/review-boundary`, 2026-10-01. Canonical Data
-Completion is the blocking active slice before ImageContext, scopes or
-Frontend V2. The branch remains the unmerged integration branch until the full
+Status: the canonical backend cutover, revisioned prompt catalog and live
+Canonical Data Completion are implemented on `refactor/review-boundary`,
+2026-10-01. ImageContext, scopes and Frontend V2 are now the remaining active
+program. The branch remains the unmerged integration branch until the full
 refactor is accepted.
 
 The goal is a maintainable local application with one canonical writable
@@ -192,23 +192,31 @@ materialized worker is currently justified. `mv_jobs` and `mv_state` therefore
 remain historical offline evidence only; the runtime worker and its consumers
 have been removed.
 
-### Slice 0. Canonical Data Completion (active)
+### Slice 0. Canonical Data Completion (completed)
 
 - the explicit `legacy-compositions audit/import` workflow is implemented;
-- the audit requires renderer-exact positive and negative prompt roundtrips,
-  unique ordered revision slots and consistent retained provenance;
-- only unique exact relationships are imported; ambiguity and missing evidence
-  remain diagnostics rather than guessed data;
+- audit format v2 recognizes complete positive/negative prompt-atom blocks in
+  variable, ordered slot sets rather than requiring all seven catalog kinds;
+- unique memberships are imported even when the immutable generation snapshot
+  contains additional historical draft text; that text never creates a
+  synthetic component or revision;
+- ambiguous and missing evidence remain diagnostics rather than guessed data;
 - every import is hash-bound, backed up, idempotent and transactional;
 - the full rehearsal on a v4 database copy successfully upgraded to v6 and
-  reran Output, Prompt and Feature imports;
-- that rehearsal classified 20 of 379 historical generations as uniquely
-  reconstructable and 359 as insufficient evidence, with zero ambiguities and
-  zero conflicts.
+  reran Output, Prompt, Feature and Composition imports idempotently;
+- the live v6 database contains 379 stable generations/images and sampler
+  stages, verified content hashes for all images, 729 components and immutable
+  revisions, 275 compositions and 1,280 composition memberships;
+- 363 generations are linked: 29 exact render roundtrips and 334 memberships
+  with preserved historical draft overrides;
+- 16 generations remain intentionally unlinked: two ambiguous and fourteen
+  without sufficient catalog evidence; no conflicts were observed;
+- final integrity, foreign-key, identity, protected-field, provenance,
+  read-only-reader and canonical-only startup checks passed.
 
-The production database is not considered complete until the fresh live
-sequence, final parity report, one-database startup check and full quality gate
-have succeeded. Rehearsal counts are observations rather than code constants.
+Detailed reports and all four pre-write backups remain ignored runtime
+artifacts. The counts above are observed migration results, not importer
+constants.
 
 ## Remaining slice order
 
@@ -216,7 +224,6 @@ The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-0. complete and validate the live canonical v4-to-v6 data sequence;
 1. add Frontend/Design quality tooling and architecture gates;
 2. add URL-free ImageContext, SQL-backed scopes/facets and API V2;
 3. build the shared V2 shell and lifecycle-owned browser components;
