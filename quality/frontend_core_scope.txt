@@ -1,0 +1,4 @@
+# Stable browser behavior boundaries with mandatory full coverage.
+static/js/core/api-error.js
+static/js/core/api-client.js
+static/js/core/request-lifecycle.js

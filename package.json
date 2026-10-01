@@ -1,0 +1,28 @@
+{
+  "name": "comfyreview-frontend",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "lint": "eslint static/js frontend-tests eslint.config.js vitest.config.js",
+    "format:check": "prettier --check static/js frontend-tests static/css/v2 package.json jsconfig.json eslint.config.js vitest.config.js .stylelintrc.json",
+    "style:check": "stylelint \"static/css/**/*.css\"",
+    "typecheck": "tsc --noEmit --project jsconfig.json",
+    "test": "vitest run --coverage",
+    "quality": "npm run lint && npm run format:check && npm run style:check && npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@vitest/coverage-v8": "5.0.3",
+    "eslint": "10.11.0",
+    "globals": "17.13.0",
+    "jsdom": "30.1.1",
+    "prettier": "3.9.9",
+    "stylelint": "17.15.0",
+    "stylelint-config-standard": "40.0.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

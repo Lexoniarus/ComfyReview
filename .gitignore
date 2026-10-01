@@ -11,6 +11,8 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+node_modules/
+coverage/frontend/
 
 # local state
 data/ui_state/
