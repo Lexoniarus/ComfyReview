@@ -6,7 +6,7 @@ const sections = new Set(["overview", "scopes", "parameters", "combinations"]);
 
 /** Orchestrate one canonical analytics report surface. */
 export class AnalyticsController {
-  /** @param {{section: string, api: ApiBoundary, requests: RequestBoundary, view: ViewBoundary, form: HTMLFormElement, model: HTMLInputElement, minimumSamples: HTMLInputElement, scope: HTMLSelectElement, status: HTMLElement, locationRef?: Location, historyRef?: History}} dependencies */
+  /** @param {{section: string, api: ApiBoundary, requests: RequestBoundary, view: ViewBoundary, form: HTMLFormElement, model: HTMLInputElement, minimumSamples: HTMLInputElement, status: HTMLElement, locationRef?: Location, historyRef?: History}} dependencies */
   constructor(dependencies) {
     this.section = sections.has(dependencies.section)
       ? dependencies.section
@@ -17,7 +17,6 @@ export class AnalyticsController {
     this.form = dependencies.form;
     this.model = dependencies.model;
     this.minimumSamples = dependencies.minimumSamples;
-    this.scope = dependencies.scope;
     this.status = dependencies.status;
     this.locationRef = dependencies.locationRef || window.location;
     this.historyRef = dependencies.historyRef || window.history;
@@ -30,11 +29,6 @@ export class AnalyticsController {
     this.model.value = query.get("model") || "";
     this.minimumSamples.value =
       query.get("min_n") || defaultMinimum(this.section);
-    this.scope.value = query.get("scope") === "neg" ? "neg" : "pos";
-    const scopeField = this.scope.closest("label");
-    if (scopeField instanceof HTMLElement) {
-      scopeField.hidden = this.section !== "scopes";
-    }
     this.form.addEventListener(
       "submit",
       (event) => {
@@ -56,7 +50,6 @@ export class AnalyticsController {
       model: this.model.value.trim(),
       min_n: normalizedMinimum(this.minimumSamples.value),
     });
-    if (this.section === "scopes") query.set("scope", this.scope.value);
     try {
       const payload = await this.requests.run((signal) =>
         this.api.get(`analytics/${this.section}?${query.toString()}`, {
@@ -81,7 +74,6 @@ export class AnalyticsController {
     const query = new URLSearchParams();
     if (this.model.value.trim()) query.set("model", this.model.value.trim());
     query.set("min_n", normalizedMinimum(this.minimumSamples.value));
-    if (this.section === "scopes") query.set("scope", this.scope.value);
     const suffix = query.toString();
     this.historyRef.replaceState(
       null,

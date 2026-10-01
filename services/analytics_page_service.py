@@ -33,32 +33,67 @@ class AnalyticsPageService:
         self._reports = reports
         self._image_url = image_url
 
-    def stats_context(
+    def composition_context(
         self,
         *,
         model: str = "",
         min_n: int = 8,
         limit: int = 200,
-        success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
-        delete_weight: float = DELETE_WEIGHT_DEFAULT,
     ) -> dict[str, Any]:
-        """Build the observed combo-statistics page model."""
+        """Build canonical composition statistics for the V2 surface."""
         normalized_model = normalize_model(model)
-        rows = self._reports.combo_statistics(
+        rows = self._reports.composition_statistics(
             model=normalized_model,
             minimum_samples=int(min_n),
             limit=int(limit),
-            success_threshold=int(success_threshold),
-            delete_weight=int(delete_weight),
         )
-        self._attach_combo_images(rows, normalized_model)
         return {
-            "rows": rows,
+            "rows": [
+                {
+                    "composition_uid": item.composition_uid,
+                    "component_names": list(item.component_names),
+                    "image_count": item.image_count,
+                    "rating_count": item.rating_count,
+                    "average_rating": item.average_rating,
+                }
+                for item in rows
+            ],
             "model": normalized_model,
             "min_n": min_n,
             "limit": limit,
-            "t": success_threshold,
-            "dw": delete_weight,
+            "model_list": self._models(),
+        }
+
+    def scope_context(
+        self,
+        *,
+        model: str = "",
+        min_n: int = 8,
+        limit: int = 200,
+    ) -> dict[str, Any]:
+        """Build canonical component statistics for the V2 surface."""
+        normalized_model = normalize_model(model)
+        rows = self._reports.scope_statistics(
+            model=normalized_model,
+            minimum_samples=int(min_n),
+            limit=int(limit),
+        )
+        return {
+            "rows": [
+                {
+                    "kind": item.kind.value,
+                    "component_uid": item.component_uid,
+                    "name": item.name,
+                    "archived": item.archived,
+                    "image_count": item.image_count,
+                    "rating_count": item.rating_count,
+                    "average_rating": item.average_rating,
+                }
+                for item in rows
+            ],
+            "model": normalized_model,
+            "min_n": min_n,
+            "limit": limit,
             "model_list": self._models(),
         }
 
@@ -144,60 +179,8 @@ class AnalyticsPageService:
             "model_list": self._models(),
         }
 
-    def prompt_tokens_context(
-        self,
-        *,
-        model: str = "",
-        scope: str = "pos",
-        min_n: int = 8,
-        limit: int = 200,
-    ) -> dict[str, Any]:
-        """Build prompt-token statistics directly from the canonical view."""
-        normalized_model = normalize_model(model)
-        statistics = self._analytics.prompt_token_statistics(
-            model_branch=normalized_model,
-            scope=scope,
-            minimum_samples=min_n,
-            limit=limit,
-        )
-        return {
-            "rows": [
-                {
-                    "token": item.token,
-                    "n": item.sample_count,
-                    "mean_score": item.mean_score,
-                    "lb05": item.lower_bound,
-                }
-                for item in statistics
-            ],
-            "model": normalized_model,
-            "scope": scope if scope in {"pos", "neg"} else "pos",
-            "min_n": min_n,
-            "limit": limit,
-            "model_list": self._models(),
-        }
-
     def _models(self) -> list[str]:
         return list(self._reports.list_models())
-
-    def _attach_combo_images(
-        self,
-        rows: list[dict[str, Any]],
-        model_branch: str,
-    ) -> None:
-        combo_keys = tuple(
-            str(row.get("combo_key") or "")
-            for row in rows
-            if row.get("combo_key")
-        )
-        images = self._analytics.best_images_for_combos(
-            combo_keys,
-            model_branch=model_branch,
-        )
-        for row in rows:
-            row["best_images"] = self._image_views(
-                images.get(str(row.get("combo_key") or ""), ())
-            )
 
     def _parameter_sections(
         self,

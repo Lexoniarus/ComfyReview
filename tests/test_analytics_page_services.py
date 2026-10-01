@@ -9,8 +9,11 @@ from comfyreview.application import (
     AnalyticsImage,
     AnalyticsReportService,
     AnalyticsService,
+    CompositionStatistic,
     ObservedPromptCombination,
     PromptTokenStatistic,
+    ScopeKind,
+    ScopeStatistic,
 )
 from services.analytics_page_service import AnalyticsPageService
 
@@ -61,6 +64,32 @@ class _Reports:
         del values
         return [{"combo_key": "character:1|scene:2"}]
 
+    def scope_statistics(self, **values):
+        del values
+        return (
+            ScopeStatistic(
+                ScopeKind.CHARACTER,
+                "character-a",
+                "Aiko",
+                False,
+                2,
+                4,
+                8.5,
+            ),
+        )
+
+    def composition_statistics(self, **values):
+        del values
+        return (
+            CompositionStatistic(
+                "composition-a",
+                ("Aiko", "Rooftop"),
+                2,
+                4,
+                8.5,
+            ),
+        )
+
     def recommendations(self, **values):
         del values
         return {"stable": ["yes"], "avoid": ["no"]}
@@ -100,11 +129,17 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
         image_url=lambda path: f"url:{Path(path).name}",
     )
 
-    stats = service.stats_context(model=" sdxl ", min_n=2, limit=5)
+    stats = service.composition_context(model=" sdxl ", min_n=2, limit=5)
     recommendations = service.recommendations_context(model="sdxl")
 
-    assert stats["rows"][0]["best_images"] == [
-        {"url": "url:image.png", "avg_rating": 8.5, "runs": 4}
+    assert stats["rows"] == [
+        {
+            "composition_uid": "composition-a",
+            "component_names": ["Aiko", "Rooftop"],
+            "image_count": 2,
+            "rating_count": 4,
+            "average_rating": 8.5,
+        }
     ]
     assert stats["model_list"] == ["sdxl"]
     assert recommendations["stable"] == ["yes"]
@@ -115,7 +150,7 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
     }
 
 
-def test_analytics_pages_build_parameter_and_token_contexts(
+def test_analytics_pages_build_parameter_and_scope_contexts(
     tmp_path: Path,
 ) -> None:
     analytics, _ = _analytics(tmp_path)
@@ -126,7 +161,7 @@ def test_analytics_pages_build_parameter_and_token_contexts(
     )
 
     parameters = service.parameter_context(model="sdxl")
-    tokens = service.prompt_tokens_context(scope="invalid", min_n=1)
+    scopes = service.scope_context(model="sdxl", min_n=1)
 
     steps = next(
         section for section in parameters["stats"] if section["key"] == "steps"
@@ -134,7 +169,14 @@ def test_analytics_pages_build_parameter_and_token_contexts(
     assert steps["rows"][0]["best_images"][0]["url"] == "url:image.png"
     assert parameters["best"] == ["best"]
     assert parameters["best_tested"] == [{"combo_key": "character:1|scene:2"}]
-    assert tokens["scope"] == "pos"
-    assert tokens["rows"] == [
-        {"token": "hero", "n": 4, "mean_score": 8.5, "lb05": 7.25}
+    assert scopes["rows"] == [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "name": "Aiko",
+            "archived": False,
+            "image_count": 2,
+            "rating_count": 4,
+            "average_rating": 8.5,
+        }
     ]

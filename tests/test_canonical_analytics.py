@@ -11,9 +11,12 @@ from comfyreview.application import (
     AnalyticsImage,
     AnalyticsReportService,
     AnalyticsService,
+    CompositionStatistic,
     ObservedPromptCombination,
     PromptMatchPreview,
     PromptTokenStatistic,
+    ScopeKind,
+    ScopeStatistic,
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
@@ -68,6 +71,32 @@ class _AnalyticsReportRepository:
     def combo_statistics(self, **values):
         self.calls.append(("combos", values))
         return [{"combo_key": "character:1|scene:2"}]
+
+    def scope_statistics(self, **values):
+        self.calls.append(("scopes", values))
+        return (
+            ScopeStatistic(
+                ScopeKind.CHARACTER,
+                "character-a",
+                "Aiko",
+                False,
+                2,
+                4,
+                8.5,
+            ),
+        )
+
+    def composition_statistics(self, **values):
+        self.calls.append(("compositions", values))
+        return (
+            CompositionStatistic(
+                "composition-a",
+                ("Aiko", "Rooftop"),
+                2,
+                4,
+                8.5,
+            ),
+        )
 
     def recommendations(self, **values):
         self.calls.append(("recommendations", values))
@@ -211,6 +240,18 @@ def test_analytics_report_service_normalizes_queries() -> None:
         == "character:1|scene:2"
     )
     assert (
+        service.scope_statistics(model=" sdxl ", minimum_samples=-1, limit=-2)[
+            0
+        ].component_uid
+        == "character-a"
+    )
+    assert (
+        service.composition_statistics(
+            model=" sdxl ", minimum_samples=-1, limit=-2
+        )[0].composition_uid
+        == "composition-a"
+    )
+    assert (
         service.recommendations(
             model=" sdxl ",
             minimum_samples=-1,
@@ -254,6 +295,8 @@ def test_analytics_report_service_normalizes_queries() -> None:
                 "delete_weight": 5,
             },
         ),
+        ("scopes", {"model": "sdxl", "min_n": 0, "limit": 0}),
+        ("compositions", {"model": "sdxl", "min_n": 0, "limit": 0}),
         (
             "recommendations",
             {
@@ -308,6 +351,7 @@ def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
             """,
             ((1, 1, "hero"), (2, 2, "blur")),
         )
+        revision_ids: list[int] = []
         for source_key, kind, name in (
             ("1", "character", "Alice"),
             ("2", "scene", "Rooftop"),
@@ -329,20 +373,60 @@ def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
                 """,
                 (cursor.lastrowid, source_key),
             )
+            revision = connection.execute(
+                """
+                INSERT INTO prompt_revisions(
+                    revision_uid, component_id, revision_number,
+                    positive_text, negative_text, content_hash
+                ) VALUES (?, ?, 1, ?, '', ?)
+                """,
+                (
+                    f"revision-{source_key}",
+                    cursor.lastrowid,
+                    name,
+                    f"hash-{source_key}",
+                ),
+            )
+            revision_id = revision.lastrowid
+            assert revision_id is not None
+            revision_ids.append(revision_id)
+        composition = connection.execute(
+            "INSERT INTO prompt_compositions(composition_uid) "
+            "VALUES ('composition-1')"
+        )
+        composition_id = composition.lastrowid
+        assert composition_id is not None
+        connection.executemany(
+            """
+            INSERT INTO prompt_composition_revisions(
+                composition_id, revision_id, slot, position
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (
+                (
+                    composition_id,
+                    revision_id,
+                    f"slot-{position}",
+                    position,
+                )
+                for position, revision_id in enumerate(revision_ids)
+            ),
+        )
         combo_key = "character:1|scene:2|outfit:3"
         connection.execute(
             """
             INSERT INTO generations(
                 generation_uid, model_branch, checkpoint, combo_key,
                 seed, steps, cfg, sampler, scheduler, denoise, loras_json,
-                positive_prompt_id, negative_prompt_id, source, status
+                positive_prompt_id, negative_prompt_id, source, status,
+                prompt_composition_id
             ) VALUES (
                 'generation-1', 'sdxl', 'model.safetensors', ?,
                 1, 20, 7.0, 'euler', 'normal', 1.0, '[]',
-                1, 2, 'test', 'completed'
+                1, 2, 'test', 'completed', ?
             )
             """,
-            (combo_key,),
+            (combo_key, composition_id),
         )
         png_path = tmp_path / "image.png"
         png_path.write_bytes(b"png")
@@ -489,6 +573,14 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
         delete_weight=5,
         limit=10,
     )
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE generations SET combo_key = 'deliberately-wrong'"
+        )
+    scopes = repository.scope_statistics(model="sdxl", min_n=1, limit=10)
+    compositions = repository.composition_statistics(
+        model="sdxl", min_n=1, limit=10
+    )
 
     assert combo_rows[0]["combo_key"] == ("character:1|scene:2|outfit:3")
     assert recommendations["stable"][0]["avg_rating"] == 8.0
@@ -500,4 +592,42 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
         "scheduler",
     }
     assert best_cases[0]["checkpoint"] == "model.safetensors"
+    assert scopes == (
+        ScopeStatistic(
+            ScopeKind.CHARACTER,
+            "component-1",
+            "Alice",
+            False,
+            1,
+            1,
+            8.0,
+        ),
+        ScopeStatistic(
+            ScopeKind.OUTFIT,
+            "component-3",
+            "Red Coat",
+            False,
+            1,
+            1,
+            8.0,
+        ),
+        ScopeStatistic(
+            ScopeKind.SCENE,
+            "component-2",
+            "Rooftop",
+            False,
+            1,
+            1,
+            8.0,
+        ),
+    )
+    assert compositions == (
+        CompositionStatistic(
+            "composition-1",
+            ("Alice", "Rooftop", "Red Coat"),
+            1,
+            1,
+            8.0,
+        ),
+    )
     assert repository.list_models() == ("sdxl",)

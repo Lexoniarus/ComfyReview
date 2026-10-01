@@ -358,11 +358,19 @@ class _AnalyticsPages:
             "model_list": ["anime"],
         }
 
-    def prompt_tokens_context(self, **values):
+    def scope_context(self, **values):
         self.call = ("scopes", values)
         return {
             "rows": [
-                {"token": "hero", "n": 4, "mean_score": 8.5, "lb05": 7.25}
+                {
+                    "kind": "character",
+                    "component_uid": "character-a",
+                    "name": "Aiko",
+                    "archived": False,
+                    "image_count": 2,
+                    "rating_count": 4,
+                    "average_rating": 8.5,
+                }
             ],
             "model_list": ["anime"],
         }
@@ -376,9 +384,17 @@ class _AnalyticsPages:
             "model_list": ["anime"],
         }
 
-    def stats_context(self, **values):
+    def composition_context(self, **values):
         self.call = ("combinations", values)
-        return {"rows": [{"combo_key": "a|b"}], "model_list": ["anime"]}
+        return {
+            "rows": [
+                {
+                    "composition_uid": "composition-a",
+                    "component_names": ["Aiko", "Rooftop"],
+                }
+            ],
+            "model_list": ["anime"],
+        }
 
 
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
@@ -809,24 +825,24 @@ def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() ->
     overview = client.get(
         "/api/v2/analytics/overview", params={"model": "anime"}
     )
-    scopes = client.get("/api/v2/analytics/scopes", params={"scope": "neg"})
+    scopes = client.get("/api/v2/analytics/scopes")
     parameters = client.get("/api/v2/analytics/parameters")
     combinations = client.get(
         "/api/v2/analytics/combinations", params={"min_n": 2}
     )
 
     assert overview.json()["stable"] == [{"label": "stable"}]
-    assert scopes.json()["rows"][0]["token"] == "hero"
+    assert scopes.json()["rows"][0]["component_uid"] == "character-a"
     assert parameters.json()["stats"][0]["key"] == "steps"
-    assert combinations.json()["rows"][0]["combo_key"] == "a|b"
+    assert combinations.json()["rows"][0]["composition_uid"] == (
+        "composition-a"
+    )
     assert container.analytics_pages.call == (
         "combinations",
         {
             "model": "",
             "min_n": 2,
             "limit": 200,
-            "success_threshold": 4,
-            "delete_weight": 5,
         },
     )
 

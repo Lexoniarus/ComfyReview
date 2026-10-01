@@ -37,14 +37,15 @@ export class AnalyticsView {
   /** @param {Record<string, any>} payload */
   #renderScopes(payload) {
     const rows = arrayValue(payload.rows).map((row) => [
-      textValue(row.token),
-      textValue(row.n),
-      decimalValue(row.mean_score),
-      decimalValue(row.lb05),
+      scopeKindLabel(row.kind),
+      textValue(row.name),
+      textValue(row.image_count),
+      textValue(row.rating_count),
+      decimalValue(row.average_rating),
     ]);
     this.root.append(
       reportTable(
-        ["Prompt-Atom", "Belege", "Ø Bewertung", "Untergrenze"],
+        ["Art", "Scope", "Bilder", "Bewertungen", "Ø Bewertung"],
         rows,
       ),
     );
@@ -79,14 +80,14 @@ export class AnalyticsView {
   /** @param {Record<string, any>} payload */
   #renderCombinations(payload) {
     const rows = arrayValue(payload.rows).map((row) => [
-      textValue(row.label || row.combo_key),
-      textValue(row.n ?? row.total_rating_count ?? row.runs),
-      decimalValue(row.avg_rating ?? row.average_rating),
-      decimalValue(row.stability_lb05 ?? row.lb05),
+      compositionLabel(row.component_names, row.composition_uid),
+      textValue(row.image_count),
+      textValue(row.rating_count),
+      decimalValue(row.average_rating),
     ]);
     this.root.append(
       reportTable(
-        ["Kombination", "Belege", "Ø Bewertung", "Untergrenze"],
+        ["Kombination", "Bilder", "Bewertungen", "Ø Bewertung"],
         rows,
       ),
     );
@@ -171,4 +172,28 @@ function textValue(value) {
 function decimalValue(value) {
   const number = Number(value);
   return Number.isFinite(number) ? numberFormatter.format(number) : "—";
+}
+
+/** @param {unknown} value */
+function scopeKindLabel(value) {
+  /** @type {Record<string, string>} */
+  const labels = {
+    character: "Charakter",
+    scene: "Szene",
+    outfit: "Outfit",
+    pose: "Pose",
+    expression: "Ausdruck",
+    lighting: "Licht",
+    modifier: "Modifier",
+  };
+  const key = String(value || "");
+  return labels[key] || textValue(value);
+}
+
+/** @param {unknown} names @param {unknown} fallback */
+function compositionLabel(names, fallback) {
+  const values = arrayValue(names)
+    .map(textValue)
+    .filter((value) => value !== "—");
+  return values.length ? values.join(" · ") : textValue(fallback);
 }

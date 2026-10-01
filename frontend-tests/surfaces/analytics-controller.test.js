@@ -5,26 +5,24 @@ import { AnalyticsController } from "../../static/js/surfaces/analytics-controll
 describe("AnalyticsController", () => {
   beforeEach(() => document.body.replaceChildren());
 
-  it("restores scope filters, loads and owns URL updates", async () => {
+  it("restores report filters, loads and owns URL updates", async () => {
     const fixture = createFixture({
       section: "scopes",
-      search: "?model=anime&min_n=6&scope=neg",
+      search: "?model=anime&min_n=6",
     });
 
     await fixture.controller.start();
     expect(fixture.api.get).toHaveBeenCalledWith(
-      "analytics/scopes?model=anime&min_n=6&scope=neg",
+      "analytics/scopes?model=anime&min_n=6",
       expect.any(Object),
     );
-    expect(fixture.scope.hidden).toBe(false);
-    expect(fixture.scopeLabel.hidden).toBe(false);
     fixture.minimumSamples.value = "-2";
     fixture.form.dispatchEvent(new Event("submit", { cancelable: true }));
     await settle();
     expect(fixture.historyRef.replaceState).toHaveBeenCalledWith(
       null,
       "",
-      "/prompt_tokens?model=anime&min_n=0&scope=neg",
+      "/prompt_tokens?model=anime&min_n=0",
     );
     fixture.controller.dispose();
     expect(fixture.requests.dispose).toHaveBeenCalledOnce();
@@ -43,7 +41,6 @@ describe("AnalyticsController", () => {
     const parameters = createFixture({ section: "parameters" });
     await parameters.controller.start();
     expect(parameters.minimumSamples.value).toBe("10");
-    expect(parameters.scopeLabel.hidden).toBe(true);
 
     const combinations = createFixture({ section: "combinations" });
     await combinations.controller.start();
@@ -81,11 +78,7 @@ function createFixture(options = {}) {
   const form = document.createElement("form");
   const model = document.createElement("input");
   const minimumSamples = document.createElement("input");
-  const scope = document.createElement("select");
-  scope.append(new Option("Positiv", "pos"), new Option("Negativ", "neg"));
-  const scopeLabel = document.createElement("label");
-  scopeLabel.append(scope);
-  form.append(model, minimumSamples, scopeLabel);
+  form.append(model, minimumSamples);
   const status = document.createElement("p");
   const api = {
     get: vi.fn(() =>
@@ -114,7 +107,6 @@ function createFixture(options = {}) {
       form,
       model,
       minimumSamples,
-      scope,
       status,
       locationRef,
       historyRef,
@@ -125,8 +117,6 @@ function createFixture(options = {}) {
     form,
     model,
     minimumSamples,
-    scope,
-    scopeLabel,
     status,
     historyRef,
   };

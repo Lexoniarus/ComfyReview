@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from comfyreview.application.image_queries import ScopeKind
+
 
 @dataclass(frozen=True, slots=True)
 class AnalyticsImage:
@@ -52,6 +54,30 @@ class ObservedPromptCombination:
     image_count: int
     total_rating_count: int
     best_images: tuple[AnalyticsImage, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ScopeStatistic:
+    """Summarize review evidence for one canonical prompt component."""
+
+    kind: ScopeKind
+    component_uid: str
+    name: str
+    archived: bool
+    image_count: int
+    rating_count: int
+    average_rating: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class CompositionStatistic:
+    """Summarize review evidence for one canonical prompt composition."""
+
+    composition_uid: str
+    component_names: tuple[str, ...]
+    image_count: int
+    rating_count: int
+    average_rating: float | None
 
 
 class AnalyticsRepository(Protocol):
@@ -139,6 +165,26 @@ class AnalyticsReportRepository(Protocol):
         delete_weight: int,
     ) -> list[dict[str, Any]]:
         """Return observed combination statistics."""
+        ...
+
+    def scope_statistics(
+        self,
+        *,
+        model: str,
+        min_n: int,
+        limit: int,
+    ) -> tuple[ScopeStatistic, ...]:
+        """Return statistics grouped by canonical prompt component."""
+        ...
+
+    def composition_statistics(
+        self,
+        *,
+        model: str,
+        min_n: int,
+        limit: int,
+    ) -> tuple[CompositionStatistic, ...]:
+        """Return statistics grouped by canonical prompt composition."""
         ...
 
     def recommendations(
@@ -356,6 +402,34 @@ class AnalyticsReportService:
             limit=max(int(limit), 0),
             success_threshold=int(success_threshold),
             delete_weight=int(delete_weight),
+        )
+
+    def scope_statistics(
+        self,
+        *,
+        model: str,
+        minimum_samples: int,
+        limit: int,
+    ) -> tuple[ScopeStatistic, ...]:
+        """Return normalized canonical component statistics."""
+        return self._repository.scope_statistics(
+            model=str(model or "").strip(),
+            min_n=max(int(minimum_samples), 0),
+            limit=max(int(limit), 0),
+        )
+
+    def composition_statistics(
+        self,
+        *,
+        model: str,
+        minimum_samples: int,
+        limit: int,
+    ) -> tuple[CompositionStatistic, ...]:
+        """Return normalized canonical composition statistics."""
+        return self._repository.composition_statistics(
+            model=str(model or "").strip(),
+            min_n=max(int(minimum_samples), 0),
+            limit=max(int(limit), 0),
         )
 
     def recommendations(

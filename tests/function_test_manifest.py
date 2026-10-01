@@ -33,6 +33,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_canonical_analytics.py::"
         "test_analytics_report_service_normalizes_queries"
     ),
+    "comfyreview.application.analytics:AnalyticsReportService.scope_statistics": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_report_service_normalizes_queries"
+    ),
+    "comfyreview.application.analytics:AnalyticsReportService.composition_statistics": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_report_service_normalizes_queries"
+    ),
     "comfyreview.application.analytics:AnalyticsReportService.recommendations": (
         "tests/test_canonical_analytics.py::"
         "test_analytics_report_service_normalizes_queries"

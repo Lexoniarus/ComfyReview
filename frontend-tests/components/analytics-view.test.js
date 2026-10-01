@@ -26,22 +26,33 @@ describe("AnalyticsView", () => {
     const view = new AnalyticsView(root);
 
     view.render("scopes", {
-      rows: [{ token: "hero", n: 4, mean_score: 8.5, lb05: 7.25 }],
+      rows: [
+        {
+          kind: "character",
+          component_uid: "character-a",
+          name: "Aiko",
+          image_count: 2,
+          rating_count: 4,
+          average_rating: 8.5,
+        },
+      ],
     });
-    expect(root.textContent).toContain("Prompt-Atom");
+    expect(root.textContent).toContain("Charakter");
+    expect(root.textContent).toContain("Aiko");
     expect(root.textContent).toContain("8,5");
 
     view.render("combinations", {
       rows: [
         {
-          combo_key: "character:a|scene:b",
-          total_rating_count: 3,
+          composition_uid: "composition-a",
+          component_names: ["Aiko", "Rooftop"],
+          image_count: 2,
+          rating_count: 3,
           average_rating: 7.5,
-          lb05: null,
         },
       ],
     });
-    expect(root.textContent).toContain("character:a|scene:b");
+    expect(root.textContent).toContain("Aiko · Rooftop");
     expect(root.textContent).toContain("7,5");
   });
 

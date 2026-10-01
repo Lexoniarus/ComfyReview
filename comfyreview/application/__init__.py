@@ -6,9 +6,11 @@ from comfyreview.application.analytics import (
     AnalyticsReportService,
     AnalyticsRepository,
     AnalyticsService,
+    CompositionStatistic,
     ObservedPromptCombination,
     PromptMatchPreview,
     PromptTokenStatistic,
+    ScopeStatistic,
 )
 from comfyreview.application.arena import (
     ArenaCompetitor,
@@ -218,6 +220,7 @@ __all__ = [
     "AnalyticsReportRepository",
     "AnalyticsReportService",
     "AnalyticsService",
+    "CompositionStatistic",
     "ArenaCompetitor",
     "ArenaDecision",
     "ArenaMutationError",
@@ -340,6 +343,7 @@ __all__ = [
     "PromptSelectionError",
     "PromptSelectionPolicy",
     "PromptTokenStatistic",
+    "ScopeStatistic",
     "PromptMatchPreview",
     "PromptSnapshot",
     "PromptCompositionEvidence",

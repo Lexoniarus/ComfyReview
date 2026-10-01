@@ -44,16 +44,12 @@ def analytics_overview(
 def analytics_scopes(
     request: Request,
     model: str = Query(""),
-    scope: str = Query("pos", pattern="^(pos|neg)$"),
     min_n: int = Query(8, ge=0),
     limit: int = Query(200, ge=0, le=500),
 ):
-    """Return canonical prompt evidence for the scope analysis tab."""
-    return get_application_container(
-        request
-    ).analytics_pages.prompt_tokens_context(
+    """Return review evidence grouped by canonical prompt component."""
+    return get_application_container(request).analytics_pages.scope_context(
         model=model,
-        scope=scope,
         min_n=min_n,
         limit=limit,
     )
@@ -87,19 +83,15 @@ def analytics_combinations(
     model: str = Query(""),
     min_n: int = Query(8, ge=0),
     limit: int = Query(200, ge=0, le=500),
-    success_threshold: int = Query(SUCCESS_THRESHOLD_DEFAULT),
-    delete_weight: int = Query(DELETE_WEIGHT_DEFAULT),
 ):
-    """Return server-computed canonical combination reports."""
+    """Return review evidence grouped by canonical compositions."""
     try:
         return get_application_container(
             request
-        ).analytics_pages.stats_context(
+        ).analytics_pages.composition_context(
             model=model,
             min_n=min_n,
             limit=limit,
-            success_threshold=success_threshold,
-            delete_weight=delete_weight,
         )
     except ValueError as error:
         return error_response(400, "invalid_analytics_query", str(error))
