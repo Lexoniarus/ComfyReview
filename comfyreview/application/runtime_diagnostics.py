@@ -79,3 +79,16 @@ class RuntimeDiagnosticsService:
             loras=capabilities.loras,
             message="connected",
         )
+
+    def snapshot(self) -> RuntimeDiagnostics:
+        """Return configuration immediately without an external provider call."""
+        return RuntimeDiagnostics(
+            configuration=self._configuration,
+            connected=False,
+            node_classes=(),
+            checkpoints=(),
+            samplers=(),
+            schedulers=(),
+            loras=(),
+            message="not_checked",
+        )

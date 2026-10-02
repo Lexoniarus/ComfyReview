@@ -49,7 +49,11 @@ describe("SettingsController", () => {
       {},
     );
     expect(fixture.api.post).toHaveBeenCalledWith("settings/comfyui/check", {});
-    expect(fixture.status.textContent).toBe("Gespeichert.");
+    expect(fixture.view.render).toHaveBeenLastCalledWith(
+      "comfyui",
+      expect.objectContaining({ runtime: { connected: true } }),
+    );
+    expect(fixture.status.textContent).toBe("Verbunden.");
 
     fixture.controller.dispose();
     expect(fixture.view.dispose).toHaveBeenCalledOnce();
@@ -81,7 +85,7 @@ describe("SettingsController", () => {
     await unknownMutation.controller.start();
     await unknownMutation.controller.checkComfyUi();
     expect(unknownMutation.status.textContent).toBe(
-      "Speichern fehlgeschlagen.",
+      "Verbindungstest fehlgeschlagen.",
     );
   });
 });
@@ -95,7 +99,15 @@ function createFixture(options = {}) {
         : Promise.resolve(data),
     ),
     put: vi.fn(() => mutation(options)),
-    post: vi.fn(() => mutation(options)),
+    post: vi.fn((path) =>
+      options.mutationError
+        ? Promise.reject(options.mutationError)
+        : Promise.resolve(
+            path === "settings/comfyui/check"
+              ? { connected: true }
+              : { ok: true },
+          ),
+    ),
     patch: vi.fn(() => mutation(options)),
   };
   const navigation = document.createElement("nav");

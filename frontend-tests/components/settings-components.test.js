@@ -139,6 +139,11 @@ describe("Settings components", () => {
     root.querySelector("button").click();
     expect(actions.onComfyUiCheck).toHaveBeenCalledOnce();
     expect(root.textContent).toContain("Verbunden");
+    view.render("comfyui", {
+      ...data,
+      runtime: { ...data.runtime, connected: false, message: "not_checked" },
+    });
+    expect(root.textContent).toContain("Noch nicht geprüft");
 
     view.render("storage", data);
     expect(root.textContent).toContain("v8");

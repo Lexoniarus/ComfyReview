@@ -76,7 +76,7 @@ class ArchiveProfileRequest(BaseModel):
 def settings(request: Request) -> JSONResponse:
     """Return preferences, profiles and safe read-only runtime diagnostics."""
     container = get_application_container(request)
-    diagnostics = container.runtime_diagnostics.inspect()
+    diagnostics = container.runtime_diagnostics.snapshot()
     return JSONResponse(
         {
             "preferences": preferences_response(

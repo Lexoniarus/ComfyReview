@@ -77,6 +77,11 @@ class _ComfyUi:
         return self.result
 
 
+class _UnexpectedComfyUi:
+    def discover_capabilities(self) -> ComfyUiCapabilities:
+        raise AssertionError("snapshot must not call ComfyUI")
+
+
 def _profile(
     *,
     profile_uid: str = "profile-one",
@@ -348,3 +353,25 @@ def test_runtime_diagnostics_normalizes_connected_and_offline_states() -> None:
     assert offline.connected is False
     assert offline.message == "ComfyUiConnectionError"
     assert offline.configuration == configuration
+
+
+def test_runtime_diagnostics_snapshot_avoids_provider_access() -> None:
+    configuration = RuntimeConfigurationSnapshot(
+        comfyui_base_url="http://127.0.0.1:8188",
+        output_root="output",
+        workflows_directory="workflows",
+        canonical_database_path="canonical.sqlite3",
+        schema_version=8,
+        runtime_mode="canonical",
+        environment_variables=("COMFYREVIEW_DATABASE",),
+    )
+
+    diagnostics = RuntimeDiagnosticsService(
+        configuration,
+        _UnexpectedComfyUi(),
+    ).snapshot()
+
+    assert diagnostics.configuration == configuration
+    assert diagnostics.connected is False
+    assert diagnostics.message == "not_checked"
+    assert diagnostics.checkpoints == ()

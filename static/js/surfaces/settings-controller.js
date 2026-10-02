@@ -99,7 +99,17 @@ export class SettingsController {
 
   /** Run a read-only provider check and refresh the ComfyUI section. */
   async checkComfyUi() {
-    await this.#mutate(() => this.api.post("settings/comfyui/check", {}));
+    this.#status("Verbindung wird geprüft …");
+    try {
+      const runtime = await this.api.post("settings/comfyui/check", {});
+      if (this.data) {
+        this.data = { ...this.data, runtime };
+        this.view.render("comfyui", this.data);
+      }
+      this.#status(runtime.connected ? "Verbunden." : "Nicht verbunden.");
+    } catch (error) {
+      this.#status(errorMessage(error, "Verbindungstest fehlgeschlagen."));
+    }
   }
 
   /** Release requests, listeners and child views. */

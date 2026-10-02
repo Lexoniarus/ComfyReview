@@ -301,6 +301,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_workspace_settings.py::"
         "test_runtime_diagnostics_normalizes_connected_and_offline_states"
     ),
+    "comfyreview.application.runtime_diagnostics:RuntimeDiagnosticsService.snapshot": (
+        "tests/test_workspace_settings.py::"
+        "test_runtime_diagnostics_snapshot_avoids_provider_access"
+    ),
     "comfyreview.domain.prompts:parse_prompt_atoms": (
         "tests/test_prompt_atoms.py::"
         "test_parse_prompt_atoms_separates_text_and_explicit_weight"

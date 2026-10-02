@@ -124,7 +124,11 @@ export class SettingsView {
   #comfyUi(container, runtime) {
     container.append(heading("ComfyUI", "Verbindung und erkannte Fähigkeiten"));
     const status = document.createElement("p");
-    status.textContent = runtime.connected ? "Verbunden" : "Nicht verbunden";
+    status.textContent = runtime.connected
+      ? "Verbunden"
+      : runtime.message === "not_checked"
+        ? "Noch nicht geprüft"
+        : "Nicht verbunden";
     status.dataset.status = runtime.connected ? "completed" : "failed";
     const facts = factList([
       ["Base-URL", runtime.configuration.comfyui_base_url],

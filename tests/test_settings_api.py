@@ -72,6 +72,19 @@ class _Profiles:
 
 
 class _Diagnostics:
+    def snapshot(self) -> RuntimeDiagnostics:
+        diagnostics = self.inspect()
+        return replace(
+            diagnostics,
+            connected=False,
+            node_classes=(),
+            checkpoints=(),
+            samplers=(),
+            schedulers=(),
+            loras=(),
+            message="not_checked",
+        )
+
     def inspect(self) -> RuntimeDiagnostics:
         return RuntimeDiagnostics(
             configuration=RuntimeConfigurationSnapshot(
@@ -113,6 +126,7 @@ def test_settings_api_reads_and_updates_canonical_preferences() -> None:
 
     assert response.status_code == 200
     assert response.json()["runtime"]["configuration"]["schema_version"] == 8
+    assert response.json()["runtime"]["message"] == "not_checked"
     assert response.json()["generation_profiles"][0]["loras"] == [
         {
             "name": "style.safetensors",
