@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 
@@ -80,6 +81,22 @@ class _ComfyUi:
 class _UnexpectedComfyUi:
     def discover_capabilities(self) -> ComfyUiCapabilities:
         raise AssertionError("snapshot must not call ComfyUI")
+
+
+class _CapabilityCache:
+    def __init__(self, values: dict[str, object] | None = None) -> None:
+        self.values = values or {}
+
+    def load(self) -> dict[str, object]:
+        return self.values
+
+    def save(self, capabilities: Mapping[str, object]) -> None:
+        self.values = dict(capabilities)
+
+
+class _FailingCapabilityCache(_CapabilityCache):
+    def save(self, capabilities: Mapping[str, object]) -> None:
+        raise OSError("cache unavailable")
 
 
 def _profile(
@@ -375,3 +392,53 @@ def test_runtime_diagnostics_snapshot_avoids_provider_access() -> None:
     assert diagnostics.connected is False
     assert diagnostics.message == "not_checked"
     assert diagnostics.checkpoints == ()
+
+
+def test_runtime_diagnostics_caches_capabilities_for_fast_snapshots() -> None:
+    configuration = RuntimeConfigurationSnapshot(
+        comfyui_base_url="http://127.0.0.1:8188",
+        output_root="output",
+        workflows_directory="workflows",
+        canonical_database_path="canonical.sqlite3",
+        schema_version=8,
+        runtime_mode="canonical",
+        environment_variables=("COMFYREVIEW_DATABASE",),
+    )
+    cache = _CapabilityCache()
+    service = RuntimeDiagnosticsService(
+        configuration,
+        _ComfyUi(
+            ComfyUiCapabilities(
+                ("LoraLoader",),
+                ("euler",),
+                ("normal",),
+                ("model.safetensors",),
+                ("style.safetensors",),
+            )
+        ),
+        cache,
+    )
+
+    assert service.inspect().connected is True
+    snapshot = RuntimeDiagnosticsService(
+        configuration,
+        _UnexpectedComfyUi(),
+        cache,
+    ).snapshot()
+
+    assert snapshot.connected is False
+    assert snapshot.message == "cached"
+    assert snapshot.checkpoints == ("model.safetensors",)
+    assert snapshot.loras == ("style.safetensors",)
+    assert (
+        RuntimeDiagnosticsService(
+            configuration,
+            _ComfyUi(
+                ComfyUiCapabilities((), (), (), (), ()),
+            ),
+            _FailingCapabilityCache(),
+        )
+        .inspect()
+        .connected
+        is True
+    )

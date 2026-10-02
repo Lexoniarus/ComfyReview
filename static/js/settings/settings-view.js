@@ -126,9 +126,11 @@ export class SettingsView {
     const status = document.createElement("p");
     status.textContent = runtime.connected
       ? "Verbunden"
-      : runtime.message === "not_checked"
-        ? "Noch nicht geprüft"
-        : "Nicht verbunden";
+      : runtime.message === "cached"
+        ? "Nicht live geprüft · letzte Erkennung"
+        : runtime.message === "not_checked"
+          ? "Noch nicht geprüft"
+          : "Nicht verbunden";
     status.dataset.status = runtime.connected ? "completed" : "failed";
     const facts = factList([
       ["Base-URL", runtime.configuration.comfyui_base_url],

@@ -204,6 +204,9 @@ def build_application_container(
     comfyui_provider = NativeComfyUiProvider(
         UrlLibJsonTransport(configured.comfyui_base_url)
     )
+    capability_cache = JsonComfyUiCapabilityCache(
+        configured.data_directory / "ui_state" / "comfy_discovery_cache.json"
+    )
     blueprints = JsonWorkflowBlueprintRepository(
         configured.workflows_directory
     )
@@ -271,11 +274,7 @@ def build_application_container(
         ),
         playground_discovery=PlaygroundDiscoveryService(
             comfyui_provider,
-            JsonComfyUiCapabilityCache(
-                configured.data_directory
-                / "ui_state"
-                / "comfy_discovery_cache.json"
-            ),
+            capability_cache,
         ),
         playground_ui_state=PlaygroundGeneratorStateRepository(
             head_path=(
@@ -357,6 +356,7 @@ def build_application_container(
                 ),
             ),
             comfyui_provider,
+            capability_cache,
         ),
     )
 

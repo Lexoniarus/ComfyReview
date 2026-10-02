@@ -144,6 +144,11 @@ describe("Settings components", () => {
       runtime: { ...data.runtime, connected: false, message: "not_checked" },
     });
     expect(root.textContent).toContain("Noch nicht geprüft");
+    view.render("comfyui", {
+      ...data,
+      runtime: { ...data.runtime, connected: false, message: "cached" },
+    });
+    expect(root.textContent).toContain("Nicht live geprüft · letzte Erkennung");
 
     view.render("storage", data);
     expect(root.textContent).toContain("v8");

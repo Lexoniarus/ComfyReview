@@ -303,7 +303,7 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     ),
     "comfyreview.application.runtime_diagnostics:RuntimeDiagnosticsService.snapshot": (
         "tests/test_workspace_settings.py::"
-        "test_runtime_diagnostics_snapshot_avoids_provider_access"
+        "test_runtime_diagnostics_caches_capabilities_for_fast_snapshots"
     ),
     "comfyreview.domain.prompts:parse_prompt_atoms": (
         "tests/test_prompt_atoms.py::"
