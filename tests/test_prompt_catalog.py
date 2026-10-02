@@ -172,6 +172,25 @@ class _CatalogRepository:
         assert component_uid == self.component.component_uid
         return (self.component.latest_revision,)
 
+    def list_components_for_revisions(
+        self,
+        revision_uids: tuple[str, ...],
+    ) -> tuple[PromptComponent, ...]:
+        if self.component is None:
+            return ()
+        return (
+            (self.component,)
+            if self.component.latest_revision.revision_uid in revision_uids
+            else ()
+        )
+
+    def list_composition_components(
+        self,
+        composition_uid: str,
+    ) -> tuple[PromptComponent, ...]:
+        del composition_uid
+        return ()
+
 
 def _service() -> tuple[PromptCatalogService, _CatalogRepository]:
     repository = _CatalogRepository()
@@ -396,6 +415,15 @@ def test_prompt_catalog_service_archives_restores_and_lists() -> None:
     with pytest.raises(PromptCatalogValidationError, match="component_uid"):
         service.list_revisions("")
 
+    assert service.list_components_for_revisions(
+        (restored.latest_revision.revision_uid,)
+    ) == (restored,)
+    assert service.list_composition_components("composition-a") == ()
+    with pytest.raises(PromptCatalogValidationError, match="revision_uid"):
+        service.list_components_for_revisions(("",))
+    with pytest.raises(PromptCatalogValidationError, match="composition_uid"):
+        service.list_composition_components("")
+
 
 def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
     tmp_path: Path,
@@ -464,3 +492,53 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
         assert connection.execute(
             "SELECT COUNT(*) FROM prompt_revisions"
         ).fetchone() == (3,)
+
+
+def test_sqlite_prompt_catalog_reads_exact_revision_and_composition(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    repository = SqlitePromptCatalogRepository(database_path)
+    service = PromptCatalogService(
+        repository=repository,
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(
+        replace(_create_command(), kind="character")
+    )
+    service.add_revision(
+        RevisePromptComponentCommand(
+            created.component_uid,
+            prompt_atom_usages_from_text("new prompt"),
+            prompt_atom_usages_from_text("new negative"),
+        )
+    )
+    with sqlite3.connect(database_path) as connection:
+        composition_id = connection.execute(
+            "INSERT INTO prompt_compositions(composition_uid) VALUES (?)",
+            ("composition-exact",),
+        ).lastrowid
+        revision_id = connection.execute(
+            "SELECT id FROM prompt_revisions WHERE revision_uid = ?",
+            (created.latest_revision.revision_uid,),
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO prompt_composition_revisions(
+                composition_id, slot, position, revision_id
+            ) VALUES (?, 'character', 0, ?)
+            """,
+            (composition_id, revision_id),
+        )
+
+    [exact] = repository.list_components_for_revisions(
+        (created.latest_revision.revision_uid,)
+    )
+    [composition] = repository.list_composition_components("composition-exact")
+
+    assert exact.latest_revision == created.latest_revision
+    assert composition == exact
+    assert repository.list_components_for_revisions(("missing",)) == ()
+    assert repository.list_components_for_revisions(()) == ()
+    assert repository.list_composition_components("missing") == ()

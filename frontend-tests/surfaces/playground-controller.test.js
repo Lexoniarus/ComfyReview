@@ -11,6 +11,8 @@ describe("PlaygroundController", () => {
     await fixture.controller.start();
     expect(fixture.modes.render).toHaveBeenCalledWith([{ component_uid: "a" }]);
     expect(fixture.controls.render).toHaveBeenCalled();
+    expect(fixture.modes.applyIntent).toHaveBeenCalledWith({});
+    expect(fixture.controls.applyIntent).toHaveBeenCalledWith({});
     expect(fixture.combinations.render).toHaveBeenCalledWith({
       two_component: [],
     });
@@ -112,6 +114,74 @@ describe("PlaygroundController", () => {
       "2 Generierungen an ComfyUI übergeben",
     );
   });
+
+  it("prefills an exact image without drafting or submitting", async () => {
+    const fixture = createFixture({
+      intent: { imageUid: "image-1" },
+      image: {
+        image_uid: "image-1",
+        scopes: [
+          {
+            component_uid: "character-a",
+            revision_uid: "revision-character-a",
+          },
+        ],
+        generation_settings: {
+          checkpoint: "model.safetensors",
+          sampler: "euler",
+          scheduler: "normal",
+          seed: 42,
+          steps: 24,
+          cfg: 6.5,
+          denoise: 1,
+        },
+      },
+    });
+
+    await fixture.controller.start();
+    expect(fixture.api.get).toHaveBeenCalledWith(
+      "images/image-1",
+      expect.any(Object),
+    );
+    expect(fixture.modes.applyIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentUids: ["character-a"],
+        revisionUids: ["revision-character-a"],
+      }),
+    );
+    expect(fixture.api.post).not.toHaveBeenCalled();
+    await fixture.controller.prepare();
+    expect(fixture.api.post).toHaveBeenCalledWith(
+      "playground/drafts",
+      { revision_uids: ["revision-character-a"] },
+      expect.any(Object),
+    );
+    fixture.controller.clearDraftReference();
+    await fixture.controller.prepare();
+    expect(fixture.api.post).toHaveBeenLastCalledWith(
+      "playground/drafts",
+      { selections: [], seed: 17 },
+      expect.any(Object),
+    );
+  });
+
+  it("keeps a composition handoff as an explicit draft action", async () => {
+    const fixture = createFixture({
+      intent: {
+        compositionUid: "composition-a",
+        componentUids: ["character-a", "scene-a"],
+      },
+    });
+
+    await fixture.controller.start();
+    expect(fixture.api.post).not.toHaveBeenCalled();
+    await fixture.controller.prepare();
+    expect(fixture.api.post).toHaveBeenCalledWith(
+      "playground/drafts",
+      { composition_uid: "composition-a" },
+      expect.any(Object),
+    );
+  });
 });
 
 function createFixture(options = {}) {
@@ -122,10 +192,12 @@ function createFixture(options = {}) {
   const result = document.createElement("div");
   const modes = disposable({
     render: vi.fn(),
+    applyIntent: vi.fn(),
     value: vi.fn(() => ({ selections: [], seed: 17 })),
   });
   const controls = disposable({
     render: vi.fn(),
+    applyIntent: vi.fn(),
     value: vi.fn(() => ({ checkpoint: "model", sampler: {} })),
     setBusy: vi.fn(),
   });
@@ -146,11 +218,13 @@ function createFixture(options = {}) {
     get: vi.fn((path) => {
       if (options.loadError) return Promise.reject(options.loadError);
       return Promise.resolve(
-        path === "catalog/components"
-          ? { components: [{ component_uid: "a" }] }
-          : path === "playground/top-combinations"
-            ? { two_component: [] }
-            : { defaults: {} },
+        path.startsWith("images/")
+          ? options.image
+          : path === "catalog/components"
+            ? { components: [{ component_uid: "a" }] }
+            : path === "playground/top-combinations"
+              ? { two_component: [] }
+              : { defaults: {} },
       );
     }),
     post: vi.fn((path) => {
@@ -194,6 +268,7 @@ function createFixture(options = {}) {
     status,
     result,
     newDraftUid: () => "draft-1",
+    intent: options.intent,
   });
   return {
     controller,

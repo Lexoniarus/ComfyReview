@@ -1,10 +1,10 @@
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
-/** @typedef {{render: (components: any[]) => void, value: () => {selections: any[], seed: number | null}, dispose: () => void}} ModesBoundary */
-/** @typedef {{render: (capabilities: any) => void, value: () => any, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
+/** @typedef {{render: (components: any[]) => void, applyIntent: (intent: Record<string, any>) => void, value: () => {selections: any[], seed: number | null}, dispose: () => void}} ModesBoundary */
+/** @typedef {{render: (capabilities: any) => void, applyIntent: (intent: Record<string, any>) => void, value: () => any, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
 /** @typedef {{render: (draft: any, draftUid: string) => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (payload: Record<string, any>) => void, dispose: () => void}} CombinationsBoundary */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, combinations: CombinationsBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, newDraftUid: () => string}} PlaygroundDependencies */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, combinations: CombinationsBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, newDraftUid: () => string, intent?: Record<string, any>}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -22,6 +22,8 @@ export class PlaygroundController {
     this.status = dependencies.status;
     this.result = dependencies.result;
     this.newDraftUid = dependencies.newDraftUid;
+    this.intent = dependencies.intent || {};
+    this.draftReference = null;
     this.abortController = new AbortController();
     this.hasDraft = false;
   }
@@ -63,7 +65,10 @@ export class PlaygroundController {
       this.modes.render(catalog.components || []);
       this.controls.render(capabilities);
       this.combinations.render(combinations);
-      this.status.textContent = "Bereit für deinen Entwurf";
+      await this.#applyIntent();
+      this.status.textContent = hasPrefill(this.intent)
+        ? "Vorbelegung übernommen – erstelle den Entwurf ausdrücklich"
+        : "Bereit für deinen Entwurf";
     } catch (error) {
       this.status.textContent = errorMessage(error);
       this.prepareButton.disabled = true;
@@ -77,7 +82,11 @@ export class PlaygroundController {
     this.status.textContent = "Prompt wird zusammengestellt …";
     try {
       const draft = await this.requests.run((signal) =>
-        this.api.post("playground/drafts", this.modes.value(), { signal }),
+        this.api.post(
+          "playground/drafts",
+          this.draftReference || this.modes.value(),
+          { signal },
+        ),
       );
       this.draft.render(draft, this.newDraftUid());
       this.hasDraft = true;
@@ -132,12 +141,68 @@ export class PlaygroundController {
     this.combinations.dispose();
   }
 
+  /** Use current mode controls after the user changes a prompt prefill. */
+  clearDraftReference() {
+    this.draftReference = null;
+  }
+
   /** @param {boolean} busy */
   #setBusy(busy) {
     this.prepareButton.disabled = busy;
     this.submitButton.disabled = busy || !this.hasDraft;
     this.controls.setBusy(busy);
   }
+
+  async #applyIntent() {
+    let intent = this.intent;
+    if (intent.imageUid) {
+      const image = await this.requests.run((signal) =>
+        this.api.get(`images/${encodeURIComponent(intent.imageUid)}`, {
+          signal,
+        }),
+      );
+      intent = imageIntent(image);
+      this.intent = intent;
+    }
+    this.modes.applyIntent(intent);
+    this.controls.applyIntent(intent);
+    if (Array.isArray(intent.revisionUids) && intent.revisionUids.length) {
+      this.draftReference = { revision_uids: intent.revisionUids };
+    } else if (intent.compositionUid) {
+      this.draftReference = { composition_uid: intent.compositionUid };
+    }
+  }
+}
+
+/** @param {Record<string, any>} image */
+function imageIntent(image) {
+  const scopes = Array.isArray(image.scopes) ? image.scopes : [];
+  const settings =
+    image.generation_settings && typeof image.generation_settings === "object"
+      ? image.generation_settings
+      : {};
+  return {
+    imageUid: String(image.image_uid || ""),
+    componentUids: scopes.map((scope) => String(scope.component_uid || "")),
+    revisionUids: scopes.map((scope) => String(scope.revision_uid || "")),
+    checkpoint: settings.checkpoint,
+    sampler: settings.sampler,
+    scheduler: settings.scheduler,
+    seedMode: "fixed",
+    seed: settings.seed,
+    steps_min: settings.steps,
+    steps_max: settings.steps,
+    cfg_min: settings.cfg,
+    cfg_max: settings.cfg,
+    denoise: settings.denoise,
+  };
+}
+
+/** @param {Record<string, any>} intent */
+function hasPrefill(intent) {
+  return Object.values(intent).some((value) =>
+    Array.isArray(value) ? value.length > 0 : value !== "" && value != null,
+  );
 }
 
 /** @param {unknown} error */

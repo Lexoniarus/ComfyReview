@@ -28,6 +28,7 @@ export class RenderSetupView {
     action.className = "secondary-button analytics-use-button";
     action.dataset.playgroundIntent = "render_setup";
     action.dataset.setupKey = String(item.setup_key || "");
+    action.dataset.renderSetup = JSON.stringify(item);
     action.textContent = "Im Generator verwenden";
     header.append(title, action);
     const stages = document.createElement("div");

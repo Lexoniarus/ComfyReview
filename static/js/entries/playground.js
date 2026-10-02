@@ -2,6 +2,10 @@ import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { DraftPreview } from "../playground/draft-preview.js";
 import { GenerationControls } from "../playground/generation-controls.js";
+import {
+  PlaygroundIntentNavigator,
+  readPlaygroundIntent,
+} from "../playground/playground-intent.js";
 import { PromptModeEditor } from "../playground/prompt-mode-editor.js";
 import { TopCombinationsView } from "../playground/top-combinations.js";
 import { PlaygroundController } from "../surfaces/playground-controller.js";
@@ -37,12 +41,16 @@ if (root instanceof HTMLElement) {
       draftState,
       () => void controller?.refreshPreview(),
     );
+    const modes = new PromptModeEditor(modesRoot, seedInput, () =>
+      controller?.clearDraftReference(),
+    );
+    const navigator = new PlaygroundIntentNavigator(window.location);
     controller = new PlaygroundController({
       api: new ApiClient(),
-      modes: new PromptModeEditor(modesRoot, seedInput),
+      modes,
       controls: new GenerationControls(controlsRoot),
       draft,
-      combinations: new TopCombinationsView(combinationsRoot),
+      combinations: new TopCombinationsView(combinationsRoot, navigator),
       requests: new RequestLifecycle(),
       previewRequests: new RequestLifecycle(),
       prepareButton,
@@ -50,6 +58,7 @@ if (root instanceof HTMLElement) {
       status,
       result,
       newDraftUid: () => crypto.randomUUID(),
+      intent: readPlaygroundIntent(window.location.search),
     });
     void controller.start();
     window.addEventListener("pagehide", () => controller.dispose(), {

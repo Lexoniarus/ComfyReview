@@ -1,8 +1,19 @@
 /** Render the two canonical Playground evidence groups. */
 export class TopCombinationsView {
-  /** @param {HTMLElement} root */
-  constructor(root) {
+  /** @param {HTMLElement} root @param {{open: (element: HTMLElement) => void}} navigator */
+  constructor(root, navigator) {
     this.root = root;
+    this.navigator = navigator;
+    this.abortController = new AbortController();
+    this.root.addEventListener(
+      "click",
+      (event) => {
+        if (!(event.target instanceof Element)) return;
+        const action = event.target.closest("[data-playground-intent]");
+        if (action instanceof HTMLElement) this.navigator.open(action);
+      },
+      { signal: this.abortController.signal },
+    );
   }
 
   /** @param {Record<string, any>} payload */
@@ -23,6 +34,7 @@ export class TopCombinationsView {
 
   /** Remove rendered evidence. */
   dispose() {
+    this.abortController.abort();
     this.root.replaceChildren();
   }
 }
@@ -63,6 +75,7 @@ function combinationCard(row) {
     image.src = String(imageValue.url);
     image.alt = `${String(row.label || "Kombination")} · Beispiel`;
     image.loading = "lazy";
+    image.decoding = "async";
     images.append(image);
   }
   if (!images.children.length) {
@@ -75,7 +88,13 @@ function combinationCard(row) {
   title.textContent = String(row.label || "Unbenannte Kombination");
   const evidence = document.createElement("span");
   evidence.textContent = `${textValue(row.image_count)} Bilder · ${textValue(row.rating_count)} Bewertungen · Ø ${decimalValue(row.average_rating)} / 10`;
-  content.append(title, evidence);
+  const action = document.createElement("button");
+  action.type = "button";
+  action.className = "secondary-button";
+  action.dataset.playgroundIntent = "scope";
+  action.dataset.componentUids = JSON.stringify(arrayValue(row.component_uids));
+  action.textContent = "Im Generator verwenden";
+  content.append(title, evidence, action);
   card.append(images, content);
   return card;
 }

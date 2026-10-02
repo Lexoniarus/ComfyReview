@@ -19,7 +19,7 @@ from comfyreview.repositories.sqlite.connection import (
     connect_read_only,
 )
 
-_SELECT_COMPONENTS = """
+_SELECT_COMPONENT_REVISION = """
 SELECT
     component.component_uid,
     component.kind,
@@ -62,12 +62,20 @@ SELECT
 FROM prompt_components AS component
 JOIN prompt_revisions AS revision
     ON revision.component_id = component.id
+"""
+
+_SELECT_COMPONENTS = (
+    _SELECT_COMPONENT_REVISION
+    + """
 WHERE revision.revision_number = (
     SELECT MAX(candidate.revision_number)
     FROM prompt_revisions AS candidate
     WHERE candidate.component_id = component.id
 )
 """
+)
+
+_SELECT_EXACT_REVISIONS = _SELECT_COMPONENT_REVISION
 
 
 class SqlitePromptCatalogRepository:
@@ -387,6 +395,69 @@ class SqlitePromptCatalogRepository:
             return tuple(self._revision(row) for row in rows)
         finally:
             connection.close()
+
+    def list_components_for_revisions(
+        self,
+        revision_uids: tuple[str, ...],
+    ) -> tuple[PromptComponent, ...]:
+        """Read component metadata with exact immutable revisions."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            return self._components_for_revisions(
+                connection,
+                revision_uids,
+            )
+        finally:
+            connection.close()
+
+    def list_composition_components(
+        self,
+        composition_uid: str,
+    ) -> tuple[PromptComponent, ...]:
+        """Read exact ordered revisions for one canonical composition."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                """
+                SELECT revision.revision_uid
+                FROM prompt_compositions AS composition
+                JOIN prompt_composition_revisions AS membership
+                    ON membership.composition_id = composition.id
+                JOIN prompt_revisions AS revision
+                    ON revision.id = membership.revision_id
+                WHERE composition.composition_uid = ?
+                ORDER BY membership.position, membership.slot
+                """,
+                (str(composition_uid or "").strip(),),
+            ).fetchall()
+            return self._components_for_revisions(
+                connection,
+                tuple(str(row["revision_uid"]) for row in rows),
+            )
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _components_for_revisions(
+        connection: sqlite3.Connection,
+        revision_uids: tuple[str, ...],
+    ) -> tuple[PromptComponent, ...]:
+        normalized = tuple(str(uid or "").strip() for uid in revision_uids)
+        if not normalized:
+            return ()
+        placeholders = ", ".join("?" for _uid in normalized)
+        rows = connection.execute(
+            _SELECT_EXACT_REVISIONS
+            + f" WHERE revision.revision_uid IN ({placeholders})",
+            normalized,
+        ).fetchall()
+        found = {
+            str(row["revision_uid"]): SqlitePromptCatalogRepository._component(
+                row
+            )
+            for row in rows
+        }
+        return tuple(found[uid] for uid in normalized if uid in found)
 
     @staticmethod
     def _insert_revision(

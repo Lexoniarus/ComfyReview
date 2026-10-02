@@ -360,6 +360,25 @@
   background: transparent;
 }
 
+.analytics-evidence-image {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.analytics-image-use {
+  position: absolute;
+  right: var(--space-1);
+  bottom: var(--space-1);
+  max-width: calc(100% - (2 * var(--space-1)));
+  padding: 0.25rem 0.4rem;
+  border: 0.0625rem solid color-mix(in srgb, white 30%, transparent);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--color-background) 88%, transparent);
+  color: var(--color-text);
+  font-size: var(--font-size-caption);
+}
+
 .analytics-image-button:focus-visible {
   outline: 0.125rem solid var(--color-accent-strong);
   outline-offset: -0.125rem;

@@ -113,6 +113,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_application.py::"
         "test_playground_service_prepares_draft_without_generation_submission"
     ),
+    "comfyreview.application.playground:PlaygroundService.prepare_revision_draft": (
+        "tests/test_playground_application.py::"
+        "test_playground_service_restores_exact_revisions_and_compositions"
+    ),
+    "comfyreview.application.playground:PlaygroundService.prepare_composition_draft": (
+        "tests/test_playground_application.py::"
+        "test_playground_service_restores_exact_revisions_and_compositions"
+    ),
     "comfyreview.application.playground:PlaygroundService.confirm_draft": (
         "tests/test_playground_application.py::"
         "test_playground_service_revalidates_confirmed_draft_and_derives_revisions"
@@ -186,6 +194,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "test_prompt_catalog_service_archives_restores_and_lists"
     ),
     "comfyreview.application.prompt_catalog:PromptCatalogService.list_revisions": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_archives_restores_and_lists"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.list_components_for_revisions": (
+        "tests/test_prompt_catalog.py::"
+        "test_prompt_catalog_service_archives_restores_and_lists"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.list_composition_components": (
         "tests/test_prompt_catalog.py::"
         "test_prompt_catalog_service_archives_restores_and_lists"
     ),

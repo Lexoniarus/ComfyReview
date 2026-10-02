@@ -10,11 +10,12 @@ const promptKinds = [
 
 /** Own fixed, random and disabled prompt-role controls. */
 export class PromptModeEditor {
-  /** @param {HTMLElement} root @param {HTMLInputElement} seedInput */
-  constructor(root, seedInput) {
+  /** @param {HTMLElement} root @param {HTMLInputElement} seedInput @param {() => void} [onChange] */
+  constructor(root, seedInput, onChange = () => {}) {
     this.root = root;
     this.seedInput = seedInput;
     this.abortController = new AbortController();
+    this.onChange = onChange;
     /** @type {Map<string, {mode: HTMLSelectElement, component: HTMLSelectElement}>} */
     this.rows = new Map();
   }
@@ -47,6 +48,20 @@ export class PromptModeEditor {
     return { selections, seed: Number.isFinite(seed) ? seed : null };
   }
 
+  /** @param {{componentUids?: string[]}} intent */
+  applyIntent(intent) {
+    const requested = new Set(intent.componentUids || []);
+    for (const row of this.rows.values()) {
+      const selected = Array.from(row.component.options).find((candidate) =>
+        requested.has(candidate.value),
+      );
+      if (!selected) continue;
+      row.component.value = selected.value;
+      row.mode.value = "fixed";
+      row.component.disabled = false;
+    }
+  }
+
   /** Release owned input listeners. */
   dispose() {
     this.abortController.abort();
@@ -77,9 +92,13 @@ export class PromptModeEditor {
       "change",
       () => {
         component.disabled = mode.value !== "fixed";
+        this.onChange();
       },
       { signal: this.abortController.signal },
     );
+    component.addEventListener("change", () => this.onChange(), {
+      signal: this.abortController.signal,
+    });
     element.append(title, mode, component);
     return { element, controls: { mode, component } };
   }

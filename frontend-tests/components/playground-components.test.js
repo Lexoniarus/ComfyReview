@@ -28,6 +28,8 @@ describe("Playground browser components", () => {
     const rows = root.querySelectorAll(".prompt-mode-row");
     expect(rows).toHaveLength(7);
     expect(rows[0].querySelector("select")?.value).toBe("fixed");
+    editor.applyIntent({ componentUids: ["scene-a"] });
+    expect(rows[1].querySelector("select")?.value).toBe("fixed");
 
     const sceneMode = rows[1].querySelector("select");
     sceneMode.value = "off";
@@ -46,6 +48,7 @@ describe("Playground browser components", () => {
         ]),
       }),
     );
+    rows[1].querySelectorAll("select")[1].dispatchEvent(new Event("change"));
     seed.value = "invalid";
     expect(editor.value().seed).toBeNull();
     editor.dispose();
@@ -85,6 +88,28 @@ describe("Playground browser components", () => {
         cfg_step: 0.1,
       },
     });
+    controls.applyIntent({
+      checkpoint: "model.safetensors",
+      sampler: "euler",
+      scheduler: "normal",
+      seedMode: "fixed",
+      seed: 99,
+      steps_min: 18,
+      steps_max: 30,
+      cfg_min: 5,
+      cfg_max: 7,
+      denoise: 0.8,
+    });
+    expect(controls.value().sampler).toEqual(
+      expect.objectContaining({
+        seed: 99,
+        steps: 18,
+        steps_max: 30,
+        cfg: 5,
+        cfg_max: 7,
+        denoise: 0.8,
+      }),
+    );
     const seedMode = root.querySelector('[data-field="seed_mode"]');
     const seed = root.querySelector('[data-field="seed"]');
     seedMode.value = "random";
@@ -185,7 +210,8 @@ describe("Playground browser components", () => {
 
   it("renders separate top two- and three-component evidence", () => {
     const root = document.createElement("div");
-    const view = new TopCombinationsView(root);
+    const navigator = { open: vi.fn() };
+    const view = new TopCombinationsView(root, navigator);
 
     view.render({
       two_component: [
@@ -194,6 +220,7 @@ describe("Playground browser components", () => {
           image_count: 2,
           rating_count: 4,
           average_rating: 8.5,
+          component_uids: ["character-a", "scene-a"],
           best_images: [{ url: "best.png" }, { url: "" }],
         },
         null,
@@ -209,6 +236,11 @@ describe("Playground browser components", () => {
     expect(root.textContent).toContain("Unbenannte Kombination");
     expect(root.textContent).toContain("Kein Bildbeispiel");
     expect(root.querySelector("img")?.getAttribute("src")).toBe("best.png");
+    root.querySelector("[data-playground-intent]")?.click();
+    expect(navigator.open).toHaveBeenCalled();
+    root
+      .appendChild(document.createTextNode("plain"))
+      .dispatchEvent(new Event("click", { bubbles: true }));
 
     view.dispose();
     expect(root.children).toHaveLength(0);

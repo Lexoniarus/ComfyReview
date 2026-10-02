@@ -475,6 +475,26 @@ class _CatalogService:
         self.calls.append(include_archived)
         return self.components
 
+    def list_components_for_revisions(
+        self,
+        revision_uids: tuple[str, ...],
+    ) -> tuple[PromptComponent, ...]:
+        by_revision = {
+            component.latest_revision.revision_uid: component
+            for component in self.components
+        }
+        return tuple(
+            by_revision[uid] for uid in revision_uids if uid in by_revision
+        )
+
+    def list_composition_components(
+        self,
+        composition_uid: str,
+    ) -> tuple[PromptComponent, ...]:
+        if composition_uid != "composition-a":
+            return ()
+        return self.components[:2]
+
 
 def test_playground_service_prepares_draft_without_generation_submission() -> (
     None
@@ -539,3 +559,75 @@ def test_playground_service_revalidates_confirmed_draft_and_derives_revisions() 
     assert draft.prompt.positive_text == "person, city, manual emphasis"
     assert draft.prompt.draft_overridden is True
     assert catalog.calls == [False]
+
+
+def test_playground_service_restores_exact_revisions_and_compositions() -> (
+    None
+):
+    catalog = _CatalogService(_catalog())
+    service = PlaygroundService(
+        catalog=catalog,
+        selection_policy=PromptSelectionPolicy(),
+        renderer=PromptRenderer(),
+    )
+
+    revision_draft = service.prepare_revision_draft(
+        ("revision-character-a", "revision-scene-night")
+    )
+    composition_draft = service.prepare_composition_draft("composition-a")
+
+    assert revision_draft.prompt.revision_uids == (
+        "revision-character-a",
+        "revision-scene-night",
+    )
+    assert (
+        composition_draft.prompt.revision_uids
+        == revision_draft.prompt.revision_uids
+    )
+
+
+@pytest.mark.parametrize(
+    ("revision_uids", "message"),
+    (
+        ((), "required"),
+        (("",), "required"),
+        (("revision-character-a", "revision-character-a"), "duplicate"),
+        (("missing",), "unknown"),
+        (("revision-scene-night",), "character"),
+    ),
+)
+def test_playground_service_rejects_invalid_revision_handoffs(
+    revision_uids: tuple[str, ...],
+    message: str,
+) -> None:
+    service = PlaygroundService(
+        catalog=_CatalogService(_catalog()),
+        selection_policy=PromptSelectionPolicy(),
+        renderer=PromptRenderer(),
+    )
+
+    with pytest.raises(PromptSelectionError, match=message):
+        service.prepare_revision_draft(revision_uids)
+    with pytest.raises(PromptSelectionError, match="composition_uid"):
+        service.prepare_composition_draft("")
+
+
+def test_playground_service_rejects_duplicate_kinds_in_exact_handoff() -> None:
+    catalog = _CatalogService(
+        (
+            _component("character-a", "character"),
+            _component("character-b", "character"),
+        )
+    )
+    service = PlaygroundService(
+        catalog=catalog,
+        selection_policy=PromptSelectionPolicy(),
+        renderer=PromptRenderer(),
+    )
+
+    with pytest.raises(
+        PromptSelectionError, match="duplicate prompt component kind"
+    ):
+        service.prepare_revision_draft(
+            ("revision-character-a", "revision-character-b")
+        )

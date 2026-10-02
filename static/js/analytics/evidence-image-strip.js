@@ -45,7 +45,19 @@ export class EvidenceImageStrip {
         );
       }
       button.append(image);
-      strip.append(button);
+      const evidence = document.createElement("div");
+      evidence.className = "analytics-evidence-image";
+      evidence.append(button);
+      if (item.image_uid) {
+        const use = document.createElement("button");
+        use.type = "button";
+        use.className = "analytics-image-use";
+        use.dataset.playgroundIntent = "image";
+        use.dataset.imageUid = String(item.image_uid);
+        use.textContent = "Im Generator verwenden";
+        evidence.append(use);
+      }
+      strip.append(evidence);
     }
     if (!strip.children.length) {
       const empty = document.createElement("span");

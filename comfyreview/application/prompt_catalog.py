@@ -187,6 +187,20 @@ class PromptCatalogRepository(Protocol):
         """Return every immutable revision in ascending order."""
         ...
 
+    def list_components_for_revisions(
+        self,
+        revision_uids: tuple[str, ...],
+    ) -> tuple[PromptComponent, ...]:
+        """Return component metadata bound to exact revisions."""
+        ...
+
+    def list_composition_components(
+        self,
+        composition_uid: str,
+    ) -> tuple[PromptComponent, ...]:
+        """Return exact ordered revision members for one composition."""
+        ...
+
 
 def prompt_revision_identity(
     component_uid: str,
@@ -397,6 +411,25 @@ class PromptCatalogService:
         """List immutable revisions for one stable component identity."""
         return self._repository.list_revisions(
             self._required(component_uid, "component_uid")
+        )
+
+    def list_components_for_revisions(
+        self,
+        revision_uids: tuple[str, ...],
+    ) -> tuple[PromptComponent, ...]:
+        """Return component metadata bound to exact immutable revisions."""
+        normalized = tuple(
+            self._required(uid, "revision_uid") for uid in revision_uids
+        )
+        return self._repository.list_components_for_revisions(normalized)
+
+    def list_composition_components(
+        self,
+        composition_uid: str,
+    ) -> tuple[PromptComponent, ...]:
+        """Return exact ordered revision members for one composition."""
+        return self._repository.list_composition_components(
+            self._required(composition_uid, "composition_uid")
         )
 
     @staticmethod

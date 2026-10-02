@@ -78,6 +78,29 @@ export class GenerationControls {
     };
   }
 
+  /** @param {Record<string, any>} intent */
+  applyIntent(intent) {
+    for (const [intentName, fieldName] of [
+      ["checkpoint", "checkpoint"],
+      ["sampler", "sampler"],
+      ["scheduler", "scheduler"],
+      ["seedMode", "seed_mode"],
+      ["seed", "seed"],
+      ["steps_min", "steps_min"],
+      ["steps_max", "steps_max"],
+      ["cfg_min", "cfg_min"],
+      ["cfg_max", "cfg_max"],
+      ["denoise", "denoise"],
+    ]) {
+      const value = intent[intentName];
+      const field = this.fields.get(fieldName);
+      if (field && value !== undefined && value !== null && value !== "") {
+        field.value = String(value);
+      }
+    }
+    this.#syncSeedMode();
+  }
+
   /** @param {boolean} busy */
   setBusy(busy) {
     for (const field of this.fields.values()) field.disabled = busy;

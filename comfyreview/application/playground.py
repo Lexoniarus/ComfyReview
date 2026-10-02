@@ -89,6 +89,20 @@ class PromptCatalogReader(Protocol):
         """Return catalog components available to the caller."""
         ...
 
+    def list_components_for_revisions(
+        self,
+        revision_uids: tuple[str, ...],
+    ) -> tuple[PromptComponent, ...]:
+        """Return component metadata bound to exact immutable revisions."""
+        ...
+
+    def list_composition_components(
+        self,
+        composition_uid: str,
+    ) -> tuple[PromptComponent, ...]:
+        """Return the exact ordered revisions in one composition."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class ManualPromptSelection:
@@ -534,6 +548,36 @@ class PlaygroundService:
             prompt=self._renderer.render(selection, overrides),
         )
 
+    def prepare_revision_draft(
+        self,
+        revision_uids: tuple[str, ...],
+    ) -> PlaygroundDraft:
+        """Render one exact immutable revision selection for a handoff."""
+        components = self._catalog.list_components_for_revisions(revision_uids)
+        selection = self._exact_selection(components, revision_uids)
+        return PlaygroundDraft(
+            selection=selection,
+            prompt=self._renderer.render(selection),
+        )
+
+    def prepare_composition_draft(
+        self,
+        composition_uid: str,
+    ) -> PlaygroundDraft:
+        """Render one persisted canonical composition for a handoff."""
+        normalized_uid = str(composition_uid or "").strip()
+        if not normalized_uid:
+            raise PromptSelectionError("composition_uid is required")
+        components = self._catalog.list_composition_components(normalized_uid)
+        revision_uids = tuple(
+            component.latest_revision.revision_uid for component in components
+        )
+        selection = self._exact_selection(components, revision_uids)
+        return PlaygroundDraft(
+            selection=selection,
+            prompt=self._renderer.render(selection),
+        )
+
     def confirm_draft(
         self,
         command: ConfirmPlaygroundDraftCommand,
@@ -564,3 +608,22 @@ class PlaygroundService:
             selection=selection,
             prompt=self._renderer.render(selection, overrides),
         )
+
+    @staticmethod
+    def _exact_selection(
+        components: tuple[PromptComponent, ...],
+        revision_uids: tuple[str, ...],
+    ) -> PromptSelection:
+        normalized = tuple(str(uid or "").strip() for uid in revision_uids)
+        if not normalized or any(not uid for uid in normalized):
+            raise PromptSelectionError("revision_uids are required")
+        if len(set(normalized)) != len(normalized):
+            raise PromptSelectionError("duplicate prompt revision")
+        if len(components) != len(normalized):
+            raise PromptSelectionError("unknown prompt revision")
+        kinds = tuple(component.kind for component in components)
+        if "character" not in kinds:
+            raise PromptSelectionError("character revision is required")
+        if len(set(kinds)) != len(kinds):
+            raise PromptSelectionError("duplicate prompt component kind")
+        return PromptSelection(components)

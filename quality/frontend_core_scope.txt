@@ -21,6 +21,7 @@ static/js/layout/responsive-rails.js
 static/js/review/review-keyboard.js
 static/js/review/review-stage.js
 static/js/playground/prompt-mode-editor.js
+static/js/playground/playground-intent.js
 static/js/playground/top-combinations.js
 static/js/playground/generation-controls.js
 static/js/playground/draft-preview.js

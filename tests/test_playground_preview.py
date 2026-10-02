@@ -28,6 +28,24 @@ class _Catalog:
         assert include_archived is False
         return self._components
 
+    def list_components_for_revisions(
+        self,
+        revision_uids: tuple[str, ...],
+    ) -> tuple[PromptComponent, ...]:
+        return tuple(
+            component
+            for uid in revision_uids
+            for component in self._components
+            if component.latest_revision.revision_uid == uid
+        )
+
+    def list_composition_components(
+        self,
+        composition_uid: str,
+    ) -> tuple[PromptComponent, ...]:
+        del composition_uid
+        return self._components
+
 
 def _component(
     source_id: int,

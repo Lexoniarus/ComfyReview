@@ -2,6 +2,7 @@ import { AnalyticsView } from "../analytics/focused-analytics-view.js";
 import { AnalyticsCollectionController } from "../analytics/analytics-collection-controller.js";
 import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
+import { PlaygroundIntentNavigator } from "../playground/playground-intent.js";
 import { AnalyticsController } from "../surfaces/focused-analytics-controller.js";
 
 const root = document.querySelector('[data-v2-surface="analytics"]');
@@ -27,6 +28,7 @@ if (root instanceof HTMLElement) {
         requests: new RequestLifecycle(),
         status,
       }),
+      intentNavigator: new PlaygroundIntentNavigator(window.location),
       view: new AnalyticsView(report),
       form,
       model,

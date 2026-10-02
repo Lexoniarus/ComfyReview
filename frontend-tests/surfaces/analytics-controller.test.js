@@ -20,6 +20,11 @@ describe("AnalyticsController", () => {
     await operations.fetchPage(24, new AbortController().signal);
     operations.appendPage({ items: [] });
     expect(fixture.view.append).toHaveBeenCalledWith({ items: [] });
+    const intent = document.createElement("button");
+    intent.dataset.playgroundIntent = "scope";
+    fixture.report.append(intent);
+    intent.click();
+    expect(fixture.intentNavigator.open).toHaveBeenCalledWith(intent);
 
     const scene = document.createElement("button");
     scene.dataset.analyticsScopeKind = "scene";
@@ -213,6 +218,7 @@ function createFixture(options = {}) {
     reset: vi.fn(),
     dispose: vi.fn(),
   };
+  const intentNavigator = { open: vi.fn() };
   const locationRef = {
     search: options.search || "",
     pathname: "/prompt_tokens",
@@ -225,6 +231,7 @@ function createFixture(options = {}) {
       requests,
       detailRequests,
       collection,
+      intentNavigator,
       view,
       form,
       model,
@@ -238,6 +245,7 @@ function createFixture(options = {}) {
     requests,
     detailRequests,
     collection,
+    intentNavigator,
     view,
     form,
     model,

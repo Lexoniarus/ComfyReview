@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from comfyreview.api import get_application_container
 from comfyreview.application import (
@@ -36,7 +36,9 @@ class PlaygroundSelectionIntent(BaseModel):
 class PlaygroundDraftRequest(BaseModel):
     """Request one catalog-backed prompt draft without persistence."""
 
-    selections: list[PlaygroundSelectionIntent]
+    selections: list[PlaygroundSelectionIntent] = Field(default_factory=list)
+    revision_uids: list[str] = Field(default_factory=list)
+    composition_uid: str | None = None
     seed: int | None = None
     max_attempts: int = 200
     positive_atoms: list[PromptAtomRequest] | None = None
@@ -90,14 +92,27 @@ def prepare_playground_draft(
 ) -> JSONResponse:
     """Prepare one reproducible draft from catalog selection intent."""
     try:
-        command = selection_command(payload)
         overrides = draft_overrides(payload)
-        draft = get_application_container(
-            request
-        ).playground_service.prepare_draft(
-            command,
-            overrides=overrides,
-        )
+        service = get_application_container(request).playground_service
+        if payload.composition_uid:
+            if payload.selections or payload.revision_uids or overrides:
+                raise PromptSelectionError(
+                    "composition handoff cannot include draft selections"
+                )
+            draft = service.prepare_composition_draft(payload.composition_uid)
+        elif payload.revision_uids:
+            if payload.selections or overrides:
+                raise PromptSelectionError(
+                    "revision handoff cannot include draft selections"
+                )
+            draft = service.prepare_revision_draft(
+                tuple(payload.revision_uids)
+            )
+        else:
+            draft = service.prepare_draft(
+                selection_command(payload),
+                overrides=overrides,
+            )
     except (PromptSelectionError, PromptCatalogValidationError) as error:
         return error_response(400, "invalid_playground_selection", str(error))
     return JSONResponse(

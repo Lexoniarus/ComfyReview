@@ -251,6 +251,14 @@ class _Playground:
             ),
         )
 
+    def prepare_revision_draft(self, revision_uids):
+        self.revision_uids = revision_uids
+        return self.prepare_draft(SimpleNamespace(), overrides=None)
+
+    def prepare_composition_draft(self, composition_uid):
+        self.composition_uid = composition_uid
+        return self.prepare_draft(SimpleNamespace(), overrides=None)
+
     def confirm_draft(self, command):
         self.confirm_command = command
         if "missing" in command.component_uids:
@@ -839,6 +847,37 @@ def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
         "invalid_playground_selection"
     )
     assert disabled.status_code == 400
+
+
+def test_v2_playground_accepts_exact_revision_and_composition_handoffs() -> (
+    None
+):
+    client, container = _client()
+
+    revisions = client.post(
+        "/api/v2/playground/drafts",
+        json={"revision_uids": ["revision-character-a", "revision-scene-a"]},
+    )
+    composition = client.post(
+        "/api/v2/playground/drafts",
+        json={"composition_uid": "composition-a"},
+    )
+    mixed = client.post(
+        "/api/v2/playground/drafts",
+        json={
+            "composition_uid": "composition-a",
+            "revision_uids": ["revision-character-a"],
+        },
+    )
+
+    assert revisions.status_code == 200
+    assert container.playground_service.revision_uids == (
+        "revision-character-a",
+        "revision-scene-a",
+    )
+    assert composition.status_code == 200
+    assert container.playground_service.composition_uid == "composition-a"
+    assert mixed.status_code == 400
 
 
 def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() -> (

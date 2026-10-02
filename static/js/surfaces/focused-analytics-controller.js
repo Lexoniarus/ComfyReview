@@ -2,12 +2,13 @@
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, cancelRequests: () => void, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (section: string, payload: Record<string, any>) => HTMLElement, append: (payload: Record<string, any>) => void, renderCompositionSetups: (compositionUid: string, payload: Record<string, any>) => void, clear: () => void, dispose: () => void}} ViewBoundary */
 /** @typedef {{start: (payload: Record<string, any>, sentinel: HTMLElement, operations: {fetchPage: (offset: number, signal: AbortSignal) => Promise<Record<string, any>>, appendPage: (payload: Record<string, any>) => void}) => void, reset: () => void, dispose: () => void}} CollectionBoundary */
+/** @typedef {{open: (element: HTMLElement) => void}} IntentBoundary */
 
 const sections = new Set(["overview", "scopes", "parameters", "combinations"]);
 
 /** Orchestrate one canonical analytics report surface. */
 export class AnalyticsController {
-  /** @param {{section: string, api: ApiBoundary, requests: RequestBoundary, detailRequests: RequestBoundary, collection: CollectionBoundary, view: ViewBoundary, form: HTMLFormElement, model: HTMLInputElement, minimumSamples: HTMLInputElement, report: HTMLElement, status: HTMLElement, locationRef?: Location, historyRef?: History}} dependencies */
+  /** @param {{section: string, api: ApiBoundary, requests: RequestBoundary, detailRequests: RequestBoundary, collection: CollectionBoundary, intentNavigator: IntentBoundary, view: ViewBoundary, form: HTMLFormElement, model: HTMLInputElement, minimumSamples: HTMLInputElement, report: HTMLElement, status: HTMLElement, locationRef?: Location, historyRef?: History}} dependencies */
   constructor(dependencies) {
     this.section = sections.has(dependencies.section)
       ? dependencies.section
@@ -16,6 +17,7 @@ export class AnalyticsController {
     this.requests = dependencies.requests;
     this.detailRequests = dependencies.detailRequests;
     this.collection = dependencies.collection;
+    this.intentNavigator = dependencies.intentNavigator;
     this.view = dependencies.view;
     this.form = dependencies.form;
     this.model = dependencies.model;
@@ -112,6 +114,11 @@ export class AnalyticsController {
       this.parameter = viewControl.dataset.analyticsParameter || "";
       this.#writeUrl();
       await this.reload();
+      return;
+    }
+    const intentControl = event.target.closest("[data-playground-intent]");
+    if (intentControl instanceof HTMLElement) {
+      this.intentNavigator.open(intentControl);
       return;
     }
     const kindControl = event.target.closest("[data-analytics-scope-kind]");
