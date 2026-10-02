@@ -27,24 +27,75 @@ describe("V2 view components", () => {
           count: 12,
           archived: true,
         },
+        {
+          kind: "scene",
+          component_uid: "scene-a",
+          name: "Strand",
+          count: 5,
+          archived: false,
+        },
       ],
       ["character-a"],
       "classified",
     );
-    root.querySelector("button")?.click();
+    expect(root.querySelectorAll("[data-scope-uid]")).toHaveLength(1);
+    root.querySelector("[data-scope-uid]")?.click();
     const select = root.querySelector("select");
     select.value = "unclassified";
     select.dispatchEvent(new Event("change", { bubbles: true }));
 
     expect(root.textContent).toContain("<Aiko>");
-    expect(root.querySelector("button")?.getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    expect(
+      root.querySelector("[data-scope-uid]")?.getAttribute("aria-pressed"),
+    ).toBe("true");
     expect(onToggle).toHaveBeenCalledWith("character-a");
     expect(onClassification).toHaveBeenCalledWith("unclassified");
+    root.querySelector("[data-scope-kind-tab='scene']")?.click();
+    expect(root.textContent).toContain("Strand");
+    expect(root.textContent).not.toContain("<Aiko>");
+    expect(
+      root
+        .querySelector("[data-scope-kind-tab='scene']")
+        ?.getAttribute("aria-selected"),
+    ).toBe("true");
+    root
+      .querySelector("[data-scope-kind-tab='scene']")
+      ?.removeAttribute("data-scope-kind-tab");
+    root.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const plainText = document.createTextNode("plain");
+    root.append(plainText);
+    plainText.dispatchEvent(new Event("click", { bubbles: true }));
+    root.dispatchEvent(new Event("change", { bubbles: true }));
     navigator.dispose();
-    root.querySelector("button")?.click();
+    root.querySelector("[data-scope-uid]")?.click();
     expect(onToggle).toHaveBeenCalledOnce();
+  });
+
+  it("focuses the first available scope kind when character is absent", () => {
+    const root = document.createElement("aside");
+    const navigator = new ScopeNavigator(root, {
+      onToggle: vi.fn(),
+      onClassification: vi.fn(),
+    });
+
+    navigator.render(
+      [
+        {
+          kind: "lighting",
+          component_uid: "lighting-a",
+          name: "Abendlicht",
+          count: 3,
+        },
+      ],
+      [],
+      "all",
+    );
+
+    expect(root.textContent).toContain("Abendlicht");
+    expect(root.querySelectorAll("[data-scope-uid]")).toHaveLength(1);
+    navigator.render([], [], "all");
+    expect(root.querySelectorAll("[data-scope-uid]")).toHaveLength(0);
+    navigator.dispose();
   });
 
   it("renders image cards, status states, and delegated actions", () => {

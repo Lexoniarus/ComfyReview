@@ -69,6 +69,10 @@
   margin-bottom: var(--space-3);
 }
 
+.playground-combination-group {
+  min-width: 0;
+}
+
 .playground-combination-group h2,
 .playground-combination-group p {
   margin: 0;
@@ -82,6 +86,8 @@
 
 .playground-combination-grid {
   display: grid;
+  max-width: 100%;
+  min-width: 0;
   grid-auto-columns: minmax(18rem, 24rem);
   grid-auto-flow: column;
   gap: var(--space-2);

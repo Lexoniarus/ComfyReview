@@ -95,6 +95,34 @@
   background: var(--color-surface);
 }
 
+.scope-kind-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.scope-kind-tabs button {
+  min-width: 0;
+  padding: 0.4rem 0.45rem;
+  overflow: hidden;
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-kind-tabs button:hover,
+.scope-kind-tabs button.is-active {
+  border-color: var(--color-border);
+  color: var(--color-accent-strong);
+  background: var(--color-surface-selected);
+}
+
 .scope-group {
   margin-top: var(--space-4);
 }

@@ -39,6 +39,7 @@ static/js/analytics/parameter-evidence-view.js
 static/js/analytics/render-setup-view.js
 static/js/analytics/scope-evidence-view.js
 static/js/scopes/active-scope-chips.js
+static/js/scopes/scope-navigator.js
 static/js/scopes/url-state.js
 static/js/scopes/scope-state-controller.js
 static/js/surfaces/top-worst-controller.js

@@ -1,3 +1,6 @@
+/** @typedef {"character" | "scene" | "outfit" | "pose" | "expression" | "lighting" | "modifier"} ScopeKind */
+
+/** @type {Record<ScopeKind, string>} */
 const KIND_LABELS = {
   character: "Charakter",
   scene: "Szene",
@@ -18,11 +21,26 @@ export class ScopeNavigator {
     this.root = root;
     this.callbacks = callbacks;
     this.events = new AbortController();
+    /** @type {ScopeKind} */
+    this.activeKind = "character";
+    /** @type {Array<Record<string, unknown>>} */
+    this.facets = [];
+    /** @type {string[]} */
+    this.selected = [];
+    this.classification = "all";
     this.root.addEventListener(
       "click",
       (event) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
+        const kindTab = target.closest("[data-scope-kind-tab]");
+        if (kindTab instanceof HTMLElement && kindTab.dataset.scopeKindTab) {
+          this.activeKind = /** @type {ScopeKind} */ (
+            kindTab.dataset.scopeKindTab
+          );
+          this.#renderCurrent();
+          return;
+        }
         const button = target.closest("[data-scope-uid]");
         if (button instanceof HTMLElement && button.dataset.scopeUid) {
           this.callbacks.onToggle(button.dataset.scopeUid);
@@ -47,30 +65,72 @@ export class ScopeNavigator {
 
   /** @param {Array<Record<string, unknown>>} facets @param {string[]} selected @param {string} classification */
   render(facets, selected, classification) {
+    this.facets = facets;
+    this.selected = selected;
+    this.classification = classification;
+    if (!facets.some((facet) => facet.kind === this.activeKind)) {
+      this.activeKind = firstAvailableKind(facets);
+    }
+    this.#renderCurrent();
+  }
+
+  #renderCurrent() {
     this.root.replaceChildren();
     const heading = document.createElement("div");
     heading.className = "v2-panel-heading";
     heading.textContent = "Bereiche";
-    this.root.append(heading, classificationControl(classification));
-    for (const [kind, label] of Object.entries(KIND_LABELS)) {
-      const matching = facets.filter((facet) => facet.kind === kind);
-      if (matching.length === 0) continue;
-      const section = document.createElement("section");
-      section.className = "scope-group";
-      const title = document.createElement("h2");
-      title.textContent = label;
-      section.append(title);
-      for (const facet of matching) {
-        section.append(scopeButton(facet, selected));
-      }
-      this.root.append(section);
+    this.root.append(
+      heading,
+      classificationControl(this.classification),
+      kindTabs(this.facets, this.activeKind),
+    );
+    const matching = this.facets.filter(
+      (facet) => facet.kind === this.activeKind,
+    );
+    if (matching.length === 0) return;
+    const section = document.createElement("section");
+    section.className = "scope-group";
+    section.setAttribute("role", "tabpanel");
+    section.setAttribute("aria-label", KIND_LABELS[this.activeKind]);
+    for (const facet of matching) {
+      section.append(scopeButton(facet, this.selected));
     }
+    this.root.append(section);
   }
 
   /** Release every DOM listener owned by this component. */
   dispose() {
     this.events.abort();
   }
+}
+
+/** @param {Array<Record<string, unknown>>} facets @returns {ScopeKind} */
+function firstAvailableKind(facets) {
+  return /** @type {ScopeKind} */ (
+    Object.keys(KIND_LABELS).find((kind) =>
+      facets.some((facet) => facet.kind === kind),
+    ) || "character"
+  );
+}
+
+/** @param {Array<Record<string, unknown>>} facets @param {string} activeKind */
+function kindTabs(facets, activeKind) {
+  const navigation = document.createElement("div");
+  navigation.className = "scope-kind-tabs";
+  navigation.setAttribute("role", "tablist");
+  navigation.setAttribute("aria-label", "Scope-Art");
+  for (const [kind, label] of Object.entries(KIND_LABELS)) {
+    if (!facets.some((facet) => facet.kind === kind)) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.scopeKindTab = kind;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", String(kind === activeKind));
+    button.classList.toggle("is-active", kind === activeKind);
+    button.textContent = label;
+    navigation.append(button);
+  }
+  return navigation;
 }
 
 /** @param {string} value */
