@@ -81,6 +81,17 @@ describe("PlaygroundController", () => {
     await settle();
     expect(fixture.result.dataset.state).toBe("success");
   });
+
+  it("reports every generation returned for a batch", async () => {
+    const fixture = createFixture({ batch: true });
+    await fixture.controller.start();
+    await fixture.controller.submit();
+
+    expect(fixture.result.textContent).toContain("generation-2 · submitted");
+    expect(fixture.status.textContent).toBe(
+      "2 Generierungen an ComfyUI übergeben",
+    );
+  });
 });
 
 function createFixture(options = {}) {
@@ -127,6 +138,12 @@ function createFixture(options = {}) {
         : Promise.resolve({
             generation_uid: "generation-1",
             status: "submitted",
+            submissions: options.batch
+              ? [
+                  { generation_uid: "generation-1", status: "submitted" },
+                  { generation_uid: "generation-2", status: "submitted" },
+                ]
+              : undefined,
           });
     }),
   };

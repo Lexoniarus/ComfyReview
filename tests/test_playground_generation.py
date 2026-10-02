@@ -14,6 +14,8 @@ from comfyreview.application import (
     GenerationValidationError,
     PlaygroundGenerationDraft,
     PlaygroundGenerationPolicy,
+    PlaygroundGenerationSweep,
+    PlaygroundGenerationSweepPolicy,
     PlaygroundSubmissionService,
     RenderedPrompt,
 )
@@ -135,3 +137,72 @@ def test_playground_submission_service_uses_real_generation_port() -> None:
     )
     assert result.failures[0].draft_uid == "draft-2"
     assert result.failures[0].message == "rejected"
+
+
+def test_generation_sweep_expands_ranges_and_random_seeds_deterministically() -> (
+    None
+):
+    policy = PlaygroundGenerationSweepPolicy()
+    sweep = PlaygroundGenerationSweep(4, True, 33, 6.8, 0.1)
+
+    first = policy.expand(_draft(), sweep)
+    second = policy.expand(_draft(), sweep)
+
+    assert first == second
+    assert tuple(item.draft_uid for item in first) == (
+        "draft 1-001",
+        "draft 1-002",
+        "draft 1-003",
+        "draft 1-004",
+    )
+    assert {item.sampler.steps for item in first} == {30, 31, 32, 33}
+    assert {item.sampler.cfg for item in first} == {6.5, 6.6, 6.7, 6.8}
+    assert len({item.sampler.seed for item in first}) == 4
+
+
+def test_generation_sweep_keeps_fixed_single_values() -> None:
+    result = PlaygroundGenerationSweepPolicy().expand(
+        _draft(),
+        PlaygroundGenerationSweep(1, False, 30, 6.5, 0.1),
+    )
+
+    assert result == (_draft(),)
+
+
+@pytest.mark.parametrize(
+    ("draft", "sweep", "message"),
+    (
+        (_draft(), PlaygroundGenerationSweep(0, False, 30, 6.5, 0.1), "batch"),
+        (
+            _draft(),
+            PlaygroundGenerationSweep(101, False, 30, 6.5, 0.1),
+            "batch",
+        ),
+        (
+            replace(_draft(), sampler=replace(_draft().sampler, steps=0)),
+            PlaygroundGenerationSweep(1, False, 30, 6.5, 0.1),
+            "steps",
+        ),
+        (_draft(), PlaygroundGenerationSweep(1, False, 29, 6.5, 0.1), "steps"),
+        (
+            replace(_draft(), sampler=replace(_draft().sampler, cfg=0)),
+            PlaygroundGenerationSweep(1, False, 30, 6.5, 0.1),
+            "cfg range",
+        ),
+        (
+            _draft(),
+            PlaygroundGenerationSweep(1, False, 30, 6.4, 0.1),
+            "cfg range",
+        ),
+        (
+            _draft(),
+            PlaygroundGenerationSweep(1, False, 30, 6.5, 0),
+            "cfg_step",
+        ),
+    ),
+)
+def test_generation_sweep_rejects_invalid_ranges(
+    draft, sweep, message
+) -> None:
+    with pytest.raises(GenerationValidationError, match=message):
+        PlaygroundGenerationSweepPolicy().expand(draft, sweep)

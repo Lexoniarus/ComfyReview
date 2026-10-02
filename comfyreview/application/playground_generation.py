@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import random
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from comfyreview.application.generation import (
     GenerationMutationError,
@@ -44,6 +46,128 @@ class PlaygroundSubmissionBatch:
 
     submissions: tuple[GenerationSubmission, ...]
     failures: tuple[PlaygroundSubmissionFailure, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PlaygroundGenerationSweep:
+    """Describe bounded variation across one reviewed Playground draft."""
+
+    batch_runs: int
+    randomize_seed: bool
+    steps_max: int
+    cfg_max: float
+    cfg_step: float
+
+
+class PlaygroundGenerationSweepPolicy:
+    """Expand bounded ranges into deterministic concrete generation drafts."""
+
+    def expand(
+        self,
+        draft: PlaygroundGenerationDraft,
+        sweep: PlaygroundGenerationSweep,
+    ) -> tuple[PlaygroundGenerationDraft, ...]:
+        """Return concrete drafts with explicit seeds, steps and CFG values."""
+        count = int(sweep.batch_runs)
+        if count < 1 or count > 100:
+            raise GenerationValidationError(
+                "batch_runs must be between 1 and 100"
+            )
+        if draft.sampler.steps < 1 or sweep.steps_max < draft.sampler.steps:
+            raise GenerationValidationError("steps range is invalid")
+        if draft.sampler.cfg <= 0 or sweep.cfg_max < draft.sampler.cfg:
+            raise GenerationValidationError("cfg range is invalid")
+        if sweep.cfg_step <= 0:
+            raise GenerationValidationError("cfg_step must be positive")
+
+        generator = random.Random(self._stable_seed(draft.draft_uid))
+        steps = self._integer_samples(
+            draft.sampler.steps,
+            sweep.steps_max,
+            count,
+            generator,
+        )
+        cfg_values = self._float_samples(
+            draft.sampler.cfg,
+            sweep.cfg_max,
+            sweep.cfg_step,
+            count,
+            generator,
+        )
+        drafts: list[PlaygroundGenerationDraft] = []
+        for index in range(count):
+            sampler = replace(
+                draft.sampler,
+                seed=(
+                    generator.randrange(0, 2**63)
+                    if sweep.randomize_seed
+                    else draft.sampler.seed
+                ),
+                steps=steps[index],
+                cfg=cfg_values[index],
+            )
+            drafts.append(
+                replace(
+                    draft,
+                    draft_uid=(
+                        draft.draft_uid
+                        if count == 1
+                        else f"{draft.draft_uid}-{index + 1:03d}"
+                    ),
+                    sampler=sampler,
+                )
+            )
+        return tuple(drafts)
+
+    @staticmethod
+    def _stable_seed(draft_uid: str) -> int:
+        digest = hashlib.sha256(str(draft_uid).encode("utf-8")).digest()
+        return int.from_bytes(digest[:8], "big")
+
+    @staticmethod
+    def _integer_samples(
+        minimum: int,
+        maximum: int,
+        count: int,
+        generator: random.Random,
+    ) -> tuple[int, ...]:
+        if minimum == maximum:
+            return (minimum,) * count
+        width = maximum - minimum + 1
+        values = []
+        for index in range(count):
+            lower = minimum + (index * width) // count
+            upper = minimum + ((index + 1) * width) // count - 1
+            values.append(generator.randint(lower, max(lower, upper)))
+        generator.shuffle(values)
+        return tuple(values)
+
+    @staticmethod
+    def _float_samples(
+        minimum: float,
+        maximum: float,
+        step: float,
+        count: int,
+        generator: random.Random,
+    ) -> tuple[float, ...]:
+        precision = max(
+            len(str(value).partition(".")[2])
+            for value in (minimum, maximum, step)
+        )
+        scale = 10**precision
+        minimum_tick = round(minimum * scale)
+        maximum_tick = round(maximum * scale)
+        step_tick = max(1, round(step * scale))
+        candidates = tuple(
+            tick / scale
+            for tick in range(minimum_tick, maximum_tick + 1, step_tick)
+        )
+        values = [
+            candidates[(index * len(candidates)) // count]
+            for index in range(count)
+        ]
+        generator.shuffle(values)
+        return tuple(values)
 
 
 class PlaygroundGenerationPolicy:

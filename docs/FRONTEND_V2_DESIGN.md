@@ -87,6 +87,13 @@ real example images per combination. These groups are derived from canonical
 composition memberships; the broader Analytics composition view remains a
 separate surface and does not replace them.
 
+Generation controls preserve the useful V1 experiment workflow without
+reviving its form orchestration: a submission may choose a fixed or randomized
+ComfyUI seed, a bounded batch size, a Steps range and a CFG range/step. The
+Application sweep policy expands those values into concrete sampler settings
+before `GenerationService` is called; every resulting generation therefore
+stores the exact seed, Steps and CFG values it used.
+
 Top/Worst is the reference surface. Its cards show only rank, rating on the
 1-10 scale, rating count and a small scope summary. Full technical metadata
 belongs in the inspector.

@@ -82,9 +82,18 @@ export class PlaygroundController {
       const submission = await this.requests.run((signal) =>
         this.api.post("generations", payload, { signal }),
       );
+      /** @type {Array<Record<string, any>>} */
+      const submissions = Array.isArray(submission.submissions)
+        ? submission.submissions
+        : [submission];
       this.result.dataset.state = "success";
-      this.result.textContent = `Generierung ${submission.generation_uid} · ${submission.status}`;
-      this.status.textContent = "An ComfyUI übergeben";
+      this.result.textContent = submissions
+        .map((item) => `${item.generation_uid} · ${item.status}`)
+        .join("\n");
+      this.status.textContent =
+        submissions.length === 1
+          ? "An ComfyUI übergeben"
+          : `${submissions.length} Generierungen an ComfyUI übergeben`;
     } catch (error) {
       this.result.dataset.state = "error";
       this.result.textContent = errorMessage(error);

@@ -21,6 +21,7 @@ from comfyreview.application import (
     GenerationService,
     ImageContextQueryService,
     OutputImageReadModel,
+    PlaygroundGenerationSweepPolicy,
     PlaygroundService,
     PlaygroundSubmissionService,
     PromptCatalogService,
@@ -133,6 +134,10 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         playground_service=cast(PlaygroundService, object()),
         playground_submission_service=cast(
             PlaygroundSubmissionService,
+            object(),
+        ),
+        playground_generation_sweeps=cast(
+            PlaygroundGenerationSweepPolicy,
             object(),
         ),
         workflow_defaults=cast(WorkflowDefaultsService, object()),

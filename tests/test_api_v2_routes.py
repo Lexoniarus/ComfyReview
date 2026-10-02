@@ -22,6 +22,7 @@ from comfyreview.application import (
     ImagePage,
     ImageScope,
     PlaygroundDraft,
+    PlaygroundGenerationSweepPolicy,
     PlaygroundSubmissionBatch,
     PlaygroundSubmissionFailure,
     PromptComponent,
@@ -793,6 +794,13 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
         "generation_uid": "generation-1",
         "status": "submitted",
         "prompt_id": "prompt-1",
+        "submissions": [
+            {
+                "generation_uid": "generation-1",
+                "status": "submitted",
+                "prompt_id": "prompt-1",
+            }
+        ],
     }
     draft = container.playground_submission_service.draft
     assert draft.prompt.positive_text == "edited positive"
@@ -829,6 +837,11 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
 
     invalid = client.post("/api/v2/generations", json=payload)
     payload["component_uids"] = ["character-a", "scene-a"]
+    bad_sweep = {
+        **payload,
+        "sampler": {**payload["sampler"], "steps_max": 20},
+    }
+    invalid_sweep = client.post("/api/v2/generations", json=bad_sweep)
     container.playground_submission_service.fail = True
     failed = client.post("/api/v2/generations", json=payload)
 
@@ -838,6 +851,7 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
 
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "invalid_generation"
+    assert invalid_sweep.status_code == 400
     assert failed.status_code == 500
     assert failed.json()["error"]["code"] == "generation_failed"
     assert graph.status_code == 422
@@ -930,6 +944,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         prompt_catalog_service=_PromptCatalog(),
         playground_service=_Playground(),
         playground_submission_service=_PlaygroundSubmission(),
+        playground_generation_sweeps=PlaygroundGenerationSweepPolicy(),
         generation_queries=_GenerationQueries(),
         generation_reconciliation=_GenerationReconciliation(),
         playground_discovery=_PlaygroundDiscovery(),

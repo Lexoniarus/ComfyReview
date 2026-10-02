@@ -78,11 +78,23 @@ describe("Playground browser components", () => {
         sampler: "euler",
         scheduler: "normal",
         denoise: 1,
+        batch_runs: 1,
+        randomize_seed: false,
+        steps_max: 24,
+        cfg_max: 6.5,
+        cfg_step: 0.1,
       },
     });
+    const seedMode = root.querySelector('[data-field="seed_mode"]');
+    const seed = root.querySelector('[data-field="seed"]');
+    seedMode.value = "random";
+    seedMode.dispatchEvent(new Event("change"));
+    expect(seed.disabled).toBe(true);
+    expect(controls.value().sampler.randomize_seed).toBe(true);
     controls.setBusy(true);
     expect(root.querySelector("select")?.disabled).toBe(true);
     controls.setBusy(false);
+    expect(seed.disabled).toBe(true);
     controls.dispose();
   });
 

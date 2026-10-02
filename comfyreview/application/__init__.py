@@ -148,6 +148,8 @@ from comfyreview.application.playground import (
 from comfyreview.application.playground_generation import (
     PlaygroundGenerationDraft,
     PlaygroundGenerationPolicy,
+    PlaygroundGenerationSweep,
+    PlaygroundGenerationSweepPolicy,
     PlaygroundSubmissionBatch,
     PlaygroundSubmissionFailure,
     PlaygroundSubmissionService,
@@ -326,6 +328,8 @@ __all__ = [
     "PlaygroundDraft",
     "PlaygroundGenerationDraft",
     "PlaygroundGenerationPolicy",
+    "PlaygroundGenerationSweep",
+    "PlaygroundGenerationSweepPolicy",
     "PlaygroundService",
     "PlaygroundSubmissionBatch",
     "PlaygroundSubmissionFailure",

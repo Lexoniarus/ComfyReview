@@ -101,6 +101,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_generation.py::"
         "test_playground_generation_policy_builds_reproducible_request"
     ),
+    "comfyreview.application.playground_generation:PlaygroundGenerationSweepPolicy.expand": (
+        "tests/test_playground_generation.py::"
+        "test_generation_sweep_expands_ranges_and_random_seeds_deterministically"
+    ),
     "comfyreview.application.playground_generation:PlaygroundSubmissionService.submit": (
         "tests/test_playground_generation.py::"
         "test_playground_submission_service_uses_real_generation_port"

@@ -16,6 +16,7 @@ from comfyreview.application import (
     GenerationSummary,
     GenerationValidationError,
     PlaygroundGenerationDraft,
+    PlaygroundGenerationSweep,
     PromptSelectionError,
 )
 from routers.api_v2.common import error_response
@@ -34,6 +35,11 @@ class PlaygroundSamplerRequest(BaseModel):
     sampler: str
     scheduler: str
     denoise: float
+    batch_runs: int = 1
+    randomize_seed: bool = False
+    steps_max: int | None = None
+    cfg_max: float | None = None
+    cfg_step: float = 0.1
 
 
 class PlaygroundGenerationRequest(BaseModel):
@@ -147,29 +153,43 @@ def submit_generation(
             for component in confirmed.selection.components
             if component.kind == "character"
         )
-        batch = container.playground_submission_service.submit(
-            (
-                PlaygroundGenerationDraft(
-                    draft_uid=payload.draft_uid,
-                    character_name=character.name,
-                    prompt=confirmed.prompt,
-                    checkpoint=payload.checkpoint,
-                    sampler=GenerationSamplerSettings(
-                        role="base_sampler",
-                        seed=payload.sampler.seed,
-                        steps=payload.sampler.steps,
-                        cfg=payload.sampler.cfg,
-                        sampler=payload.sampler.sampler,
-                        scheduler=payload.sampler.scheduler,
-                        denoise=payload.sampler.denoise,
-                    ),
-                    output_subdirectory=(
-                        f"playground/{character.component_key}"
-                    ),
-                ),
-            )
+        draft = PlaygroundGenerationDraft(
+            draft_uid=payload.draft_uid,
+            character_name=character.name,
+            prompt=confirmed.prompt,
+            checkpoint=payload.checkpoint,
+            sampler=GenerationSamplerSettings(
+                role="base_sampler",
+                seed=payload.sampler.seed,
+                steps=payload.sampler.steps,
+                cfg=payload.sampler.cfg,
+                sampler=payload.sampler.sampler,
+                scheduler=payload.sampler.scheduler,
+                denoise=payload.sampler.denoise,
+            ),
+            output_subdirectory=f"playground/{character.component_key}",
         )
-    except (KeyError, PromptSelectionError, StopIteration) as error:
+        drafts = container.playground_generation_sweeps.expand(
+            draft,
+            PlaygroundGenerationSweep(
+                batch_runs=payload.sampler.batch_runs,
+                randomize_seed=payload.sampler.randomize_seed,
+                steps_max=payload.sampler.steps_max or payload.sampler.steps,
+                cfg_max=(
+                    payload.sampler.cfg
+                    if payload.sampler.cfg_max is None
+                    else payload.sampler.cfg_max
+                ),
+                cfg_step=payload.sampler.cfg_step,
+            ),
+        )
+        batch = container.playground_submission_service.submit(drafts)
+    except (
+        GenerationValidationError,
+        KeyError,
+        PromptSelectionError,
+        StopIteration,
+    ) as error:
         return error_response(400, "invalid_generation", str(error))
     if batch.failures:
         return error_response(
@@ -183,6 +203,14 @@ def submit_generation(
             "generation_uid": submission.generation_uid,
             "status": submission.status,
             "prompt_id": submission.prompt_id,
+            "submissions": [
+                {
+                    "generation_uid": item.generation_uid,
+                    "status": item.status,
+                    "prompt_id": item.prompt_id,
+                }
+                for item in batch.submissions
+            ],
         },
         status_code=202,
     )

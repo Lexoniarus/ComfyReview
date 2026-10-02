@@ -25,6 +25,7 @@ from comfyreview.application import (
     ImageContextQueryService,
     OutputImageCatalog,
     PlaygroundGenerationPolicy,
+    PlaygroundGenerationSweepPolicy,
     PlaygroundService,
     PlaygroundSubmissionService,
     PromptCatalogService,
@@ -114,6 +115,7 @@ class ApplicationContainer:
     prompt_labels: PromptLabelService
     playground_service: PlaygroundService
     playground_submission_service: PlaygroundSubmissionService
+    playground_generation_sweeps: PlaygroundGenerationSweepPolicy
     workflow_defaults: WorkflowDefaultsService
     review_service: ReviewService
     review_history: ReviewHistoryService
@@ -274,6 +276,7 @@ def build_application_container(
                 expected_output_roles=("primary",),
             ),
         ),
+        playground_generation_sweeps=PlaygroundGenerationSweepPolicy(),
         workflow_defaults=WorkflowDefaultsService(blueprints),
         review_service=review_service,
         review_history=ReviewHistoryService(
