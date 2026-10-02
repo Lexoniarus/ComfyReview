@@ -44,7 +44,10 @@ export class GenerationProfileEditor {
       this.#select(
         "seed_mode",
         "Seedmodus",
-        ["fixed", "random"],
+        [
+          { value: "fixed", label: "Fest" },
+          { value: "random", label: "Zufällig" },
+        ],
         value.seed_mode,
       ),
       this.#number("fixed_seed", "Fester Seed", value.fixed_seed ?? 1, "1"),
@@ -146,14 +149,21 @@ export class GenerationProfileEditor {
     return wrapper;
   }
 
-  /** @param {string} name @param {string} label @param {unknown[]} values @param {unknown} selected */
+  /** @param {string} name @param {string} label @param {Array<unknown | {value: unknown, label: string}>} values @param {unknown} selected */
   #select(name, label, values, selected) {
     const wrapper = field(label);
     const control = document.createElement("select");
-    for (const value of values || []) {
+    for (const item of values || []) {
+      const value =
+        typeof item === "object" && item !== null && "value" in item
+          ? item.value
+          : item;
       const option = document.createElement("option");
       option.value = String(value);
-      option.textContent = String(value);
+      option.textContent =
+        typeof item === "object" && item !== null && "label" in item
+          ? String(item.label)
+          : String(value);
       control.append(option);
     }
     control.value = String(selected || control.value);

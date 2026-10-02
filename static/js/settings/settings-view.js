@@ -210,13 +210,19 @@ function preferenceFields(section, preferences, data) {
     selectField(
       "density",
       "Dichte",
-      ["comfortable", "compact"],
+      [
+        { value: "comfortable", label: "Komfortabel" },
+        { value: "compact", label: "Kompakt" },
+      ],
       preferences.density,
     ),
     selectField(
       "motion",
       "Bewegung",
-      ["system", "reduced"],
+      [
+        { value: "system", label: "Systemvorgabe" },
+        { value: "reduced", label: "Reduziert" },
+      ],
       preferences.motion,
     ),
     selectField(
@@ -230,21 +236,24 @@ function preferenceFields(section, preferences, data) {
       "default_generation_profile_uid",
       "Standardprofil",
       [
-        "",
+        { value: "", label: "Keins" },
         ...(data.generation_profiles || [])
           .filter(
             (/** @type {Record<string, any>} */ profile) => !profile.archived,
           )
-          .map(
-            (/** @type {Record<string, any>} */ profile) => profile.profile_uid,
-          ),
+          .map((/** @type {Record<string, any>} */ profile) => ({
+            value: profile.profile_uid,
+            label: profile.name,
+          })),
       ],
       preferences.default_generation_profile_uid || "",
     ),
   ];
 }
 
-/** @param {string} name @param {string} label @param {Array<string | number>} values @param {unknown} selected @param {(value: string) => any} [convert] */
+/** @typedef {{value: string | number, label: string}} SelectOption */
+
+/** @param {string} name @param {string} label @param {Array<string | number | SelectOption>} values @param {unknown} selected @param {(value: string) => any} [convert] */
 function selectField(
   name,
   label,
@@ -254,10 +263,12 @@ function selectField(
 ) {
   const wrapper = field(label);
   const control = document.createElement("select");
-  for (const value of values) {
+  for (const item of values) {
+    const value = typeof item === "object" ? item.value : item;
     const option = document.createElement("option");
     option.value = String(value);
-    option.textContent = String(value || "Keins");
+    option.textContent =
+      typeof item === "object" ? item.label : String(value || "Keins");
     control.append(option);
   }
   control.value = String(selected);

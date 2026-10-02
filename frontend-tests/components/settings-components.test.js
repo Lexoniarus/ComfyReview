@@ -109,6 +109,9 @@ describe("Settings components", () => {
     const data = settingsData();
 
     view.render("general", data);
+    expect(root.textContent).toContain("Komfortabel");
+    expect(root.textContent).toContain("Systemvorgabe");
+    expect(root.textContent).toContain("Standardprofil");
     root.querySelectorAll("select")[0].value = "compact";
     root
       .querySelector("form")
@@ -162,6 +165,7 @@ describe("Settings components", () => {
     const view = new SettingsView(root, actions);
     view.render("profiles", settingsData());
     expect(root.textContent).toContain("Standard");
+    expect(root.textContent).toContain("Zufällig");
 
     root.querySelectorAll(".settings-profile-list button")[0].click();
     root.querySelectorAll(".settings-profile-list button")[1].click();
