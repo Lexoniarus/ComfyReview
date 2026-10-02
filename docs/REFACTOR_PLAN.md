@@ -1,10 +1,10 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover, revisioned prompt catalog and live
-Canonical Data Completion are implemented on `refactor/review-boundary`,
-2026-10-01. ImageContext, scopes and Frontend V2 are now the remaining active
-program. The branch remains the unmerged integration branch until the full
-refactor is accepted.
+Status: the canonical backend cutover, structured prompt catalog, schema-v7
+data migration, ImageContext/scopes and Frontend V2 surfaces are implemented
+on `refactor/review-boundary`, 2026-10-02. Final polish, cleanup and integration
+acceptance remain. The branch stays unmerged until the full refactor is
+accepted.
 
 The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
@@ -238,28 +238,33 @@ constants.
   checks at desktop and 1180 x 820 without console errors or horizontal
   overflow.
 
+### Structured prompt bundles and schema v7 (completed)
+
+- `PromptRevision` now owns ordered positive and negative `PromptAtomUsage`
+  values with text and `weight_milli` stored separately;
+- schema v7 adds `prompt_revision_atom_usages` without changing stable
+  component, revision, composition, generation or image identities;
+- the explicit v6-to-v7 migration was rehearsed, backed up and applied to the
+  stopped live database; 729 revisions produced 4,061 validated usages;
+- Catalog V2 authoring and Playground drafts accept atom arrays only, while
+  rendered prompt columns remain immutable derived snapshots;
+- preview and generation submission share the server-side `PromptRenderer`;
+- draft edits, reordering and reset operate on copies and never mutate the
+  selected immutable revision;
+- the legacy HTML form adapter is the only normal compatibility boundary that
+  parses combined prompt text;
+- the live database validates as schema v7 with `integrity_check = ok` and no
+  foreign-key violations.
+
 ## Remaining slice order
 
 The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-Before the Playground and Catalog surface cutovers, the accepted target in
-`docs/STRUCTURED_PROMPT_BUNDLES_WORK_ORDER.md` must replace whole-string
-catalog authoring and Playground overrides with ordered positive and negative
-atom usages whose text and numeric weight are separate values. This is a target
-until implemented; existing Prompt Catalog revisions remain whole-string based.
-
-1. add Frontend/Design quality tooling and architecture gates;
-2. add URL-free ImageContext, SQL-backed scopes/facets and API V2;
-3. build the shared V2 shell and lifecycle-owned browser components;
-4. cut over Top/Worst without changing ranking semantics;
-5. cut over Review and Arena to UID-only API V2 payloads;
-6. cut over Playground while preserving catalog revisions and draft semantics;
-7. add Catalog and Generation surfaces;
-8. add Analytics and Curation surfaces;
-9. complete responsive/accessibility work and remove old presentation paths;
-10. run the complete architecture, data, browser, ComfyUI, quality and
+1. complete responsive/accessibility polish and remove old presentation paths;
+2. finish the usage audit and delete only proven-dead compatibility code;
+3. run the complete architecture, data, browser, ComfyUI, quality and
     documentation acceptance before opening a new pull request.
 
 Each intermediate commit runs focused tests and static checks for changed

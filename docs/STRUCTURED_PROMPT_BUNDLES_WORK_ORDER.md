@@ -1,6 +1,6 @@
 # Work Order: Structured Prompt Bundles
 
-Status: approved target, not implemented, 2026-10-02.
+Status: implemented on `refactor/review-boundary`, 2026-10-02.
 
 ## Purpose
 
@@ -238,3 +238,23 @@ work must not be discarded.
 
 Those capabilities may build on the structured representation later, but they
 must not enlarge this work order.
+
+## Implemented result
+
+Schema v7 adds `prompt_revision_atom_usages`, relating each immutable revision
+to a canonical atom by positive/negative scope, ordered position and
+`weight_milli`. The explicit backed-up v6-to-v7 migration preserved all 729
+component/revision identities and renderer-produced snapshots while creating
+4,061 validated usages. Rehearsal and live validation both completed with an
+integrity-valid database and no foreign-key violations.
+
+Catalog V2, Playground draft preparation and generation submission now use
+structured arrays. The server validates the selected revision UIDs and renders
+the final positive/negative snapshots centrally; the browser cannot submit an
+arbitrary workflow graph or treat a free-form final prompt as canonical truth.
+The Catalog and Playground atom editors own their listeners, support add,
+remove, reorder and reset, and pass `checkJs`, lint and focused behavior tests.
+
+The combined-string parser remains only where historical migration or the
+legacy HTML form contract explicitly requires it. It is not a writable
+application or repository contract.

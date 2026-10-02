@@ -1,9 +1,9 @@
 # ComfyReview Architecture
 
-Status: canonical Review, Ranking, Arena, Curation, Prompt Catalog, analytics,
-native Generation and live schema-v6 data completion are implemented on the
-active refactor branch, 2026-10-01. Frontend V2 and final presentation cleanup
-remain open.
+Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
+analytics, native Generation, live schema-v7 data and Frontend V2 surfaces are
+implemented on the active refactor branch, 2026-10-02. Final presentation,
+accessibility and integration acceptance remain open.
 
 ## 1. Product boundary
 
@@ -41,9 +41,10 @@ only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v6 is the active
+The canonical database has an explicit schema version. Schema v7 is the active
 shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
-catalog and records native output roles and content hashes. Stable `image_uid`
+catalog, records v6 native output roles/content hashes and normalizes ordered
+prompt-revision atom usages. Stable `image_uid`
 and `generation_uid` values are identity; PNG and optional sidecar paths are
 mutable attributes.
 
@@ -57,6 +58,9 @@ Canonical v4 facts include:
 Canonical v5 additionally includes stable prompt components, immutable prompt
 revisions, explicit compositions and source mappings for audited legacy
 imports. Catalog metadata can change without rewriting revision content.
+Schema v7 makes ordered positive/negative atom usages with separate numeric
+weights the authored revision truth. Rendered whole-prompt columns remain
+derived immutable snapshots, not writable API inputs.
 
 `images.deleted_at`, `current_image_reviews`, `image_review_summary` and ranking
 results are projections derived from canonical facts. The old `image_reviews`
@@ -216,12 +220,14 @@ indices are assigned only when ComfyUI outputs are collected.
 ## 9. Schema lifecycle
 
 Runtime startup validates only the supported canonical schema; it never
-upgrades an unsupported database silently. Canonical v3 through v6
+upgrades an unsupported database silently. Canonical v3 through v7
 changes are available only through `python -m comfyreview canonical-db
 upgrade` and are backed up. The v3-to-v4 step migrates writable legacy review
 state into events, projects delete tombstones and replaces old tables with
 read-only views; v5 adds the prompt catalog and v6 stores native output role
-and content-hash provenance.
+and content-hash provenance. Schema v7 adds normalized revision atom usages;
+the v6-to-v7 upgrade parses only the supported grammar and validates the
+structured roundtrip before commit.
 
 The older multi-file schema lifecycle remains centralized in
 `comfyreview.repositories.sqlite.legacy_schema`. Its explicit
@@ -235,7 +241,8 @@ The canonical cutover is intentionally not the end of the wider refactor.
 - Remaining older `services/*` modules require a final usage and responsibility
   audit; active HTTP/view preparation stays, obsolete compatibility facades do
   not.
-- Frontend logic still needs the planned ES-module/API-client cleanup.
+- Frontend V2 uses native ES modules and the shared API client; final
+  responsive/accessibility polish and presentation cleanup remain.
 - Live canonical data completion is validated. ImageContext and scope queries
   can now use exact composition memberships for 363 generations; the sixteen
   unresolved cases remain explicit diagnostics rather than guessed relations.
@@ -256,7 +263,23 @@ worker/jobs/cursors and their runtime have been removed.
 Legacy sources may be read by explicit migration tools. They must not become a
 second writable truth for an already cut-over feature.
 
-### 10.1 Canonical analytics boundaries
+### 10.1 Structured prompt boundary
+
+`PromptAtomUsage` carries normalized text and `weight_milli`. Catalog write
+commands, Playground draft overrides and V2 generation submission accept
+ordered positive/negative usages rather than an arbitrary final prompt string.
+`PromptRenderer` alone produces the rendered snapshots supplied to
+`GenerationService` and ultimately `WorkflowCompiler`. Repositories persist
+the normalized usage relation but do not format prompts. The ComfyUI provider
+remains unaware of atoms, weights and catalog roles.
+
+The Catalog and Playground editors use a lifecycle-owned `PromptAtomEditor`.
+Edits affect a draft copy, can be reordered/reset, and never mutate the source
+revision. The legacy HTML form adapter may parse the supported combined-string
+grammar at its explicit compatibility boundary; it does not reintroduce a
+whole-string application contract.
+
+### 10.2 Canonical analytics boundaries
 
 Render analytics no longer treat a serialized `combo_key` as a technical
 configuration. `RenderAnalyticsService` separates marginal recommendations

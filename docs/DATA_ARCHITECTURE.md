@@ -1,9 +1,9 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v6 and the live historical-data completion are
+Status: canonical schema v7 and the live historical-data completion are
 implemented for images, reviews, Arena, Curation, revisioned prompts and
-native generation outputs on the active refactor branch, 2026-10-01.
-Playground catalog editing remains transitional.
+native generation outputs on the active refactor branch, 2026-10-02.
+Catalog authoring and Playground drafts use structured prompt atoms.
 
 ## 1. Source-of-truth rule
 
@@ -21,11 +21,11 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v6
+## 2. Canonical schema v7
 
 The canonical database uses explicit schema metadata and foreign keys. Schema
-v6 contains the v4 identity/review cutover, the v5 prompt catalog and native
-output provenance:
+v7 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
+output provenance and normalized prompt-revision atom usages:
 
 - `generations` and normalized generation provenance;
 - `images` with stable UID, output role, content hash, current paths and
@@ -35,11 +35,14 @@ output provenance:
 - `curation_assignments` with one assignment per image;
 - `prompt_components` with stable component UIDs and mutable metadata;
 - immutable `prompt_revisions`;
+- ordered `prompt_revision_atom_usages` with positive/negative scope,
+  position and `weight_milli` linked to canonical `prompt_atoms`;
 - `prompt_compositions` and their concrete revision membership;
 - rebuildable current-state and aggregate views.
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
-a v3-to-v4, v4-to-v5 or v5-to-v6 migration. The explicit, backed-up command is:
+a v3-to-v4, v4-to-v5, v5-to-v6 or v6-to-v7 migration. The explicit,
+backed-up command is:
 
 ```text
 python -m comfyreview canonical-db upgrade [--backup-dir PATH]
@@ -102,9 +105,15 @@ Curation and Delete therefore work for canonical PNGs without sidecars.
 
 The canonical prompt catalog preserves authored material independently
 of whether it has already produced an image. A stable prompt component owns
-immutable prompt revisions. Changing positive text, negative text or explicit
-weights creates a new revision; display name, tags and notes remain mutable
-catalog metadata.
+immutable prompt revisions. Each revision owns ordered positive and negative
+atom usages. Atom text and numeric weight are separate values; changing text,
+weight or order creates a new revision. Display name, tags and notes remain
+mutable catalog metadata.
+
+`positive_text` and `negative_text` remain immutable renderer-produced
+snapshots for provenance and compatibility. They are not writable catalog
+input. `PromptRenderer` is the single formatting boundary: weight `1.0` is
+rendered without explicit syntax and other weights use deterministic syntax.
 
 A prompt composition references concrete revision IDs. A generation references
 the composition/revisions it used and also stores the exact rendered positive
@@ -115,10 +124,11 @@ destroy revisions or historical relationships.
 `PromptCatalogService` owns catalog use cases through an injected repository;
 SQLite and stable-ID generation remain technical adapters. Playground preview
 selection and rendering now consume exact catalog revisions and retain their
-UIDs in each draft. A manual draft edit changes only its rendered snapshot. It
-does not create or mutate a revision. Playground submission uses the native
-`GenerationService`, preserves exact prompt snapshots and revision IDs, and
-does not dual-write legacy generation state.
+UIDs in each draft. A manual draft edit changes only its structured copy. It
+does not create or mutate a revision. Preview and submission use the same
+server-side renderer. Playground submission uses the native
+`GenerationService`, preserves structured usages, exact rendered snapshots and
+revision IDs, and does not dual-write legacy generation state.
 
 Legacy prompt migration is explicit:
 
@@ -238,18 +248,27 @@ Normal runtime startup neither opens nor initializes these files. Known
 additive changes require the explicit `python -m comfyreview legacy-db upgrade`
 command.
 
-## 10. Completed canonical data migration and remaining design
+## 10. Completed canonical data migration and schema-v7 cutover
 
-The live schema-v6 database now contains 379 generations, 379 images, 379
+The live schema-v7 database now contains 379 generations, 379 images, 379
 sampler stages, 729 prompt components, 729 immutable first revisions, 275
 recovered compositions and 1,280 ordered composition memberships. All 379
 images have output role, output index and a verified content hash. The existing
-5,468 review events, 1,224 Arena matches and three Curation assignments remain
+5,534 review events, 1,257 Arena matches and three Curation assignments remain
 canonical facts.
 
-Completion was rehearsed from a verified v4 backup through the full v4-to-v6
-upgrade and all four fresh audit/import stages. The same ordered sequence then
-ran against the already-upgraded live v6 database. Each live import created its
+The explicit v6-to-v7 migration was rehearsed on a byte-identical copy, then
+run against the stopped live application. Both upgrades created their own
+SQLite backup. The live migration preserved every component, revision,
+composition, generation and rendered prompt snapshot while creating 4,061
+ordered revision atom usages. Final `user_version` is 7,
+`integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
+pre-upgrade backup remains schema v6 with all 729 revisions.
+
+Historical completion was rehearsed from a verified v4 backup through the full
+v4-to-v6 upgrade and all four fresh audit/import stages. The same ordered
+sequence then ran against the already-upgraded live v6 database. Each live
+import created its
 own validated backup before writing. Final `integrity_check`, foreign-key,
 schema, identity, protected-field, provenance, read-only-reader and
 canonical-only startup checks passed. Repeated rehearsal imports created no
@@ -264,7 +283,7 @@ Cartesian product of possible prompt combinations. Persist combinations when
 they are explicitly authored, generated, curated or uniquely reconstructed. An
 unused authored template or revision remains canonical catalog data.
 
-Frontend V2 scope work may now begin. Exact memberships are authoritative for
+Frontend V2 uses this completed data. Exact memberships are authoritative for
 the 363 linked generations. Any scope fallback for the sixteen unresolved
 generations must be the smallest read-only policy justified by their explicit
 diagnostics; it must not read legacy databases, paths, directory names or

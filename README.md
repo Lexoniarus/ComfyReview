@@ -209,7 +209,7 @@ Validate or explicitly upgrade the canonical database:
 
 ```bash
 python -m comfyreview canonical-db validate
-python -m comfyreview canonical-db upgrade --backup-dir data/backups/canonical-v4
+python -m comfyreview canonical-db upgrade --backup-dir data/backups/canonical
 ```
 
 Historical ComfyUI output provenance is imported through a read-only audit
@@ -242,6 +242,12 @@ identified as complete prompt-atom blocks. Additional historical draft text
 remains in the unchanged generation snapshot; it is not invented as a new
 catalog revision. Ambiguous or incomplete evidence remains unlinked and is
 reported rather than guessed.
+
+The active schema is v7. Prompt Catalog revisions and Playground drafts expose
+ordered positive/negative atom rows with separate numeric weights. Rendered
+whole prompts remain exact provenance snapshots produced by the server; they
+are not a second editable source of truth. Existing v6 databases require the
+explicit backed-up `canonical-db upgrade` command before startup.
 
 Audit reports bind source files and databases by hash. Import commands
 revalidate that evidence, create a backup before writing, and commit all writes
