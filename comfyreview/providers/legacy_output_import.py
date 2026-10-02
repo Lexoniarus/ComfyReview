@@ -333,7 +333,7 @@ class LocalLegacyOutputImportSource:
             positive_prompt = str(metadata.get("pos_prompt") or "")
         if not negative_prompt:
             negative_prompt = str(metadata.get("neg_prompt") or "")
-        checkpoint = self._checkpoint(graph_facts, graph)
+        checkpoint = self._checkpoint(graph_facts, graph, metadata)
         stages = self._sampler_stages(graph_facts)
         first = stages[0] if stages else None
         loras = self._normalized_loras(graph_facts)
@@ -528,6 +528,7 @@ class LocalLegacyOutputImportSource:
     def _checkpoint(
         graph_facts: dict[str, Any],
         graph: dict[str, Any],
+        metadata: dict[str, Any],
     ) -> str:
         audited = graph_facts.get("checkpoint")
         if isinstance(audited, str) and audited:
@@ -541,6 +542,9 @@ class LocalLegacyOutputImportSource:
             value = inputs.get("ckpt_name")
             if isinstance(value, str) and value.strip():
                 return value.strip()
+        sidecar_checkpoint = metadata.get("checkpoint")
+        if isinstance(sidecar_checkpoint, str) and sidecar_checkpoint.strip():
+            return sidecar_checkpoint.strip()
         return "unknown"
 
     @staticmethod

@@ -76,6 +76,19 @@ def _workflow() -> dict[str, object]:
     }
 
 
+def _workflow_with_linked_checkpoint() -> dict[str, object]:
+    workflow = _workflow()
+    loader = workflow["loader"]
+    assert isinstance(loader, dict)
+    loader["class_type"] = "RandomLoadCheckpoint"
+    loader["inputs"] = {"ckpt_name": ["checkpoint-name", 0]}
+    workflow["checkpoint-name"] = {
+        "class_type": "PrimitiveString",
+        "inputs": {"value": "model.safetensors"},
+    }
+    return workflow
+
+
 def _write_source(output_root: Path) -> tuple[Path, Path]:
     png_path = output_root / "image.png"
     json_path = output_root / "image.json"
@@ -105,6 +118,31 @@ def _write_source(output_root: Path) -> tuple[Path, Path]:
         encoding="utf-8",
     )
     return png_path, json_path
+
+
+def test_import_uses_sidecar_checkpoint_for_linked_workflow_input(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    database_path = tmp_path / "comfyreview.sqlite3"
+    report_path = tmp_path / "audit.json"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    png_path, json_path = _write_source(output_root)
+    metadata = json.loads(json_path.read_text(encoding="utf-8"))
+    metadata["comfy_prompt_graph"] = _workflow_with_linked_checkpoint()
+    json_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    LegacyOutputAuditor(
+        output_root=output_root,
+        canonical_database_path=database_path,
+    ).audit(report_path)
+
+    records, excluded = LocalLegacyOutputImportSource(database_path).load(
+        report_path
+    )
+
+    assert excluded == 0
+    assert records[0].checkpoint == "model.safetensors"
 
 
 def _sha(path: Path) -> str:
