@@ -58,6 +58,8 @@ def analytics_scopes(
 @router.get("/analytics/parameters")
 def analytics_parameters(
     request: Request,
+    view: str = Query("summary"),
+    parameter: str = Query(""),
     model: str = Query(""),
     min_n: int = Query(10, ge=0),
     success_threshold: int = Query(SUCCESS_THRESHOLD_DEFAULT),
@@ -65,14 +67,23 @@ def analytics_parameters(
 ):
     """Return server-computed canonical render-parameter reports."""
     try:
-        return get_application_container(
-            request
-        ).analytics_pages.parameter_context(
-            model=model,
-            min_n=min_n,
-            success_threshold=success_threshold,
-            delete_weight=delete_weight,
-        )
+        pages = get_application_container(request).analytics_pages
+        if view == "summary":
+            return pages.parameter_summary_context(
+                model=model,
+                min_n=min_n,
+                success_threshold=success_threshold,
+                delete_weight=delete_weight,
+            )
+        if view == "values" and parameter:
+            return pages.parameter_values_context(
+                parameter,
+                model=model,
+                min_n=min_n,
+                success_threshold=success_threshold,
+                delete_weight=delete_weight,
+            )
+        raise ValueError("parameter analytics requires a supported view")
     except ValueError as error:
         return error_response(400, "invalid_analytics_query", str(error))
 
@@ -80,15 +91,45 @@ def analytics_parameters(
 @router.get("/analytics/combinations")
 def analytics_combinations(
     request: Request,
+    view: str = Query("prompt"),
     model: str = Query(""),
     min_n: int = Query(8, ge=0),
     limit: int = Query(200, ge=0, le=500),
 ):
     """Return review evidence grouped by canonical compositions."""
     try:
+        pages = get_application_container(request).analytics_pages
+        if view == "prompt":
+            return pages.composition_context(
+                model=model,
+                min_n=min_n,
+                limit=limit,
+            )
+        if view == "render":
+            return pages.render_setups_context(
+                model=model,
+                min_n=min_n,
+                limit=limit,
+            )
+        raise ValueError("unsupported combination analytics view")
+    except ValueError as error:
+        return error_response(400, "invalid_analytics_query", str(error))
+
+
+@router.get("/analytics/combinations/{composition_uid}/render-setups")
+def analytics_composition_render_setups(
+    composition_uid: str,
+    request: Request,
+    model: str = Query(""),
+    min_n: int = Query(1, ge=0),
+    limit: int = Query(20, ge=0, le=100),
+):
+    """Return observed render setups for one canonical composition."""
+    try:
         return get_application_container(
             request
-        ).analytics_pages.composition_context(
+        ).analytics_pages.composition_render_setups_context(
+            composition_uid,
             model=model,
             min_n=min_n,
             limit=limit,

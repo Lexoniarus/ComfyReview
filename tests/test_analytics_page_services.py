@@ -9,9 +9,17 @@ from comfyreview.application import (
     AnalyticsImage,
     AnalyticsReportService,
     AnalyticsService,
+    CalculatedRenderRecommendation,
+    CompositionAnalyticsService,
     CompositionStatistic,
     ObservedPromptCombination,
+    ParameterValueStatistic,
     PromptTokenStatistic,
+    RenderAnalyticsService,
+    RenderAnalyticsSummary,
+    RenderParameter,
+    RenderSamplerStage,
+    RenderSetupStatistic,
     ScopeKind,
     ScopeStatistic,
 )
@@ -121,6 +129,79 @@ class _Reports:
         return ("sdxl",)
 
 
+class _RenderAnalytics:
+    def __init__(self, image: AnalyticsImage) -> None:
+        self.setup = RenderSetupStatistic(
+            "setup-a",
+            "model.safetensors",
+            (RenderSamplerStage("base", 20, 7.0, "euler", "normal", 1.0),),
+            1,
+            4,
+            8.5,
+            0.75,
+            0.6,
+            (image,),
+        )
+
+    def summary(self, **values):
+        del values
+        return RenderAnalyticsSummary(
+            (
+                CalculatedRenderRecommendation(
+                    "model.safetensors",
+                    "euler",
+                    "normal",
+                    20,
+                    7.0,
+                    1.0,
+                    0.7,
+                    0.6,
+                ),
+            ),
+            (self.setup,),
+        )
+
+    def parameter_values(self, parameter, **values):
+        del values
+        return (
+            ParameterValueStatistic(
+                RenderParameter(str(parameter)),
+                "20",
+                4,
+                8.5,
+                0.75,
+                0.6,
+                self.setup.best_images,
+            ),
+        )
+
+
+class _CompositionAnalytics:
+    def __init__(
+        self, image: AnalyticsImage, setup: RenderSetupStatistic
+    ) -> None:
+        self.image = image
+        self.setup = setup
+
+    def prompt_combinations(self, **values):
+        del values
+        return (
+            CompositionStatistic(
+                "composition-a",
+                ("Aiko", "Rooftop"),
+                2,
+                4,
+                8.5,
+                (self.image,),
+            ),
+        )
+
+    def render_setups(self, composition_uid, **values):
+        del values
+        assert composition_uid == "composition-a"
+        return (self.setup,)
+
+
 def _analytics(tmp_path: Path) -> tuple[_Analytics, AnalyticsImage]:
     image = AnalyticsImage(
         png_path=tmp_path / "image.png",
@@ -135,9 +216,15 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
     tmp_path: Path,
 ) -> None:
     analytics, image = _analytics(tmp_path)
+    render = _RenderAnalytics(image)
     service = AnalyticsPageService(
         analytics=cast(AnalyticsService, analytics),
         reports=cast(AnalyticsReportService, _Reports(image)),
+        render_analytics=cast(RenderAnalyticsService, render),
+        composition_analytics=cast(
+            CompositionAnalyticsService,
+            _CompositionAnalytics(image, render.setup),
+        ),
         image_url=lambda path: f"url:{Path(path).name}",
     )
 
@@ -157,6 +244,7 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
             ],
         }
     ]
+    assert stats["view"] == "prompt"
     assert stats["model_list"] == ["sdxl"]
     assert playground["two_component"][0] == {
         "combo_key": "character:1|scene:2",
@@ -187,21 +275,32 @@ def test_analytics_pages_build_parameter_and_scope_contexts(
     tmp_path: Path,
 ) -> None:
     analytics, image = _analytics(tmp_path)
+    render = _RenderAnalytics(image)
     service = AnalyticsPageService(
         analytics=cast(AnalyticsService, analytics),
         reports=cast(AnalyticsReportService, _Reports(image)),
+        render_analytics=cast(RenderAnalyticsService, render),
+        composition_analytics=cast(
+            CompositionAnalyticsService,
+            _CompositionAnalytics(image, render.setup),
+        ),
         image_url=lambda path: "" if "missing" in path else "url:image.png",
     )
 
-    parameters = service.parameter_context(model="sdxl")
+    summary = service.parameter_summary_context(model="sdxl")
+    parameters = service.parameter_values_context("steps", model="sdxl")
+    render_setups = service.render_setups_context(model="sdxl")
+    composition_setups = service.composition_render_setups_context(
+        "composition-a", model="sdxl"
+    )
     scopes = service.scope_context(model="sdxl", min_n=1)
 
-    steps = next(
-        section for section in parameters["stats"] if section["key"] == "steps"
-    )
-    assert steps["rows"][0]["best_images"][0]["url"] == "url:image.png"
-    assert parameters["best"] == ["best"]
-    assert parameters["best_tested"] == [{"combo_key": "character:1|scene:2"}]
+    assert parameters["parameter"] == "steps"
+    assert parameters["rows"][0]["best_images"][0]["url"] == "url:image.png"
+    assert summary["recommendations"][0]["jointly_observed"] is False
+    assert summary["observed_setups"][0]["stages"][0]["sampler"] == "euler"
+    assert render_setups["rows"][0]["setup_key"] == "setup-a"
+    assert composition_setups["rows"] == render_setups["rows"]
     assert scopes["rows"] == [
         {
             "kind": "character",

@@ -9,7 +9,13 @@ from comfyreview.application import (
     AnalyticsImage,
     AnalyticsReportService,
     AnalyticsService,
+    CalculatedRenderRecommendation,
+    CompositionAnalyticsService,
     ObservedPromptCombination,
+    ParameterValueStatistic,
+    RenderAnalyticsService,
+    RenderParameter,
+    RenderSetupStatistic,
 )
 from comfyreview.application.rating_evidence import (
     DELETE_WEIGHT_DEFAULT,
@@ -28,10 +34,14 @@ class AnalyticsPageService:
         *,
         analytics: AnalyticsService,
         reports: AnalyticsReportService,
+        render_analytics: RenderAnalyticsService,
+        composition_analytics: CompositionAnalyticsService,
         image_url: ImageUrlResolver,
     ) -> None:
         self._analytics = analytics
         self._reports = reports
+        self._render_analytics = render_analytics
+        self._composition_analytics = composition_analytics
         self._image_url = image_url
 
     def composition_context(
@@ -43,12 +53,13 @@ class AnalyticsPageService:
     ) -> dict[str, Any]:
         """Build canonical composition statistics for the V2 surface."""
         normalized_model = normalize_model(model)
-        rows = self._reports.composition_statistics(
+        rows = self._composition_analytics.prompt_combinations(
             model=normalized_model,
             minimum_samples=int(min_n),
             limit=int(limit),
         )
         return {
+            "view": "prompt",
             "rows": [
                 {
                     "composition_uid": item.composition_uid,
@@ -163,7 +174,7 @@ class AnalyticsPageService:
             "model_list": self._models(),
         }
 
-    def parameter_context(
+    def parameter_summary_context(
         self,
         *,
         model: str = "",
@@ -171,31 +182,25 @@ class AnalyticsPageService:
         success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
         delete_weight: int = DELETE_WEIGHT_DEFAULT,
     ) -> dict[str, Any]:
-        """Build render-parameter statistics and canonical image examples."""
+        """Build calculated recommendations and observed complete setups."""
         normalized_model = normalize_model(model)
-        rows = self._reports.parameter_statistics(
+        summary = self._render_analytics.summary(
             model=normalized_model,
             minimum_samples=int(min_n),
             success_threshold=int(success_threshold),
             delete_weight=int(delete_weight),
+            limit=50,
         )
-        sections = self._parameter_sections(rows, normalized_model)
         return {
-            "stats": sections,
-            "best": self._reports.calculated_best_cases(
-                model=normalized_model,
-                minimum_samples=int(min_n),
-                success_threshold=int(success_threshold),
-                delete_weight=int(delete_weight),
-                limit=200,
-            ),
-            "best_tested": self._reports.combo_statistics(
-                model=normalized_model,
-                minimum_samples=int(min_n),
-                limit=200,
-                success_threshold=int(success_threshold),
-                delete_weight=int(delete_weight),
-            ),
+            "view": "summary",
+            "recommendations": [
+                self._recommendation_view(item)
+                for item in summary.recommendations
+            ],
+            "observed_setups": [
+                self._render_setup_view(item)
+                for item in summary.observed_setups
+            ],
             "model": normalized_model,
             "min_n": min_n,
             "t": success_threshold,
@@ -203,44 +208,151 @@ class AnalyticsPageService:
             "model_list": self._models(),
         }
 
+    def parameter_values_context(
+        self,
+        parameter: str | RenderParameter,
+        *,
+        model: str = "",
+        min_n: int = 10,
+        success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
+        delete_weight: int = DELETE_WEIGHT_DEFAULT,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """Build one selected single-parameter evidence list."""
+        normalized_model = normalize_model(model)
+        rows = self._render_analytics.parameter_values(
+            parameter,
+            model=normalized_model,
+            minimum_samples=int(min_n),
+            success_threshold=int(success_threshold),
+            delete_weight=int(delete_weight),
+            limit=int(limit),
+        )
+        normalized_parameter = RenderParameter(str(parameter))
+        return {
+            "view": "values",
+            "parameter": normalized_parameter.value,
+            "rows": [self._parameter_value_view(item) for item in rows],
+            "model": normalized_model,
+            "min_n": min_n,
+            "t": success_threshold,
+            "dw": delete_weight,
+            "model_list": self._models(),
+        }
+
+    def render_setups_context(
+        self,
+        *,
+        model: str = "",
+        min_n: int = 8,
+        success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
+        delete_weight: int = DELETE_WEIGHT_DEFAULT,
+        limit: int = 200,
+    ) -> dict[str, Any]:
+        """Build the observed render-setup combinations view."""
+        normalized_model = normalize_model(model)
+        summary = self._render_analytics.summary(
+            model=normalized_model,
+            minimum_samples=int(min_n),
+            success_threshold=int(success_threshold),
+            delete_weight=int(delete_weight),
+            limit=int(limit),
+        )
+        return {
+            "view": "render",
+            "rows": [
+                self._render_setup_view(item)
+                for item in summary.observed_setups
+            ],
+            "model": normalized_model,
+            "min_n": min_n,
+            "limit": limit,
+            "model_list": self._models(),
+        }
+
+    def composition_render_setups_context(
+        self,
+        composition_uid: str,
+        *,
+        model: str = "",
+        min_n: int = 1,
+        success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
+        delete_weight: int = DELETE_WEIGHT_DEFAULT,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Build observed render setups for one prompt composition."""
+        normalized_model = normalize_model(model)
+        rows = self._composition_analytics.render_setups(
+            composition_uid,
+            model=normalized_model,
+            minimum_samples=int(min_n),
+            success_threshold=int(success_threshold),
+            delete_weight=int(delete_weight),
+            limit=int(limit),
+        )
+        return {
+            "composition_uid": str(composition_uid).strip(),
+            "rows": [self._render_setup_view(item) for item in rows],
+        }
+
     def _models(self) -> list[str]:
         return list(self._reports.list_models())
 
-    def _parameter_sections(
+    def _recommendation_view(
         self,
-        rows: list[dict[str, Any]],
-        model_branch: str,
-    ) -> list[dict[str, Any]]:
-        titles = {
-            "checkpoint": "Checkpoint",
-            "steps": "Steps",
-            "cfg": "CFG",
-            "sampler": "Sampler",
-            "scheduler": "Scheduler",
+        item: CalculatedRenderRecommendation,
+    ) -> dict[str, object]:
+        return {
+            "checkpoint": item.checkpoint,
+            "sampler": item.sampler,
+            "scheduler": item.scheduler,
+            "steps": item.steps,
+            "cfg": item.cfg,
+            "denoise": item.denoise,
+            "score": item.score,
+            "checkpoint_lower_bound": item.checkpoint_lower_bound,
+            "jointly_observed": False,
         }
-        sections: list[dict[str, Any]] = []
-        for parameter, title in titles.items():
-            parameter_rows = [
-                row for row in rows if row.get("feat") == parameter
-            ]
-            values = tuple(
-                str(row["value"])
-                for row in parameter_rows
-                if row.get("value") is not None
-            )
-            images = self._analytics.best_images_for_parameter(
-                parameter,
-                values,
-                model_branch=model_branch,
-            )
-            for row in parameter_rows:
-                row["best_images"] = self._image_views(
-                    images.get(str(row.get("value")), ())
-                )
-            sections.append(
-                {"key": parameter, "title": title, "rows": parameter_rows}
-            )
-        return sections
+
+    def _render_setup_view(
+        self,
+        item: RenderSetupStatistic,
+    ) -> dict[str, object]:
+        return {
+            "setup_key": item.setup_key,
+            "checkpoint": item.checkpoint,
+            "stages": [
+                {
+                    "role": stage.role,
+                    "steps": stage.steps,
+                    "cfg": stage.cfg,
+                    "sampler": stage.sampler,
+                    "scheduler": stage.scheduler,
+                    "denoise": stage.denoise,
+                }
+                for stage in item.stages
+            ],
+            "image_count": item.image_count,
+            "rating_count": item.rating_count,
+            "average_rating": item.average_rating,
+            "expected_success_rate": item.expected_success_rate,
+            "lower_bound": item.lower_bound,
+            "best_images": self._image_views(item.best_images),
+        }
+
+    def _parameter_value_view(
+        self,
+        item: ParameterValueStatistic,
+    ) -> dict[str, object]:
+        return {
+            "parameter": item.parameter.value,
+            "value": item.value,
+            "sample_count": item.sample_count,
+            "average_rating": item.average_rating,
+            "expected_success_rate": item.expected_success_rate,
+            "lower_bound": item.lower_bound,
+            "best_images": self._image_views(item.best_images),
+        }
 
     def _image_views(
         self,

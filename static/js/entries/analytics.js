@@ -21,10 +21,12 @@ if (root instanceof HTMLElement) {
       section: root.dataset.section || "overview",
       api: new ApiClient(),
       requests: new RequestLifecycle(),
+      detailRequests: new RequestLifecycle(),
       view: new AnalyticsView(report),
       form,
       model,
       minimumSamples,
+      report,
       status,
     });
     void controller.start();

@@ -396,12 +396,29 @@ class _AnalyticsPages:
             "model_list": ["anime"],
         }
 
-    def parameter_context(self, **values):
-        self.call = ("parameters", values)
+    def parameter_summary_context(self, **values):
+        self.call = ("parameter-summary", values)
         return {
-            "stats": [{"key": "steps", "title": "Steps", "rows": []}],
-            "best": [],
-            "best_tested": [],
+            "view": "summary",
+            "recommendations": [{"checkpoint": "model.safetensors"}],
+            "observed_setups": [{"setup_key": "setup-a"}],
+            "model_list": ["anime"],
+        }
+
+    def parameter_values_context(self, parameter, **values):
+        if parameter not in {
+            "checkpoint",
+            "steps",
+            "cfg",
+            "sampler",
+            "scheduler",
+        }:
+            raise ValueError("unsupported render parameter")
+        self.call = ("parameter-values", {"parameter": parameter, **values})
+        return {
+            "view": "values",
+            "parameter": parameter,
+            "rows": [{"value": "20"}],
             "model_list": ["anime"],
         }
 
@@ -415,6 +432,24 @@ class _AnalyticsPages:
                 }
             ],
             "model_list": ["anime"],
+        }
+
+    def render_setups_context(self, **values):
+        self.call = ("render-setups", values)
+        return {
+            "view": "render",
+            "rows": [{"setup_key": "setup-a"}],
+            "model_list": ["anime"],
+        }
+
+    def composition_render_setups_context(self, composition_uid, **values):
+        self.call = (
+            "composition-render-setups",
+            {"composition_uid": composition_uid, **values},
+        )
+        return {
+            "composition_uid": composition_uid,
+            "rows": [{"setup_key": "setup-a"}],
         }
 
     def playground_combinations_context(self, **values):
@@ -907,22 +942,43 @@ def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() ->
     )
     scopes = client.get("/api/v2/analytics/scopes")
     parameters = client.get("/api/v2/analytics/parameters")
+    parameter_values = client.get(
+        "/api/v2/analytics/parameters",
+        params={"view": "values", "parameter": "steps"},
+    )
     combinations = client.get(
         "/api/v2/analytics/combinations", params={"min_n": 2}
+    )
+    render_setups = client.get(
+        "/api/v2/analytics/combinations", params={"view": "render"}
+    )
+    composition_setups = client.get(
+        "/api/v2/analytics/combinations/composition-a/render-setups"
+    )
+    invalid_parameter = client.get(
+        "/api/v2/analytics/parameters",
+        params={"view": "values", "parameter": "seed"},
     )
 
     assert overview.json()["stable"] == [{"label": "stable"}]
     assert scopes.json()["rows"][0]["component_uid"] == "character-a"
-    assert parameters.json()["stats"][0]["key"] == "steps"
+    assert parameters.json()["recommendations"][0]["checkpoint"] == (
+        "model.safetensors"
+    )
+    assert parameter_values.json()["rows"][0]["value"] == "20"
     assert combinations.json()["rows"][0]["composition_uid"] == (
         "composition-a"
     )
+    assert render_setups.json()["rows"][0]["setup_key"] == "setup-a"
+    assert composition_setups.json()["composition_uid"] == "composition-a"
+    assert invalid_parameter.status_code == 400
     assert container.analytics_pages.call == (
-        "combinations",
+        "composition-render-setups",
         {
+            "composition_uid": "composition-a",
             "model": "",
-            "min_n": 2,
-            "limit": 200,
+            "min_n": 1,
+            "limit": 20,
         },
     )
 

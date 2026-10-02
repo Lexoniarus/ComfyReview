@@ -16,6 +16,7 @@ from comfyreview.application import (
     AnalyticsService,
     ArenaService,
     CanonicalSchemaLifecycle,
+    CompositionAnalyticsService,
     CurationService,
     DraftOverridePolicy,
     GenerationOutputCollector,
@@ -31,6 +32,7 @@ from comfyreview.application import (
     PromptCatalogService,
     PromptRenderer,
     PromptSelectionPolicy,
+    RenderAnalyticsService,
     ReviewCandidateService,
     ReviewHistoryService,
     ReviewService,
@@ -62,6 +64,7 @@ from comfyreview.repositories.sqlite import (
     SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
+    SqliteCompositionAnalyticsRepository,
     SqliteCurationRepository,
     SqliteGenerationOutputRepository,
     SqliteGenerationQueryRepository,
@@ -70,11 +73,13 @@ from comfyreview.repositories.sqlite import (
     SqliteImageFileRepository,
     SqliteOutputImageRepository,
     SqlitePromptCatalogRepository,
+    SqliteRenderAnalyticsRepository,
     SqliteReviewCandidateRepository,
     SqliteReviewHistoryRepository,
     SqliteReviewRepository,
     SqliteScopeFacetRepository,
 )
+from comfyreview.revalidating_static_files import RevalidatingStaticFiles
 from comfyreview.settings import Settings, load_settings
 from routers.api_v2_router import router as api_v2_router
 from routers.arena_router import router as arena_router
@@ -175,6 +180,14 @@ def build_application_container(
     analytics_reports = AnalyticsReportService(
         SqliteAnalyticsReportRepository(configured.canonical_database_path)
     )
+    render_analytics = RenderAnalyticsService(
+        SqliteRenderAnalyticsRepository(configured.canonical_database_path)
+    )
+    composition_analytics = CompositionAnalyticsService(
+        SqliteCompositionAnalyticsRepository(
+            configured.canonical_database_path
+        )
+    )
     comfyui_provider = NativeComfyUiProvider(
         UrlLibJsonTransport(configured.comfyui_base_url)
     )
@@ -233,6 +246,8 @@ def build_application_container(
         analytics_pages=AnalyticsPageService(
             analytics=analytics_service,
             reports=analytics_reports,
+            render_analytics=render_analytics,
+            composition_analytics=composition_analytics,
             image_url=file_urls.existing_url,
         ),
         playground_discovery=PlaygroundDiscoveryService(
@@ -324,7 +339,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     )
     application.mount(
         "/static",
-        StaticFiles(
+        RevalidatingStaticFiles(
             directory=str(Path(resources.settings.base_directory) / "static"),
             check_dir=False,
         ),

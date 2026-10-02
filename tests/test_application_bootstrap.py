@@ -189,6 +189,21 @@ def test_lifespan_preserves_schema_order_when_application_body_fails(
     assert events == ["canonical"]
 
 
+def test_static_modules_require_browser_revalidation(tmp_path: Path) -> None:
+    static_directory = tmp_path / "static"
+    static_directory.mkdir()
+    (static_directory / "module.js").write_text(
+        "export const ready = true;\n", encoding="utf-8"
+    )
+    application = create_app(_container(tmp_path, []))
+
+    with TestClient(application) as client:
+        response = client.get("/static/module.js")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache, must-revalidate"
+
+
 def test_entry_points_and_route_contract_remain_compatible() -> None:
     from app import app as root_app
     from main import app as main_app
