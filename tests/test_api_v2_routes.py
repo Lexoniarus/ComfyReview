@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -819,7 +820,7 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     None
 ):
     client, container = _client()
-    payload = {
+    payload: dict[str, Any] = {
         "draft_uid": "draft-1",
         "component_uids": ["missing"],
         "positive_prompt": "positive",
