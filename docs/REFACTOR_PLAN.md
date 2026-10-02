@@ -1,10 +1,12 @@
 # ComfyReview Refactor Plan
 
 Status: the canonical backend cutover, structured prompt catalog, schema-v7
-data migration, ImageContext/scopes and Frontend V2 surfaces are implemented
-on `refactor/review-boundary`, 2026-10-02. Final polish, cleanup and integration
-acceptance remain. The branch stays unmerged until the full refactor is
-accepted.
+data migration and the first Frontend V2 surfaces are implemented on
+`refactor/review-boundary`, 2026-10-02. The remaining Frontend V2 overhaul is
+functional work rather than final polish: bounded Analytics collections,
+Playground handoffs, generation profiles and LoRA stacks, the complete Settings
+surface, Inspector composition and browser acceptance remain. The branch stays
+unmerged until the full refactor is accepted.
 
 The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
@@ -262,10 +264,16 @@ The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
-1. complete responsive/accessibility polish and remove old presentation paths;
-2. finish the usage audit and delete only proven-dead compatibility code;
-3. run the complete architecture, data, browser, ComfyUI, quality and
-    documentation acceptance before opening a new pull request.
+1. paginate and encapsulate Analytics collections and evidence cards;
+2. add explicit Analytics-to-Playground intents without automatic submission;
+3. introduce schema v8, generation profiles and normalized LoRA selections;
+4. compile explicit ordered LoRA stacks through a versioned workflow blueprint;
+5. add the complete Settings surface and read-only runtime diagnostics;
+6. finish Inspector composition, responsive/accessibility behavior and remove
+   replaced presentation paths;
+7. finish the usage audit and delete only proven-dead compatibility code;
+8. run the complete architecture, data, browser, ComfyUI, quality and
+   documentation acceptance before opening a new pull request.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the

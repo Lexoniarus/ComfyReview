@@ -42,9 +42,11 @@ Generierungen
 Analysen
 ```
 
-The generated reference's Japanese claim, user avatar, settings control,
-global search, grid/list toggle and ranking sort control are intentionally not
-part of the product. Scope search remains available inside the Scope Navigator.
+The generated reference's Japanese claim, user avatar, global search,
+grid/list toggle and ranking sort control are intentionally not part of the
+product. Scope search remains available inside the Scope Navigator. A labelled
+settings control on the right side of the application bar is part of the
+product and opens the dedicated `/settings` surface.
 
 ## Typography and geometry
 
@@ -80,6 +82,36 @@ scope colors as their only cue.
 - image viewer dialog;
 - buttons, fields, tabs, dividers, loading, empty and error states;
 - drawers and rail-collapse controls.
+
+## Settings surface
+
+Settings uses the same dark navy shell and compact editorial hierarchy as the
+other V2 surfaces. A narrow section navigator remains visible beside one
+focused form region; settings are not spread across modal dialogs.
+
+The surface contains General, Generation profiles, Review, Curation, ComfyUI,
+and Storage and database sections. General preferences and generation profiles
+are live canonical data. Environment-derived infrastructure settings are
+read-only, name their controlling environment variable, and state when a
+restart is required. The browser never writes `.env`.
+
+Generation profiles own reproducible sampler defaults and an ordered LoRA
+stack with separate model and CLIP strengths. Review and Curation settings are
+UI/session defaults only and do not change review-event or assignment
+semantics.
+
+## Collection and evidence contract
+
+Analytics collections render at most 24 records initially and at most three
+example images per record. Additional pages load through one owned scroll
+sentinel. Switching filters or views cancels stale work, removes the prior
+collection, and prevents late DOM updates.
+
+Evidence images use fixed aspect-ratio frames, lazy decoding, bounded crops,
+and explicit loading and failure states. Scope, parameter, composition and
+render-setup cards share this geometry rather than inventing page-specific
+image strips. Every recommendation distinguishes calculated candidates from
+settings that were actually observed together.
 
 The Playground keeps its compact evidence preview: one ranked group for
 Character + Scene and one for Character + Scene + Outfit, with up to three
