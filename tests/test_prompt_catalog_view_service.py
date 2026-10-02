@@ -11,6 +11,7 @@ from comfyreview.application import (
     PromptRevision,
     UpdatePromptComponentCommand,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 from services.prompt_catalog_view_service import PromptCatalogViewService
 
 
@@ -36,6 +37,8 @@ def _component(
             positive_text=f"positive-{uid}",
             negative_text=f"negative-{uid}",
             content_hash=f"hash-{uid}",
+            positive_atoms=prompt_atom_usages_from_text(f"positive-{uid}"),
+            negative_atoms=prompt_atom_usages_from_text(f"negative-{uid}"),
         ),
     )
 
@@ -155,16 +158,16 @@ def test_catalog_view_translates_create_and_atomic_update_commands() -> None:
         name=" Moon City ",
         tags=("night", "city", "night"),
         notes="note",
-        positive_text="moon",
-        negative_text="day",
+        positive_atoms=prompt_atom_usages_from_text("moon"),
+        negative_atoms=prompt_atom_usages_from_text("day"),
     )
     assert catalog.updated == UpdatePromptComponentCommand(
         component_uid="scene-a",
         name="New Moon",
         tags=("night", "blue"),
         notes="new note",
-        positive_text="new moon",
-        negative_text="sun",
+        positive_atoms=prompt_atom_usages_from_text("new moon"),
+        negative_atoms=prompt_atom_usages_from_text("sun"),
     )
 
 

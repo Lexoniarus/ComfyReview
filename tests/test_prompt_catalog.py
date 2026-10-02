@@ -25,6 +25,7 @@ from comfyreview.application import (
     prompt_composition_identity,
     prompt_revision_identity,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqlitePromptCatalogRepository,
@@ -79,6 +80,8 @@ class _CatalogRepository:
             positive_text=component.revision.positive_text,
             negative_text=component.revision.negative_text,
             content_hash=component.revision.content_hash,
+            positive_atoms=component.revision.positive_atoms,
+            negative_atoms=component.revision.negative_atoms,
         )
         self.component = PromptComponent(
             component_uid=component.component_uid,
@@ -104,6 +107,8 @@ class _CatalogRepository:
             revision.positive_text,
             revision.negative_text,
             revision.content_hash,
+            revision.positive_atoms,
+            revision.negative_atoms,
         )
 
     def update_metadata(
@@ -143,6 +148,8 @@ class _CatalogRepository:
                 revision.positive_text,
                 revision.negative_text,
                 revision.content_hash,
+                revision.positive_atoms,
+                revision.negative_atoms,
             ),
         )
         return self.component
@@ -184,8 +191,8 @@ def _create_command() -> CreatePromptComponentCommand:
         name=" Rooftop ",
         tags=(" night ", "", "night", "city"),
         notes=" reusable ",
-        positive_text=" skyline ",
-        negative_text=" blur ",
+        positive_atoms=prompt_atom_usages_from_text(" skyline "),
+        negative_atoms=prompt_atom_usages_from_text(" blur "),
     )
 
 
@@ -253,7 +260,7 @@ def test_prompt_component_key_is_readable_and_identity_scoped() -> None:
         ("name", replace(_create_command(), name="")),
         (
             "prompt revision",
-            replace(_create_command(), positive_text="", negative_text=""),
+            replace(_create_command(), positive_atoms=(), negative_atoms=()),
         ),
     ],
 )
@@ -273,8 +280,8 @@ def test_prompt_catalog_service_appends_immutable_revision() -> None:
     revision = service.add_revision(
         RevisePromptComponentCommand(
             component_uid=" prompt-component-fixed ",
-            positive_text=" hero:1.2 ",
-            negative_text=" blur ",
+            positive_atoms=prompt_atom_usages_from_text(" hero:1.2 "),
+            negative_atoms=prompt_atom_usages_from_text(" blur "),
         )
     )
 
@@ -285,8 +292,8 @@ def test_prompt_catalog_service_appends_immutable_revision() -> None:
         service.add_revision(
             RevisePromptComponentCommand(
                 component_uid="prompt-component-fixed",
-                positive_text="",
-                negative_text="",
+                positive_atoms=(),
+                negative_atoms=(),
             )
         )
 
@@ -332,8 +339,8 @@ def test_prompt_catalog_service_updates_metadata_and_revision_atomically() -> (
             name=" Rainy Rooftop ",
             tags=(" rain ", "rain"),
             notes=" changed ",
-            positive_text=" skyline, rain ",
-            negative_text=" blur ",
+            positive_atoms=prompt_atom_usages_from_text(" skyline, rain "),
+            negative_atoms=prompt_atom_usages_from_text(" blur "),
         )
     )
 
@@ -349,8 +356,8 @@ def test_prompt_catalog_service_updates_metadata_and_revision_atomically() -> (
                 "name",
                 (),
                 "",
-                "",
-                "",
+                (),
+                (),
             )
         )
 
@@ -390,15 +397,15 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
     revision = service.add_revision(
         RevisePromptComponentCommand(
             component_uid=created.component_uid,
-            positive_text="skyline, rain",
-            negative_text="blur",
+            positive_atoms=prompt_atom_usages_from_text("skyline, rain"),
+            negative_atoms=prompt_atom_usages_from_text("blur"),
         )
     )
     repeated = service.add_revision(
         RevisePromptComponentCommand(
             component_uid=created.component_uid,
-            positive_text="skyline, rain",
-            negative_text="blur",
+            positive_atoms=prompt_atom_usages_from_text("skyline, rain"),
+            negative_atoms=prompt_atom_usages_from_text("blur"),
         )
     )
     renamed = service.update_metadata(
@@ -430,8 +437,8 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
             name="Storm Rooftop",
             tags=("storm",),
             notes="atomic",
-            positive_text="skyline, storm",
-            negative_text="blur",
+            positive_atoms=prompt_atom_usages_from_text("skyline, storm"),
+            negative_atoms=prompt_atom_usages_from_text("blur"),
         )
     )
     assert updated.latest_revision.revision_number == 3

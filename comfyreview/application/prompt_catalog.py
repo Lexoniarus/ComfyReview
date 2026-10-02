@@ -9,6 +9,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
+from comfyreview.domain import PromptAtomUsage, render_prompt_atom_usages
+
 
 class PromptCatalogValidationError(ValueError):
     """Reject invalid prompt-catalog input before persistence."""
@@ -23,6 +25,8 @@ class PromptRevision:
     positive_text: str
     negative_text: str
     content_hash: str
+    positive_atoms: tuple[PromptAtomUsage, ...] = ()
+    negative_atoms: tuple[PromptAtomUsage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,8 +61,8 @@ class CreatePromptComponentCommand:
     name: str
     tags: tuple[str, ...] = ()
     notes: str = ""
-    positive_text: str = ""
-    negative_text: str = ""
+    positive_atoms: tuple[PromptAtomUsage, ...] = ()
+    negative_atoms: tuple[PromptAtomUsage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,8 +70,8 @@ class RevisePromptComponentCommand:
     """Append immutable content to an existing component."""
 
     component_uid: str
-    positive_text: str
-    negative_text: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,8 +92,8 @@ class UpdatePromptComponentCommand:
     name: str
     tags: tuple[str, ...]
     notes: str
-    positive_text: str
-    negative_text: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +104,8 @@ class PromptRevisionDraft:
     positive_text: str
     negative_text: str
     content_hash: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,8 +296,8 @@ class PromptCatalogService:
         ).strip() or prompt_component_key(kind, name, component_uid)
         revision = self._revision(
             component_uid,
-            command.positive_text,
-            command.negative_text,
+            command.positive_atoms,
+            command.negative_atoms,
         )
         return self._repository.create(
             NewPromptComponent(
@@ -313,8 +319,8 @@ class PromptCatalogService:
         component_uid = self._required(command.component_uid, "component_uid")
         revision = self._revision(
             component_uid,
-            command.positive_text,
-            command.negative_text,
+            command.positive_atoms,
+            command.negative_atoms,
         )
         return self._repository.add_revision(component_uid, revision)
 
@@ -351,8 +357,8 @@ class PromptCatalogService:
         )
         revision = self._revision(
             component_uid,
-            command.positive_text,
-            command.negative_text,
+            command.positive_atoms,
+            command.negative_atoms,
         )
         return self._repository.update_component(metadata, revision)
 
@@ -396,25 +402,32 @@ class PromptCatalogService:
     @staticmethod
     def _revision(
         component_uid: str,
-        positive_text: str,
-        negative_text: str,
+        positive_atoms: tuple[PromptAtomUsage, ...],
+        negative_atoms: tuple[PromptAtomUsage, ...],
     ) -> PromptRevisionDraft:
-        positive = str(positive_text or "").strip()
-        negative = str(negative_text or "").strip()
+        positive = tuple(positive_atoms)
+        negative = tuple(negative_atoms)
         if not positive and not negative:
             raise PromptCatalogValidationError(
-                "a prompt revision requires positive or negative text"
+                "a prompt revision requires positive or negative atoms"
             )
+        try:
+            positive_text = render_prompt_atom_usages(positive)
+            negative_text = render_prompt_atom_usages(negative)
+        except ValueError as error:
+            raise PromptCatalogValidationError(str(error)) from error
         revision_uid, content_hash = prompt_revision_identity(
             component_uid,
-            positive,
-            negative,
+            positive_text,
+            negative_text,
         )
         return PromptRevisionDraft(
             revision_uid=revision_uid,
-            positive_text=positive,
-            negative_text=negative,
+            positive_text=positive_text,
+            negative_text=negative_text,
             content_hash=content_hash,
+            positive_atoms=positive,
+            negative_atoms=negative,
         )
 
     @staticmethod

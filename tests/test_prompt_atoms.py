@@ -1,6 +1,14 @@
 """Behavior tests for normalized prompt atom parsing."""
 
-from comfyreview.domain import parse_prompt_atoms
+import pytest
+
+from comfyreview.domain import (
+    PromptAtomUsage,
+    parse_prompt_atoms,
+    prompt_atom_usage,
+    prompt_atom_usages_from_text,
+    render_prompt_atom_usages,
+)
 
 
 def test_parse_prompt_atoms_separates_text_and_explicit_weight() -> None:
@@ -43,3 +51,37 @@ def test_supported_prompt_grammar_preserves_order_and_default_weight() -> None:
         ("cyan blue eyes", 1200),
         ("soft smile", 1000),
     )
+
+
+def test_structured_prompt_usages_validate_and_render_deterministically() -> (
+    None
+):
+    usages = (
+        prompt_atom_usage(" silver   hair "),
+        prompt_atom_usage("cyan eyes", "1.2"),
+    )
+
+    assert usages == (
+        PromptAtomUsage("silver hair", 1000),
+        PromptAtomUsage("cyan eyes", 1200),
+    )
+    assert usages[1].weight == 1.2
+    assert render_prompt_atom_usages(usages) == (
+        "silver hair, (cyan eyes:1.2)"
+    )
+    assert (
+        prompt_atom_usages_from_text(render_prompt_atom_usages(usages))
+        == usages
+    )
+    with pytest.raises(ValueError, match="text"):
+        prompt_atom_usage(" ")
+    with pytest.raises(ValueError, match="numeric"):
+        prompt_atom_usage("hair", "heavy")
+    with pytest.raises(ValueError, match="positive"):
+        prompt_atom_usage("hair", 0)
+    with pytest.raises(ValueError, match="at least"):
+        prompt_atom_usage("hair", 0.0001)
+    with pytest.raises(ValueError, match="text"):
+        render_prompt_atom_usages((PromptAtomUsage("", 1000),))
+    with pytest.raises(ValueError, match="positive"):
+        render_prompt_atom_usages((PromptAtomUsage("hair", 0),))

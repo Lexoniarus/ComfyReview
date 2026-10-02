@@ -17,8 +17,10 @@ from comfyreview.application import (
     GenerationValidationError,
     PlaygroundGenerationDraft,
     PlaygroundGenerationSweep,
+    PromptCatalogValidationError,
     PromptSelectionError,
 )
+from routers.api_v2.catalog import PromptAtomRequest, atom_usages
 from routers.api_v2.common import error_response
 
 router = APIRouter()
@@ -49,8 +51,8 @@ class PlaygroundGenerationRequest(BaseModel):
 
     draft_uid: str
     component_uids: list[str]
-    positive_prompt: str
-    negative_prompt: str
+    positive_atoms: list[PromptAtomRequest]
+    negative_atoms: list[PromptAtomRequest]
     checkpoint: str
     sampler: PlaygroundSamplerRequest
 
@@ -144,8 +146,8 @@ def submit_generation(
         confirmed = container.playground_service.confirm_draft(
             ConfirmPlaygroundDraftCommand(
                 component_uids=tuple(payload.component_uids),
-                positive_prompt=payload.positive_prompt,
-                negative_prompt=payload.negative_prompt,
+                positive_atoms=atom_usages(payload.positive_atoms),
+                negative_atoms=atom_usages(payload.negative_atoms),
             )
         )
         character = next(
@@ -188,6 +190,7 @@ def submit_generation(
         GenerationValidationError,
         KeyError,
         PromptSelectionError,
+        PromptCatalogValidationError,
         StopIteration,
     ) as error:
         return error_response(400, "invalid_generation", str(error))

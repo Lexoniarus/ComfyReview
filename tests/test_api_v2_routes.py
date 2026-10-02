@@ -37,6 +37,10 @@ from comfyreview.application import (
     ScopeKind,
     WorkflowProvenance,
 )
+from comfyreview.domain import (
+    prompt_atom_usages_from_text,
+    render_prompt_atom_usages,
+)
 from comfyreview.observability import RequestTracingMiddleware
 from routers.api_v2_router import router
 
@@ -153,7 +157,13 @@ def _prompt_component(
         notes="note",
         archived=False,
         latest_revision=PromptRevision(
-            f"revision-{uid}", 1, f"positive {uid}", "negative", "hash"
+            f"revision-{uid}",
+            1,
+            f"positive {uid}",
+            "negative",
+            "hash",
+            prompt_atom_usages_from_text(f"positive {uid}"),
+            prompt_atom_usages_from_text("negative"),
         ),
     )
 
@@ -197,9 +207,11 @@ class _PromptCatalog:
             latest_revision=PromptRevision(
                 "revision-updated",
                 2,
-                command.positive_text,
-                command.negative_text,
+                render_prompt_atom_usages(command.positive_atoms),
+                render_prompt_atom_usages(command.negative_atoms),
                 "updated-hash",
+                command.positive_atoms,
+                command.negative_atoms,
             ),
         )
         return self.component
@@ -224,13 +236,17 @@ class _Playground:
                 (_prompt_component(), _prompt_component("scene-a", "scene"))
             ),
             RenderedPrompt(
-                overrides.positive_text
-                if overrides and overrides.positive_text is not None
+                render_prompt_atom_usages(overrides.positive_atoms)
+                if overrides and overrides.positive_atoms is not None
                 else "rendered positive",
                 "rendered negative",
                 "notes",
                 ("revision-character-a", "revision-scene-a"),
                 overrides is not None,
+                overrides.positive_atoms
+                if overrides and overrides.positive_atoms is not None
+                else prompt_atom_usages_from_text("rendered positive"),
+                prompt_atom_usages_from_text("rendered negative"),
             ),
         )
 
@@ -243,11 +259,14 @@ class _Playground:
                 (_prompt_component(), _prompt_component("scene-a", "scene"))
             ),
             RenderedPrompt(
-                command.positive_prompt,
-                command.negative_prompt,
+                render_prompt_atom_usages(command.positive_atoms),
+                render_prompt_atom_usages(command.negative_atoms),
                 "notes",
                 ("revision-character-a", "revision-scene-a"),
-                command.positive_prompt != "rendered positive",
+                render_prompt_atom_usages(command.positive_atoms)
+                != "rendered positive",
+                command.positive_atoms,
+                command.negative_atoms,
             ),
         )
 
@@ -646,6 +665,8 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "revision_number": 1,
         "positive_text": "positive character-a",
         "negative_text": "negative",
+        "positive_atoms": [{"text": "positive character-a", "weight": 1.0}],
+        "negative_atoms": [{"text": "negative", "weight": 1.0}],
     }
     assert capabilities.json() == {
         "checkpoints": ["model.safetensors"],
@@ -683,8 +704,8 @@ def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
             "name": "Rainy street",
             "tags": ["rain"],
             "notes": "note",
-            "positive_text": "rainy street",
-            "negative_text": "sun",
+            "positive_atoms": [{"text": "rainy street", "weight": 1.0}],
+            "negative_atoms": [{"text": "sun", "weight": 1.0}],
         },
     )
     updated = client.put(
@@ -693,8 +714,10 @@ def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
             "kind": "scene",
             "name": "Rainy street night",
             "tags": ["rain", "night"],
-            "positive_text": "rainy street at night",
-            "negative_text": "sun",
+            "positive_atoms": [
+                {"text": "rainy street at night", "weight": 1.0}
+            ],
+            "negative_atoms": [{"text": "sun", "weight": 1.0}],
         },
     )
     archived = client.patch(
@@ -716,7 +739,7 @@ def test_v2_catalog_rejects_missing_components_and_kind_changes() -> None:
     payload = {
         "kind": "scene",
         "name": "Scene",
-        "positive_text": "scene",
+        "positive_atoms": [{"text": "scene", "weight": 1.0}],
     }
 
     missing = client.get("/api/v2/catalog/components/missing")
@@ -752,7 +775,7 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         json={
             "selections": selections,
             "seed": 17,
-            "positive_override": "draft positive",
+            "positive_atoms": [{"text": "draft positive", "weight": 1.0}],
         },
     )
 
@@ -810,8 +833,8 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
     payload = {
         "draft_uid": "draft-1",
         "component_uids": ["character-a", "scene-a"],
-        "positive_prompt": "edited positive",
-        "negative_prompt": "edited negative",
+        "positive_atoms": [{"text": "edited positive", "weight": 1.0}],
+        "negative_atoms": [{"text": "edited negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
         "sampler": {
             "seed": 42,
@@ -858,8 +881,8 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     payload: dict[str, Any] = {
         "draft_uid": "draft-1",
         "component_uids": ["missing"],
-        "positive_prompt": "positive",
-        "negative_prompt": "negative",
+        "positive_atoms": [{"text": "positive", "weight": 1.0}],
+        "negative_atoms": [{"text": "negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
         "sampler": {
             "seed": 42,

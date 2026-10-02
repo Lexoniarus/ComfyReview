@@ -202,6 +202,8 @@ class PlaygroundGenerationPolicy:
                 positive_text=draft.prompt.positive_text,
                 negative_text=draft.prompt.negative_text,
                 revision_uids=draft.prompt.revision_uids,
+                positive_atoms=draft.prompt.positive_atoms,
+                negative_atoms=draft.prompt.negative_atoms,
             ),
             blueprint_uid=self._blueprint_uid,
             blueprint_version=self._blueprint_version,

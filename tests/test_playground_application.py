@@ -18,6 +18,7 @@ from comfyreview.application import (
     PromptSelectionError,
     PromptSelectionPolicy,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 
 
 def _component(
@@ -45,6 +46,8 @@ def _component(
             positive_text=positive,
             negative_text=negative,
             content_hash=f"hash-{uid}",
+            positive_atoms=prompt_atom_usages_from_text(positive),
+            negative_atoms=prompt_atom_usages_from_text(negative),
         ),
     )
 
@@ -435,8 +438,8 @@ def test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate() -
     overridden = renderer.render(
         selection,
         PromptDraftOverrides(
-            positive_text="draft positive",
-            negative_text="draft negative",
+            positive_atoms=prompt_atom_usages_from_text("draft positive"),
+            negative_atoms=prompt_atom_usages_from_text("draft negative"),
         ),
     )
 
@@ -522,8 +525,10 @@ def test_playground_service_revalidates_confirmed_draft_and_derives_revisions() 
     draft = service.confirm_draft(
         ConfirmPlaygroundDraftCommand(
             component_uids=("character-a", "scene-night"),
-            positive_prompt="person, city, manual emphasis",
-            negative_prompt="bad anatomy",
+            positive_atoms=prompt_atom_usages_from_text(
+                "person, city, manual emphasis"
+            ),
+            negative_atoms=prompt_atom_usages_from_text("bad anatomy"),
         )
     )
 

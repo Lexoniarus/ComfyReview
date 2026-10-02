@@ -18,6 +18,7 @@ from comfyreview.application.workflow_compilation import (
     WorkflowBlueprintRepository,
     WorkflowCompiler,
 )
+from comfyreview.domain import PromptAtomUsage
 
 
 class GenerationValidationError(ValueError):
@@ -39,6 +40,8 @@ class GenerationPromptSnapshot:
     positive_text: str
     negative_text: str
     revision_uids: tuple[str, ...]
+    positive_atoms: tuple[PromptAtomUsage, ...] = ()
+    negative_atoms: tuple[PromptAtomUsage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

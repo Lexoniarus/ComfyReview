@@ -12,9 +12,17 @@ from comfyreview.application import (
     PromptRevision,
     UpdatePromptComponentCommand,
 )
+from comfyreview.domain import PromptAtomUsage, prompt_atom_usage
 from routers.api_v2.common import PromptKind, error_response
 
 router = APIRouter()
+
+
+class PromptAtomRequest(BaseModel):
+    """Carry structured authored atom content."""
+
+    text: str
+    weight: float = 1.0
 
 
 class PromptComponentWriteRequest(BaseModel):
@@ -24,8 +32,8 @@ class PromptComponentWriteRequest(BaseModel):
     name: str
     tags: list[str] = Field(default_factory=list)
     notes: str = ""
-    positive_text: str = ""
-    negative_text: str = ""
+    positive_atoms: list[PromptAtomRequest] = Field(default_factory=list)
+    negative_atoms: list[PromptAtomRequest] = Field(default_factory=list)
 
 
 class PromptArchiveRequest(BaseModel):
@@ -93,8 +101,8 @@ def create_catalog_component(
                 name=payload.name,
                 tags=tuple(payload.tags),
                 notes=payload.notes,
-                positive_text=payload.positive_text,
-                negative_text=payload.negative_text,
+                positive_atoms=atom_usages(payload.positive_atoms),
+                negative_atoms=atom_usages(payload.negative_atoms),
             )
         )
     except PromptCatalogValidationError as error:
@@ -125,8 +133,8 @@ def update_catalog_component(
                 name=payload.name,
                 tags=tuple(payload.tags),
                 notes=payload.notes,
-                positive_text=payload.positive_text,
-                negative_text=payload.negative_text,
+                positive_atoms=atom_usages(payload.positive_atoms),
+                negative_atoms=atom_usages(payload.negative_atoms),
             )
         )
     except (KeyError, PromptCatalogValidationError) as error:
@@ -168,6 +176,12 @@ def component_response(component: PromptComponent) -> dict[str, object]:
             "revision_number": component.latest_revision.revision_number,
             "positive_text": component.latest_revision.positive_text,
             "negative_text": component.latest_revision.negative_text,
+            "positive_atoms": atom_response(
+                component.latest_revision.positive_atoms
+            ),
+            "negative_atoms": atom_response(
+                component.latest_revision.negative_atoms
+            ),
         },
     }
 
@@ -180,7 +194,28 @@ def revision_response(revision: PromptRevision) -> dict[str, object]:
         "positive_text": revision.positive_text,
         "negative_text": revision.negative_text,
         "content_hash": revision.content_hash,
+        "positive_atoms": atom_response(revision.positive_atoms),
+        "negative_atoms": atom_response(revision.negative_atoms),
     }
+
+
+def atom_usages(
+    values: list[PromptAtomRequest],
+) -> tuple[PromptAtomUsage, ...]:
+    """Translate JSON atom values into validated domain usages."""
+    try:
+        return tuple(
+            prompt_atom_usage(value.text, value.weight) for value in values
+        )
+    except ValueError as error:
+        raise PromptCatalogValidationError(str(error)) from error
+
+
+def atom_response(
+    values: tuple[PromptAtomUsage, ...],
+) -> list[dict[str, object]]:
+    """Map ordered domain atom usages to JSON values."""
+    return [{"text": item.text, "weight": item.weight} for item in values]
 
 
 def catalog_error(error: Exception) -> JSONResponse:

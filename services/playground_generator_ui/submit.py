@@ -9,6 +9,7 @@ from comfyreview.application import (
     PlaygroundSubmissionService,
     RenderedPrompt,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 
 
 def preview_draft_from_state(
@@ -24,15 +25,19 @@ def preview_draft_from_state(
         if isinstance(value, Mapping)
         and (revision_uid := str(value.get("revision_uid") or "").strip())
     )
+    positive_text = _text(state, "prompt_positive")
+    negative_text = _text(state, "prompt_negative")
     return PlaygroundGenerationDraft(
         draft_uid=_text(state, "draft_id"),
         character_name=_text(state, "character_name"),
         prompt=RenderedPrompt(
-            positive_text=_text(state, "prompt_positive"),
-            negative_text=_text(state, "prompt_negative"),
+            positive_text=positive_text,
+            negative_text=negative_text,
             notes="",
             revision_uids=revision_uids,
             draft_overridden=True,
+            positive_atoms=prompt_atom_usages_from_text(positive_text),
+            negative_atoms=prompt_atom_usages_from_text(negative_text),
         ),
         checkpoint=_text(state, "checkpoint"),
         sampler=GenerationSamplerSettings(

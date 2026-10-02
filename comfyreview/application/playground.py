@@ -10,6 +10,11 @@ from typing import Protocol
 from comfyreview.application.prompt_catalog import (
     PromptComponent,
 )
+from comfyreview.domain import (
+    PromptAtomUsage,
+    prompt_atom_usages_from_text,
+    render_prompt_atom_usages,
+)
 
 _SELECTION_ORDER = (
     "character",
@@ -111,8 +116,8 @@ class ConfirmPlaygroundDraftCommand:
     """Confirm exact catalog components and reviewed prompt snapshots."""
 
     component_uids: tuple[str, ...]
-    positive_prompt: str
-    negative_prompt: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,8 +131,8 @@ class PromptSelection:
 class PromptDraftOverrides:
     """Override a rendered draft without mutating catalog revisions."""
 
-    positive_text: str | None = None
-    negative_text: str | None = None
+    positive_atoms: tuple[PromptAtomUsage, ...] | None = None
+    negative_atoms: tuple[PromptAtomUsage, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +144,8 @@ class RenderedPrompt:
     notes: str
     revision_uids: tuple[str, ...]
     draft_overridden: bool
+    positive_atoms: tuple[PromptAtomUsage, ...] = ()
+    negative_atoms: tuple[PromptAtomUsage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -413,15 +420,15 @@ class PromptRenderer:
         overrides: PromptDraftOverrides | None = None,
     ) -> RenderedPrompt:
         """Return exact positive/negative snapshots without catalog writes."""
-        positive, negative = self.render_blocks(
-            tuple(
-                component.latest_revision.positive_text
-                for component in selection.components
-            ),
-            tuple(
-                component.latest_revision.negative_text
-                for component in selection.components
-            ),
+        positive_atoms = tuple(
+            atom
+            for component in selection.components
+            for atom in self._revision_atoms(component, positive=True)
+        )
+        negative_atoms = tuple(
+            atom
+            for component in selection.components
+            for atom in self._revision_atoms(component, positive=False)
         )
         notes = " | ".join(
             component.notes.strip()
@@ -429,10 +436,11 @@ class PromptRenderer:
             if component.notes.strip()
         )
         if overrides is not None:
-            if overrides.positive_text is not None:
-                positive = str(overrides.positive_text)
-            if overrides.negative_text is not None:
-                negative = str(overrides.negative_text)
+            if overrides.positive_atoms is not None:
+                positive_atoms = tuple(overrides.positive_atoms)
+            if overrides.negative_atoms is not None:
+                negative_atoms = tuple(overrides.negative_atoms)
+        positive, negative = self.render_atoms(positive_atoms, negative_atoms)
         return RenderedPrompt(
             positive_text=positive,
             negative_text=negative,
@@ -443,9 +451,22 @@ class PromptRenderer:
             ),
             draft_overridden=overrides is not None
             and (
-                overrides.positive_text is not None
-                or overrides.negative_text is not None
+                overrides.positive_atoms is not None
+                or overrides.negative_atoms is not None
             ),
+            positive_atoms=positive_atoms,
+            negative_atoms=negative_atoms,
+        )
+
+    def render_atoms(
+        self,
+        positive_atoms: tuple[PromptAtomUsage, ...],
+        negative_atoms: tuple[PromptAtomUsage, ...],
+    ) -> tuple[str, str]:
+        """Render structured positive and negative usages deterministically."""
+        return (
+            render_prompt_atom_usages(positive_atoms),
+            render_prompt_atom_usages(negative_atoms),
         )
 
     def render_blocks(
@@ -454,13 +475,35 @@ class PromptRenderer:
         negative_blocks: tuple[str, ...],
     ) -> tuple[str, str]:
         """Render ordered revision blocks using canonical join semantics."""
-        return self._join(positive_blocks), self._join(negative_blocks)
+        return self.render_atoms(
+            self._block_atoms(positive_blocks),
+            self._block_atoms(negative_blocks),
+        )
 
     @staticmethod
-    def _join(blocks: Iterable[str]) -> str:
-        return ", ".join(
-            block for value in blocks if (block := str(value or "").strip())
+    def _block_atoms(blocks: Iterable[str]) -> tuple[PromptAtomUsage, ...]:
+        return tuple(
+            atom
+            for value in blocks
+            for atom in prompt_atom_usages_from_text(str(value or "").strip())
         )
+
+    @staticmethod
+    def _revision_atoms(
+        component: PromptComponent,
+        *,
+        positive: bool,
+    ) -> tuple[PromptAtomUsage, ...]:
+        revision = component.latest_revision
+        atoms = (
+            revision.positive_atoms if positive else revision.negative_atoms
+        )
+        if atoms:
+            return atoms
+        snapshot = (
+            revision.positive_text if positive else revision.negative_text
+        )
+        return prompt_atom_usages_from_text(snapshot)
 
 
 class PlaygroundService:
@@ -503,13 +546,13 @@ class PlaygroundService:
         )
         canonical = self._renderer.render(selection)
         positive_override = (
-            command.positive_prompt
-            if command.positive_prompt != canonical.positive_text
+            command.positive_atoms
+            if command.positive_atoms != canonical.positive_atoms
             else None
         )
         negative_override = (
-            command.negative_prompt
-            if command.negative_prompt != canonical.negative_text
+            command.negative_atoms
+            if command.negative_atoms != canonical.negative_atoms
             else None
         )
         overrides = (

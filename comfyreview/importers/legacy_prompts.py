@@ -16,6 +16,7 @@ from comfyreview.application import (
     imported_prompt_component_uid,
     prompt_revision_identity,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
@@ -369,7 +370,7 @@ class LegacyPromptImporter:
                 (component_id,),
             ).fetchone()[0]
         )
-        connection.execute(
+        cursor = connection.execute(
             """
             INSERT INTO prompt_revisions(
                 revision_uid, component_id, revision_number,
@@ -386,6 +387,37 @@ class LegacyPromptImporter:
                 created_at,
             ),
         )
+        revision_id = int(cursor.lastrowid or 0)
+        for scope, snapshot in (
+            ("pos", positive_text),
+            ("neg", negative_text),
+        ):
+            for position, usage in enumerate(
+                prompt_atom_usages_from_text(snapshot)
+            ):
+                connection.execute(
+                    "INSERT OR IGNORE INTO prompt_atoms(canonical_text) "
+                    "VALUES (?)",
+                    (usage.text,),
+                )
+                atom = connection.execute(
+                    "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                    (usage.text,),
+                ).fetchone()
+                connection.execute(
+                    """
+                    INSERT INTO prompt_revision_atom_usages(
+                        revision_id, atom_id, scope, position, weight_milli
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        revision_id,
+                        int(atom[0]),
+                        scope,
+                        position,
+                        usage.weight_milli,
+                    ),
+                )
         return True
 
     def _create_backup(self, backup_directory: Path | None) -> Path:

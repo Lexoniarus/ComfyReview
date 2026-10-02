@@ -8,6 +8,7 @@ from comfyreview.application import (
     PlaygroundGenerationPolicy,
     PlaygroundSubmissionService,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 from services.playground_generator_ui.submit import (
     preview_draft_from_state,
     submit_preview_drafts,
@@ -63,6 +64,7 @@ def test_preview_draft_adapter_preserves_prompt_and_revision_snapshot() -> (
     draft = preview_draft_from_state(_state())
 
     assert draft.prompt.positive_text == "hero"
+    assert draft.prompt.positive_atoms == prompt_atom_usages_from_text("hero")
     assert draft.prompt.revision_uids == (
         "revision-character",
         "revision-scene",

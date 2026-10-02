@@ -8,6 +8,7 @@ from comfyreview.application import (
     PromptComponent,
     UpdatePromptComponentCommand,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 
 _DROPDOWN_KINDS = (
     "character",
@@ -73,8 +74,8 @@ class PromptCatalogViewService:
                 name=name,
                 tags=self._tags(tags),
                 notes=notes,
-                positive_text=positive_text,
-                negative_text=negative_text,
+                positive_atoms=prompt_atom_usages_from_text(positive_text),
+                negative_atoms=prompt_atom_usages_from_text(negative_text),
             )
         )
 
@@ -95,8 +96,8 @@ class PromptCatalogViewService:
                 name=name,
                 tags=self._tags(tags),
                 notes=notes,
-                positive_text=positive_text,
-                negative_text=negative_text,
+                positive_atoms=prompt_atom_usages_from_text(positive_text),
+                negative_atoms=prompt_atom_usages_from_text(negative_text),
             )
         )
 
@@ -123,16 +124,12 @@ class PromptCatalogViewService:
         normalized_scope = str(scope or "").strip().lower()
         if normalized_scope not in {"pos", "neg"}:
             raise ValueError("scope must be pos or neg")
-        text = (
-            component.latest_revision.positive_text
+        usages = (
+            component.latest_revision.positive_atoms
             if normalized_scope == "pos"
-            else component.latest_revision.negative_text
+            else component.latest_revision.negative_atoms
         )
-        return [
-            token
-            for part in text.replace("\n", " ").split(",")
-            if (token := part.strip())
-        ]
+        return [usage.text for usage in usages]
 
     @staticmethod
     def _tags(value: str) -> tuple[str, ...]:

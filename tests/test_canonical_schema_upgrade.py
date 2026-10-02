@@ -200,13 +200,13 @@ def test_version_two_upgrade_preserves_output_identity_and_reviews(
 
     report = CanonicalSchemaManager(database_path).upgrade(backup_root)
 
-    assert report.schema_version == 6
+    assert report.schema_version == 7
     assert report.upgraded_from == 2
     assert report.backup_path is not None
     assert report.backup_path.is_file()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (6,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (7,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         live = connection.execute(
             """
@@ -306,10 +306,10 @@ def test_version_one_can_upgrade_directly_to_current_schema(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 6
+    assert report.schema_version == 7
     assert report.upgraded_from == 1
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (6,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (7,)
         row = connection.execute(
             """
             SELECT generation_uid, source, status, seed
@@ -334,7 +334,7 @@ def test_version_three_upgrade_preserves_ids_and_replaces_writable_state(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 6
+    assert report.schema_version == 7
     assert report.upgraded_from == 3
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -373,7 +373,7 @@ def test_version_four_upgrade_adds_revisioned_prompt_catalog(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 6
+    assert report.schema_version == 7
     assert report.upgraded_from == 4
     with sqlite3.connect(database_path) as connection:
         objects = dict(
@@ -421,14 +421,74 @@ def test_version_five_upgrade_adds_output_provenance(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 6
+    assert report.schema_version == 7
     assert report.upgraded_from == 5
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (6,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (7,)
         image_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(images)")
         }
         assert {"content_hash", "output_role"} <= image_columns
+
+
+def test_version_six_upgrade_normalizes_prompt_atoms_without_changing_snapshots(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    _create_version_four_database(database_path)
+    manager = CanonicalSchemaManager(database_path)
+    with sqlite3.connect(database_path) as connection:
+        manager._upgrade_v4_to_v5(connection)
+        component_id = connection.execute(
+            """
+            INSERT INTO prompt_components(
+                component_uid, kind, component_key, name
+            ) VALUES ('component-a', 'character', 'character_a', 'A')
+            """
+        ).lastrowid
+        connection.execute(
+            """
+            INSERT INTO prompt_revisions(
+                revision_uid, component_id, revision_number,
+                positive_text, negative_text, content_hash
+            ) VALUES (?, ?, 1, ?, ?, 'hash-a')
+            """,
+            (
+                "revision-a",
+                component_id,
+                "silver hair, (cyan eyes:1.2)",
+                "multiple people",
+            ),
+        )
+        manager._upgrade_v5_to_v6(connection)
+        connection.commit()
+
+    report = manager.upgrade(tmp_path / "backups")
+
+    assert report.schema_version == 7
+    assert report.upgraded_from == 6
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT revision_uid, positive_text, negative_text "
+            "FROM prompt_revisions"
+        ).fetchone() == (
+            "revision-a",
+            "silver hair, (cyan eyes:1.2)",
+            "multiple people",
+        )
+        assert connection.execute(
+            """
+            SELECT usage.scope, usage.position, atom.canonical_text,
+                   usage.weight_milli
+            FROM prompt_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            ORDER BY usage.scope DESC, usage.position
+            """
+        ).fetchall() == [
+            ("pos", 0, "silver hair", 1000),
+            ("pos", 1, "cyan eyes", 1200),
+            ("neg", 0, "multiple people", 1000),
+        ]
 
 
 def test_upgrade_rolls_back_without_unnecessary_backup_restore(
@@ -491,8 +551,8 @@ def test_canonical_database_cli_validates_and_upgrades(
         == 0
     )
     output = capsys.readouterr().out
-    assert '"schema_version": 6' in output
+    assert '"schema_version": 7' in output
     assert '"upgraded_from": 2' in output
 
     assert main(["canonical-db", "validate"]) == 0
-    assert '"schema_version": 6' in capsys.readouterr().out
+    assert '"schema_version": 7' in capsys.readouterr().out

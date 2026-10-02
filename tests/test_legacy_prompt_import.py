@@ -139,6 +139,15 @@ def test_legacy_prompt_import_preserves_items_revisions_and_backup(
             "SELECT source, source_key FROM legacy_prompt_component_sources "
             "ORDER BY source_key"
         ).fetchall()
+        usages = connection.execute(
+            """
+            SELECT usage.scope, usage.position, atom.canonical_text,
+                   usage.weight_milli
+            FROM prompt_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            ORDER BY usage.revision_id, usage.scope DESC, usage.position
+            """
+        ).fetchall()
     assert components == [
         (
             "outfit",
@@ -164,6 +173,11 @@ def test_legacy_prompt_import_preserves_items_revisions_and_backup(
     assert mappings == [
         ("legacy_playground", "1"),
         ("legacy_playground", "2"),
+    ]
+    assert usages == [
+        ("pos", 0, "rooftop skyline", 1000),
+        ("neg", 0, "blur", 1000),
+        ("pos", 0, "red coat", 1000),
     ]
 
 

@@ -19,6 +19,7 @@ from comfyreview.application import (
     PlaygroundSubmissionService,
     RenderedPrompt,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 
 
 def _draft() -> PlaygroundGenerationDraft:
@@ -31,6 +32,8 @@ def _draft() -> PlaygroundGenerationDraft:
             "",
             ("revision-1", "revision-2"),
             True,
+            prompt_atom_usages_from_text("hero"),
+            prompt_atom_usages_from_text("blur"),
         ),
         checkpoint="models/NetaYume.safetensors",
         sampler=GenerationSamplerSettings(
@@ -61,6 +64,9 @@ def test_playground_generation_policy_builds_reproducible_request() -> None:
     assert request.model_branch == "NetaYume"
     assert request.prompt.revision_uids == ("revision-1", "revision-2")
     assert request.prompt.positive_text == "hero"
+    assert request.prompt.positive_atoms == prompt_atom_usages_from_text(
+        "hero"
+    )
     assert request.output_policy.output_subdirectory == "playground/Hero_Name"
     assert request.output_policy.filename_prefix == "Hero_Name_draft_1"
     assert request.output_policy.expected_roles == ("primary",)

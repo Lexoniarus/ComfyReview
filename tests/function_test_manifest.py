@@ -157,6 +157,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_application.py::"
         "test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate"
     ),
+    "comfyreview.application.playground:PromptRenderer.render_atoms": (
+        "tests/test_prompt_atoms.py::"
+        "test_structured_prompt_usages_validate_and_render_deterministically"
+    ),
     "comfyreview.application.playground:PromptSelectionPolicy.select": (
         "tests/test_playground_application.py::"
         "test_prompt_selection_policy_selects_reproducible_compatible_revisions"
@@ -248,6 +252,22 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     "comfyreview.domain.prompts:parse_prompt_atoms": (
         "tests/test_prompt_atoms.py::"
         "test_parse_prompt_atoms_separates_text_and_explicit_weight"
+    ),
+    "comfyreview.domain.prompts:PromptAtomUsage.weight": (
+        "tests/test_prompt_atoms.py::"
+        "test_structured_prompt_usages_validate_and_render_deterministically"
+    ),
+    "comfyreview.domain.prompts:prompt_atom_usage": (
+        "tests/test_prompt_atoms.py::"
+        "test_structured_prompt_usages_validate_and_render_deterministically"
+    ),
+    "comfyreview.domain.prompts:prompt_atom_usages_from_text": (
+        "tests/test_prompt_atoms.py::"
+        "test_structured_prompt_usages_validate_and_render_deterministically"
+    ),
+    "comfyreview.domain.prompts:render_prompt_atom_usages": (
+        "tests/test_prompt_atoms.py::"
+        "test_structured_prompt_usages_validate_and_render_deterministically"
     ),
     "comfyreview.settings:load_settings": (
         "tests/test_settings.py::"

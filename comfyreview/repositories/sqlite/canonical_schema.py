@@ -10,8 +10,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from comfyreview.application import CanonicalSchemaReport
+from comfyreview.domain import (
+    PromptAtomUsage,
+    prompt_atom_usages_from_text,
+    render_prompt_atom_usages,
+)
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -425,6 +430,18 @@ _REQUIRED_IMAGE_COLUMNS_V6 = _REQUIRED_IMAGE_COLUMNS_V4 | {
     "output_role",
 }
 
+_REQUIRED_OBJECTS_V7 = {
+    **_REQUIRED_OBJECTS_V6,
+    "prompt_revision_atom_usages": "table",
+}
+_REQUIRED_REVISION_ATOM_COLUMNS_V7 = {
+    "revision_id",
+    "atom_id",
+    "scope",
+    "position",
+    "weight_milli",
+}
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -472,10 +489,10 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4, 5}:
+        if current_version not in {1, 2, 3, 4, 5, 6}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1, 2, 3, 4, 5, or "
+                f"{current_version}; expected 1, 2, 3, 4, 5, 6, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -487,8 +504,10 @@ class CanonicalSchemaManager:
             self._validate_version_three()
         elif current_version == 4:
             self._validate_version_four()
-        else:
+        elif current_version == 5:
             self._validate_version_five()
+        else:
+            self._validate_version_six()
 
         backup_path = self._create_backup(backup_directory)
         committed = False
@@ -504,7 +523,9 @@ class CanonicalSchemaManager:
                     self._upgrade_v3_to_v4(connection)
                 if current_version <= 4:
                     self._upgrade_v4_to_v5(connection)
-                self._upgrade_v5_to_v6(connection)
+                if current_version <= 5:
+                    self._upgrade_v5_to_v6(connection)
+                self._upgrade_v6_to_v7(connection)
                 connection.commit()
                 committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
@@ -553,6 +574,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v5_to_v6(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v6_to_v7(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -565,7 +589,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3, 4, 5}:
+            if version in {1, 2, 3, 4, 5, 6}:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -665,6 +689,23 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_six(self) -> None:
+        connection = self._open_read_only()
+        try:
+            version = self._schema_version(connection)
+            if version != 6:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 6 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V6)
+            self._validate_metadata_version(connection, 6)
+            self._validate_generation_columns(connection)
+            self._validate_output_identity_v6(connection)
+            self._validate_prompt_catalog_v5(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -673,11 +714,12 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V6)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V7)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
         self._validate_prompt_catalog_v5(connection)
+        self._validate_prompt_catalog_v7(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -1126,6 +1168,73 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 6")
 
     @staticmethod
+    def _upgrade_v6_to_v7(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE prompt_revision_atom_usages (
+                revision_id INTEGER NOT NULL
+                    REFERENCES prompt_revisions(id) ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                position INTEGER NOT NULL,
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                PRIMARY KEY (revision_id, scope, position)
+            )
+            """
+        )
+        rows = connection.execute(
+            """
+            SELECT id, positive_text, negative_text
+            FROM prompt_revisions
+            ORDER BY id
+            """
+        ).fetchall()
+        for revision_id, positive_text, negative_text in rows:
+            for scope, snapshot in (
+                ("pos", str(positive_text or "")),
+                ("neg", str(negative_text or "")),
+            ):
+                usages = prompt_atom_usages_from_text(snapshot)
+                if (
+                    prompt_atom_usages_from_text(
+                        render_prompt_atom_usages(usages)
+                    )
+                    != usages
+                ):
+                    raise CanonicalSchemaValidationError(
+                        "prompt revision atom roundtrip failed"
+                    )
+                for position, usage in enumerate(usages):
+                    connection.execute(
+                        "INSERT OR IGNORE INTO prompt_atoms(canonical_text) "
+                        "VALUES (?)",
+                        (usage.text,),
+                    )
+                    atom_row = connection.execute(
+                        "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                        (usage.text,),
+                    ).fetchone()
+                    connection.execute(
+                        """
+                        INSERT INTO prompt_revision_atom_usages(
+                            revision_id, atom_id, scope, position, weight_milli
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            int(revision_id),
+                            int(atom_row[0]),
+                            scope,
+                            position,
+                            usage.weight_milli,
+                        ),
+                    )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '7' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 7")
+
+    @staticmethod
     def _create_review_views(connection: sqlite3.Connection) -> None:
         connection.execute(
             """
@@ -1505,6 +1614,50 @@ class CanonicalSchemaManager:
                 "prompt_components is missing stable UID uniqueness"
             )
 
+    @classmethod
+    def _validate_prompt_catalog_v7(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        usage_columns = cls._table_column_rows(
+            connection,
+            "prompt_revision_atom_usages",
+        )
+        missing = sorted(
+            _REQUIRED_REVISION_ATOM_COLUMNS_V7 - usage_columns.keys()
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Prompt revision atom usages are missing required columns: "
+                + ", ".join(missing)
+            )
+        revisions = connection.execute(
+            "SELECT id, positive_text, negative_text FROM prompt_revisions"
+        ).fetchall()
+        for revision_id, positive_text, negative_text in revisions:
+            for scope, snapshot in (
+                ("pos", str(positive_text or "")),
+                ("neg", str(negative_text or "")),
+            ):
+                rows = connection.execute(
+                    """
+                    SELECT atom.canonical_text, usage.weight_milli
+                    FROM prompt_revision_atom_usages AS usage
+                    JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+                    WHERE usage.revision_id = ? AND usage.scope = ?
+                    ORDER BY usage.position
+                    """,
+                    (revision_id, scope),
+                ).fetchall()
+                usages = tuple(
+                    PromptAtomUsage(str(text), int(weight_milli))
+                    for text, weight_milli in rows
+                )
+                if usages != prompt_atom_usages_from_text(snapshot):
+                    raise CanonicalSchemaValidationError(
+                        "prompt revision atom usages do not match snapshots"
+                    )
+
     def _is_valid_version(self, version: int) -> bool:
         try:
             if version == 1:
@@ -1517,6 +1670,8 @@ class CanonicalSchemaManager:
                 self._validate_version_four()
             elif version == 5:
                 self._validate_version_five()
+            elif version == 6:
+                self._validate_version_six()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):

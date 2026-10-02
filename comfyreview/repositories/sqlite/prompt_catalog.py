@@ -13,6 +13,7 @@ from comfyreview.application.prompt_catalog import (
     PromptRevisionDraft,
     UpdatePromptComponentMetadataCommand,
 )
+from comfyreview.domain import PromptAtomUsage
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
     connect_read_only,
@@ -31,7 +32,33 @@ SELECT
     revision.revision_number,
     revision.positive_text,
     revision.negative_text,
-    revision.content_hash
+    revision.content_hash,
+    COALESCE((
+        SELECT json_group_array(json_object(
+            'text', ordered.canonical_text,
+            'weight_milli', ordered.weight_milli
+        ))
+        FROM (
+            SELECT atom.canonical_text, usage.weight_milli
+            FROM prompt_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            WHERE usage.revision_id = revision.id AND usage.scope = 'pos'
+            ORDER BY usage.position
+        ) AS ordered
+    ), '[]') AS positive_atoms_json,
+    COALESCE((
+        SELECT json_group_array(json_object(
+            'text', ordered.canonical_text,
+            'weight_milli', ordered.weight_milli
+        ))
+        FROM (
+            SELECT atom.canonical_text, usage.weight_milli
+            FROM prompt_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            WHERE usage.revision_id = revision.id AND usage.scope = 'neg'
+            ORDER BY usage.position
+        ) AS ordered
+    ), '[]') AS negative_atoms_json
 FROM prompt_components AS component
 JOIN prompt_revisions AS revision
     ON revision.component_id = component.id
@@ -111,7 +138,15 @@ class SqlitePromptCatalogRepository:
             ).fetchone()
             if existing is not None:
                 connection.commit()
-                return self._revision(existing)
+                return PromptRevision(
+                    revision_uid=str(existing["revision_uid"]),
+                    revision_number=int(existing["revision_number"]),
+                    positive_text=str(existing["positive_text"]),
+                    negative_text=str(existing["negative_text"]),
+                    content_hash=str(existing["content_hash"]),
+                    positive_atoms=revision.positive_atoms,
+                    negative_atoms=revision.negative_atoms,
+                )
             number_row = connection.execute(
                 """
                 SELECT COALESCE(MAX(revision_number), 0) + 1
@@ -134,6 +169,8 @@ class SqlitePromptCatalogRepository:
                 positive_text=revision.positive_text,
                 negative_text=revision.negative_text,
                 content_hash=revision.content_hash,
+                positive_atoms=revision.positive_atoms,
+                negative_atoms=revision.negative_atoms,
             )
         except Exception:
             connection.rollback()
@@ -308,7 +345,35 @@ class SqlitePromptCatalogRepository:
                     revision.revision_number,
                     revision.positive_text,
                     revision.negative_text,
-                    revision.content_hash
+                    revision.content_hash,
+                    COALESCE((
+                        SELECT json_group_array(json_object(
+                            'text', ordered.canonical_text,
+                            'weight_milli', ordered.weight_milli
+                        ))
+                        FROM (
+                            SELECT atom.canonical_text, usage.weight_milli
+                            FROM prompt_revision_atom_usages AS usage
+                            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+                            WHERE usage.revision_id = revision.id
+                              AND usage.scope = 'pos'
+                            ORDER BY usage.position
+                        ) AS ordered
+                    ), '[]') AS positive_atoms_json,
+                    COALESCE((
+                        SELECT json_group_array(json_object(
+                            'text', ordered.canonical_text,
+                            'weight_milli', ordered.weight_milli
+                        ))
+                        FROM (
+                            SELECT atom.canonical_text, usage.weight_milli
+                            FROM prompt_revision_atom_usages AS usage
+                            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+                            WHERE usage.revision_id = revision.id
+                              AND usage.scope = 'neg'
+                            ORDER BY usage.position
+                        ) AS ordered
+                    ), '[]') AS negative_atoms_json
                 FROM prompt_revisions AS revision
                 JOIN prompt_components AS component
                     ON component.id = revision.component_id
@@ -331,7 +396,7 @@ class SqlitePromptCatalogRepository:
         revision_number: int,
         revision: PromptRevisionDraft,
     ) -> None:
-        connection.execute(
+        cursor = connection.execute(
             """
             INSERT INTO prompt_revisions(
                 revision_uid, component_id, revision_number,
@@ -347,6 +412,35 @@ class SqlitePromptCatalogRepository:
                 revision.content_hash,
             ),
         )
+        revision_id = int(cursor.lastrowid or 0)
+        for scope, usages in (
+            ("pos", revision.positive_atoms),
+            ("neg", revision.negative_atoms),
+        ):
+            for position, usage in enumerate(usages):
+                connection.execute(
+                    "INSERT OR IGNORE INTO prompt_atoms(canonical_text) "
+                    "VALUES (?)",
+                    (usage.text,),
+                )
+                atom = connection.execute(
+                    "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                    (usage.text,),
+                ).fetchone()
+                connection.execute(
+                    """
+                    INSERT INTO prompt_revision_atom_usages(
+                        revision_id, atom_id, scope, position, weight_milli
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        revision_id,
+                        int(atom[0]),
+                        scope,
+                        position,
+                        usage.weight_milli,
+                    ),
+                )
 
     @staticmethod
     def _get_component(
@@ -388,6 +482,23 @@ class SqlitePromptCatalogRepository:
             positive_text=str(row["positive_text"]),
             negative_text=str(row["negative_text"]),
             content_hash=str(row["content_hash"]),
+            positive_atoms=SqlitePromptCatalogRepository._atoms(
+                row["positive_atoms_json"]
+            ),
+            negative_atoms=SqlitePromptCatalogRepository._atoms(
+                row["negative_atoms_json"]
+            ),
+        )
+
+    @staticmethod
+    def _atoms(value: object) -> tuple[PromptAtomUsage, ...]:
+        raw = json.loads(str(value or "[]"))
+        if not isinstance(raw, list):
+            return ()
+        return tuple(
+            PromptAtomUsage(str(item["text"]), int(item["weight_milli"]))
+            for item in raw
+            if isinstance(item, dict)
         )
 
     @staticmethod

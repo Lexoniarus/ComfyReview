@@ -9,11 +9,17 @@ from pydantic import BaseModel
 from comfyreview.api import get_application_container
 from comfyreview.application import (
     ManualPromptSelection,
+    PromptCatalogValidationError,
     PromptDraftOverrides,
     PromptSelectionCommand,
     PromptSelectionError,
 )
-from routers.api_v2.catalog import component_response
+from routers.api_v2.catalog import (
+    PromptAtomRequest,
+    atom_response,
+    atom_usages,
+    component_response,
+)
 from routers.api_v2.common import PromptKind, error_response
 
 router = APIRouter()
@@ -33,8 +39,8 @@ class PlaygroundDraftRequest(BaseModel):
     selections: list[PlaygroundSelectionIntent]
     seed: int | None = None
     max_attempts: int = 200
-    positive_override: str | None = None
-    negative_override: str | None = None
+    positive_atoms: list[PromptAtomRequest] | None = None
+    negative_atoms: list[PromptAtomRequest] | None = None
 
 
 @router.get("/playground/capabilities")
@@ -85,7 +91,7 @@ def prepare_playground_draft(
             command,
             overrides=overrides,
         )
-    except PromptSelectionError as error:
+    except (PromptSelectionError, PromptCatalogValidationError) as error:
         return error_response(400, "invalid_playground_selection", str(error))
     return JSONResponse(
         {
@@ -95,6 +101,8 @@ def prepare_playground_draft(
             ],
             "positive_prompt": draft.prompt.positive_text,
             "negative_prompt": draft.prompt.negative_text,
+            "positive_atoms": atom_response(draft.prompt.positive_atoms),
+            "negative_atoms": atom_response(draft.prompt.negative_atoms),
             "revision_uids": draft.prompt.revision_uids,
             "draft_overridden": draft.prompt.draft_overridden,
         }
@@ -155,9 +163,17 @@ def draft_overrides(
     payload: PlaygroundDraftRequest,
 ) -> PromptDraftOverrides | None:
     """Translate optional draft text without mutating catalog revisions."""
-    if payload.positive_override is None and payload.negative_override is None:
+    if payload.positive_atoms is None and payload.negative_atoms is None:
         return None
     return PromptDraftOverrides(
-        positive_text=payload.positive_override,
-        negative_text=payload.negative_override,
+        positive_atoms=(
+            atom_usages(payload.positive_atoms)
+            if payload.positive_atoms is not None
+            else None
+        ),
+        negative_atoms=(
+            atom_usages(payload.negative_atoms)
+            if payload.negative_atoms is not None
+            else None
+        ),
     )
