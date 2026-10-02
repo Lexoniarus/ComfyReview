@@ -27,6 +27,7 @@ from comfyreview.application import (
     PlaygroundSubmissionBatch,
     PlaygroundSubmissionFailure,
     PromptComponent,
+    PromptRenderer,
     PromptRevision,
     PromptSelection,
     PromptSnapshot,
@@ -792,6 +793,20 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         "pose",
         "lighting",
     )
+    preview = client.post(
+        "/api/v2/playground/render-preview",
+        json={
+            "positive_atoms": [
+                {"text": "cyan eyes", "weight": 1.2},
+                {"text": "silver hair", "weight": 1.0},
+            ],
+            "negative_atoms": [{"text": "blur", "weight": 1.0}],
+        },
+    )
+    assert preview.json() == {
+        "positive_prompt": "(cyan eyes:1.2), silver hair",
+        "negative_prompt": "blur",
+    }
 
 
 def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
@@ -1022,6 +1037,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         curation_service=_Curation(),
         arena_service=_Arena(),
         prompt_catalog_service=_PromptCatalog(),
+        prompt_renderer=PromptRenderer(),
         playground_service=_Playground(),
         playground_submission_service=_PlaygroundSubmission(),
         playground_generation_sweeps=PlaygroundGenerationSweepPolicy(),

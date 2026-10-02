@@ -25,7 +25,7 @@ from comfyreview.application import (
     prompt_composition_identity,
     prompt_revision_identity,
 )
-from comfyreview.domain import prompt_atom_usages_from_text
+from comfyreview.domain import PromptAtomUsage, prompt_atom_usages_from_text
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqlitePromptCatalogRepository,
@@ -272,6 +272,20 @@ def test_prompt_catalog_service_rejects_invalid_component(
 
     with pytest.raises(PromptCatalogValidationError, match=field):
         service.create_component(command)
+
+
+def test_prompt_catalog_service_normalizes_renderer_validation_errors() -> (
+    None
+):
+    service, _repository = _service()
+
+    with pytest.raises(PromptCatalogValidationError, match="text"):
+        service.create_component(
+            replace(
+                _create_command(),
+                positive_atoms=(PromptAtomUsage("", 1000),),
+            )
+        )
 
 
 def test_prompt_catalog_service_appends_immutable_revision() -> None:

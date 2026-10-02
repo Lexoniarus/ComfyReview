@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DraftPreview } from "../../static/js/playground/draft-preview.js";
 import { GenerationControls } from "../../static/js/playground/generation-controls.js";
@@ -101,8 +101,10 @@ describe("Playground browser components", () => {
   it("keeps edits as draft overrides and builds the UID-based payload", () => {
     const root = document.createElement("div");
     const state = document.createElement("span");
-    const preview = new DraftPreview(root, state);
+    const onChange = vi.fn();
+    const preview = new DraftPreview(root, state, onChange);
     expect(preview.generationPayload({})).toBeNull();
+    expect(preview.promptPayload()).toBeNull();
 
     preview.render(
       {
@@ -117,10 +119,23 @@ describe("Playground browser components", () => {
       "draft-1",
     );
     expect(state.textContent).toBe("Katalogrevisionen unverändert");
+    expect(root.textContent).toContain("Serverseitig gerenderter Prompt");
+    expect(
+      root.querySelector(".draft-rendered-snapshots").textContent,
+    ).toContain("positive");
     const positive = root.querySelector("[data-atom-text]");
     positive.value = "edited";
     positive.dispatchEvent(new Event("input"));
+    const negative = root.querySelectorAll("[data-atom-text]")[1];
+    negative.dispatchEvent(new Event("input"));
     expect(state.textContent).toBe("Draft-Override aktiv");
+    expect(onChange).toHaveBeenCalled();
+    expect(preview.promptPayload().positive_atoms[0].text).toBe("edited");
+    preview.renderSnapshots({
+      positive_prompt: "server edited",
+      negative_prompt: "server negative",
+    });
+    expect(root.textContent).toContain("server edited");
 
     expect(
       preview.generationPayload({
@@ -148,6 +163,24 @@ describe("Playground browser components", () => {
     );
     expect(preview.generationPayload({})).toBeNull();
     preview.dispose();
+
+    const defaultRoot = document.createElement("div");
+    const defaultPreview = new DraftPreview(
+      defaultRoot,
+      document.createElement("span"),
+    );
+    defaultPreview.render(
+      {
+        components,
+        positive_atoms: [{ text: "positive", weight: 1 }],
+        negative_atoms: [],
+      },
+      "draft-default",
+    );
+    defaultRoot
+      .querySelector("[data-atom-text]")
+      .dispatchEvent(new Event("input"));
+    defaultPreview.dispose();
   });
 
   it("renders separate top two- and three-component evidence", () => {

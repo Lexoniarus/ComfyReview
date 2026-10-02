@@ -239,6 +239,28 @@
   gap: var(--space-3);
 }
 
+.draft-rendered-snapshots {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.draft-rendered-snapshots h3,
+.draft-rendered-snapshots h4 {
+  margin: 0;
+}
+
+.draft-rendered-snapshots pre {
+  overflow-wrap: anywhere;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  font: inherit;
+  white-space: pre-wrap;
+}
+
 .draft-field textarea {
   min-height: 11rem;
   resize: vertical;

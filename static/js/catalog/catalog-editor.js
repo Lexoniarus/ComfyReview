@@ -102,6 +102,7 @@ export class CatalogEditor {
       positive.element,
       negative.element,
     );
+    const snapshots = revisionSnapshots(component?.latest_revision);
     const actions = document.createElement("div");
     actions.className = "catalog-actions";
     const save = document.createElement("button");
@@ -123,7 +124,7 @@ export class CatalogEditor {
       );
       actions.append(archive);
     }
-    form.append(fields, actions);
+    form.append(fields, snapshots, actions);
     form.addEventListener(
       "submit",
       (event) => {
@@ -230,4 +231,24 @@ function atomSummary(label, values) {
     (atom) => `${String(atom.text || "")} · ${Number(atom.weight ?? 1)}`,
   );
   return `${label}\n${lines.join("\n") || "—"}`;
+}
+
+/** @param {Record<string, any> | undefined} revision */
+function revisionSnapshots(revision) {
+  const section = document.createElement("section");
+  section.className = "catalog-rendered-snapshots";
+  const title = document.createElement("h3");
+  title.textContent = "Gespeicherter Render-Snapshot";
+  section.append(title);
+  for (const [label, value] of [
+    ["Positiv", revision?.positive_text],
+    ["Negativ", revision?.negative_text],
+  ]) {
+    const heading = document.createElement("h4");
+    heading.textContent = label;
+    const snapshot = document.createElement("pre");
+    snapshot.textContent = String(value || "—");
+    section.append(heading, snapshot);
+  }
+  return section;
 }

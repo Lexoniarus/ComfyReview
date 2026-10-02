@@ -2,16 +2,19 @@ import { PromptAtomEditor } from "../prompts/prompt-atom-editor.js";
 
 /** Own the reviewed prompt snapshot and its local draft overrides. */
 export class DraftPreview {
-  /** @param {HTMLElement} root @param {HTMLElement} state */
-  constructor(root, state) {
+  /** @param {HTMLElement} root @param {HTMLElement} state @param {() => void} [onChange] */
+  constructor(root, state, onChange = () => {}) {
     this.root = root;
     this.state = state;
+    this.onChange = onChange;
     this.abortController = new AbortController();
     /** @type {Record<string, any> | null} */
     this.draft = null;
     this.draftUid = "";
     this.positive = null;
     this.negative = null;
+    this.positiveSnapshot = document.createElement("pre");
+    this.negativeSnapshot = document.createElement("pre");
   }
 
   /** @param {Record<string, any>} draft @param {string} draftUid */
@@ -34,16 +37,41 @@ export class DraftPreview {
     this.positive = new PromptAtomEditor(
       "Positive Atome",
       draft.positive_atoms || [],
-      () => this.#updateState(),
+      () => this.#updateState(true),
     );
     this.negative = new PromptAtomEditor(
       "Negative Atome",
       draft.negative_atoms || [],
-      () => this.#updateState(),
+      () => this.#updateState(true),
     );
     fields.append(this.positive.element, this.negative.element);
-    this.root.append(memberships, fields);
-    this.#updateState();
+    const snapshots = document.createElement("section");
+    snapshots.className = "draft-rendered-snapshots";
+    const snapshotTitle = document.createElement("h3");
+    snapshotTitle.textContent = "Serverseitig gerenderter Prompt";
+    snapshots.append(
+      snapshotTitle,
+      labeledSnapshot("Positiv", this.positiveSnapshot),
+      labeledSnapshot("Negativ", this.negativeSnapshot),
+    );
+    this.root.append(memberships, fields, snapshots);
+    this.renderSnapshots(draft);
+    this.#updateState(false);
+  }
+
+  /** Return only the structured values accepted by the server renderer. */
+  promptPayload() {
+    if (!this.positive || !this.negative) return null;
+    return {
+      positive_atoms: this.positive.value(),
+      negative_atoms: this.negative.value(),
+    };
+  }
+
+  /** @param {Record<string, any>} payload */
+  renderSnapshots(payload) {
+    this.positiveSnapshot.textContent = String(payload.positive_prompt || "—");
+    this.negativeSnapshot.textContent = String(payload.negative_prompt || "—");
   }
 
   /** @param {Record<string, any>} settings */
@@ -87,11 +115,22 @@ export class DraftPreview {
     );
   }
 
-  #updateState() {
+  /** @param {boolean} notify */
+  #updateState(notify) {
     const overridden =
       Boolean(this.draft?.draft_overridden) || this.#isEdited();
     this.state.textContent = overridden
       ? "Draft-Override aktiv"
       : "Katalogrevisionen unverändert";
+    if (notify && this.positive && this.negative) this.onChange();
   }
+}
+
+/** @param {string} label @param {HTMLElement} value */
+function labeledSnapshot(label, value) {
+  const wrapper = document.createElement("div");
+  const heading = document.createElement("h4");
+  heading.textContent = label;
+  wrapper.append(heading, value);
+  return wrapper;
 }

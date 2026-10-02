@@ -1,10 +1,10 @@
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
 /** @typedef {{render: (components: any[]) => void, value: () => {selections: any[], seed: number | null}, dispose: () => void}} ModesBoundary */
 /** @typedef {{render: (capabilities: any) => void, value: () => any, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
-/** @typedef {{render: (draft: any, draftUid: string) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
+/** @typedef {{render: (draft: any, draftUid: string) => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (payload: Record<string, any>) => void, dispose: () => void}} CombinationsBoundary */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, combinations: CombinationsBoundary, requests: RequestBoundary, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, newDraftUid: () => string}} PlaygroundDependencies */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, combinations: CombinationsBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, newDraftUid: () => string}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -16,6 +16,7 @@ export class PlaygroundController {
     this.draft = dependencies.draft;
     this.combinations = dependencies.combinations;
     this.requests = dependencies.requests;
+    this.previewRequests = dependencies.previewRequests;
     this.prepareButton = dependencies.prepareButton;
     this.submitButton = dependencies.submitButton;
     this.status = dependencies.status;
@@ -23,6 +24,23 @@ export class PlaygroundController {
     this.newDraftUid = dependencies.newDraftUid;
     this.abortController = new AbortController();
     this.hasDraft = false;
+  }
+
+  /** Refresh the explanatory snapshot through the authoritative renderer. */
+  async refreshPreview() {
+    const payload = this.draft.promptPayload();
+    if (!payload) return;
+    this.previewRequests.cancelRequests();
+    try {
+      const rendered = await this.previewRequests.run((signal) =>
+        this.api.post("playground/render-preview", payload, { signal }),
+      );
+      this.draft.renderSnapshots(rendered);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        this.status.textContent = errorMessage(error);
+      }
+    }
   }
 
   /** Load canonical catalog data and bind user actions. */
@@ -107,6 +125,7 @@ export class PlaygroundController {
   dispose() {
     this.abortController.abort();
     this.requests.dispose();
+    this.previewRequests.dispose();
     this.modes.dispose();
     this.controls.dispose();
     this.draft.dispose();

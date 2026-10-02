@@ -43,6 +43,13 @@ class PlaygroundDraftRequest(BaseModel):
     negative_atoms: list[PromptAtomRequest] | None = None
 
 
+class PromptRenderPreviewRequest(BaseModel):
+    """Carry one structured draft to the authoritative renderer."""
+
+    positive_atoms: list[PromptAtomRequest]
+    negative_atoms: list[PromptAtomRequest]
+
+
 @router.get("/playground/capabilities")
 def playground_capabilities(request: Request) -> JSONResponse:
     """Return cached-or-live native ComfyUI enum capabilities."""
@@ -106,6 +113,26 @@ def prepare_playground_draft(
             "revision_uids": draft.prompt.revision_uids,
             "draft_overridden": draft.prompt.draft_overridden,
         }
+    )
+
+
+@router.post("/playground/render-preview")
+def render_playground_preview(
+    request: Request,
+    payload: PromptRenderPreviewRequest,
+) -> JSONResponse:
+    """Render draft atoms without persisting or submitting a generation."""
+    try:
+        positive, negative = get_application_container(
+            request
+        ).prompt_renderer.render_atoms(
+            atom_usages(payload.positive_atoms),
+            atom_usages(payload.negative_atoms),
+        )
+    except PromptCatalogValidationError as error:
+        return error_response(400, "invalid_prompt_atoms", str(error))
+    return JSONResponse(
+        {"positive_prompt": positive, "negative_prompt": negative}
     )
 
 

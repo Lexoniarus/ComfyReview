@@ -32,7 +32,7 @@ export class PromptAtomEditor {
       signal: this.abortController.signal,
     });
     this.element.append(heading, this.list, add, reset);
-    this.reset();
+    this.#renderOriginal();
   }
 
   /** Return the current ordered structured atom values. */
@@ -44,9 +44,13 @@ export class PromptAtomEditor {
 
   /** Restore the exact selected catalog revision. */
   reset() {
+    this.#renderOriginal();
+    this.onChange();
+  }
+
+  #renderOriginal() {
     this.list.replaceChildren();
     for (const usage of this.original) this.#append(usage);
-    this.onChange();
   }
 
   /** Release all owned listeners. */

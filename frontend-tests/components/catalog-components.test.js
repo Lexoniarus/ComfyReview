@@ -62,6 +62,9 @@ describe("Catalog browser components", () => {
 
     editor.render(components[1], [revision(1), revision(2)]);
     expect(root.querySelectorAll(".catalog-revision")).toHaveLength(2);
+    expect(
+      root.querySelector(".catalog-rendered-snapshots").textContent,
+    ).toContain("positive 2");
     expect(root.querySelector("select").disabled).toBe(true);
     root.querySelector(".archive-button").click();
     expect(onArchive).toHaveBeenCalledWith(false);

@@ -116,6 +116,7 @@ class ApplicationContainer:
     generation_queries: GenerationQueryService
     generation_reconciliation: GenerationReconciliationService
     prompt_catalog_service: PromptCatalogService
+    prompt_renderer: PromptRenderer
     prompt_catalog_views: PromptCatalogViewService
     prompt_labels: PromptLabelService
     playground_service: PlaygroundService
@@ -276,6 +277,7 @@ def build_application_container(
         ),
         generation_reconciliation=generation_reconciliation,
         prompt_catalog_service=prompt_catalog_service,
+        prompt_renderer=prompt_renderer,
         prompt_catalog_views=PromptCatalogViewService(prompt_catalog_service),
         prompt_labels=PromptLabelService(prompt_catalog_service),
         playground_service=PlaygroundService(

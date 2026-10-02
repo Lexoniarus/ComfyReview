@@ -30,13 +30,21 @@ if (root instanceof HTMLElement) {
     result instanceof HTMLElement &&
     combinationsRoot instanceof HTMLElement
   ) {
-    const controller = new PlaygroundController({
+    /** @type {PlaygroundController | null} */
+    let controller = null;
+    const draft = new DraftPreview(
+      draftRoot,
+      draftState,
+      () => void controller?.refreshPreview(),
+    );
+    controller = new PlaygroundController({
       api: new ApiClient(),
       modes: new PromptModeEditor(modesRoot, seedInput),
       controls: new GenerationControls(controlsRoot),
-      draft: new DraftPreview(draftRoot, draftState),
+      draft,
       combinations: new TopCombinationsView(combinationsRoot),
       requests: new RequestLifecycle(),
+      previewRequests: new RequestLifecycle(),
       prepareButton,
       submitButton,
       status,

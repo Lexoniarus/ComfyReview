@@ -25,6 +25,16 @@ describe("PlaygroundController", () => {
       expect.objectContaining({ positive_prompt: "positive" }),
       "draft-1",
     );
+    await fixture.controller.refreshPreview();
+    expect(fixture.api.post).toHaveBeenCalledWith(
+      "playground/render-preview",
+      expect.objectContaining({ positive_atoms: [] }),
+      expect.any(Object),
+    );
+    expect(fixture.draft.renderSnapshots).toHaveBeenCalledWith({
+      positive_prompt: "preview positive",
+      negative_prompt: "preview negative",
+    });
 
     await fixture.controller.submit();
     expect(fixture.api.post).toHaveBeenCalledWith(
@@ -68,6 +78,16 @@ describe("PlaygroundController", () => {
     await empty.controller.start();
     await empty.controller.submit();
     expect(empty.api.post).not.toHaveBeenCalled();
+
+    const previewFailure = createFixture({
+      previewError: new Error("preview kaputt"),
+    });
+    await previewFailure.controller.refreshPreview();
+    expect(previewFailure.status.textContent).toBe("preview kaputt");
+
+    const noPreview = createFixture({ emptyPromptPayload: true });
+    await noPreview.controller.refreshPreview();
+    expect(noPreview.api.post).not.toHaveBeenCalled();
   });
 
   it("binds its action buttons through one owned listener lifecycle", async () => {
@@ -111,6 +131,12 @@ function createFixture(options = {}) {
   });
   const draft = disposable({
     render: vi.fn(),
+    promptPayload: vi.fn(() =>
+      options.emptyPromptPayload
+        ? null
+        : { positive_atoms: [], negative_atoms: [] },
+    ),
+    renderSnapshots: vi.fn(),
     generationPayload: vi.fn(() =>
       options.emptyPayload ? null : { draft_uid: "draft-1" },
     ),
@@ -133,6 +159,14 @@ function createFixture(options = {}) {
           ? Promise.reject(options.draftError)
           : Promise.resolve({ positive_prompt: "positive" });
       }
+      if (path === "playground/render-preview") {
+        return options.previewError
+          ? Promise.reject(options.previewError)
+          : Promise.resolve({
+              positive_prompt: "preview positive",
+              negative_prompt: "preview negative",
+            });
+      }
       return options.generationError
         ? Promise.reject(options.generationError)
         : Promise.resolve({
@@ -154,6 +188,7 @@ function createFixture(options = {}) {
     draft,
     combinations,
     requests: new RequestLifecycle(),
+    previewRequests: new RequestLifecycle(),
     prepareButton,
     submitButton,
     status,
