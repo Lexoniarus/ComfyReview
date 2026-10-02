@@ -224,6 +224,12 @@ The dependency order is binding. In particular, Playground does not receive a
 temporary generation facade and the ComfyUI provider never owns workflow
 semantics.
 
+Before the Playground and Catalog surface cutovers, the accepted target in
+`docs/STRUCTURED_PROMPT_BUNDLES_WORK_ORDER.md` must replace whole-string
+catalog authoring and Playground overrides with ordered positive and negative
+atom usages whose text and numeric weight are separate values. This is a target
+until implemented; existing Prompt Catalog revisions remain whole-string based.
+
 1. add Frontend/Design quality tooling and architecture gates;
 2. add URL-free ImageContext, SQL-backed scopes/facets and API V2;
 3. build the shared V2 shell and lifecycle-owned browser components;
