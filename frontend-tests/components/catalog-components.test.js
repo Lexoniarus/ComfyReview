@@ -45,7 +45,9 @@ describe("Catalog browser components", () => {
     const createInputs = root.querySelectorAll("input");
     createInputs[0].value = "Neue Szene";
     createInputs[1].value = "rain, night";
-    root.querySelectorAll("textarea")[1].value = "rainy street";
+    root.querySelector(".prompt-atom-editor > button").click();
+    const positiveText = root.querySelectorAll("[data-atom-text]")[0];
+    positiveText.value = "rainy street";
     root
       .querySelector("form")
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -54,7 +56,7 @@ describe("Catalog browser components", () => {
         kind: "scene",
         name: "Neue Szene",
         tags: ["rain", "night"],
-        positive_text: "rainy street",
+        positive_atoms: [{ text: "rainy street", weight: 1 }],
       }),
     );
 
@@ -90,5 +92,7 @@ function revision(number) {
     revision_number: number,
     positive_text: `positive ${number}`,
     negative_text: "",
+    positive_atoms: [{ text: `positive ${number}`, weight: 1 }],
+    negative_atoms: [],
   };
 }

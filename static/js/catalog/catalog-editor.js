@@ -1,3 +1,5 @@
+import { PromptAtomEditor } from "../prompts/prompt-atom-editor.js";
+
 /** @type {Array<[string, string]>} */
 const editableKinds = [
   ["character", "Charakter"],
@@ -17,6 +19,8 @@ export class CatalogEditor {
     this.actions = actions;
     this.abortController = new AbortController();
     this.isBusy = false;
+    /** @type {Array<PromptAtomEditor>} */
+    this.atomEditors = [];
   }
 
   /** Render an empty create form. */
@@ -49,11 +53,13 @@ export class CatalogEditor {
   /** Release owned form listeners. */
   dispose() {
     this.abortController.abort();
+    this.#disposeAtomEditors();
   }
 
   /** @param {Record<string, any> | null} component @param {Array<Record<string, any>>} revisions */
   #renderForm(component, revisions) {
     this.abortController.abort();
+    this.#disposeAtomEditors();
     this.abortController = new AbortController();
     this.root.replaceChildren();
     const heading = document.createElement("div");
@@ -79,23 +85,22 @@ export class CatalogEditor {
       (component?.tags || []).join(", "),
     );
     const notes = areaField("Notizen", component?.notes || "", false);
-    const positive = areaField(
-      "Positiver Prompt",
-      component?.latest_revision?.positive_text || "",
-      true,
+    const positive = new PromptAtomEditor(
+      "Positive Atome",
+      component?.latest_revision?.positive_atoms || [],
     );
-    const negative = areaField(
-      "Negativer Prompt",
-      component?.latest_revision?.negative_text || "",
-      true,
+    const negative = new PromptAtomEditor(
+      "Negative Atome",
+      component?.latest_revision?.negative_atoms || [],
     );
+    this.atomEditors = [positive, negative];
     fields.append(
       kind.wrapper,
       name.wrapper,
       tags.wrapper,
       notes.wrapper,
-      positive.wrapper,
-      negative.wrapper,
+      positive.element,
+      negative.element,
     );
     const actions = document.createElement("div");
     actions.className = "catalog-actions";
@@ -128,8 +133,8 @@ export class CatalogEditor {
           name: name.control.value,
           tags: nameList(tags.control.value),
           notes: notes.control.value,
-          positive_text: positive.control.value,
-          negative_text: negative.control.value,
+          positive_atoms: positive.value(),
+          negative_atoms: negative.value(),
         });
       },
       { signal: this.abortController.signal },
@@ -137,6 +142,11 @@ export class CatalogEditor {
     this.root.append(heading, form);
     if (component) this.root.append(revisionHistory(revisions));
     this.setBusy(this.isBusy);
+  }
+
+  #disposeAtomEditors() {
+    for (const editor of this.atomEditors) editor.dispose();
+    this.atomEditors = [];
   }
 }
 
@@ -204,11 +214,20 @@ function revisionHistory(revisions) {
     const summary = document.createElement("summary");
     summary.textContent = `Revision ${revision.revision_number}`;
     const positive = document.createElement("pre");
-    positive.textContent = `Positiv\n${revision.positive_text || "—"}`;
+    positive.textContent = atomSummary("Positiv", revision.positive_atoms);
     const negative = document.createElement("pre");
-    negative.textContent = `Negativ\n${revision.negative_text || "—"}`;
+    negative.textContent = atomSummary("Negativ", revision.negative_atoms);
     details.append(summary, positive, negative);
     history.append(details);
   }
   return history;
+}
+
+/** @param {string} label @param {unknown} values */
+function atomSummary(label, values) {
+  const atoms = Array.isArray(values) ? values : [];
+  const lines = atoms.map(
+    (atom) => `${String(atom.text || "")} · ${Number(atom.weight ?? 1)}`,
+  );
+  return `${label}\n${lines.join("\n") || "—"}`;
 }

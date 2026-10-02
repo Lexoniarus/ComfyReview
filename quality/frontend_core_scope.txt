@@ -24,6 +24,7 @@ static/js/playground/prompt-mode-editor.js
 static/js/playground/top-combinations.js
 static/js/playground/generation-controls.js
 static/js/playground/draft-preview.js
+static/js/prompts/prompt-atom-editor.js
 static/js/generations/generation-list.js
 static/js/generations/generation-detail.js
 static/js/analytics/focused-analytics-view.js
