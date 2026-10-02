@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from comfyreview.application import (
+    GenerationLoraSelection,
     GenerationOutputPolicy,
     GenerationPromptSnapshot,
     GenerationRequest,
@@ -28,7 +29,7 @@ def _blueprint_payload() -> dict[str, object]:
         "blueprint_uid": "portrait",
         "version": 1,
         "graph": {
-            "positive": {"inputs": {"text": ""}},
+            "positive": {"inputs": {"text": "", "clip": ["checkpoint", 1]}},
             "negative": {"inputs": {"text": ""}},
             "checkpoint": {"inputs": {"ckpt_name": ""}},
             "sampler": {
@@ -39,6 +40,7 @@ def _blueprint_payload() -> dict[str, object]:
                     "sampler_name": "euler",
                     "scheduler": "normal",
                     "denoise": 1.0,
+                    "model": ["checkpoint", 0],
                 }
             },
             "save": {"inputs": {"subfolder": "", "prefix": ""}},
@@ -60,6 +62,12 @@ def _blueprint_payload() -> dict[str, object]:
         "output_bindings": [{"role": "primary", "node_id": "save"}],
         "sampler_roles": ["base_sampler"],
         "capability_requirements": ["SaveImage"],
+        "lora_chain_binding": {
+            "model_source": {"node_id": "checkpoint", "output_index": 0},
+            "clip_source": {"node_id": "checkpoint", "output_index": 1},
+            "model_targets": [{"node_id": "sampler", "input_name": "model"}],
+            "clip_targets": [{"node_id": "positive", "input_name": "clip"}],
+        },
     }
 
 
@@ -81,6 +89,7 @@ def _request(revision_uid: str) -> GenerationRequest:
         output_policy=GenerationOutputPolicy(
             "playground/Hero", "hero_", ("primary",)
         ),
+        loras=(GenerationLoraSelection("style.safetensors", 800, 650, 0),),
     )
 
 
@@ -219,6 +228,12 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
             ORDER BY membership.position
             """
         ).fetchall()
+        loras = connection.execute(
+            "SELECT position, lora_name, model_strength_milli, "
+            "clip_strength_milli FROM generation_loras "
+            "WHERE generation_id = (SELECT id FROM generations "
+            "WHERE generation_uid = 'generation-native')"
+        ).fetchall()
     assert generation[:4] == (
         "native_comfyui",
         "completed",
@@ -232,6 +247,7 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
     ]
     assert memberships == 3
     assert composition_memberships == [("character", 0, revision_uid)]
+    assert loras == [(0, "style.safetensors", 800, 650)]
 
 
 def test_generation_repository_enforces_transitions_and_missing_database(

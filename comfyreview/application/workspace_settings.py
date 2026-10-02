@@ -5,19 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Protocol
 
+from comfyreview.application.generation import GenerationLoraSelection
+
 
 class WorkspaceSettingsValidationError(ValueError):
     """Reject invalid workspace preferences or generation profiles."""
-
-
-@dataclass(frozen=True, slots=True)
-class GenerationLoraSelection:
-    """Describe one ordered LoRA selection with independent strengths."""
-
-    name: str
-    model_strength_milli: int
-    clip_strength_milli: int
-    position: int
 
 
 @dataclass(frozen=True, slots=True)

@@ -8,6 +8,7 @@ import pytest
 
 from comfyreview.application import (
     CompiledOutputBinding,
+    GenerationLoraSelection,
     GenerationOutputPolicy,
     GenerationPromptSnapshot,
     GenerationRequest,
@@ -15,7 +16,9 @@ from comfyreview.application import (
     WorkflowBlueprint,
     WorkflowCompilationError,
     WorkflowCompiler,
+    WorkflowConnection,
     WorkflowInputBinding,
+    WorkflowLoraChainBinding,
     WorkflowOutputBinding,
 )
 
@@ -95,6 +98,27 @@ def _request() -> GenerationRequest:
     )
 
 
+def _lora_blueprint() -> WorkflowBlueprint:
+    blueprint = replace(
+        _blueprint(),
+        lora_chain_binding=WorkflowLoraChainBinding(
+            model_source=WorkflowConnection("checkpoint", 0),
+            clip_source=WorkflowConnection("checkpoint", 1),
+            model_targets=(WorkflowInputBinding("sampler", "model"),),
+            clip_targets=(WorkflowInputBinding("positive", "clip"),),
+        ),
+    )
+    blueprint.graph["sampler"]["inputs"]["model"] = ["checkpoint", 0]
+    blueprint.graph["positive"]["inputs"]["clip"] = ["checkpoint", 1]
+    return blueprint
+
+
+def _lora_binding() -> WorkflowLoraChainBinding:
+    binding = _lora_blueprint().lora_chain_binding
+    assert binding is not None
+    return binding
+
+
 def test_workflow_compiler_uses_only_explicit_roles_and_preserves_blueprint() -> (
     None
 ):
@@ -144,6 +168,120 @@ def test_workflow_compiler_hash_is_canonical_and_request_values_are_optional() -
     assert first.graph_hash == second.graph_hash
     assert "checkpoint" not in first.resolved_roles
     assert "reference_image" not in first.resolved_roles
+
+
+def test_workflow_compiler_builds_explicit_ordered_lora_chain() -> None:
+    blueprint = _lora_blueprint()
+    request = replace(
+        _request(),
+        loras=(
+            GenerationLoraSelection("first.safetensors", 800, 700, 0),
+            GenerationLoraSelection("second.safetensors", 600, 500, 1),
+        ),
+    )
+
+    compiled = WorkflowCompiler().compile(blueprint, request)
+
+    assert compiled.graph["cr:lora:000"]["inputs"] == {
+        "lora_name": "first.safetensors",
+        "strength_model": 0.8,
+        "strength_clip": 0.7,
+        "model": ["checkpoint", 0],
+        "clip": ["checkpoint", 1],
+    }
+    assert compiled.graph["cr:lora:001"]["inputs"]["model"] == [
+        "cr:lora:000",
+        0,
+    ]
+    assert compiled.graph["sampler"]["inputs"]["model"] == [
+        "cr:lora:001",
+        0,
+    ]
+    assert compiled.graph["positive"]["inputs"]["clip"] == [
+        "cr:lora:001",
+        1,
+    ]
+    assert "cr:lora:000" not in blueprint.graph
+
+
+def test_workflow_compiler_rejects_loras_without_explicit_binding() -> None:
+    request = replace(
+        _request(),
+        loras=(GenerationLoraSelection("style.safetensors", 1000, 1000, 0),),
+    )
+
+    with pytest.raises(WorkflowCompilationError, match="does not support"):
+        WorkflowCompiler().compile(_blueprint(), request)
+
+
+@pytest.mark.parametrize(
+    ("blueprint", "message"),
+    (
+        (
+            replace(
+                _lora_blueprint(),
+                graph={
+                    **_lora_blueprint().graph,
+                    "cr:lora:000": {"inputs": {}},
+                },
+            ),
+            "reserves",
+        ),
+        (
+            replace(
+                _lora_blueprint(),
+                lora_chain_binding=replace(
+                    _lora_binding(),
+                    model_source=WorkflowConnection("missing", 0),
+                ),
+            ),
+            "invalid source",
+        ),
+        (
+            replace(
+                _lora_blueprint(),
+                lora_chain_binding=replace(
+                    _lora_binding(),
+                    model_targets=(),
+                ),
+            ),
+            "requires model",
+        ),
+        (
+            replace(
+                _lora_blueprint(),
+                lora_chain_binding=replace(
+                    _lora_binding(),
+                    model_targets=(WorkflowInputBinding("missing", "model"),),
+                ),
+            ),
+            "missing target",
+        ),
+        (
+            replace(
+                _lora_blueprint(),
+                lora_chain_binding=replace(
+                    _lora_binding(),
+                    model_targets=(
+                        WorkflowInputBinding("sampler", "missing"),
+                    ),
+                ),
+            ),
+            "missing target input",
+        ),
+    ),
+)
+def test_workflow_compiler_rejects_invalid_lora_bindings(
+    blueprint: WorkflowBlueprint,
+    message: str,
+) -> None:
+    request = replace(
+        _request(),
+        loras=(GenerationLoraSelection("style.safetensors", 1000, 1000, 0),),
+    )
+
+    with pytest.raises(WorkflowCompilationError, match=message):
+        WorkflowCompiler().compile(blueprint, request)
 
 
 @pytest.mark.parametrize(

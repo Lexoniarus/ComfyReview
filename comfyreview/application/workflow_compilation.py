@@ -45,6 +45,24 @@ class WorkflowOutputBinding:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkflowConnection:
+    """Identify one graph output used as an explicit connection source."""
+
+    node_id: str
+    output_index: int
+
+
+@dataclass(frozen=True, slots=True)
+class WorkflowLoraChainBinding:
+    """Declare explicit model/CLIP sources and consumers for a LoRA chain."""
+
+    model_source: WorkflowConnection
+    clip_source: WorkflowConnection
+    model_targets: tuple[WorkflowInputBinding, ...]
+    clip_targets: tuple[WorkflowInputBinding, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class WorkflowBlueprint:
     """Hold one immutable versioned API graph template and explicit mappings."""
 
@@ -55,6 +73,7 @@ class WorkflowBlueprint:
     output_bindings: tuple[WorkflowOutputBinding, ...]
     sampler_roles: tuple[str, ...]
     capability_requirements: tuple[str, ...] = ()
+    lora_chain_binding: WorkflowLoraChainBinding | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +173,7 @@ class WorkflowCompiler:
             request,
             resolved_roles,
         )
+        self._compile_lora_chain(graph, blueprint, request)
         self._write_required_role(
             graph,
             blueprint,
@@ -294,6 +314,88 @@ class WorkflowCompiler:
         if len(set(actual_roles)) != len(actual_roles):
             raise WorkflowCompilationError("output roles must be unique")
         return outputs
+
+    def _compile_lora_chain(
+        self,
+        graph: dict[str, Any],
+        blueprint: WorkflowBlueprint,
+        request: GenerationRequest,
+    ) -> None:
+        if not request.loras:
+            return
+        binding = blueprint.lora_chain_binding
+        if binding is None:
+            raise WorkflowCompilationError(
+                "blueprint does not support LoRA selections"
+            )
+        self._validate_lora_binding(graph, binding)
+        model_source: list[object] = [
+            binding.model_source.node_id,
+            binding.model_source.output_index,
+        ]
+        clip_source: list[object] = [
+            binding.clip_source.node_id,
+            binding.clip_source.output_index,
+        ]
+        for index, lora in enumerate(request.loras):
+            node_id = f"cr:lora:{index:03d}"
+            if node_id in graph:
+                raise WorkflowCompilationError(
+                    "blueprint reserves a generated LoRA node identity"
+                )
+            graph[node_id] = {
+                "inputs": {
+                    "lora_name": lora.name,
+                    "strength_model": lora.model_strength_milli / 1000,
+                    "strength_clip": lora.clip_strength_milli / 1000,
+                    "model": model_source,
+                    "clip": clip_source,
+                },
+                "class_type": "LoraLoader",
+                "_meta": {"title": f"ComfyReview LoRA {index + 1}"},
+            }
+            model_source = [node_id, 0]
+            clip_source = [node_id, 1]
+        self._connect_targets(graph, binding.model_targets, model_source)
+        self._connect_targets(graph, binding.clip_targets, clip_source)
+
+    @classmethod
+    def _validate_lora_binding(
+        cls,
+        graph: dict[str, Any],
+        binding: WorkflowLoraChainBinding,
+    ) -> None:
+        for source in (binding.model_source, binding.clip_source):
+            if source.node_id not in graph or source.output_index < 0:
+                raise WorkflowCompilationError(
+                    "LoRA chain references an invalid source"
+                )
+        if not binding.model_targets or not binding.clip_targets:
+            raise WorkflowCompilationError(
+                "LoRA chain requires model and CLIP targets"
+            )
+        for target in (*binding.model_targets, *binding.clip_targets):
+            if target.node_id not in graph:
+                raise WorkflowCompilationError(
+                    "LoRA chain references a missing target"
+                )
+            inputs = cls._node_inputs(graph, target.node_id)
+            if target.input_name not in inputs:
+                raise WorkflowCompilationError(
+                    "LoRA chain references a missing target input"
+                )
+
+    @classmethod
+    def _connect_targets(
+        cls,
+        graph: dict[str, Any],
+        targets: tuple[WorkflowInputBinding, ...],
+        source: list[object],
+    ) -> None:
+        for target in targets:
+            cls._node_inputs(graph, target.node_id)[target.input_name] = list(
+                source
+            )
 
     def _write_required_role(
         self,

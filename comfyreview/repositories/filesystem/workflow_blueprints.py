@@ -10,7 +10,9 @@ from typing import Any, cast
 from comfyreview.application import (
     WorkflowBlueprint,
     WorkflowCompilationError,
+    WorkflowConnection,
     WorkflowInputBinding,
+    WorkflowLoraChainBinding,
     WorkflowOutputBinding,
 )
 
@@ -102,6 +104,7 @@ class JsonWorkflowBlueprintRepository:
         outputs = payload.get("output_bindings")
         sampler_roles = payload.get("sampler_roles")
         capabilities = payload.get("capability_requirements", [])
+        lora_chain = payload.get("lora_chain_binding")
         if not isinstance(graph, dict) or not isinstance(roles, dict):
             raise WorkflowCompilationError(
                 "blueprint graph or roles are invalid"
@@ -133,6 +136,11 @@ class JsonWorkflowBlueprintRepository:
                 for value in outputs
                 if isinstance(value, dict)
             )
+            lora_chain_binding = (
+                JsonWorkflowBlueprintRepository._lora_chain(lora_chain)
+                if lora_chain is not None
+                else None
+            )
         except KeyError as error:
             raise WorkflowCompilationError(
                 "blueprint binding is incomplete"
@@ -153,4 +161,68 @@ class JsonWorkflowBlueprintRepository:
             capability_requirements=tuple(
                 str(value) for value in capabilities
             ),
+            lora_chain_binding=lora_chain_binding,
         )
+
+    @staticmethod
+    def _lora_chain(value: object) -> WorkflowLoraChainBinding:
+        if not isinstance(value, dict):
+            raise WorkflowCompilationError("blueprint LoRA chain is invalid")
+        try:
+            return WorkflowLoraChainBinding(
+                model_source=JsonWorkflowBlueprintRepository._connection(
+                    value["model_source"]
+                ),
+                clip_source=JsonWorkflowBlueprintRepository._connection(
+                    value["clip_source"]
+                ),
+                model_targets=JsonWorkflowBlueprintRepository._targets(
+                    value["model_targets"]
+                ),
+                clip_targets=JsonWorkflowBlueprintRepository._targets(
+                    value["clip_targets"]
+                ),
+            )
+        except KeyError as error:
+            raise WorkflowCompilationError(
+                "blueprint LoRA chain is incomplete"
+            ) from error
+
+    @staticmethod
+    def _connection(value: object) -> WorkflowConnection:
+        if not isinstance(value, dict):
+            raise WorkflowCompilationError("blueprint LoRA source is invalid")
+        try:
+            return WorkflowConnection(
+                node_id=str(value["node_id"]),
+                output_index=int(value["output_index"]),
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise WorkflowCompilationError(
+                "blueprint LoRA source is invalid"
+            ) from error
+
+    @staticmethod
+    def _targets(value: object) -> tuple[WorkflowInputBinding, ...]:
+        if not isinstance(value, list):
+            raise WorkflowCompilationError(
+                "blueprint LoRA targets are invalid"
+            )
+        try:
+            targets = tuple(
+                WorkflowInputBinding(
+                    node_id=str(item["node_id"]),
+                    input_name=str(item["input_name"]),
+                )
+                for item in value
+                if isinstance(item, dict)
+            )
+        except KeyError as error:
+            raise WorkflowCompilationError(
+                "blueprint LoRA target is incomplete"
+            ) from error
+        if len(targets) != len(value):
+            raise WorkflowCompilationError(
+                "blueprint LoRA targets are invalid"
+            )
+        return targets

@@ -376,12 +376,13 @@ class _PlaygroundDiscovery:
             checkpoints=["model.safetensors"],
             samplers=["euler"],
             schedulers=["normal"],
+            loras=["style.safetensors"],
         )
 
 
 class _WorkflowDefaults:
     def load(self, blueprint_uid, version):
-        assert (blueprint_uid, version) == ("default-character", 1)
+        assert (blueprint_uid, version) == ("default-character", 2)
         return SimpleNamespace(
             checkpoint="model.safetensors",
             sampler=SimpleNamespace(
@@ -681,6 +682,7 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "checkpoints": ["model.safetensors"],
         "samplers": ["euler"],
         "schedulers": ["normal"],
+        "loras": ["style.safetensors"],
         "defaults": {
             "checkpoint": "model.safetensors",
             "seed": 1,

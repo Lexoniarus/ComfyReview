@@ -67,6 +67,7 @@ class ComfyUiCapabilities:
     samplers: tuple[str, ...]
     schedulers: tuple[str, ...]
     checkpoints: tuple[str, ...]
+    loras: tuple[str, ...] = ()
 
 
 class ComfyUiProvider(Protocol):

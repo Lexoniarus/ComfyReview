@@ -57,12 +57,13 @@ def playground_capabilities(request: Request) -> JSONResponse:
     """Return cached-or-live native ComfyUI enum capabilities."""
     container = get_application_container(request)
     discovery = container.playground_discovery.discover()
-    defaults = container.workflow_defaults.load("default-character", 1)
+    defaults = container.workflow_defaults.load("default-character", 2)
     return JSONResponse(
         {
             "checkpoints": discovery.checkpoints,
             "samplers": discovery.samplers,
             "schedulers": discovery.schedulers,
+            "loras": discovery.loras,
             "defaults": {
                 "checkpoint": defaults.checkpoint,
                 "seed": 1,

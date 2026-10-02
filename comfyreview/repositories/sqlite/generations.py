@@ -85,7 +85,7 @@ class SqliteGenerationRepository:
                     self._primary_stage_value(generation, "sampler"),
                     self._primary_stage_value(generation, "scheduler"),
                     self._primary_stage_value(generation, "denoise"),
-                    generation.request.loras_json,
+                    self._loras_json(generation),
                     positive_id,
                     negative_id,
                     metadata,
@@ -123,6 +123,24 @@ class SqliteGenerationRepository:
                         stage.denoise,
                     ),
                 )
+            connection.executemany(
+                """
+                INSERT INTO generation_loras(
+                    generation_id, position, lora_name,
+                    model_strength_milli, clip_strength_milli
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                tuple(
+                    (
+                        generation_id,
+                        lora.position,
+                        lora.name,
+                        lora.model_strength_milli,
+                        lora.clip_strength_milli,
+                    )
+                    for lora in generation.request.loras
+                ),
+            )
             connection.commit()
             return GenerationRecord(
                 generation.generation_uid, "prepared", None
@@ -132,6 +150,21 @@ class SqliteGenerationRepository:
             raise
         finally:
             connection.close()
+
+    @staticmethod
+    def _loras_json(generation: PreparedGeneration) -> str:
+        return json.dumps(
+            [
+                {
+                    "name": lora.name,
+                    "strength_model": lora.model_strength_milli / 1000,
+                    "strength_clip": lora.clip_strength_milli / 1000,
+                }
+                for lora in generation.request.loras
+            ],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
 
     def get(self, generation_uid: str) -> GenerationRecord:
         """Return one current lifecycle record."""

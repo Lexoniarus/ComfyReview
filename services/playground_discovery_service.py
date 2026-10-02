@@ -42,8 +42,14 @@ class PlaygroundDiscoveryService:
             checkpoints=list(capabilities.checkpoints),
             samplers=list(capabilities.samplers),
             schedulers=list(capabilities.schedulers),
+            loras=list(capabilities.loras),
         )
-        if result.checkpoints or result.samplers or result.schedulers:
+        if (
+            result.checkpoints
+            or result.samplers
+            or result.schedulers
+            or result.loras
+        ):
             self._save(result)
             return result
         return self._cached()
@@ -54,6 +60,7 @@ class PlaygroundDiscoveryService:
             checkpoints=self._strings(raw.get("checkpoints")),
             samplers=self._strings(raw.get("samplers")),
             schedulers=self._strings(raw.get("schedulers")),
+            loras=self._strings(raw.get("loras")),
         )
 
     def _save(self, result: DiscoveryLists) -> None:
@@ -63,6 +70,7 @@ class PlaygroundDiscoveryService:
                     "checkpoints": result.checkpoints,
                     "samplers": result.samplers,
                     "schedulers": result.schedulers,
+                    "loras": result.loras,
                 }
             )
         except OSError:

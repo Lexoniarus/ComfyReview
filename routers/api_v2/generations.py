@@ -2,13 +2,14 @@
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from comfyreview.api import get_application_container
 from comfyreview.api.v2_presenters import ImageResponseMapper
 from comfyreview.application import (
     ConfirmPlaygroundDraftCommand,
     GenerationDetail,
+    GenerationLoraSelection,
     GenerationMutationError,
     GenerationNotFoundError,
     GenerationQueryValidationError,
@@ -44,6 +45,16 @@ class PlaygroundSamplerRequest(BaseModel):
     cfg_step: float = 0.1
 
 
+class GenerationLoraRequest(BaseModel):
+    """Carry one ordered LoRA selection without workflow semantics."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    model_strength: float = 1.0
+    clip_strength: float = 1.0
+
+
 class PlaygroundGenerationRequest(BaseModel):
     """Submit reviewed domain intent without workflow graph semantics."""
 
@@ -55,6 +66,7 @@ class PlaygroundGenerationRequest(BaseModel):
     negative_atoms: list[PromptAtomRequest]
     checkpoint: str
     sampler: PlaygroundSamplerRequest
+    loras: list[GenerationLoraRequest] = Field(default_factory=list)
 
 
 class GenerationReconcileRequest(BaseModel):
@@ -170,6 +182,15 @@ def submit_generation(
                 denoise=payload.sampler.denoise,
             ),
             output_subdirectory=f"playground/{character.component_key}",
+            loras=tuple(
+                GenerationLoraSelection(
+                    name=item.name,
+                    model_strength_milli=round(item.model_strength * 1000),
+                    clip_strength_milli=round(item.clip_strength * 1000),
+                    position=position,
+                )
+                for position, item in enumerate(payload.loras)
+            ),
         )
         drafts = container.playground_generation_sweeps.expand(
             draft,

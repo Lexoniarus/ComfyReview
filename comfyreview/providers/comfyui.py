@@ -257,11 +257,13 @@ class NativeComfyUiProvider:
             if values:
                 checkpoints = values
                 break
+        loras = self._enum_values(objects.get("LoraLoader"), "lora_name")
         return ComfyUiCapabilities(
             node_classes=tuple(sorted(str(key) for key in objects)),
             samplers=samplers,
             schedulers=schedulers,
             checkpoints=checkpoints,
+            loras=loras,
         )
 
     def _history(self, prompt_id: str) -> dict[str, Any]:

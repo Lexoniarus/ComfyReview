@@ -14,6 +14,7 @@ from comfyreview.application import (
     ComfyUiRejectionError,
     ComfyUiSubmission,
     ComfyUiTimeoutError,
+    GenerationLoraSelection,
     GenerationMutationError,
     GenerationOutputPolicy,
     GenerationPromptSnapshot,
@@ -141,15 +142,17 @@ class _ComfyUi:
         submit_error: Exception | None = None,
         wait_result: ComfyUiJobStatus | Exception | None = None,
         capabilities: tuple[str, ...] = ("SaveImage",),
+        loras: tuple[str, ...] = (),
     ) -> None:
         self.events = events
         self.submit_error = submit_error
         self.wait_result = wait_result
         self.capabilities = capabilities
+        self.loras = loras
 
     def discover_capabilities(self):
         self.events.append("capabilities")
-        return ComfyUiCapabilities(self.capabilities, (), (), ())
+        return ComfyUiCapabilities(self.capabilities, (), (), (), self.loras)
 
     def submit(self, compiled_graph):
         self.events.append("external_submit")
@@ -262,6 +265,20 @@ def test_generation_service_submits_without_open_external_transaction() -> (
             ),
             "negative prompt",
         ),
+        (
+            replace(
+                _request(),
+                loras=(GenerationLoraSelection("style", 1000, 1000, 1),),
+            ),
+            "positions",
+        ),
+        (
+            replace(
+                _request(),
+                loras=(GenerationLoraSelection("", 1000, 1000, 0),),
+            ),
+            "name",
+        ),
     ),
 )
 def test_generation_service_validates_before_dependencies(
@@ -275,6 +292,36 @@ def test_generation_service_validates_before_dependencies(
             events=events,
         ).submit(generation_request)
     assert events == []
+
+
+def test_generation_service_rejects_unavailable_and_duplicate_loras() -> None:
+    events: list[str] = []
+    unavailable = replace(
+        _request(),
+        loras=(GenerationLoraSelection("missing.safetensors", 1000, 1000, 0),),
+    )
+    with pytest.raises(GenerationValidationError, match="missing requested"):
+        _service(
+            generations=_Generations(events),
+            comfyui=_ComfyUi(events, loras=("available.safetensors",)),
+            events=events,
+        ).submit(unavailable)
+    assert events == ["capabilities"]
+
+    events.clear()
+    duplicate = replace(
+        _request(),
+        loras=(
+            GenerationLoraSelection("same.safetensors", 1000, 1000, 0),
+            GenerationLoraSelection("same.safetensors", 500, 500, 1),
+        ),
+    )
+    with pytest.raises(GenerationValidationError, match="unique"):
+        _service(
+            generations=_Generations(events),
+            comfyui=_ComfyUi(events, loras=("same.safetensors",)),
+            events=events,
+        ).submit(duplicate)
 
 
 def test_generation_service_requires_blueprint_capabilities() -> None:

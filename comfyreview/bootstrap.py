@@ -289,7 +289,7 @@ def build_application_container(
             generation=generation_service,
             policy=PlaygroundGenerationPolicy(
                 blueprint_uid="default-character",
-                blueprint_version=1,
+                blueprint_version=2,
                 expected_output_roles=("primary",),
             ),
         ),

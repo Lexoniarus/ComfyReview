@@ -251,6 +251,15 @@ def test_native_provider_discovers_technical_capabilities() -> None:
                     }
                 }
             },
+            "LoraLoader": {
+                "input": {
+                    "required": {
+                        "lora_name": [
+                            ["style-b.safetensors", "style-a.safetensors"]
+                        ]
+                    }
+                }
+            },
             "SaveImage": {"input": {}},
         },
     )
@@ -260,11 +269,16 @@ def test_native_provider_discovers_technical_capabilities() -> None:
     assert capabilities.node_classes == (
         "CheckpointLoaderSimple",
         "KSampler",
+        "LoraLoader",
         "SaveImage",
     )
     assert capabilities.samplers == ("dpmpp", "euler")
     assert capabilities.schedulers == ("karras", "normal")
     assert capabilities.checkpoints == ("a.safetensors", "b.safetensors")
+    assert capabilities.loras == (
+        "style-a.safetensors",
+        "style-b.safetensors",
+    )
 
 
 class _Response:

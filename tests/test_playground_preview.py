@@ -121,7 +121,7 @@ def test_preview_generation_uses_catalog_revisions_and_keeps_legacy_submit_shape
                 "key": "aiko",
             }
         ],
-        discovery=DiscoveryLists([], [], []),
+        discovery=DiscoveryLists([], [], [], []),
         playground_service=playground,
         render_defaults={
             "checkpoint_name": "model.safetensors",

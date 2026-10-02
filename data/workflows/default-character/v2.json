@@ -1,0 +1,118 @@
+{
+  "blueprint_uid": "default-character",
+  "version": 2,
+  "graph": {
+    "3": {
+      "inputs": {
+        "seed": 228780579102843,
+        "steps": 32,
+        "cfg": 6,
+        "sampler_name": "sa_solver",
+        "scheduler": "simple",
+        "denoise": 1,
+        "model": ["42", 0],
+        "positive": ["26:7", 0],
+        "negative": ["25:7", 0],
+        "latent_image": ["13", 0]
+      },
+      "class_type": "KSampler",
+      "_meta": {"title": "KSampler"}
+    },
+    "8": {
+      "inputs": {"samples": ["3", 0], "vae": ["42", 2]},
+      "class_type": "VAEDecode",
+      "_meta": {"title": "VAE Decode"}
+    },
+    "13": {
+      "inputs": {"width": 1024, "height": 1024, "batch_size": 1},
+      "class_type": "EmptySD3LatentImage",
+      "_meta": {"title": "EmptySD3LatentImage"}
+    },
+    "33": {
+      "inputs": {"filename_prefix": ["cr:output_path", 0], "images": ["8", 0]},
+      "class_type": "SaveImage",
+      "_meta": {"title": "Save Image"}
+    },
+    "42": {
+      "inputs": {"ckpt_name": "NetaYumev35_pretrained_all_in_one.safetensors"},
+      "class_type": "CheckpointLoaderSimple",
+      "_meta": {"title": "Load Checkpoint"}
+    },
+    "26:23": {
+      "inputs": {"value": "You are an assistant designed to generate high quality anime images based on textual prompts. <Prompt Start> "},
+      "class_type": "PrimitiveStringMultiline",
+      "_meta": {"title": "System prompt"}
+    },
+    "26:24": {
+      "inputs": {"value": "(masterpiece:1.3), (best quality:1.3)"},
+      "class_type": "PrimitiveStringMultiline",
+      "_meta": {"title": "Prompt"}
+    },
+    "26:22": {
+      "inputs": {"string_a": ["26:23", 0], "string_b": ["26:24", 0], "delimiter": ""},
+      "class_type": "StringConcatenate",
+      "_meta": {"title": "Concatenate"}
+    },
+    "26:7": {
+      "inputs": {"text": ["26:22", 0], "clip": ["42", 1]},
+      "class_type": "CLIPTextEncode",
+      "_meta": {"title": "CLIP Text Encode (Positive Prompt)"}
+    },
+    "25:22": {
+      "inputs": {"string_a": ["25:23", 0], "string_b": ["25:24", 0], "delimiter": ""},
+      "class_type": "StringConcatenate",
+      "_meta": {"title": "Concatenate"}
+    },
+    "25:23": {
+      "inputs": {"value": "You are an assistant designed to generate low-quality images based on textual prompts <Prompt Start> "},
+      "class_type": "PrimitiveStringMultiline",
+      "_meta": {"title": "System prompt"}
+    },
+    "25:24": {
+      "inputs": {"value": "(multiple girls:1.8), (bad anatomy:1.5), (low quality:1.3)"},
+      "class_type": "PrimitiveStringMultiline",
+      "_meta": {"title": "Negative Prompt"}
+    },
+    "25:7": {
+      "inputs": {"text": ["25:22", 0], "clip": ["42", 1]},
+      "class_type": "CLIPTextEncode",
+      "_meta": {"title": "CLIP Text Encode (Negative Prompt)"}
+    },
+    "cr:output_subdir": {
+      "inputs": {"value": "playground"},
+      "class_type": "PrimitiveString",
+      "_meta": {"title": "Output Subdirectory"}
+    },
+    "cr:filename_prefix": {
+      "inputs": {"value": "ComfyReview"},
+      "class_type": "PrimitiveString",
+      "_meta": {"title": "Filename Prefix"}
+    },
+    "cr:output_path": {
+      "inputs": {"string_a": ["cr:output_subdir", 0], "string_b": ["cr:filename_prefix", 0], "delimiter": "/"},
+      "class_type": "StringConcatenate",
+      "_meta": {"title": "Output Path"}
+    }
+  },
+  "role_bindings": {
+    "positive_prompt": {"node_id": "26:24", "input_name": "value"},
+    "negative_prompt": {"node_id": "25:24", "input_name": "value"},
+    "checkpoint": {"node_id": "42", "input_name": "ckpt_name"},
+    "base_sampler": {"node_id": "3"},
+    "output_subdirectory": {"node_id": "cr:output_subdir", "input_name": "value"},
+    "filename_prefix": {"node_id": "cr:filename_prefix", "input_name": "value"},
+    "save_image": {"node_id": "33"}
+  },
+  "output_bindings": [{"role": "primary", "node_id": "33"}],
+  "sampler_roles": ["base_sampler"],
+  "capability_requirements": ["CheckpointLoaderSimple", "LoraLoader", "SaveImage", "PrimitiveString", "StringConcatenate"],
+  "lora_chain_binding": {
+    "model_source": {"node_id": "42", "output_index": 0},
+    "clip_source": {"node_id": "42", "output_index": 1},
+    "model_targets": [{"node_id": "3", "input_name": "model"}],
+    "clip_targets": [
+      {"node_id": "26:7", "input_name": "clip"},
+      {"node_id": "25:7", "input_name": "clip"}
+    ]
+  }
+}

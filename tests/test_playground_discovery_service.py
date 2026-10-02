@@ -44,6 +44,7 @@ def test_playground_discovery_uses_native_capabilities_and_refreshes_cache(
                 ("euler",),
                 ("normal",),
                 ("model.safetensors",),
+                ("style.safetensors",),
             )
         ),
         cache_path,
@@ -53,6 +54,7 @@ def test_playground_discovery_uses_native_capabilities_and_refreshes_cache(
 
     assert result.checkpoints == ["model.safetensors"]
     assert result.samplers == ["euler"]
+    assert result.loras == ["style.safetensors"]
     assert cache_path.is_file()
 
 
@@ -70,7 +72,7 @@ def test_playground_discovery_falls_back_to_clean_cached_lists(
         cache_path,
     )
     empty = _service(
-        _Provider(ComfyUiCapabilities((), (), (), ())),
+        _Provider(ComfyUiCapabilities((), (), (), (), ())),
         cache_path,
     )
 
@@ -95,7 +97,7 @@ def test_playground_discovery_ignores_cache_write_failure(
     service = PlaygroundDiscoveryService(
         cast(
             ComfyUiProvider,
-            _Provider(ComfyUiCapabilities((), ("euler",), (), ())),
+            _Provider(ComfyUiCapabilities((), ("euler",), (), (), ())),
         ),
         _ReadOnlyCache(),
     )

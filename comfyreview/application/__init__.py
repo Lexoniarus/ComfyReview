@@ -55,6 +55,7 @@ from comfyreview.application.curation import (
 )
 from comfyreview.application.generation import (
     GenerationIdentitySource,
+    GenerationLoraSelection,
     GenerationMutationError,
     GenerationOutputPolicy,
     GenerationPort,
@@ -225,7 +226,9 @@ from comfyreview.application.workflow_compilation import (
     WorkflowBlueprintRepository,
     WorkflowCompilationError,
     WorkflowCompiler,
+    WorkflowConnection,
     WorkflowInputBinding,
+    WorkflowLoraChainBinding,
     WorkflowOutputBinding,
 )
 from comfyreview.application.workflow_defaults import (
@@ -234,7 +237,6 @@ from comfyreview.application.workflow_defaults import (
     WorkflowDefaultsService,
 )
 from comfyreview.application.workspace_settings import (
-    GenerationLoraSelection,
     GenerationProfile,
     GenerationProfileIdentitySource,
     GenerationProfileRepository,
@@ -435,9 +437,11 @@ __all__ = [
     "WorkflowBlueprint",
     "WorkflowBlueprintRepository",
     "WorkflowCompilationError",
+    "WorkflowConnection",
     "WorkflowCompiler",
     "WorkflowDefaultsService",
     "WorkflowInputBinding",
+    "WorkflowLoraChainBinding",
     "WorkflowOutputBinding",
     "WorkflowProvenance",
     "WorkspacePreferences",

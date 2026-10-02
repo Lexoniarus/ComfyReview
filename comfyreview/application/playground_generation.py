@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass, replace
 
 from comfyreview.application.generation import (
+    GenerationLoraSelection,
     GenerationMutationError,
     GenerationOutputPolicy,
     GenerationPort,
@@ -30,6 +31,7 @@ class PlaygroundGenerationDraft:
     checkpoint: str
     sampler: GenerationSamplerSettings
     output_subdirectory: str
+    loras: tuple[GenerationLoraSelection, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,6 +221,7 @@ class PlaygroundGenerationPolicy:
                 ),
                 expected_roles=self._expected_output_roles,
             ),
+            loras=draft.loras,
         )
 
     @staticmethod

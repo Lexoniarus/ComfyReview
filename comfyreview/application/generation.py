@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from comfyreview.application.comfyui import (
+    ComfyUiCapabilities,
     ComfyUiConnectionError,
     ComfyUiError,
     ComfyUiProvider,
@@ -58,6 +59,16 @@ class GenerationSamplerSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationLoraSelection:
+    """Describe one ordered LoRA with independent model and CLIP strengths."""
+
+    name: str
+    model_strength_milli: int
+    clip_strength_milli: int
+    position: int
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationOutputPolicy:
     """Carry output naming intent decided before workflow compilation."""
 
@@ -78,7 +89,7 @@ class GenerationRequest:
     checkpoint: str | None
     sampler_stages: tuple[GenerationSamplerSettings, ...]
     output_policy: GenerationOutputPolicy
-    loras_json: str = "[]"
+    loras: tuple[GenerationLoraSelection, ...] = ()
     reference_image: str | None = None
 
 
@@ -212,12 +223,17 @@ class GenerationService:
     def submit(self, request: GenerationRequest) -> GenerationSubmission:
         """Compile, persist and submit one generation without a long transaction."""
         self._validate(request)
+        capabilities = (
+            self._comfyui.discover_capabilities() if request.loras else None
+        )
+        if capabilities is not None:
+            self._validate_loras(request, capabilities.loras)
         blueprint = self._blueprints.get(
             request.blueprint_uid,
             request.blueprint_version,
         )
         compiled = self._compiler.compile(blueprint, request)
-        self._validate_capabilities(compiled)
+        self._validate_capabilities(compiled, capabilities)
         generation_uid = self._identities.new_generation_uid()
         prepared = PreparedGeneration(generation_uid, request, compiled)
         try:
@@ -334,16 +350,36 @@ class GenerationService:
                 "ComfyUI completed but outputs could not be confirmed"
             ) from error
 
-    def _validate_capabilities(self, compiled: CompiledWorkflow) -> None:
+    def _validate_capabilities(
+        self,
+        compiled: CompiledWorkflow,
+        discovered: ComfyUiCapabilities | None = None,
+    ) -> None:
         requirements = set(compiled.capability_requirements)
         if not requirements:
             return
-        available = set(self._comfyui.discover_capabilities().node_classes)
+        capabilities = discovered or self._comfyui.discover_capabilities()
+        available = set(capabilities.node_classes)
         missing = requirements - available
         if missing:
             raise GenerationValidationError(
                 "ComfyUI is missing required capabilities: "
                 + ", ".join(sorted(missing))
+            )
+
+    @staticmethod
+    def _validate_loras(
+        request: GenerationRequest,
+        available_loras: tuple[str, ...],
+    ) -> None:
+        requested = tuple(lora.name for lora in request.loras)
+        if len(set(requested)) != len(requested):
+            raise GenerationValidationError("LoRA names must be unique")
+        unavailable = set(requested) - set(available_loras)
+        if unavailable:
+            raise GenerationValidationError(
+                "ComfyUI is missing requested LoRAs: "
+                + ", ".join(sorted(unavailable))
             )
 
     def _mark_failed(self, generation_uid: str, reason: str) -> None:
@@ -380,6 +416,14 @@ class GenerationService:
             raise GenerationValidationError("positive prompt is required")
         if not request.prompt.negative_text.strip():
             raise GenerationValidationError("negative prompt is required")
+        if tuple(lora.position for lora in request.loras) != tuple(
+            range(len(request.loras))
+        ):
+            raise GenerationValidationError(
+                "LoRA positions must be contiguous"
+            )
+        if any(not lora.name.strip() for lora in request.loras):
+            raise GenerationValidationError("LoRA name is required")
 
     @staticmethod
     def _required(value: str, field: str) -> str:
