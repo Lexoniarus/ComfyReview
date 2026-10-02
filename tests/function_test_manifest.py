@@ -1,6 +1,10 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.catalog_evidence:CatalogEvidenceService.list_top_images": (
+        "tests/test_catalog_evidence.py::"
+        "test_catalog_evidence_service_validates_bounded_queries"
+    ),
     "comfyreview.application.pagination:normalize_page": (
         "tests/test_canonical_analytics.py::"
         "test_analytics_paging_is_bounded_and_scope_kind_is_explicit"

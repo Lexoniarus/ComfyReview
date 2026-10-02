@@ -5,6 +5,7 @@ static/js/core/request-lifecycle.js
 static/js/components/confirmation-dialog.js
 static/js/curation/image-curation-controller.js
 static/js/catalog/catalog-browser.js
+static/js/catalog/catalog-evidence-view.js
 static/js/catalog/catalog-editor.js
 static/js/arena/arena-board.js
 static/js/arena/arena-keyboard.js

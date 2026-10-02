@@ -14,6 +14,7 @@ from comfyreview.api.v2_presenters import ImageResponseMapper
 from comfyreview.application import (
     ArenaPair,
     ArenaResult,
+    CatalogEvidenceImage,
     CurationResult,
     GenerationSettings,
     GenerationSubmission,
@@ -222,6 +223,16 @@ class _PromptCatalog:
             self.get_component(component_uid), archived=archived
         )
         return self.component
+
+
+class _CatalogEvidence:
+    def list_top_images(self, component_uid, *, limit=3):
+        assert component_uid != "missing"
+        assert limit == 3
+        return (
+            CatalogEvidenceImage("evidence-1", 9.25, 4),
+            CatalogEvidenceImage("evidence-2", None, 0),
+        )
 
 
 class _Playground:
@@ -736,6 +747,20 @@ def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
     )
 
     assert detail.status_code == 200
+    assert detail.json()["top_images"] == [
+        {
+            "image_uid": "evidence-1",
+            "image_url": "/files/output/evidence-1.png",
+            "average_rating": 9.25,
+            "rating_count": 4,
+        },
+        {
+            "image_uid": "evidence-2",
+            "image_url": "/files/output/evidence-2.png",
+            "average_rating": None,
+            "rating_count": 0,
+        },
+    ]
     assert revisions.json()["revisions"][0]["revision_uid"] == (
         "revision-character-a"
     )
@@ -1078,6 +1103,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         curation_service=_Curation(),
         arena_service=_Arena(),
         prompt_catalog_service=_PromptCatalog(),
+        catalog_evidence=_CatalogEvidence(),
         prompt_renderer=PromptRenderer(),
         playground_service=_Playground(),
         playground_submission_service=_PlaygroundSubmission(),

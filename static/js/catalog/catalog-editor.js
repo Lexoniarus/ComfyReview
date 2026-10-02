@@ -1,4 +1,5 @@
 import { PromptAtomEditor } from "../prompts/prompt-atom-editor.js";
+import { CatalogEvidenceView } from "./catalog-evidence-view.js";
 
 /** @type {Array<[string, string]>} */
 const editableKinds = [
@@ -13,12 +14,15 @@ const editableKinds = [
 
 /** Own one focused component editor and immutable revision history. */
 export class CatalogEditor {
-  /** @param {HTMLElement} root @param {{onSave: (payload: Record<string, any>) => void, onArchive: (archived: boolean) => void}} actions */
+  /** @param {HTMLElement} root @param {{onSave: (payload: Record<string, any>) => void, onArchive: (archived: boolean) => void, onEvidenceOpen: (imageUid: string, imageUrl: string) => void}} actions */
   constructor(root, actions) {
     this.root = root;
     this.actions = actions;
     this.abortController = new AbortController();
     this.isBusy = false;
+    this.evidence = new CatalogEvidenceView({
+      onOpen: actions.onEvidenceOpen,
+    });
     /** @type {Array<PromptAtomEditor>} */
     this.atomEditors = [];
   }
@@ -54,6 +58,7 @@ export class CatalogEditor {
   dispose() {
     this.abortController.abort();
     this.#disposeAtomEditors();
+    this.evidence.dispose();
   }
 
   /** @param {Record<string, any> | null} component @param {Array<Record<string, any>>} revisions */
@@ -140,7 +145,12 @@ export class CatalogEditor {
       },
       { signal: this.abortController.signal },
     );
-    this.root.append(heading, form);
+    if (component) {
+      this.evidence.render(component.top_images || []);
+      this.root.append(heading, this.evidence.element, form);
+    } else {
+      this.root.append(heading, form);
+    }
     if (component) this.root.append(revisionHistory(revisions));
     this.setBusy(this.isBusy);
   }

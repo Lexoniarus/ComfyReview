@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CatalogBrowser } from "../../static/js/catalog/catalog-browser.js";
 import { CatalogEditor } from "../../static/js/catalog/catalog-editor.js";
+import { CatalogEvidenceView } from "../../static/js/catalog/catalog-evidence-view.js";
 
 const components = [
   component("character-a", "character", "Aiko", false, ["hero"]),
@@ -39,7 +40,11 @@ describe("Catalog browser components", () => {
     const root = document.createElement("div");
     const onSave = vi.fn();
     const onArchive = vi.fn();
-    const editor = new CatalogEditor(root, { onSave, onArchive });
+    const editor = new CatalogEditor(root, {
+      onSave,
+      onArchive,
+      onEvidenceOpen: vi.fn(),
+    });
 
     editor.create();
     const createInputs = root.querySelectorAll("input");
@@ -73,6 +78,29 @@ describe("Catalog browser components", () => {
     editor.setBusy(false);
     expect(root.querySelector("select").disabled).toBe(true);
     editor.dispose();
+  });
+
+  it("shows at most three lazy evidence images and owns interactions", () => {
+    const onOpen = vi.fn();
+    const view = new CatalogEvidenceView({ onOpen });
+    const images = Array.from({ length: 4 }, (_, index) => ({
+      image_uid: `image-${index}`,
+      image_url: `/output/image-${index}.png`,
+      average_rating: index === 0 ? 9.5 : null,
+      rating_count: index,
+    }));
+
+    view.render(images);
+    expect(view.element.querySelectorAll("img")).toHaveLength(3);
+    expect(view.element.querySelector("img").loading).toBe("lazy");
+    expect(view.element.textContent).toContain("Ø 9,5 / 10");
+    view.element.querySelector("button").click();
+    expect(onOpen).toHaveBeenCalledWith("image-0", "/output/image-0.png");
+
+    view.render([]);
+    expect(view.element.textContent).toContain("Noch keine");
+    view.dispose();
+    expect(view.element.childElementCount).toBe(0);
   });
 });
 

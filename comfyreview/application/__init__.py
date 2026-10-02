@@ -24,6 +24,11 @@ from comfyreview.application.arena import (
     ArenaValidationError,
     RecordArenaDecisionCommand,
 )
+from comfyreview.application.catalog_evidence import (
+    CatalogEvidenceImage,
+    CatalogEvidenceRepository,
+    CatalogEvidenceService,
+)
 from comfyreview.application.comfyui import (
     ComfyUiCapabilities,
     ComfyUiConnectionError,
@@ -275,6 +280,9 @@ __all__ = [
     "CanonicalOutputImageSource",
     "CanonicalSchemaLifecycle",
     "CanonicalSchemaReport",
+    "CatalogEvidenceImage",
+    "CatalogEvidenceRepository",
+    "CatalogEvidenceService",
     "CollectionPage",
     "CollectedOutputFile",
     "ComfyUiCapabilities",

@@ -1,6 +1,7 @@
 {% extends "_v2_base.html" %} {% set page_title = "Katalog · ComfyReview" %}
 {% set active_nav = "catalog" %} {% block styles %}
 <link rel="stylesheet" href="/static/css/v2/catalog.css" />
+<link rel="stylesheet" href="/static/css/v2/image-surfaces.css" />
 {% endblock %} {% block content %}
 <div class="catalog-shell" data-v2-surface="catalog">
   <header class="v2-panel catalog-header">
@@ -47,6 +48,17 @@
   <p class="catalog-status" data-catalog-status aria-live="polite">
     Katalog wird geladen …
   </p>
+  <dialog class="image-viewer" data-image-viewer aria-label="Bildansicht">
+    <button
+      class="icon-button"
+      type="button"
+      data-viewer-close
+      aria-label="Bildansicht schließen"
+    >
+      ×
+    </button>
+    <img alt="Vergrößertes Katalogbeispiel" />
+  </dialog>
 </div>
 {% endblock %} {% block scripts %}
 <script type="module" src="/static/js/entries/catalog.js"></script>

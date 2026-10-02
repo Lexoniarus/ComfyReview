@@ -14,6 +14,7 @@ from comfyreview.application import (
     AnalyticsService,
     ArenaService,
     CanonicalSchemaReport,
+    CatalogEvidenceService,
     CurationImage,
     CurationService,
     GenerationProfileService,
@@ -133,6 +134,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
             object(),
         ),
         prompt_catalog_service=cast(PromptCatalogService, object()),
+        catalog_evidence=cast(CatalogEvidenceService, object()),
         prompt_renderer=PromptRenderer(),
         prompt_catalog_views=cast(PromptCatalogViewService, object()),
         prompt_labels=cast(PromptLabelService, object()),
@@ -250,6 +252,7 @@ def test_default_container_wires_canonical_review_runtime(
     )
     assert isinstance(container.review_service, ReviewService)
     assert isinstance(container.prompt_catalog_service, PromptCatalogService)
+    assert isinstance(container.catalog_evidence, CatalogEvidenceService)
     assert isinstance(container.prompt_catalog_views, PromptCatalogViewService)
     assert isinstance(container.prompt_labels, PromptLabelService)
     assert isinstance(container.playground_service, PlaygroundService)

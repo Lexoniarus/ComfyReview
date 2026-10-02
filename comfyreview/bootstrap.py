@@ -16,6 +16,7 @@ from comfyreview.application import (
     AnalyticsService,
     ArenaService,
     CanonicalSchemaLifecycle,
+    CatalogEvidenceService,
     CompositionAnalyticsService,
     CurationService,
     DraftOverridePolicy,
@@ -69,6 +70,7 @@ from comfyreview.repositories.sqlite import (
     SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
+    SqliteCatalogEvidenceRepository,
     SqliteCompositionAnalyticsRepository,
     SqliteCurationRepository,
     SqliteGenerationOutputRepository,
@@ -125,6 +127,7 @@ class ApplicationContainer:
     generation_queries: GenerationQueryService
     generation_reconciliation: GenerationReconciliationService
     prompt_catalog_service: PromptCatalogService
+    catalog_evidence: CatalogEvidenceService
     prompt_renderer: PromptRenderer
     prompt_catalog_views: PromptCatalogViewService
     prompt_labels: PromptLabelService
@@ -294,6 +297,9 @@ def build_application_container(
         ),
         generation_reconciliation=generation_reconciliation,
         prompt_catalog_service=prompt_catalog_service,
+        catalog_evidence=CatalogEvidenceService(
+            SqliteCatalogEvidenceRepository(configured.canonical_database_path)
+        ),
         prompt_renderer=prompt_renderer,
         prompt_catalog_views=PromptCatalogViewService(prompt_catalog_service),
         prompt_labels=PromptLabelService(prompt_catalog_service),

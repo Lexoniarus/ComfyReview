@@ -60,12 +60,29 @@ def catalog_components(
 def catalog_component(request: Request, component_uid: str) -> JSONResponse:
     """Return one canonical prompt component."""
     try:
-        component = get_application_container(
-            request
-        ).prompt_catalog_service.get_component(component_uid)
+        container = get_application_container(request)
+        component = container.prompt_catalog_service.get_component(
+            component_uid
+        )
+        images = container.catalog_evidence.list_top_images(component_uid)
     except (KeyError, PromptCatalogValidationError) as error:
         return catalog_error(error)
-    return JSONResponse(component_response(component))
+    return JSONResponse(
+        {
+            **component_response(component),
+            "top_images": [
+                {
+                    "image_uid": image.image_uid,
+                    "image_url": container.image_responses.image_url(
+                        image.image_uid
+                    ),
+                    "average_rating": image.average_rating,
+                    "rating_count": image.rating_count,
+                }
+                for image in images
+            ],
+        }
+    )
 
 
 @router.get("/catalog/components/{component_uid}/revisions")
