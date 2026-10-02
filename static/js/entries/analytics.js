@@ -1,4 +1,5 @@
 import { AnalyticsView } from "../analytics/focused-analytics-view.js";
+import { AnalyticsCollectionController } from "../analytics/analytics-collection-controller.js";
 import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { AnalyticsController } from "../surfaces/focused-analytics-controller.js";
@@ -22,6 +23,10 @@ if (root instanceof HTMLElement) {
       api: new ApiClient(),
       requests: new RequestLifecycle(),
       detailRequests: new RequestLifecycle(),
+      collection: new AnalyticsCollectionController({
+        requests: new RequestLifecycle(),
+        status,
+      }),
       view: new AnalyticsView(report),
       form,
       model,

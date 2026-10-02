@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from comfyreview.application.analytics import CompositionStatistic
+from comfyreview.application.pagination import CollectionPage
 from comfyreview.application.render_analytics import RenderSetupStatistic
 from comfyreview.repositories.sqlite.analytics_reports import (
     SqliteAnalyticsReportRepository,
@@ -24,12 +25,14 @@ class SqliteCompositionAnalyticsRepository:
         *,
         model: str,
         minimum_samples: int,
+        offset: int = 0,
         limit: int,
-    ) -> tuple[CompositionStatistic, ...]:
+    ) -> CollectionPage[CompositionStatistic]:
         """Return canonical prompt compositions with evidence."""
         return self._reports.composition_statistics(
             model=model,
             min_n=minimum_samples,
+            offset=offset,
             limit=limit,
         )
 
@@ -50,5 +53,6 @@ class SqliteCompositionAnalyticsRepository:
             minimum_samples=minimum_samples,
             success_threshold=success_threshold,
             delete_weight=delete_weight,
+            offset=0,
             limit=limit,
-        )
+        ).entries

@@ -45,14 +45,23 @@ def analytics_scopes(
     request: Request,
     model: str = Query(""),
     min_n: int = Query(8, ge=0),
-    limit: int = Query(200, ge=0, le=500),
+    kind: str = Query("character"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(24, ge=1, le=48),
 ):
     """Return review evidence grouped by canonical prompt component."""
-    return get_application_container(request).analytics_pages.scope_context(
-        model=model,
-        min_n=min_n,
-        limit=limit,
-    )
+    try:
+        return get_application_container(
+            request
+        ).analytics_pages.scope_context(
+            model=model,
+            min_n=min_n,
+            kind=kind,
+            offset=offset,
+            limit=limit,
+        )
+    except ValueError as error:
+        return error_response(400, "invalid_analytics_query", str(error))
 
 
 @router.get("/analytics/parameters")
@@ -64,6 +73,8 @@ def analytics_parameters(
     min_n: int = Query(10, ge=0),
     success_threshold: int = Query(SUCCESS_THRESHOLD_DEFAULT),
     delete_weight: int = Query(DELETE_WEIGHT_DEFAULT),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(24, ge=1, le=48),
 ):
     """Return server-computed canonical render-parameter reports."""
     try:
@@ -74,6 +85,8 @@ def analytics_parameters(
                 min_n=min_n,
                 success_threshold=success_threshold,
                 delete_weight=delete_weight,
+                offset=offset,
+                limit=limit,
             )
         if view == "values" and parameter:
             return pages.parameter_values_context(
@@ -82,6 +95,8 @@ def analytics_parameters(
                 min_n=min_n,
                 success_threshold=success_threshold,
                 delete_weight=delete_weight,
+                offset=offset,
+                limit=limit,
             )
         raise ValueError("parameter analytics requires a supported view")
     except ValueError as error:
@@ -94,7 +109,8 @@ def analytics_combinations(
     view: str = Query("prompt"),
     model: str = Query(""),
     min_n: int = Query(8, ge=0),
-    limit: int = Query(200, ge=0, le=500),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(24, ge=1, le=48),
 ):
     """Return review evidence grouped by canonical compositions."""
     try:
@@ -103,12 +119,14 @@ def analytics_combinations(
             return pages.composition_context(
                 model=model,
                 min_n=min_n,
+                offset=offset,
                 limit=limit,
             )
         if view == "render":
             return pages.render_setups_context(
                 model=model,
                 min_n=min_n,
+                offset=offset,
                 limit=limit,
             )
         raise ValueError("unsupported combination analytics view")

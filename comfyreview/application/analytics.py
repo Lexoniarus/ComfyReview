@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from comfyreview.application.image_queries import ScopeKind
+from comfyreview.application.pagination import CollectionPage, normalize_page
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,6 +18,7 @@ class AnalyticsImage:
     json_path: Path | None
     average_rating: float | None
     rating_count: int
+    image_uid: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,8 +175,10 @@ class AnalyticsReportRepository(Protocol):
         *,
         model: str,
         min_n: int,
+        kind: ScopeKind | None,
+        offset: int,
         limit: int,
-    ) -> tuple[ScopeStatistic, ...]:
+    ) -> CollectionPage[ScopeStatistic]:
         """Return statistics grouped by canonical prompt component."""
         ...
 
@@ -183,8 +187,9 @@ class AnalyticsReportRepository(Protocol):
         *,
         model: str,
         min_n: int,
+        offset: int,
         limit: int,
-    ) -> tuple[CompositionStatistic, ...]:
+    ) -> CollectionPage[CompositionStatistic]:
         """Return statistics grouped by canonical prompt composition."""
         ...
 
@@ -410,13 +415,22 @@ class AnalyticsReportService:
         *,
         model: str,
         minimum_samples: int,
-        limit: int,
-    ) -> tuple[ScopeStatistic, ...]:
+        kind: str = "character",
+        offset: int = 0,
+        limit: int = 24,
+    ) -> CollectionPage[ScopeStatistic]:
         """Return normalized canonical component statistics."""
+        try:
+            normalized_kind = ScopeKind(str(kind).strip())
+        except ValueError as error:
+            raise ValueError(f"unsupported scope kind: {kind}") from error
+        normalized_offset, normalized_limit = normalize_page(offset, limit)
         return self._repository.scope_statistics(
             model=str(model or "").strip(),
             min_n=max(int(minimum_samples), 0),
-            limit=max(int(limit), 0),
+            kind=normalized_kind,
+            offset=normalized_offset,
+            limit=normalized_limit,
         )
 
     def composition_statistics(
@@ -424,13 +438,16 @@ class AnalyticsReportService:
         *,
         model: str,
         minimum_samples: int,
-        limit: int,
-    ) -> tuple[CompositionStatistic, ...]:
+        offset: int = 0,
+        limit: int = 24,
+    ) -> CollectionPage[CompositionStatistic]:
         """Return normalized canonical composition statistics."""
+        normalized_offset, normalized_limit = normalize_page(offset, limit)
         return self._repository.composition_statistics(
             model=str(model or "").strip(),
             min_n=max(int(minimum_samples), 0),
-            limit=max(int(limit), 0),
+            offset=normalized_offset,
+            limit=normalized_limit,
         )
 
     def recommendations(

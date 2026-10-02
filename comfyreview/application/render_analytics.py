@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Protocol
 
 from comfyreview.application.analytics import AnalyticsImage
+from comfyreview.application.pagination import CollectionPage, normalize_page
 from comfyreview.application.rating_evidence import (
     DELETE_WEIGHT_DEFAULT,
     SUCCESS_THRESHOLD_DEFAULT,
@@ -82,7 +83,7 @@ class RenderAnalyticsSummary:
     """Keep calculated recommendations separate from observed setups."""
 
     recommendations: tuple[CalculatedRenderRecommendation, ...]
-    observed_setups: tuple[RenderSetupStatistic, ...]
+    observed_setups: CollectionPage[RenderSetupStatistic]
 
 
 class RenderAnalyticsRepository(Protocol):
@@ -107,8 +108,9 @@ class RenderAnalyticsRepository(Protocol):
         minimum_samples: int,
         success_threshold: int,
         delete_weight: int,
+        offset: int,
         limit: int,
-    ) -> tuple[RenderSetupStatistic, ...]:
+    ) -> CollectionPage[RenderSetupStatistic]:
         """Return actually observed complete render setups."""
         ...
 
@@ -120,8 +122,9 @@ class RenderAnalyticsRepository(Protocol):
         minimum_samples: int,
         success_threshold: int,
         delete_weight: int,
+        offset: int,
         limit: int,
-    ) -> tuple[ParameterValueStatistic, ...]:
+    ) -> CollectionPage[ParameterValueStatistic]:
         """Return evidence for one selected parameter dimension."""
         ...
 
@@ -139,7 +142,8 @@ class RenderAnalyticsService:
         minimum_samples: int = 10,
         success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
         delete_weight: int = DELETE_WEIGHT_DEFAULT,
-        limit: int = 50,
+        offset: int = 0,
+        limit: int = 24,
     ) -> RenderAnalyticsSummary:
         """Return calculated and observed render evidence separately."""
         options = self._options(
@@ -149,6 +153,7 @@ class RenderAnalyticsService:
             delete_weight,
             limit,
         )
+        normalized_offset, normalized_limit = normalize_page(offset, limit)
         return RenderAnalyticsSummary(
             recommendations=self._repository.list_calculated_recommendations(
                 model=options[0],
@@ -162,7 +167,8 @@ class RenderAnalyticsService:
                 minimum_samples=options[1],
                 success_threshold=options[2],
                 delete_weight=options[3],
-                limit=options[4],
+                offset=normalized_offset,
+                limit=normalized_limit,
             ),
         )
 
@@ -174,8 +180,9 @@ class RenderAnalyticsService:
         minimum_samples: int = 10,
         success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
         delete_weight: int = DELETE_WEIGHT_DEFAULT,
-        limit: int = 100,
-    ) -> tuple[ParameterValueStatistic, ...]:
+        offset: int = 0,
+        limit: int = 24,
+    ) -> CollectionPage[ParameterValueStatistic]:
         """Return evidence only for the requested parameter dimension."""
         try:
             normalized_parameter = RenderParameter(str(parameter).strip())
@@ -190,13 +197,15 @@ class RenderAnalyticsService:
             delete_weight,
             limit,
         )
+        normalized_offset, normalized_limit = normalize_page(offset, limit)
         return self._repository.list_parameter_values(
             normalized_parameter,
             model=options[0],
             minimum_samples=options[1],
             success_threshold=options[2],
             delete_weight=options[3],
-            limit=options[4],
+            offset=normalized_offset,
+            limit=normalized_limit,
         )
 
     @staticmethod

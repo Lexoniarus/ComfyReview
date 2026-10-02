@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from comfyreview.application.analytics import CompositionStatistic
+from comfyreview.application.pagination import CollectionPage, normalize_page
 from comfyreview.application.rating_evidence import (
     DELETE_WEIGHT_DEFAULT,
     SUCCESS_THRESHOLD_DEFAULT,
@@ -20,8 +21,9 @@ class CompositionAnalyticsRepository(Protocol):
         *,
         model: str,
         minimum_samples: int,
+        offset: int,
         limit: int,
-    ) -> tuple[CompositionStatistic, ...]:
+    ) -> CollectionPage[CompositionStatistic]:
         """Return canonical prompt compositions with review evidence."""
         ...
 
@@ -50,13 +52,16 @@ class CompositionAnalyticsService:
         *,
         model: str = "",
         minimum_samples: int = 8,
-        limit: int = 200,
-    ) -> tuple[CompositionStatistic, ...]:
+        offset: int = 0,
+        limit: int = 24,
+    ) -> CollectionPage[CompositionStatistic]:
         """Return observed canonical prompt compositions."""
+        normalized_offset, normalized_limit = normalize_page(offset, limit)
         return self._repository.list_prompt_combinations(
             model=str(model or "").strip(),
             minimum_samples=max(int(minimum_samples), 0),
-            limit=max(int(limit), 0),
+            offset=normalized_offset,
+            limit=normalized_limit,
         )
 
     def render_setups(

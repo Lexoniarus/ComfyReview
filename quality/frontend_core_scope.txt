@@ -28,6 +28,14 @@ static/js/prompts/prompt-atom-editor.js
 static/js/generations/generation-list.js
 static/js/generations/generation-detail.js
 static/js/analytics/focused-analytics-view.js
+static/js/analytics/analytics-collection-controller.js
+static/js/analytics/analytics-formatters.js
+static/js/analytics/composition-evidence-view.js
+static/js/analytics/evidence-image-strip.js
+static/js/analytics/overview-analytics-view.js
+static/js/analytics/parameter-evidence-view.js
+static/js/analytics/render-setup-view.js
+static/js/analytics/scope-evidence-view.js
 static/js/scopes/active-scope-chips.js
 static/js/scopes/url-state.js
 static/js/scopes/scope-state-controller.js

@@ -10,6 +10,7 @@ from comfyreview.application import (
     AnalyticsReportService,
     AnalyticsService,
     CalculatedRenderRecommendation,
+    CollectionPage,
     CompositionAnalyticsService,
     CompositionStatistic,
     ObservedPromptCombination,
@@ -83,31 +84,39 @@ class _Reports:
         return [{"combo_key": "character:1|scene:2"}]
 
     def scope_statistics(self, **values):
-        del values
-        return (
-            ScopeStatistic(
-                ScopeKind.CHARACTER,
-                "character-a",
-                "Aiko",
-                False,
-                2,
-                4,
-                8.5,
-                (self.image,),
+        return CollectionPage(
+            (
+                ScopeStatistic(
+                    ScopeKind.CHARACTER,
+                    "character-a",
+                    "Aiko",
+                    False,
+                    2,
+                    4,
+                    8.5,
+                    (self.image,),
+                ),
             ),
+            1,
+            values["offset"],
+            values["limit"],
         )
 
     def composition_statistics(self, **values):
-        del values
-        return (
-            CompositionStatistic(
-                "composition-a",
-                ("Aiko", "Rooftop"),
-                2,
-                4,
-                8.5,
-                (self.image,),
+        return CollectionPage(
+            (
+                CompositionStatistic(
+                    "composition-a",
+                    ("Aiko", "Rooftop"),
+                    2,
+                    4,
+                    8.5,
+                    (self.image,),
+                ),
             ),
+            1,
+            values["offset"],
+            values["limit"],
         )
 
     def recommendations(self, **values):
@@ -144,7 +153,6 @@ class _RenderAnalytics:
         )
 
     def summary(self, **values):
-        del values
         return RenderAnalyticsSummary(
             (
                 CalculatedRenderRecommendation(
@@ -158,21 +166,30 @@ class _RenderAnalytics:
                     0.6,
                 ),
             ),
-            (self.setup,),
+            CollectionPage(
+                (self.setup,),
+                1,
+                values.get("offset", 0),
+                values.get("limit", 24),
+            ),
         )
 
     def parameter_values(self, parameter, **values):
-        del values
-        return (
-            ParameterValueStatistic(
-                RenderParameter(str(parameter)),
-                "20",
-                4,
-                8.5,
-                0.75,
-                0.6,
-                self.setup.best_images,
+        return CollectionPage(
+            (
+                ParameterValueStatistic(
+                    RenderParameter(str(parameter)),
+                    "20",
+                    4,
+                    8.5,
+                    0.75,
+                    0.6,
+                    self.setup.best_images,
+                ),
             ),
+            1,
+            values.get("offset", 0),
+            values.get("limit", 24),
         )
 
 
@@ -184,16 +201,20 @@ class _CompositionAnalytics:
         self.setup = setup
 
     def prompt_combinations(self, **values):
-        del values
-        return (
-            CompositionStatistic(
-                "composition-a",
-                ("Aiko", "Rooftop"),
-                2,
-                4,
-                8.5,
-                (self.image,),
+        return CollectionPage(
+            (
+                CompositionStatistic(
+                    "composition-a",
+                    ("Aiko", "Rooftop"),
+                    2,
+                    4,
+                    8.5,
+                    (self.image,),
+                ),
             ),
+            1,
+            values.get("offset", 0),
+            values.get("limit", 24),
         )
 
     def render_setups(self, composition_uid, **values):
@@ -232,7 +253,7 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
     playground = service.playground_combinations_context(limit=4)
     recommendations = service.recommendations_context(model="sdxl")
 
-    assert stats["rows"] == [
+    assert stats["items"] == [
         {
             "composition_uid": "composition-a",
             "component_names": ["Aiko", "Rooftop"],
@@ -240,7 +261,12 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
             "rating_count": 4,
             "average_rating": 8.5,
             "best_images": [
-                {"url": "url:image.png", "avg_rating": 8.5, "runs": 4}
+                {
+                    "image_uid": "",
+                    "url": "url:image.png",
+                    "avg_rating": 8.5,
+                    "runs": 4,
+                }
             ],
         }
     ]
@@ -255,7 +281,12 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
         "image_count": 1,
         "rating_count": 4,
         "best_images": [
-            {"url": "url:image.png", "avg_rating": 8.5, "runs": 4}
+            {
+                "image_uid": "",
+                "url": "url:image.png",
+                "avg_rating": 8.5,
+                "runs": 4,
+            }
         ],
     }
     assert playground["three_component"][0]["component_uids"] == [
@@ -296,12 +327,12 @@ def test_analytics_pages_build_parameter_and_scope_contexts(
     scopes = service.scope_context(model="sdxl", min_n=1)
 
     assert parameters["parameter"] == "steps"
-    assert parameters["rows"][0]["best_images"][0]["url"] == "url:image.png"
+    assert parameters["items"][0]["best_images"][0]["url"] == "url:image.png"
     assert summary["recommendations"][0]["jointly_observed"] is False
-    assert summary["observed_setups"][0]["stages"][0]["sampler"] == "euler"
-    assert render_setups["rows"][0]["setup_key"] == "setup-a"
-    assert composition_setups["rows"] == render_setups["rows"]
-    assert scopes["rows"] == [
+    assert summary["items"][0]["stages"][0]["sampler"] == "euler"
+    assert render_setups["items"][0]["setup_key"] == "setup-a"
+    assert composition_setups["rows"] == render_setups["items"]
+    assert scopes["items"] == [
         {
             "kind": "character",
             "component_uid": "character-a",
@@ -311,7 +342,12 @@ def test_analytics_pages_build_parameter_and_scope_contexts(
             "rating_count": 4,
             "average_rating": 8.5,
             "best_images": [
-                {"url": "url:image.png", "avg_rating": 8.5, "runs": 4}
+                {
+                    "image_uid": "",
+                    "url": "url:image.png",
+                    "avg_rating": 8.5,
+                    "runs": 4,
+                }
             ],
         }
     ]

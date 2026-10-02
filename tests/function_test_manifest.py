@@ -1,6 +1,10 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.pagination:normalize_page": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_paging_is_bounded_and_scope_kind_is_explicit"
+    ),
     "comfyreview.application.generation_queries:GenerationQueryService.list_generations": (
         "tests/test_generation_queries.py::"
         "test_generation_query_service_reads_persisted_lifecycle_state"

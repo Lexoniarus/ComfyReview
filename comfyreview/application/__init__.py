@@ -135,6 +135,7 @@ from comfyreview.application.output_images import (
     OutputImageCatalog,
     OutputImageReadModel,
 )
+from comfyreview.application.pagination import CollectionPage, normalize_page
 from comfyreview.application.playground import (
     ConfirmPlaygroundDraftCommand,
     ManualPromptSelection,
@@ -256,6 +257,7 @@ __all__ = [
     "CanonicalOutputImageSource",
     "CanonicalSchemaLifecycle",
     "CanonicalSchemaReport",
+    "CollectionPage",
     "CollectedOutputFile",
     "ComfyUiCapabilities",
     "ComfyUiConnectionError",
@@ -426,4 +428,5 @@ __all__ = [
     "prompt_component_key",
     "generation_output_identity",
     "prompt_revision_identity",
+    "normalize_page",
 ]

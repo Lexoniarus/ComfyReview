@@ -12,6 +12,7 @@ from comfyreview.application.analytics import (
     ScopeStatistic,
 )
 from comfyreview.application.image_queries import ScopeKind
+from comfyreview.application.pagination import CollectionPage
 from comfyreview.repositories.sqlite.connection import connect_read_only
 from comfyreview.repositories.sqlite.page_analytics_combos import (
     fetch_combo_stats,
@@ -53,21 +54,36 @@ class SqliteAnalyticsReportRepository:
         *,
         model: str,
         min_n: int,
+        kind: ScopeKind | None = None,
+        offset: int = 0,
         limit: int,
-    ) -> tuple[ScopeStatistic, ...]:
+    ) -> CollectionPage[ScopeStatistic]:
         """Aggregate live image evidence by canonical prompt component."""
         connection = connect_read_only(self._database_path, rows=True)
         try:
+            filters: tuple[object, ...] = (
+                *((model,) if model else ()),
+                *((kind.value,) if kind is not None else ()),
+                min_n,
+            )
+            total = int(
+                connection.execute(
+                    _scope_statistics_count_statement(
+                        bool(model), kind is not None
+                    ),
+                    filters,
+                ).fetchone()[0]
+            )
             rows = connection.execute(
-                _scope_statistics_statement(bool(model)),
-                (*((model,) if model else ()), min_n, limit),
+                _scope_statistics_statement(bool(model), kind is not None),
+                (*filters, limit, offset),
             ).fetchall()
             examples = _scope_example_images(
                 connection,
                 tuple(int(row["component_id"]) for row in rows),
                 model,
             )
-            return tuple(
+            entries = tuple(
                 ScopeStatistic(
                     kind=ScopeKind(str(row["kind"])),
                     component_uid=str(row["component_uid"]),
@@ -80,6 +96,7 @@ class SqliteAnalyticsReportRepository:
                 )
                 for row in rows
             )
+            return CollectionPage(entries, total, offset, limit)
         finally:
             connection.close()
 
@@ -88,14 +105,25 @@ class SqliteAnalyticsReportRepository:
         *,
         model: str,
         min_n: int,
+        offset: int = 0,
         limit: int,
-    ) -> tuple[CompositionStatistic, ...]:
+    ) -> CollectionPage[CompositionStatistic]:
         """Aggregate live image evidence by canonical composition."""
         connection = connect_read_only(self._database_path, rows=True)
         try:
+            filters: tuple[object, ...] = (
+                *((model,) if model else ()),
+                min_n,
+            )
+            total = int(
+                connection.execute(
+                    _composition_statistics_count_statement(bool(model)),
+                    filters,
+                ).fetchone()[0]
+            )
             rows = connection.execute(
                 _composition_statistics_statement(bool(model)),
-                (*((model,) if model else ()), min_n, limit),
+                (*filters, limit, offset),
             ).fetchall()
             composition_ids = tuple(int(row["composition_id"]) for row in rows)
             names = _composition_component_names(connection, composition_ids)
@@ -104,7 +132,7 @@ class SqliteAnalyticsReportRepository:
                 composition_ids,
                 model,
             )
-            return tuple(
+            entries = tuple(
                 CompositionStatistic(
                     composition_uid=str(row["composition_uid"]),
                     component_names=names.get(int(row["composition_id"]), ()),
@@ -115,6 +143,7 @@ class SqliteAnalyticsReportRepository:
                 )
                 for row in rows
             )
+            return CollectionPage(entries, total, offset, limit)
         finally:
             connection.close()
 
@@ -192,8 +221,9 @@ class SqliteAnalyticsReportRepository:
             connection.close()
 
 
-def _scope_statistics_statement(filter_model: bool) -> str:
+def _scope_statistics_base(filter_model: bool, filter_kind: bool) -> str:
     model_filter = "AND generation.model_branch = ?" if filter_model else ""
+    kind_filter = "WHERE component.kind = ?" if filter_kind else ""
     return f"""
         WITH component_images AS (
             SELECT DISTINCT
@@ -227,8 +257,16 @@ def _scope_statistics_statement(filter_model: bool) -> str:
             END AS average_rating
         FROM prompt_components AS component
         JOIN component_images ON component_images.component_id = component.id
+        {kind_filter}
         GROUP BY component.id
         HAVING SUM(component_images.rating_count) >= ?
+    """
+
+
+def _scope_statistics_statement(filter_model: bool, filter_kind: bool) -> str:
+    return (
+        _scope_statistics_base(filter_model, filter_kind)
+        + """
         ORDER BY
             average_rating IS NULL,
             average_rating DESC,
@@ -236,11 +274,22 @@ def _scope_statistics_statement(filter_model: bool) -> str:
             component.kind,
             component.name COLLATE NOCASE,
             component.component_uid
-        LIMIT ?
+        LIMIT ? OFFSET ?
     """
+    )
 
 
-def _composition_statistics_statement(filter_model: bool) -> str:
+def _scope_statistics_count_statement(
+    filter_model: bool, filter_kind: bool
+) -> str:
+    return (
+        "SELECT COUNT(*) FROM ("
+        + _scope_statistics_base(filter_model, filter_kind)
+        + ") AS scoped"
+    )
+
+
+def _composition_statistics_base(filter_model: bool) -> str:
     model_filter = "AND generation.model_branch = ?" if filter_model else ""
     return f"""
         WITH composition_images AS (
@@ -269,13 +318,29 @@ def _composition_statistics_statement(filter_model: bool) -> str:
         FROM composition_images
         GROUP BY composition_id, composition_uid
         HAVING SUM(rating_count) >= ?
+    """
+
+
+def _composition_statistics_statement(filter_model: bool) -> str:
+    return (
+        _composition_statistics_base(filter_model)
+        + """
         ORDER BY
             average_rating IS NULL,
             average_rating DESC,
             rating_count DESC,
             composition_uid
-        LIMIT ?
+        LIMIT ? OFFSET ?
     """
+    )
+
+
+def _composition_statistics_count_statement(filter_model: bool) -> str:
+    return (
+        "SELECT COUNT(*) FROM ("
+        + _composition_statistics_base(filter_model)
+        + ") AS scoped"
+    )
 
 
 def _composition_component_names(
@@ -422,6 +487,7 @@ def _group_example_images(
                 json_path=Path(json_path) if json_path else None,
                 average_rating=_optional_float(row["average_rating"]),
                 rating_count=int(row["rating_count"]),
+                image_uid=str(row["image_uid"]),
             )
         )
     return {key: tuple(images) for key, images in grouped.items()}

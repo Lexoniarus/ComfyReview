@@ -12,6 +12,7 @@ from comfyreview.application import (
     AnalyticsReportService,
     AnalyticsService,
     CalculatedRenderRecommendation,
+    CollectionPage,
     CompositionAnalyticsService,
     CompositionStatistic,
     ObservedPromptCombination,
@@ -23,6 +24,7 @@ from comfyreview.application import (
     RenderSetupStatistic,
     ScopeKind,
     ScopeStatistic,
+    normalize_page,
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
@@ -82,28 +84,38 @@ class _AnalyticsReportRepository:
 
     def scope_statistics(self, **values):
         self.calls.append(("scopes", values))
-        return (
-            ScopeStatistic(
-                ScopeKind.CHARACTER,
-                "character-a",
-                "Aiko",
-                False,
-                2,
-                4,
-                8.5,
+        return CollectionPage(
+            (
+                ScopeStatistic(
+                    ScopeKind.CHARACTER,
+                    "character-a",
+                    "Aiko",
+                    False,
+                    2,
+                    4,
+                    8.5,
+                ),
             ),
+            1,
+            values["offset"],
+            values["limit"],
         )
 
     def composition_statistics(self, **values):
         self.calls.append(("compositions", values))
-        return (
-            CompositionStatistic(
-                "composition-a",
-                ("Aiko", "Rooftop"),
-                2,
-                4,
-                8.5,
+        return CollectionPage(
+            (
+                CompositionStatistic(
+                    "composition-a",
+                    ("Aiko", "Rooftop"),
+                    2,
+                    4,
+                    8.5,
+                ),
             ),
+            1,
+            values["offset"],
+            values["limit"],
         )
 
     def recommendations(self, **values):
@@ -154,11 +166,13 @@ class _RenderAnalyticsRepository:
 
     def list_observed_setups(self, **values):
         self.calls.append(("setups", values))
-        return (self.setup,)
+        return CollectionPage(
+            (self.setup,), 1, values["offset"], values["limit"]
+        )
 
     def list_parameter_values(self, parameter, **values):
         self.calls.append(("values", (parameter, values)))
-        return ()
+        return CollectionPage((), 0, values["offset"], values["limit"])
 
 
 class _CompositionAnalyticsRepository:
@@ -168,10 +182,15 @@ class _CompositionAnalyticsRepository:
 
     def list_prompt_combinations(self, **values):
         self.calls.append(("prompts", values))
-        return (
-            CompositionStatistic(
-                "composition-a", ("Aiko", "Rooftop"), 1, 2, 8.0
+        return CollectionPage(
+            (
+                CompositionStatistic(
+                    "composition-a", ("Aiko", "Rooftop"), 1, 2, 8.0
+                ),
             ),
+            1,
+            values["offset"],
+            values["limit"],
         )
 
     def list_render_setups(self, composition_uid, **values):
@@ -304,15 +323,17 @@ def test_analytics_report_service_normalizes_queries() -> None:
         == "character:1|scene:2"
     )
     assert (
-        service.scope_statistics(model=" sdxl ", minimum_samples=-1, limit=-2)[
-            0
-        ].component_uid
+        service.scope_statistics(model=" sdxl ", minimum_samples=-1, limit=-2)
+        .entries[0]
+        .component_uid
         == "character-a"
     )
     assert (
         service.composition_statistics(
             model=" sdxl ", minimum_samples=-1, limit=-2
-        )[0].composition_uid
+        )
+        .entries[0]
+        .composition_uid
         == "composition-a"
     )
     assert (
@@ -359,8 +380,20 @@ def test_analytics_report_service_normalizes_queries() -> None:
                 "delete_weight": 5,
             },
         ),
-        ("scopes", {"model": "sdxl", "min_n": 0, "limit": 0}),
-        ("compositions", {"model": "sdxl", "min_n": 0, "limit": 0}),
+        (
+            "scopes",
+            {
+                "model": "sdxl",
+                "min_n": 0,
+                "kind": ScopeKind.CHARACTER,
+                "offset": 0,
+                "limit": 1,
+            },
+        ),
+        (
+            "compositions",
+            {"model": "sdxl", "min_n": 0, "offset": 0, "limit": 1},
+        ),
         (
             "recommendations",
             {
@@ -414,9 +447,9 @@ def test_focused_analytics_services_normalize_queries() -> None:
         limit=-2,
     )
 
-    assert summary.observed_setups == (render_repository.setup,)
+    assert summary.observed_setups.entries == (render_repository.setup,)
     assert summary.recommendations[0].checkpoint == "model.safetensors"
-    assert values == ()
+    assert values.entries == ()
     assert render_repository.calls == [
         (
             "recommendations",
@@ -435,7 +468,8 @@ def test_focused_analytics_services_normalize_queries() -> None:
                 "minimum_samples": 0,
                 "success_threshold": 4,
                 "delete_weight": 0,
-                "limit": 0,
+                "offset": 0,
+                "limit": 1,
             },
         ),
         (
@@ -447,7 +481,8 @@ def test_focused_analytics_services_normalize_queries() -> None:
                     "minimum_samples": 0,
                     "success_threshold": 4,
                     "delete_weight": 5,
-                    "limit": 0,
+                    "offset": 0,
+                    "limit": 1,
                 },
             ),
         ),
@@ -470,12 +505,17 @@ def test_focused_analytics_services_normalize_queries() -> None:
         limit=-1,
     )
 
-    assert combinations[0].composition_uid == "composition-a"
+    assert combinations.entries[0].composition_uid == "composition-a"
     assert setups == (render_repository.setup,)
     assert composition_repository.calls == [
         (
             "prompts",
-            {"model": "sdxl", "minimum_samples": 0, "limit": 0},
+            {
+                "model": "sdxl",
+                "minimum_samples": 0,
+                "offset": 0,
+                "limit": 1,
+            },
         ),
         (
             "setups",
@@ -493,6 +533,37 @@ def test_focused_analytics_services_normalize_queries() -> None:
     ]
     with pytest.raises(ValueError, match="composition_uid is required"):
         composition_service.render_setups(" ")
+
+
+def test_analytics_paging_is_bounded_and_scope_kind_is_explicit() -> None:
+    assert normalize_page(-10, 100) == (0, 48)
+    assert normalize_page(4, 0) == (4, 1)
+
+    repository = _AnalyticsReportRepository()
+    service = AnalyticsReportService(repository)
+    page = service.scope_statistics(
+        model="",
+        minimum_samples=0,
+        kind="scene",
+        offset=5,
+        limit=100,
+    )
+
+    assert page.total == 1
+    assert repository.calls == [
+        (
+            "scopes",
+            {
+                "model": "",
+                "min_n": 0,
+                "kind": ScopeKind.SCENE,
+                "offset": 5,
+                "limit": 48,
+            },
+        )
+    ]
+    with pytest.raises(ValueError, match="unsupported scope kind"):
+        service.scope_statistics(model="", minimum_samples=0, kind="unknown")
 
 
 def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
@@ -731,6 +802,7 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
                     json_path=tmp_path / "image.json",
                     average_rating=8.0,
                     rating_count=1,
+                    image_uid="image-1",
                 ),
             ),
         ),
@@ -788,6 +860,13 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
             "UPDATE generations SET combo_key = 'deliberately-wrong'"
         )
     scopes = repository.scope_statistics(model="sdxl", min_n=1, limit=10)
+    scene_page = repository.scope_statistics(
+        model="sdxl",
+        min_n=1,
+        kind=ScopeKind.SCENE,
+        offset=0,
+        limit=1,
+    )
     compositions = repository.composition_statistics(
         model="sdxl", min_n=1, limit=10
     )
@@ -802,7 +881,7 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
         "scheduler",
     }
     assert best_cases[0]["checkpoint"] == "model.safetensors"
-    assert scopes == (
+    assert scopes.entries == (
         ScopeStatistic(
             ScopeKind.CHARACTER,
             "component-1",
@@ -817,6 +896,7 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
                     tmp_path / "image.json",
                     8.0,
                     1,
+                    "image-1",
                 ),
             ),
         ),
@@ -834,6 +914,7 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
                     tmp_path / "image.json",
                     8.0,
                     1,
+                    "image-1",
                 ),
             ),
         ),
@@ -851,11 +932,15 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
                     tmp_path / "image.json",
                     8.0,
                     1,
+                    "image-1",
                 ),
             ),
         ),
     )
-    assert compositions == (
+    assert scopes.total == 3
+    assert scene_page.total == 1
+    assert scene_page.entries[0].component_uid == "component-2"
+    assert compositions.entries == (
         CompositionStatistic(
             "composition-1",
             ("Alice", "Rooftop", "Red Coat"),
@@ -868,6 +953,7 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
                     tmp_path / "image.json",
                     8.0,
                     1,
+                    "image-1",
                 ),
             ),
         ),
@@ -925,14 +1011,14 @@ def test_focused_sqlite_analytics_uses_normalized_render_facts(
     )
 
     assert recommendations[0].checkpoint == "model.safetensors"
-    assert setups[0].checkpoint == "model.safetensors"
-    assert setups[0].stages == (
+    assert setups.entries[0].checkpoint == "model.safetensors"
+    assert setups.entries[0].stages == (
         RenderSamplerStage("base_sampler", 20, 7.0, "euler", "normal", 1.0),
     )
-    assert setups[0].image_count == 1
-    assert setups[0].rating_count == 1
-    assert setups[0].best_images[0].png_path == tmp_path / "image.png"
-    assert values[0].parameter is RenderParameter.STEPS
-    assert values[0].value == "20"
-    assert combinations[0].composition_uid == "composition-1"
-    assert composition_setups == setups
+    assert setups.entries[0].image_count == 1
+    assert setups.entries[0].rating_count == 1
+    assert setups.entries[0].best_images[0].png_path == tmp_path / "image.png"
+    assert values.entries[0].parameter is RenderParameter.STEPS
+    assert values.entries[0].value == "20"
+    assert combinations.entries[0].composition_uid == "composition-1"
+    assert composition_setups == setups.entries

@@ -291,6 +291,7 @@ class SqliteAnalyticsRepository:
                     scope.scene_name,
                     scope.outfit_uid,
                     scope.outfit_name,
+                    image.image_uid,
                     image.png_path,
                     image.json_path,
                     summary.average_rating,
@@ -404,6 +405,7 @@ class SqliteAnalyticsRepository:
                     f"""
                     SELECT
                         CAST({expression} AS TEXT) AS group_value,
+                        image.image_uid,
                         image.png_path,
                         image.json_path,
                         summary.average_rating,
@@ -453,4 +455,5 @@ class SqliteAnalyticsRepository:
                 else None
             ),
             rating_count=int(row["rating_count"] or 0),
+            image_uid=str(row["image_uid"] or ""),
         )

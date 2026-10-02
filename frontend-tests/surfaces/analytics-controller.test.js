@@ -13,7 +13,21 @@ describe("AnalyticsController", () => {
 
     await fixture.controller.start();
     expect(fixture.api.get).toHaveBeenCalledWith(
-      "analytics/scopes?model=anime&min_n=6",
+      "analytics/scopes?model=anime&min_n=6&offset=0&limit=24&kind=character",
+      expect.any(Object),
+    );
+    const operations = fixture.collection.start.mock.calls[0][2];
+    await operations.fetchPage(24, new AbortController().signal);
+    operations.appendPage({ items: [] });
+    expect(fixture.view.append).toHaveBeenCalledWith({ items: [] });
+
+    const scene = document.createElement("button");
+    scene.dataset.analyticsScopeKind = "scene";
+    fixture.report.append(scene);
+    scene.click();
+    await settle();
+    expect(fixture.api.get).toHaveBeenLastCalledWith(
+      "analytics/scopes?model=anime&min_n=6&offset=0&limit=24&kind=scene",
       expect.any(Object),
     );
     fixture.minimumSamples.value = "-2";
@@ -22,12 +36,13 @@ describe("AnalyticsController", () => {
     expect(fixture.historyRef.replaceState).toHaveBeenCalledWith(
       null,
       "",
-      "/prompt_tokens?model=anime&min_n=0",
+      "/prompt_tokens?model=anime&min_n=0&kind=scene",
     );
     fixture.controller.dispose();
     expect(fixture.requests.dispose).toHaveBeenCalledOnce();
     expect(fixture.detailRequests.dispose).toHaveBeenCalledOnce();
-    expect(fixture.view.clear).toHaveBeenCalled();
+    expect(fixture.collection.dispose).toHaveBeenCalledOnce();
+    expect(fixture.view.dispose).toHaveBeenCalledOnce();
   });
 
   it("uses section defaults and falls back to overview", async () => {
@@ -35,7 +50,7 @@ describe("AnalyticsController", () => {
     await overview.controller.start();
     expect(overview.minimumSamples.value).toBe("5");
     expect(overview.api.get).toHaveBeenCalledWith(
-      "analytics/overview?model=&min_n=5",
+      "analytics/overview?model=&min_n=5&offset=0&limit=24",
       expect.any(Object),
     );
 
@@ -43,7 +58,7 @@ describe("AnalyticsController", () => {
     await parameters.controller.start();
     expect(parameters.minimumSamples.value).toBe("10");
     expect(parameters.api.get).toHaveBeenCalledWith(
-      "analytics/parameters?model=&min_n=10&view=summary",
+      "analytics/parameters?model=&min_n=10&offset=0&limit=24&view=summary",
       expect.any(Object),
     );
 
@@ -51,7 +66,7 @@ describe("AnalyticsController", () => {
     await combinations.controller.start();
     expect(combinations.minimumSamples.value).toBe("8");
     expect(combinations.api.get).toHaveBeenCalledWith(
-      "analytics/combinations?model=&min_n=8&view=prompt",
+      "analytics/combinations?model=&min_n=8&offset=0&limit=24&view=prompt",
       expect.any(Object),
     );
   });
@@ -77,7 +92,7 @@ describe("AnalyticsController", () => {
     invalid.form.dispatchEvent(new Event("submit", { cancelable: true }));
     await settle();
     expect(invalid.api.get).toHaveBeenLastCalledWith(
-      "analytics/overview?model=&min_n=0",
+      "analytics/overview?model=&min_n=0&offset=0&limit=24",
       expect.any(Object),
     );
   });
@@ -89,7 +104,7 @@ describe("AnalyticsController", () => {
     });
     await fixture.controller.start();
     expect(fixture.api.get).toHaveBeenLastCalledWith(
-      "analytics/parameters?model=&min_n=10&view=values&parameter=cfg",
+      "analytics/parameters?model=&min_n=10&offset=0&limit=24&view=values&parameter=cfg",
       expect.any(Object),
     );
 
@@ -100,7 +115,7 @@ describe("AnalyticsController", () => {
     checkpoint.click();
     await settle();
     expect(fixture.api.get).toHaveBeenLastCalledWith(
-      "analytics/parameters?model=&min_n=10&view=values&parameter=checkpoint",
+      "analytics/parameters?model=&min_n=10&offset=0&limit=24&view=values&parameter=checkpoint",
       expect.any(Object),
     );
     expect(fixture.requests.cancelRequests).toHaveBeenCalled();
@@ -116,7 +131,7 @@ describe("AnalyticsController", () => {
     );
     expect(fixture.view.renderCompositionSetups).toHaveBeenCalledWith(
       "composition a",
-      { rows: [] },
+      { items: [], rows: [], total: 0, offset: 0, limit: 24 },
     );
 
     const empty = document.createElement("button");
@@ -148,7 +163,7 @@ describe("AnalyticsController", () => {
     aborted.report.append(abortButton);
     abortButton.click();
     await settle();
-    expect(aborted.status.textContent).toBe("Analyse geladen");
+    expect(aborted.status.textContent).toBe("0 von 0 Ergebnissen geladen");
   });
 });
 
@@ -163,7 +178,13 @@ function createFixture(options = {}) {
     get: vi.fn(() =>
       options.error
         ? Promise.reject(options.error)
-        : Promise.resolve({ rows: [] }),
+        : Promise.resolve({
+            items: [],
+            rows: [],
+            total: 0,
+            offset: 0,
+            limit: 24,
+          }),
     ),
   };
   const requests = {
@@ -181,9 +202,16 @@ function createFixture(options = {}) {
     dispose: vi.fn(),
   };
   const view = {
-    render: vi.fn(),
+    render: vi.fn(() => document.createElement("div")),
+    append: vi.fn(),
     renderCompositionSetups: vi.fn(),
     clear: vi.fn(),
+    dispose: vi.fn(),
+  };
+  const collection = {
+    start: vi.fn(),
+    reset: vi.fn(),
+    dispose: vi.fn(),
   };
   const locationRef = {
     search: options.search || "",
@@ -196,6 +224,7 @@ function createFixture(options = {}) {
       api,
       requests,
       detailRequests,
+      collection,
       view,
       form,
       model,
@@ -208,6 +237,7 @@ function createFixture(options = {}) {
     api,
     requests,
     detailRequests,
+    collection,
     view,
     form,
     model,

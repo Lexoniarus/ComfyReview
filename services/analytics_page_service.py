@@ -49,18 +49,20 @@ class AnalyticsPageService:
         *,
         model: str = "",
         min_n: int = 8,
-        limit: int = 200,
+        offset: int = 0,
+        limit: int = 24,
     ) -> dict[str, Any]:
         """Build canonical composition statistics for the V2 surface."""
         normalized_model = normalize_model(model)
-        rows = self._composition_analytics.prompt_combinations(
+        page = self._composition_analytics.prompt_combinations(
             model=normalized_model,
             minimum_samples=int(min_n),
+            offset=int(offset),
             limit=int(limit),
         )
         return {
             "view": "prompt",
-            "rows": [
+            "items": [
                 {
                     "composition_uid": item.composition_uid,
                     "component_names": list(item.component_names),
@@ -69,11 +71,13 @@ class AnalyticsPageService:
                     "average_rating": item.average_rating,
                     "best_images": self._image_views(item.best_images),
                 }
-                for item in rows
+                for item in page.entries
             ],
+            "total": page.total,
+            "offset": page.offset,
+            "limit": page.limit,
             "model": normalized_model,
             "min_n": min_n,
-            "limit": limit,
             "model_list": self._models(),
         }
 
@@ -103,17 +107,21 @@ class AnalyticsPageService:
         *,
         model: str = "",
         min_n: int = 8,
-        limit: int = 200,
+        kind: str = "character",
+        offset: int = 0,
+        limit: int = 24,
     ) -> dict[str, Any]:
         """Build canonical component statistics for the V2 surface."""
         normalized_model = normalize_model(model)
-        rows = self._reports.scope_statistics(
+        page = self._reports.scope_statistics(
             model=normalized_model,
             minimum_samples=int(min_n),
+            kind=kind,
+            offset=int(offset),
             limit=int(limit),
         )
         return {
-            "rows": [
+            "items": [
                 {
                     "kind": item.kind.value,
                     "component_uid": item.component_uid,
@@ -124,11 +132,14 @@ class AnalyticsPageService:
                     "average_rating": item.average_rating,
                     "best_images": self._image_views(item.best_images),
                 }
-                for item in rows
+                for item in page.entries
             ],
+            "total": page.total,
+            "offset": page.offset,
+            "limit": page.limit,
+            "kind": kind,
             "model": normalized_model,
             "min_n": min_n,
-            "limit": limit,
             "model_list": self._models(),
         }
 
@@ -181,6 +192,8 @@ class AnalyticsPageService:
         min_n: int = 10,
         success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
         delete_weight: int = DELETE_WEIGHT_DEFAULT,
+        offset: int = 0,
+        limit: int = 24,
     ) -> dict[str, Any]:
         """Build calculated recommendations and observed complete setups."""
         normalized_model = normalize_model(model)
@@ -189,7 +202,8 @@ class AnalyticsPageService:
             minimum_samples=int(min_n),
             success_threshold=int(success_threshold),
             delete_weight=int(delete_weight),
-            limit=50,
+            offset=int(offset),
+            limit=int(limit),
         )
         return {
             "view": "summary",
@@ -197,10 +211,13 @@ class AnalyticsPageService:
                 self._recommendation_view(item)
                 for item in summary.recommendations
             ],
-            "observed_setups": [
+            "items": [
                 self._render_setup_view(item)
-                for item in summary.observed_setups
+                for item in summary.observed_setups.entries
             ],
+            "total": summary.observed_setups.total,
+            "offset": summary.observed_setups.offset,
+            "limit": summary.observed_setups.limit,
             "model": normalized_model,
             "min_n": min_n,
             "t": success_threshold,
@@ -216,23 +233,30 @@ class AnalyticsPageService:
         min_n: int = 10,
         success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
         delete_weight: int = DELETE_WEIGHT_DEFAULT,
-        limit: int = 100,
+        offset: int = 0,
+        limit: int = 24,
     ) -> dict[str, Any]:
         """Build one selected single-parameter evidence list."""
         normalized_model = normalize_model(model)
-        rows = self._render_analytics.parameter_values(
+        page = self._render_analytics.parameter_values(
             parameter,
             model=normalized_model,
             minimum_samples=int(min_n),
             success_threshold=int(success_threshold),
             delete_weight=int(delete_weight),
+            offset=int(offset),
             limit=int(limit),
         )
         normalized_parameter = RenderParameter(str(parameter))
         return {
             "view": "values",
             "parameter": normalized_parameter.value,
-            "rows": [self._parameter_value_view(item) for item in rows],
+            "items": [
+                self._parameter_value_view(item) for item in page.entries
+            ],
+            "total": page.total,
+            "offset": page.offset,
+            "limit": page.limit,
             "model": normalized_model,
             "min_n": min_n,
             "t": success_threshold,
@@ -247,7 +271,8 @@ class AnalyticsPageService:
         min_n: int = 8,
         success_threshold: int = SUCCESS_THRESHOLD_DEFAULT,
         delete_weight: int = DELETE_WEIGHT_DEFAULT,
-        limit: int = 200,
+        offset: int = 0,
+        limit: int = 24,
     ) -> dict[str, Any]:
         """Build the observed render-setup combinations view."""
         normalized_model = normalize_model(model)
@@ -256,17 +281,20 @@ class AnalyticsPageService:
             minimum_samples=int(min_n),
             success_threshold=int(success_threshold),
             delete_weight=int(delete_weight),
+            offset=int(offset),
             limit=int(limit),
         )
         return {
             "view": "render",
-            "rows": [
+            "items": [
                 self._render_setup_view(item)
-                for item in summary.observed_setups
+                for item in summary.observed_setups.entries
             ],
+            "total": summary.observed_setups.total,
+            "offset": summary.observed_setups.offset,
+            "limit": summary.observed_setups.limit,
             "model": normalized_model,
             "min_n": min_n,
-            "limit": limit,
             "model_list": self._models(),
         }
 
@@ -365,6 +393,7 @@ class AnalyticsPageService:
                 continue
             output.append(
                 {
+                    "image_uid": image.image_uid,
                     "url": url,
                     "avg_rating": image.average_rating,
                     "runs": image.rating_count,

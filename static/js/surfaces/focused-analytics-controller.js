@@ -1,12 +1,13 @@
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, cancelRequests: () => void, dispose: () => void}} RequestBoundary */
-/** @typedef {{render: (section: string, payload: Record<string, any>) => void, renderCompositionSetups: (compositionUid: string, payload: Record<string, any>) => void, clear: () => void}} ViewBoundary */
+/** @typedef {{render: (section: string, payload: Record<string, any>) => HTMLElement, append: (payload: Record<string, any>) => void, renderCompositionSetups: (compositionUid: string, payload: Record<string, any>) => void, clear: () => void, dispose: () => void}} ViewBoundary */
+/** @typedef {{start: (payload: Record<string, any>, sentinel: HTMLElement, operations: {fetchPage: (offset: number, signal: AbortSignal) => Promise<Record<string, any>>, appendPage: (payload: Record<string, any>) => void}) => void, reset: () => void, dispose: () => void}} CollectionBoundary */
 
 const sections = new Set(["overview", "scopes", "parameters", "combinations"]);
 
 /** Orchestrate one canonical analytics report surface. */
 export class AnalyticsController {
-  /** @param {{section: string, api: ApiBoundary, requests: RequestBoundary, detailRequests: RequestBoundary, view: ViewBoundary, form: HTMLFormElement, model: HTMLInputElement, minimumSamples: HTMLInputElement, report: HTMLElement, status: HTMLElement, locationRef?: Location, historyRef?: History}} dependencies */
+  /** @param {{section: string, api: ApiBoundary, requests: RequestBoundary, detailRequests: RequestBoundary, collection: CollectionBoundary, view: ViewBoundary, form: HTMLFormElement, model: HTMLInputElement, minimumSamples: HTMLInputElement, report: HTMLElement, status: HTMLElement, locationRef?: Location, historyRef?: History}} dependencies */
   constructor(dependencies) {
     this.section = sections.has(dependencies.section)
       ? dependencies.section
@@ -14,6 +15,7 @@ export class AnalyticsController {
     this.api = dependencies.api;
     this.requests = dependencies.requests;
     this.detailRequests = dependencies.detailRequests;
+    this.collection = dependencies.collection;
     this.view = dependencies.view;
     this.form = dependencies.form;
     this.model = dependencies.model;
@@ -25,6 +27,7 @@ export class AnalyticsController {
     this.abortController = new AbortController();
     this.viewName = defaultView(this.section);
     this.parameter = "";
+    this.scopeKind = "character";
   }
 
   /** Restore URL filters and load the initial report. */
@@ -35,6 +38,7 @@ export class AnalyticsController {
       query.get("min_n") || defaultMinimum(this.section);
     this.viewName = query.get("view") || defaultView(this.section);
     this.parameter = query.get("parameter") || "";
+    this.scopeKind = query.get("kind") || "character";
     this.form.addEventListener(
       "submit",
       (event) => {
@@ -55,24 +59,19 @@ export class AnalyticsController {
   /** Reload one server-computed analytics report. */
   async reload() {
     this.requests.cancelRequests();
+    this.collection.reset();
     this.status.textContent = "Analyse wird geladen …";
     this.view.clear();
-    const query = new URLSearchParams({
-      model: this.model.value.trim(),
-      min_n: normalizedMinimum(this.minimumSamples.value),
-    });
-    if (this.viewName) query.set("view", this.viewName);
-    if (this.viewName === "values" && this.parameter) {
-      query.set("parameter", this.parameter);
-    }
     try {
       const payload = await this.requests.run((signal) =>
-        this.api.get(`analytics/${this.section}?${query.toString()}`, {
-          signal,
-        }),
+        this.#loadPage(0, signal),
       );
-      this.view.render(this.section, payload);
-      this.status.textContent = "Analyse geladen";
+      const sentinel = this.view.render(this.section, payload);
+      this.collection.start(payload, sentinel, {
+        fetchPage: (offset, signal) => this.#loadPage(offset, signal),
+        appendPage: (page) => this.view.append(page),
+      });
+      this.status.textContent = resultStatus(payload);
     } catch (error) {
       if (!isAbortError(error)) this.status.textContent = errorMessage(error);
     }
@@ -83,7 +82,8 @@ export class AnalyticsController {
     this.abortController.abort();
     this.requests.dispose();
     this.detailRequests.dispose();
-    this.view.clear();
+    this.collection.dispose();
+    this.view.dispose();
   }
 
   #writeUrl() {
@@ -94,6 +94,7 @@ export class AnalyticsController {
     if (this.viewName === "values" && this.parameter) {
       query.set("parameter", this.parameter);
     }
+    if (this.section === "scopes") query.set("kind", this.scopeKind);
     const suffix = query.toString();
     this.historyRef.replaceState(
       null,
@@ -109,6 +110,13 @@ export class AnalyticsController {
     if (viewControl instanceof HTMLElement) {
       this.viewName = viewControl.dataset.analyticsView || "";
       this.parameter = viewControl.dataset.analyticsParameter || "";
+      this.#writeUrl();
+      await this.reload();
+      return;
+    }
+    const kindControl = event.target.closest("[data-analytics-scope-kind]");
+    if (kindControl instanceof HTMLElement) {
+      this.scopeKind = kindControl.dataset.analyticsScopeKind || "character";
       this.#writeUrl();
       await this.reload();
       return;
@@ -129,6 +137,24 @@ export class AnalyticsController {
     } catch (error) {
       if (!isAbortError(error)) this.status.textContent = errorMessage(error);
     }
+  }
+
+  /** @param {number} offset @param {AbortSignal} signal */
+  #loadPage(offset, signal) {
+    const query = new URLSearchParams({
+      model: this.model.value.trim(),
+      min_n: normalizedMinimum(this.minimumSamples.value),
+      offset: String(offset),
+      limit: "24",
+    });
+    if (this.viewName) query.set("view", this.viewName);
+    if (this.viewName === "values" && this.parameter) {
+      query.set("parameter", this.parameter);
+    }
+    if (this.section === "scopes") query.set("kind", this.scopeKind);
+    return this.api.get(`analytics/${this.section}?${query.toString()}`, {
+      signal,
+    });
   }
 }
 
@@ -162,4 +188,13 @@ function errorMessage(error) {
   return error && typeof error === "object" && "message" in error
     ? String(error.message)
     : "Die Analyse konnte nicht geladen werden.";
+}
+
+/** @param {Record<string, any>} payload */
+function resultStatus(payload) {
+  const total = Number(payload.total);
+  const items = Array.isArray(payload.items) ? payload.items.length : 0;
+  return Number.isFinite(total)
+    ? `${items} von ${total} Ergebnissen geladen`
+    : "Analyse geladen";
 }

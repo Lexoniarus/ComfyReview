@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnalyticsView } from "../../static/js/analytics/focused-analytics-view.js";
 
@@ -37,12 +37,25 @@ describe("AnalyticsView", () => {
 
     view.render("overview", { stable: [], avoid: [], approx: null });
     expect(root.textContent).toContain("Keine rechnerischen Kandidaten");
+
+    view.render("scopes", {
+      items: [
+        {
+          component_uid: "default-action",
+          name: "Default action",
+          best_images: [{ image_uid: "image-default", url: "default.png" }],
+        },
+      ],
+    });
+    root.querySelector(".analytics-image-button")?.click();
   });
 
   it("renders canonical scope groups and explicit empty states", () => {
-    const { root, view } = fixture();
+    const onImageSelect = vi.fn();
+    const { root, view } = fixture({ onImageSelect });
     view.render("scopes", {
-      rows: [
+      kind: "character",
+      items: [
         {
           kind: "character",
           name: "Aiko",
@@ -51,7 +64,7 @@ describe("AnalyticsView", () => {
           rating_count: 4,
           average_rating: 8.5,
           best_images: [
-            { url: "image.png", avg_rating: 9 },
+            { image_uid: "image-a", url: "image.png", avg_rating: 9 },
             { url: "", avg_rating: 8 },
           ],
         },
@@ -66,8 +79,23 @@ describe("AnalyticsView", () => {
     expect(root.querySelector(".analytics-image-strip")?.dataset.count).toBe(
       "1",
     );
+    root.querySelector(".analytics-image-button")?.click();
+    expect(onImageSelect).toHaveBeenCalledWith("image-a");
+    root.querySelector("img")?.dispatchEvent(new Event("error"));
+    expect(root.querySelector(".analytics-image-button")?.dataset.state).toBe(
+      "failed",
+    );
+    view.append({
+      items: [
+        {
+          kind: "character",
+          component_uid: "component-b",
+          name: "Kaori",
+        },
+      ],
+    });
 
-    view.render("scopes", { rows: null });
+    view.render("scopes", { kind: "character", items: null });
     expect(root.textContent).toContain("Keine Scopes");
   });
 
@@ -86,7 +114,7 @@ describe("AnalyticsView", () => {
           checkpoint_lower_bound: 0.6,
         },
       ],
-      observed_setups: [setup()],
+      items: [setup()],
     });
 
     expect(root.textContent).toContain("nicht gemeinsam getestet");
@@ -96,7 +124,7 @@ describe("AnalyticsView", () => {
     view.render("parameters", {
       view: "values",
       parameter: "steps",
-      rows: [
+      items: [
         {
           value: "30",
           sample_count: 5,
@@ -109,6 +137,16 @@ describe("AnalyticsView", () => {
     });
     expect(root.textContent).toContain("30");
     expect(root.querySelector("img")?.src).toContain("best.png");
+    view.append({
+      items: [
+        {
+          parameter: "steps",
+          value: "40",
+          sample_count: 2,
+          best_images: [],
+        },
+      ],
+    });
     expect(
       root
         .querySelector('[data-analytics-parameter="steps"]')
@@ -118,20 +156,21 @@ describe("AnalyticsView", () => {
     view.render("parameters", {
       view: "values",
       parameter: "seed",
-      rows: [],
+      items: [],
     });
     expect(root.textContent).toContain("Keine Werte");
 
-    view.render("parameters", { view: "summary" });
+    view.render("parameters", { view: "summary", items: [] });
     expect(root.textContent).toContain("Keine rechnerischen Empfehlungen");
     expect(root.textContent).toContain("Keine beobachteten Setups");
+    view.append({ items: [setup()] });
   });
 
   it("renders prompt combinations, render setups, and focused details", () => {
     const { root, view } = fixture();
     view.render("combinations", {
       view: "prompt",
-      rows: [
+      items: [
         {
           composition_uid: "composition-a",
           component_names: ["Aiko", "Rooftop"],
@@ -154,13 +193,21 @@ describe("AnalyticsView", () => {
     expect(root.textContent).toContain("Aiko");
     expect(root.textContent).toContain("composition-b");
     expect(root.textContent).toContain("Technische Setups anzeigen");
+    view.append({
+      items: [
+        {
+          composition_uid: "composition-c",
+          component_names: ["Kaori"],
+        },
+      ],
+    });
     view.renderCompositionSetups("composition-a", { rows: [setup()] });
     expect(root.textContent).toContain("Beobachtete Render-Setups");
     view.renderCompositionSetups("composition-a", { rows: [] });
     expect(root.textContent).toContain("Keine technischen Setups");
     view.renderCompositionSetups("missing", { rows: [] });
 
-    view.render("combinations", { view: "render", rows: [setup()] });
+    view.render("combinations", { view: "render", items: [setup()] });
     expect(root.textContent).toContain("model.safetensors");
     expect(
       root
@@ -168,20 +215,22 @@ describe("AnalyticsView", () => {
         ?.getAttribute("aria-pressed"),
     ).toBe("true");
 
-    view.render("combinations", { rows: [] });
+    view.render("combinations", { items: [] });
     expect(root.textContent).toContain("Keine Kombinationen");
     view.clear();
     expect(root.children).toHaveLength(0);
+    view.dispose();
   });
 });
 
-function fixture() {
+function fixture(actions = {}) {
   const root = document.createElement("div");
-  return { root, view: new AnalyticsView(root) };
+  return { root, view: new AnalyticsView(root, actions) };
 }
 
 function setup() {
   return {
+    setup_key: "setup-a",
     checkpoint: "model.safetensors",
     stages: [
       {

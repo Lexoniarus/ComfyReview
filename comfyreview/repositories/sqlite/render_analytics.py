@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from comfyreview.application.analytics import AnalyticsImage
+from comfyreview.application.pagination import CollectionPage
 from comfyreview.application.rating_evidence import (
     _bayes_lb05,
     _classify,
@@ -33,6 +34,7 @@ from comfyreview.repositories.sqlite.page_analytics_parameters import (
 @dataclass(frozen=True, slots=True)
 class _ObservedImage:
     image_id: int
+    image_uid: str
     png_path: Path
     json_path: Path | None
     run: int
@@ -63,8 +65,9 @@ class SqliteRenderSetupQuery:
         minimum_samples: int,
         success_threshold: int,
         delete_weight: int,
+        offset: int = 0,
         limit: int,
-    ) -> tuple[RenderSetupStatistic, ...]:
+    ) -> CollectionPage[RenderSetupStatistic]:
         """Return observed setup evidence with ordered sampler stages."""
         rows = self._load_rows(model=model, composition_uid=composition_uid)
         evidence = self._group_rows(rows)
@@ -77,7 +80,7 @@ class SqliteRenderSetupQuery:
             for item in evidence.values()
             if len(item.observations) >= minimum_samples
         )
-        return tuple(
+        ordered = tuple(
             sorted(
                 statistics,
                 key=lambda item: (
@@ -87,7 +90,13 @@ class SqliteRenderSetupQuery:
                     item.setup_key,
                 ),
                 reverse=True,
-            )[:limit]
+            )
+        )
+        return CollectionPage(
+            entries=ordered[offset : offset + limit],
+            total=len(ordered),
+            offset=offset,
+            limit=limit,
         )
 
     def _load_rows(self, *, model: str, composition_uid: str) -> list[Any]:
@@ -113,6 +122,7 @@ class SqliteRenderSetupQuery:
                     generation.scheduler AS fallback_scheduler,
                     generation.denoise AS fallback_denoise,
                     image.id AS image_id,
+                    image.image_uid,
                     image.png_path,
                     image.json_path,
                     rating.run,
@@ -218,6 +228,7 @@ class SqliteRenderSetupQuery:
                 item.json_path,
                 item.average_rating,
                 item.rating_count,
+                item.image_uid,
             )
         expected = (success + 1) / (success + failure + 2)
         average = rating_sum / rating_weight if rating_weight else None
@@ -282,14 +293,16 @@ class SqliteRenderAnalyticsRepository:
         minimum_samples: int,
         success_threshold: int,
         delete_weight: int,
+        offset: int = 0,
         limit: int,
-    ) -> tuple[RenderSetupStatistic, ...]:
+    ) -> CollectionPage[RenderSetupStatistic]:
         """Return complete setups built from normalized columns and stages."""
         return self._setups.list_setups(
             model=model,
             minimum_samples=minimum_samples,
             success_threshold=success_threshold,
             delete_weight=delete_weight,
+            offset=offset,
             limit=limit,
         )
 
@@ -301,8 +314,9 @@ class SqliteRenderAnalyticsRepository:
         minimum_samples: int,
         success_threshold: int,
         delete_weight: int,
+        offset: int = 0,
         limit: int,
-    ) -> tuple[ParameterValueStatistic, ...]:
+    ) -> CollectionPage[ParameterValueStatistic]:
         """Return one requested parameter dimension with image examples."""
         rows = tuple(
             row
@@ -314,7 +328,9 @@ class SqliteRenderAnalyticsRepository:
                 delete_weight=delete_weight,
             )
             if row.get("feat") == parameter.value
-        )[:limit]
+        )
+        total = len(rows)
+        rows = rows[offset : offset + limit]
         values = tuple(str(row["value"]) for row in rows)
         images = self._images.list_best_images_for_parameter(
             parameter.value,
@@ -322,7 +338,7 @@ class SqliteRenderAnalyticsRepository:
             model_branch=model,
             limit_per_value=3,
         )
-        return tuple(
+        entries = tuple(
             ParameterValueStatistic(
                 parameter=parameter,
                 value=str(row["value"]),
@@ -334,6 +350,7 @@ class SqliteRenderAnalyticsRepository:
             )
             for row in rows
         )
+        return CollectionPage(entries, total, offset, limit)
 
 
 def _sampler_stages(rows: list[Any]) -> tuple[RenderSamplerStage, ...]:
@@ -371,6 +388,7 @@ def _observation(row: Any) -> _ObservedImage:
     json_path = str(row["json_path"] or "")
     return _ObservedImage(
         image_id=int(row["image_id"]),
+        image_uid=str(row["image_uid"]),
         png_path=Path(str(row["png_path"])),
         json_path=Path(json_path) if json_path else None,
         run=int(row["run"] or 1),
