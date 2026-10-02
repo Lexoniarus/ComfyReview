@@ -428,6 +428,17 @@ def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
             """,
             (combo_key, composition_id),
         )
+        connection.execute(
+            """
+            INSERT INTO generation_sampler_stages(
+                generation_id, node_id, stage_order, role, seed, steps,
+                cfg, sampler, scheduler, denoise, source
+            ) VALUES (
+                1, 'sampler', 0, 'base_sampler', 1, 20,
+                7.0, 'euler', 'normal', 1.0, 'test'
+            )
+            """
+        )
         png_path = tmp_path / "image.png"
         png_path.write_bytes(b"png")
         json_path = tmp_path / "image.json"
@@ -450,6 +461,44 @@ def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
             """
         )
         connection.execute("UPDATE review_clock SET value = 1")
+
+
+def test_analytics_fixture_keeps_render_setup_outside_combo_key(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _insert_analytics_fixture(database_path, tmp_path)
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE generations SET combo_key = 'not-a-render-contract'"
+        )
+        row = connection.execute(
+            """
+            SELECT
+                generation.checkpoint,
+                stage.role,
+                stage.steps,
+                stage.cfg,
+                stage.sampler,
+                stage.scheduler,
+                stage.denoise
+            FROM generations AS generation
+            JOIN generation_sampler_stages AS stage
+                ON stage.generation_id = generation.id
+            """
+        ).fetchone()
+
+    assert row == (
+        "model.safetensors",
+        "base_sampler",
+        20,
+        7.0,
+        "euler",
+        "normal",
+        1.0,
+    )
 
 
 def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
