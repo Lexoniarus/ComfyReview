@@ -109,13 +109,15 @@ describe("Playground browser components", () => {
         components,
         positive_prompt: "positive",
         negative_prompt: "negative",
+        positive_atoms: [{ text: "positive", weight: 1 }],
+        negative_atoms: [{ text: "negative", weight: 1 }],
         revision_uids: ["revision-character-a"],
         draft_overridden: false,
       },
       "draft-1",
     );
     expect(state.textContent).toBe("Katalogrevisionen unverändert");
-    const positive = root.querySelector("[data-prompt='positive']");
+    const positive = root.querySelector("[data-atom-text]");
     positive.value = "edited";
     positive.dispatchEvent(new Event("input"));
     expect(state.textContent).toBe("Draft-Override aktiv");
@@ -129,7 +131,7 @@ describe("Playground browser components", () => {
       expect.objectContaining({
         draft_uid: "draft-1",
         component_uids: components.map((item) => item.component_uid),
-        positive_prompt: "edited",
+        positive_atoms: [{ text: "edited", weight: 1 }],
       }),
     );
 
@@ -138,6 +140,8 @@ describe("Playground browser components", () => {
         components: [component("scene-a", "scene", "Scene")],
         positive_prompt: "positive",
         negative_prompt: "negative",
+        positive_atoms: [{ text: "positive", weight: 1 }],
+        negative_atoms: [{ text: "negative", weight: 1 }],
         draft_overridden: true,
       },
       "draft-2",

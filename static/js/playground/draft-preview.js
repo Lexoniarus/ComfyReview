@@ -1,3 +1,5 @@
+import { PromptAtomEditor } from "../prompts/prompt-atom-editor.js";
+
 /** Own the reviewed prompt snapshot and its local draft overrides. */
 export class DraftPreview {
   /** @param {HTMLElement} root @param {HTMLElement} state */
@@ -14,8 +16,8 @@ export class DraftPreview {
 
   /** @param {Record<string, any>} draft @param {string} draftUid */
   render(draft, draftUid) {
-    this.abortController.abort();
-    this.abortController = new AbortController();
+    this.positive?.dispose();
+    this.negative?.dispose();
     this.draft = draft;
     this.draftUid = draftUid;
     this.root.replaceChildren();
@@ -29,17 +31,17 @@ export class DraftPreview {
     }
     const fields = document.createElement("div");
     fields.className = "draft-fields";
-    this.positive = this.#promptField(
-      "Positiver Prompt",
-      "positive",
-      String(draft.positive_prompt || ""),
+    this.positive = new PromptAtomEditor(
+      "Positive Atome",
+      draft.positive_atoms || [],
+      () => this.#updateState(),
     );
-    this.negative = this.#promptField(
-      "Negativer Prompt",
-      "negative",
-      String(draft.negative_prompt || ""),
+    this.negative = new PromptAtomEditor(
+      "Negative Atome",
+      draft.negative_atoms || [],
+      () => this.#updateState(),
     );
-    fields.append(this.positive.wrapper, this.negative.wrapper);
+    fields.append(this.positive.element, this.negative.element);
     this.root.append(memberships, fields);
     this.#updateState();
   }
@@ -57,8 +59,8 @@ export class DraftPreview {
     return {
       draft_uid: this.draftUid,
       component_uids: components.map((component) => component.component_uid),
-      positive_prompt: this.positive.control.value,
-      negative_prompt: this.negative.control.value,
+      positive_atoms: this.positive.value(),
+      negative_atoms: this.negative.value(),
       checkpoint: settings.checkpoint,
       sampler: settings.sampler,
     };
@@ -67,32 +69,21 @@ export class DraftPreview {
   /** Release owned prompt listeners. */
   dispose() {
     this.abortController.abort();
+    this.positive?.dispose();
+    this.negative?.dispose();
     this.draft = null;
     this.positive = null;
     this.negative = null;
-  }
-
-  /** @param {string} label @param {string} scope @param {string} value */
-  #promptField(label, scope, value) {
-    const wrapper = document.createElement("label");
-    wrapper.className = "draft-field";
-    wrapper.append(document.createTextNode(label));
-    const control = document.createElement("textarea");
-    control.dataset.prompt = scope;
-    control.value = value;
-    control.addEventListener("input", () => this.#updateState(), {
-      signal: this.abortController.signal,
-    });
-    wrapper.append(control);
-    return { wrapper, control, original: value };
   }
 
   #isEdited() {
     return Boolean(
       this.positive &&
       this.negative &&
-      (this.positive.control.value !== this.positive.original ||
-        this.negative.control.value !== this.negative.original),
+      (JSON.stringify(this.positive.value()) !==
+        JSON.stringify(this.draft?.positive_atoms || []) ||
+        JSON.stringify(this.negative.value()) !==
+          JSON.stringify(this.draft?.negative_atoms || [])),
     );
   }
 
