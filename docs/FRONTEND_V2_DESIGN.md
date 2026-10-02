@@ -14,15 +14,18 @@ CENTER = image or active work
 RIGHT  = context
 ```
 
-The center remains visually dominant. The interface uses a light warm-gray
-editorial canvas, near-white working surfaces, fine dividers and restrained
-semantic color. It is neither a dark dashboard nor an anime fan page.
+The center remains visually dominant. The interface uses the proven V1 dark
+navy canvas with restrained cyan and green ambient light, deep working
+surfaces, fine dividers and explicit semantic color. V2 keeps its calmer
+editorial spacing and component hierarchy; the light warm-gray experiment was
+rejected after comparison with the running V1 product.
 
-The accepted visual reference is
-`docs/design/frontend-v2/top-worst-reference.png`. It fixes the palette,
-density, three-region composition, image treatment and component character.
-The generated sample data is not product copy and is not an implementation
-fixture.
+The accepted layout reference is
+`docs/design/frontend-v2/top-worst-reference.png`. It fixes density,
+three-region composition, image treatment and component character. The color
+reference is the V1 token set preserved in the Git history and implemented in
+`static/css/v2/tokens.css`. The generated sample data is not product copy and
+is not an implementation fixture.
 
 ## Allowed primary navigation copy
 

@@ -10,7 +10,11 @@ html {
 body {
   margin: 0;
   color: var(--color-text);
-  background: var(--color-canvas);
+  background:
+    radial-gradient(circle at 15% 10%, rgb(50 197 255 / 18%), transparent 35%),
+    radial-gradient(circle at 85% 15%, rgb(46 204 113 / 15%), transparent 40%),
+    linear-gradient(180deg, #0b0f17, #0e1422 35%, #0b0f17);
+  background-attachment: fixed;
   font-family: var(--font-ui);
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
@@ -48,7 +52,7 @@ input:focus-visible {
   gap: var(--space-5);
   padding: 0 var(--space-5);
   border-bottom: 0.0625rem solid var(--color-border);
-  background: rgb(255 255 255 / 92%);
+  background: rgb(11 15 23 / 90%);
   backdrop-filter: blur(1rem);
 }
 
@@ -120,7 +124,7 @@ input:focus-visible {
   padding: 0.55rem 0.85rem;
   border: 0;
   border-radius: var(--radius-control);
-  color: #fff;
+  color: var(--color-on-accent);
   background: var(--color-accent-strong);
   cursor: pointer;
   font-weight: 750;
