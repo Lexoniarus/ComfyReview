@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AnalyticsController } from "../../static/js/surfaces/analytics-controller.js";
+import { AnalyticsController } from "../../static/js/surfaces/focused-analytics-controller.js";
 
 describe("AnalyticsController", () => {
   beforeEach(() => document.body.replaceChildren());

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { AnalyticsView } from "../../static/js/analytics/analytics-view.js";
+import { AnalyticsView } from "../../static/js/analytics/focused-analytics-view.js";
 
 describe("AnalyticsView", () => {
   beforeEach(() => document.body.replaceChildren());

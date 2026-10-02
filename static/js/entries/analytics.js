@@ -1,7 +1,7 @@
-import { AnalyticsView } from "../analytics/analytics-view.js";
+import { AnalyticsView } from "../analytics/focused-analytics-view.js";
 import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
-import { AnalyticsController } from "../surfaces/analytics-controller.js";
+import { AnalyticsController } from "../surfaces/focused-analytics-controller.js";
 
 const root = document.querySelector('[data-v2-surface="analytics"]');
 if (root instanceof HTMLElement) {

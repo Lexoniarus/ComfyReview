@@ -1,6 +1,9 @@
 {% extends "_v2_base.html" %} {% set page_title = "Analysen · ComfyReview" %} {%
 set active_nav = "analytics" %} {% block styles %}
-<link rel="stylesheet" href="/static/css/v2/analytics.css?v=20261002" />
+<link
+  rel="stylesheet"
+  href="/static/css/v2/analytics.css?v=20261002-analytics2"
+/>
 {% endblock %} {% block content %}
 <section
   class="analytics-page"
@@ -58,5 +61,8 @@ set active_nav = "analytics" %} {% block styles %}
   </p>
 </section>
 {% endblock %} {% block scripts %}
-<script type="module" src="/static/js/entries/analytics.js?v=20261002"></script>
+<script
+  type="module"
+  src="/static/js/entries/analytics.js?v=20261002-analytics2"
+></script>
 {% endblock %}
