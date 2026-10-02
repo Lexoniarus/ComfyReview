@@ -6,15 +6,17 @@
     "node": ">=24"
   },
   "scripts": {
-    "lint": "eslint static/js frontend-tests eslint.config.js vitest.config.js",
-    "format:check": "prettier --check static/js frontend-tests static/css/v2 package.json jsconfig.json eslint.config.js vitest.config.js .stylelintrc.json",
+    "lint": "eslint static/js frontend-tests eslint.config.js vitest.config.js playwright.config.js",
+    "format:check": "prettier --check static/js frontend-tests static/css/v2 package.json jsconfig.json eslint.config.js vitest.config.js playwright.config.js .stylelintrc.json",
     "style:check": "stylelint \"static/css/**/*.css\"",
     "typecheck": "tsc --noEmit --project jsconfig.json",
     "test": "vitest run --coverage",
+    "test:e2e": "playwright test",
     "quality": "npm run lint && npm run format:check && npm run style:check && npm run typecheck && npm run test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@vitest/coverage-v8": "5.0.3",
     "eslint": "10.11.0",
     "globals": "17.13.0",
