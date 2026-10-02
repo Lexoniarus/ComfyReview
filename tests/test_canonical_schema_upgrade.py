@@ -533,7 +533,7 @@ def test_version_seven_upgrade_adds_settings_and_normalizes_generation_loras(
         assert connection.execute("PRAGMA user_version").fetchone() == (7,)
 
 
-def test_version_seven_upgrade_rejects_incomplete_lora_provenance(
+def test_version_seven_upgrade_reports_and_skips_incomplete_lora_provenance(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
@@ -549,21 +549,74 @@ def test_version_seven_upgrade_rejects_incomplete_lora_provenance(
         )
         connection.commit()
 
+    report = manager.upgrade(tmp_path / "backups")
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM generation_loras"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            "SELECT loras_json FROM generations WHERE id = 1"
+        ).fetchone() == ('[{"name":"style.safetensors"}]',)
+    assert report.warnings == (
+        "skipped 1 incomplete historical LoRA provenance items",
+    )
+
+
+def test_version_seven_upgrade_normalizes_metadata_export_lora_keys(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    _create_version_four_database(database_path)
+    manager = CanonicalSchemaManager(database_path)
+    with sqlite3.connect(database_path) as connection:
+        manager._upgrade_v4_to_v5(connection)
+        manager._upgrade_v5_to_v6(connection)
+        manager._upgrade_v6_to_v7(connection)
+        connection.execute(
+            "UPDATE generations SET loras_json = ? WHERE id = 1",
+            (
+                '[{"name":"style.safetensors","sm":0.8,"sc":0.65,'
+                '"node_id":"37","class_type":"LoraLoader"}]',
+            ),
+        )
+        connection.commit()
+
+    report = manager.upgrade(tmp_path / "backups")
+
+    assert report.warnings == ()
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT lora_name, model_strength_milli, clip_strength_milli "
+            "FROM generation_loras"
+        ).fetchall() == [("style.safetensors", 800, 650)]
+
+
+def test_version_seven_upgrade_rejects_malformed_lora_provenance(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    _create_version_four_database(database_path)
+    manager = CanonicalSchemaManager(database_path)
+    with sqlite3.connect(database_path) as connection:
+        manager._upgrade_v4_to_v5(connection)
+        manager._upgrade_v5_to_v6(connection)
+        manager._upgrade_v6_to_v7(connection)
+        connection.execute(
+            "UPDATE generations SET loras_json = ? WHERE id = 1",
+            ("not-json",),
+        )
+        connection.commit()
+
     with pytest.raises(
         CanonicalSchemaValidationError,
-        match="provenance is incomplete",
+        match="not valid JSON",
     ):
         manager.upgrade(tmp_path / "backups")
 
     with sqlite3.connect(database_path) as connection:
         assert connection.execute("PRAGMA user_version").fetchone() == (7,)
-        assert (
-            connection.execute(
-                "SELECT name FROM sqlite_master "
-                "WHERE name = 'generation_profiles'"
-            ).fetchone()
-            is None
-        )
 
 
 def test_upgrade_rolls_back_without_unnecessary_backup_restore(

@@ -171,6 +171,7 @@ def _render_canonical(report: CanonicalSchemaReport) -> str:
         "initialized": report.initialized,
         "schema_version": report.schema_version,
         "upgraded_from": report.upgraded_from,
+        "warnings": list(report.warnings),
     }
     return json.dumps(payload, sort_keys=True)
 

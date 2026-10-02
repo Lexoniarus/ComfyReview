@@ -44,6 +44,7 @@ class CanonicalSchemaReport:
     schema_version: int = 0
     upgraded_from: int | None = None
     backup_path: Path | None = None
+    warnings: tuple[str, ...] = ()
 
 
 class CanonicalSchemaLifecycle(Protocol):

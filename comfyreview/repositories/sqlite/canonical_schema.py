@@ -561,6 +561,7 @@ class CanonicalSchemaManager:
 
         backup_path = self._create_backup(backup_directory)
         committed = False
+        skipped_lora_items = 0
         try:
             connection = self._open_read_write(foreign_keys=False)
             try:
@@ -577,7 +578,7 @@ class CanonicalSchemaManager:
                     self._upgrade_v5_to_v6(connection)
                 if current_version <= 6:
                     self._upgrade_v6_to_v7(connection)
-                self._upgrade_v7_to_v8(connection)
+                skipped_lora_items = self._upgrade_v7_to_v8(connection)
                 connection.commit()
                 committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
@@ -596,6 +597,14 @@ class CanonicalSchemaManager:
             schema_version=SCHEMA_VERSION,
             upgraded_from=current_version,
             backup_path=backup_path,
+            warnings=(
+                (
+                    f"skipped {skipped_lora_items} incomplete historical "
+                    "LoRA provenance items",
+                )
+                if skipped_lora_items
+                else ()
+            ),
         )
 
     def _create_new_database(self) -> None:
@@ -1309,7 +1318,7 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 7")
 
     @classmethod
-    def _upgrade_v7_to_v8(cls, connection: sqlite3.Connection) -> None:
+    def _upgrade_v7_to_v8(cls, connection: sqlite3.Connection) -> int:
         connection.execute(
             """
             CREATE TABLE generation_profiles (
@@ -1403,12 +1412,15 @@ class CanonicalSchemaManager:
         connection.execute(
             "INSERT INTO workspace_preferences(singleton_id) VALUES (1)"
         )
+        skipped_lora_items = 0
         for generation_id, loras_json in connection.execute(
             "SELECT id, loras_json FROM generations ORDER BY id"
         ).fetchall():
-            for position, lora in enumerate(
-                cls._legacy_lora_selections(str(loras_json or "[]"))
-            ):
+            selections, skipped = cls._legacy_lora_selections(
+                str(loras_json or "[]")
+            )
+            skipped_lora_items += skipped
+            for position, lora in enumerate(selections):
                 connection.execute(
                     """
                     INSERT INTO generation_loras(
@@ -1423,11 +1435,12 @@ class CanonicalSchemaManager:
             "WHERE key = 'schema_version'"
         )
         connection.execute("PRAGMA user_version = 8")
+        return skipped_lora_items
 
     @staticmethod
     def _legacy_lora_selections(
         payload: str,
-    ) -> tuple[tuple[str, int, int], ...]:
+    ) -> tuple[tuple[tuple[str, int, int], ...], int]:
         try:
             values = json.loads(payload)
         except json.JSONDecodeError as error:
@@ -1439,25 +1452,29 @@ class CanonicalSchemaManager:
                 "generation LoRA provenance must be a list"
             )
         result: list[tuple[str, int, int]] = []
+        skipped = 0
         for value in values:
             if not isinstance(value, dict):
                 raise CanonicalSchemaValidationError(
                     "generation LoRA provenance contains an invalid item"
                 )
             name = value.get("name")
-            model_strength = value.get("strength_model")
-            clip_strength = value.get("strength_clip")
+            model_strength = CanonicalSchemaManager._legacy_lora_strength(
+                value,
+                ("strength_model", "model_strength", "sm"),
+            )
+            clip_strength = CanonicalSchemaManager._legacy_lora_strength(
+                value,
+                ("strength_clip", "clip_strength", "sc"),
+            )
             if (
                 not isinstance(name, str)
                 or not name.strip()
-                or isinstance(model_strength, bool)
-                or not isinstance(model_strength, (int, float))
-                or isinstance(clip_strength, bool)
-                or not isinstance(clip_strength, (int, float))
+                or model_strength is None
+                or clip_strength is None
             ):
-                raise CanonicalSchemaValidationError(
-                    "generation LoRA provenance is incomplete"
-                )
+                skipped += 1
+                continue
             result.append(
                 (
                     name.strip(),
@@ -1465,7 +1482,29 @@ class CanonicalSchemaManager:
                     round(float(clip_strength) * 1000),
                 )
             )
-        return tuple(result)
+        return tuple(result), skipped
+
+    @staticmethod
+    def _legacy_lora_strength(
+        value: dict[str, object],
+        aliases: tuple[str, ...],
+    ) -> float | None:
+        candidates = [value[key] for key in aliases if key in value]
+        if not candidates:
+            return None
+        numeric_candidates: list[float] = []
+        for candidate in candidates:
+            if isinstance(candidate, bool) or not isinstance(
+                candidate, (int, float)
+            ):
+                return None
+            numeric_candidates.append(float(candidate))
+        normalized = set(numeric_candidates)
+        if len(normalized) != 1:
+            raise CanonicalSchemaValidationError(
+                "generation LoRA provenance contains conflicting strengths"
+            )
+        return normalized.pop()
 
     @staticmethod
     def _create_review_views(connection: sqlite3.Connection) -> None:
