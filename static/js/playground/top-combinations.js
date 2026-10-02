@@ -5,6 +5,8 @@ export class TopCombinationsView {
     this.root = root;
     this.navigator = navigator;
     this.abortController = new AbortController();
+    /** @type {LoopingCarousel[]} */
+    this.carousels = [];
     this.root.addEventListener(
       "click",
       (event) => {
@@ -18,24 +20,91 @@ export class TopCombinationsView {
 
   /** @param {Record<string, any>} payload */
   render(payload) {
-    this.root.replaceChildren(
-      combinationGroup(
-        "Top 2er-Kombinationen",
-        "Charakter + Szene",
-        arrayValue(payload.two_component),
-      ),
-      combinationGroup(
-        "Top 3er-Kombinationen",
-        "Charakter + Szene + Outfit",
-        arrayValue(payload.three_component),
-      ),
+    this.#disposeCarousels();
+    const twoComponent = combinationGroup(
+      "Top 2er-Kombinationen",
+      "Charakter + Szene",
+      arrayValue(payload.two_component),
     );
+    const threeComponent = combinationGroup(
+      "Top 3er-Kombinationen",
+      "Charakter + Szene + Outfit",
+      arrayValue(payload.three_component),
+    );
+    this.root.replaceChildren(twoComponent, threeComponent);
+    this.carousels = [
+      new LoopingCarousel(twoComponent),
+      new LoopingCarousel(threeComponent),
+    ];
   }
 
   /** Remove rendered evidence. */
   dispose() {
+    this.#disposeCarousels();
     this.abortController.abort();
     this.root.replaceChildren();
+  }
+
+  #disposeCarousels() {
+    for (const carousel of this.carousels) carousel.dispose();
+    this.carousels = [];
+  }
+}
+
+/** Own cyclic navigation and listeners for one evidence carousel. */
+class LoopingCarousel {
+  /** @param {HTMLElement} root */
+  constructor(root) {
+    this.root = root;
+    this.track = /** @type {HTMLElement} */ (
+      root.querySelector("[data-carousel-track]")
+    );
+    this.abortController = new AbortController();
+    this.currentIndex = 0;
+    this.root.addEventListener(
+      "click",
+      (event) => {
+        if (!(event.target instanceof Element)) return;
+        const button = event.target.closest("[data-carousel-direction]");
+        if (!(button instanceof HTMLElement)) return;
+        this.move(button.dataset.carouselDirection === "previous" ? -1 : 1);
+      },
+      { signal: this.abortController.signal },
+    );
+    this.#updateControls();
+  }
+
+  /** @param {-1 | 1} direction */
+  move(direction) {
+    const cards = Array.from(
+      this.track.querySelectorAll(".playground-combination-card"),
+    );
+    if (cards.length < 2) return;
+    this.currentIndex =
+      (this.currentIndex + direction + cards.length) % cards.length;
+    this.track.dataset.carouselIndex = String(this.currentIndex);
+    const target = /** @type {HTMLElement} */ (cards[this.currentIndex]);
+    if (typeof this.track.scrollTo === "function") {
+      this.track.scrollTo({ left: target.offsetLeft, behavior: "smooth" });
+    } else {
+      this.track.scrollLeft = target.offsetLeft;
+    }
+  }
+
+  /** Release every listener owned by this carousel. */
+  dispose() {
+    this.abortController.abort();
+  }
+
+  #updateControls() {
+    const count = this.track.querySelectorAll(
+      ".playground-combination-card",
+    ).length;
+    for (const button of this.root.querySelectorAll(
+      "[data-carousel-direction]",
+    )) {
+      if (button instanceof HTMLButtonElement) button.hidden = count < 2;
+    }
   }
 }
 
@@ -49,8 +118,12 @@ function combinationGroup(title, subtitle, rows) {
   const description = document.createElement("p");
   description.textContent = subtitle;
   heading.append(titleElement, description);
+  const carousel = document.createElement("div");
+  carousel.className = "playground-carousel";
   const grid = document.createElement("div");
   grid.className = "playground-combination-grid";
+  grid.dataset.carouselTrack = "";
+  grid.dataset.carouselIndex = "0";
   if (!rows.length) {
     const empty = document.createElement("p");
     empty.className = "muted";
@@ -58,8 +131,24 @@ function combinationGroup(title, subtitle, rows) {
     grid.append(empty);
   }
   for (const row of rows) grid.append(combinationCard(recordValue(row)));
-  section.append(heading, grid);
+  carousel.append(
+    carouselButton("previous", "Vorherige Kombinationen", "‹"),
+    grid,
+    carouselButton("next", "Nächste Kombinationen", "›"),
+  );
+  section.append(heading, carousel);
   return section;
+}
+
+/** @param {"previous" | "next"} direction @param {string} label @param {string} glyph */
+function carouselButton(direction, label, glyph) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `playground-carousel-button is-${direction}`;
+  button.dataset.carouselDirection = direction;
+  button.setAttribute("aria-label", label);
+  button.textContent = glyph;
+  return button;
 }
 
 /** @param {Record<string, any>} row */
@@ -68,7 +157,7 @@ function combinationCard(row) {
   card.className = "playground-combination-card";
   const images = document.createElement("div");
   images.className = "playground-combination-images";
-  for (const value of arrayValue(row.best_images)) {
+  for (const value of arrayValue(row.best_images).slice(0, 3)) {
     const imageValue = recordValue(value);
     if (!imageValue.url) continue;
     const image = document.createElement("img");
@@ -83,6 +172,9 @@ function combinationCard(row) {
     missing.textContent = "Kein Bildbeispiel";
     images.append(missing);
   }
+  const imageCount = images.querySelectorAll("img").length;
+  images.dataset.imageCount = String(imageCount);
+  card.dataset.imageCount = String(imageCount);
   const content = document.createElement("div");
   const title = document.createElement("strong");
   title.textContent = String(row.label || "Unbenannte Kombination");

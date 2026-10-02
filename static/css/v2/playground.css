@@ -78,6 +78,11 @@
   margin: 0;
 }
 
+.playground-carousel {
+  position: relative;
+  min-width: 0;
+}
+
 .playground-combination-group header p,
 .playground-combination-card span {
   color: var(--color-text-muted);
@@ -85,20 +90,58 @@
 }
 
 .playground-combination-grid {
-  display: grid;
+  display: flex;
   max-width: 100%;
   min-width: 0;
-  grid-auto-columns: minmax(18rem, 24rem);
-  grid-auto-flow: column;
   gap: var(--space-2);
   overflow-x: auto;
-  padding-bottom: var(--space-2);
+  padding-inline: 2.75rem;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  scroll-padding-inline: 2.75rem;
   scroll-snap-type: x proximity;
+}
+
+.playground-combination-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.playground-carousel-button {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  display: grid;
+  width: 2.25rem;
+  height: 3.5rem;
+  place-items: center;
+  border: 0.0625rem solid var(--color-accent-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  box-shadow: var(--shadow-panel);
+  cursor: pointer;
+  font-size: 1.8rem;
+  transform: translateY(-50%);
+}
+
+.playground-carousel-button:hover,
+.playground-carousel-button:focus-visible {
+  color: var(--color-accent-strong);
+  background: var(--color-surface-selected);
+}
+
+.playground-carousel-button.is-previous {
+  left: 0.25rem;
+}
+
+.playground-carousel-button.is-next {
+  right: 0.25rem;
 }
 
 .playground-combination-card {
   display: grid;
-  grid-template-columns: 7rem minmax(0, 1fr);
+  flex: 0 0 18rem;
+  grid-template-rows: 13rem minmax(8.5rem, auto);
   overflow: hidden;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-panel);
@@ -106,16 +149,32 @@
   scroll-snap-align: start;
 }
 
+.playground-combination-card[data-image-count="2"] {
+  flex-basis: 21rem;
+}
+
+.playground-combination-card[data-image-count="3"] {
+  flex-basis: 24rem;
+}
+
 .playground-combination-images {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(2rem, 1fr));
-  min-height: 6rem;
+  min-height: 0;
   background: var(--color-surface-soft);
+}
+
+.playground-combination-images[data-image-count="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.playground-combination-images[data-image-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .playground-combination-images img {
   width: 100%;
-  height: 6.5rem;
+  height: 100%;
+  min-height: 0;
   object-fit: cover;
 }
 
@@ -126,13 +185,13 @@
 
 .playground-combination-card > div:last-child {
   display: grid;
-  align-content: center;
+  grid-template-rows: auto auto 1fr;
   gap: var(--space-1);
   padding: var(--space-3);
 }
 
 .playground-combination-card button {
-  justify-self: start;
+  place-self: end start;
   padding: 0.35rem 0.55rem;
   border: 0.0625rem solid var(--color-accent-border);
   border-radius: var(--radius-control);

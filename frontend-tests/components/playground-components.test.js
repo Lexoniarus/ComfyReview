@@ -322,7 +322,16 @@ describe("Playground browser components", () => {
           rating_count: 4,
           average_rating: 8.5,
           component_uids: ["character-a", "scene-a"],
-          best_images: [{ url: "best.png" }, { url: "" }],
+          best_images: [
+            { url: "best.png" },
+            { url: "second.png" },
+            { url: "third.png" },
+            { url: "ignored.png" },
+          ],
+        },
+        {
+          label: "Hina + Park",
+          best_images: [{ url: "" }, { url: "hina.png" }],
         },
         null,
       ],
@@ -337,6 +346,34 @@ describe("Playground browser components", () => {
     expect(root.textContent).toContain("Unbenannte Kombination");
     expect(root.textContent).toContain("Kein Bildbeispiel");
     expect(root.querySelector("img")?.getAttribute("src")).toBe("best.png");
+    expect(root.querySelectorAll("img")).toHaveLength(4);
+    expect(root.querySelector("img[src='ignored.png']")).toBeNull();
+    const firstCard = root.querySelector(".playground-combination-card");
+    expect(firstCard?.getAttribute("data-image-count")).toBe("3");
+    const next = root.querySelector("[data-carousel-direction='next']");
+    const previous = root.querySelector("[data-carousel-direction='previous']");
+    const track = root.querySelector("[data-carousel-track]");
+    next?.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(track?.getAttribute("data-carousel-index")).toBe("1");
+    if (!(track instanceof HTMLElement)) throw new Error("track missing");
+    track.scrollTo = vi.fn();
+    next?.dispatchEvent(new Event("click", { bubbles: true }));
+    next?.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(track?.getAttribute("data-carousel-index")).toBe("0");
+    expect(track.scrollTo).toHaveBeenCalled();
+    previous?.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(track?.getAttribute("data-carousel-index")).toBe("2");
+    expect(
+      root
+        .querySelectorAll("[data-carousel-direction]")[2]
+        .hasAttribute("hidden"),
+    ).toBe(true);
+    root
+      .querySelectorAll("[data-carousel-direction]")[2]
+      .dispatchEvent(new Event("click", { bubbles: true }));
+    const carouselText = document.createTextNode("carousel plain");
+    root.querySelector(".playground-combination-group")?.append(carouselText);
+    carouselText.dispatchEvent(new Event("click", { bubbles: true }));
     root.querySelector("[data-playground-intent]")?.click();
     expect(navigator.open).toHaveBeenCalled();
     root
