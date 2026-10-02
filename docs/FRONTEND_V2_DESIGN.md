@@ -119,6 +119,12 @@ real example images per combination. These groups are derived from canonical
 composition memberships; the broader Analytics composition view remains a
 separate surface and does not replace them.
 
+Each evidence group is a cyclic, arrow-controlled carousel. Native horizontal
+scrollbars are hidden, but touch/trackpad scrolling remains available. Cards
+adapt their width to one, two or three examples, and the image region consumes
+the full bounded card height before textual evidence and the explicit handoff
+action.
+
 Generation controls preserve the useful V1 experiment workflow without
 reviving its form orchestration: a submission may choose a fixed or randomized
 ComfyUI seed, a bounded batch size, a Steps range and a CFG range/step. The

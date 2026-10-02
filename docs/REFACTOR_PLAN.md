@@ -1,12 +1,13 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover, structured prompt catalog, schema-v7
-data migration and the first Frontend V2 surfaces are implemented on
-`refactor/review-boundary`, 2026-10-02. The remaining Frontend V2 overhaul is
-functional work rather than final polish: bounded Analytics collections,
-Playground handoffs, generation profiles and LoRA stacks, the complete Settings
-surface, Inspector composition and browser acceptance remain. The branch stays
-unmerged until the full refactor is accepted.
+Status: the canonical backend cutover, structured prompt catalog, schema-v8
+data migration and Frontend V2 overhaul are implemented on
+`refactor/review-boundary`, 2026-10-02. Analytics collections are bounded,
+Playground handoffs are explicit, generation profiles and ordered LoRA stacks
+are canonical, Settings is a complete product surface, the Inspector is
+composed from focused views and Playwright covers the browser acceptance
+contract. The branch stays unmerged until final user acceptance and the final
+integration review.
 
 The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
@@ -255,31 +256,46 @@ constants.
   selected immutable revision;
 - the legacy HTML form adapter is the only normal compatibility boundary that
   parses combined prompt text;
-- the live database validates as schema v7 with `integrity_check = ok` and no
-  foreign-key violations.
+- this slice concluded with a valid schema-v7 database; the later explicit
+  schema-v8 Settings/Profile upgrade is recorded below.
 
-## Remaining slice order
+### Frontend V2 overhaul and schema v8 (completed)
 
-The dependency order is binding. In particular, Playground does not receive a
-temporary generation facade and the ComfyUI provider never owns workflow
-semantics.
+- Analytics collections use deterministic pagination, one lifecycle-owned
+  collection controller, stale-request cancellation and bounded lazy image
+  evidence;
+- Analytics, example-image and top-combination handoffs serialize a typed
+  Playground intent and never create or submit a draft automatically;
+- schema v8 adds typed workspace preferences, generation profiles, ordered
+  profile LoRAs and normalized LoRAs actually used by generations;
+- Blueprint v2 exposes an explicit LoRA insertion role and the compiler builds
+  a deterministic Model/CLIP loader chain without provider-side graph logic;
+- `/settings` owns General, Generation profiles, Review, Curation, ComfyUI and
+  Storage/database sections; environment configuration stays read-only;
+- the Inspector delegates Context, Prompt, Generation, Workflow, Reviews and
+  Curation rendering to focused views;
+- Scope navigation renders only the active kind instead of hundreds of buttons
+  at once;
+- Playground top combinations use cyclic arrow-controlled evidence carousels;
+  native scrollbars are hidden and one to three images fill a bounded card;
+- Playwright runs against a temporary schema-v8 database and fake ComfyUI and
+  covers bounded Analytics, Settings persistence, the Playground carousel and
+  the four required viewport sizes;
+- Node 24, ESLint, Prettier, Stylelint, checkJs, Vitest coverage and Playwright
+  are part of `python scripts/quality.py` and CI.
 
-1. paginate and encapsulate Analytics collections and evidence cards;
-2. add explicit Analytics-to-Playground intents without automatic submission;
-3. introduce schema v8, generation profiles and normalized LoRA selections;
-4. compile explicit ordered LoRA stacks through a versioned workflow blueprint;
-5. add the complete Settings surface and read-only runtime diagnostics;
-6. finish Inspector composition, responsive/accessibility behavior and remove
-   replaced presentation paths;
-7. finish the usage audit and delete only proven-dead compatibility code;
-8. run the complete architecture, data, browser, ComfyUI, quality and
-   documentation acceptance before opening a new pull request.
+## Final acceptance remaining
+
+The implementation slices are complete. Remaining integration work is limited
+to user-facing visual acceptance, an optional real-ComfyUI generation smoke
+test, the final dead-path usage audit and opening the replacement pull request.
+No automatic merge is planned.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the
 final integration require a successful full `python scripts/quality.py` run.
 
-## Invariants for remaining work
+## Invariants for final acceptance
 
 - one writable authority for each fact; no durable dual-writes;
 - stable IDs, never paths, are relational identity;

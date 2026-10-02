@@ -2,102 +2,58 @@
 
 ## Summary
 
-ComfyReview is a public prototype and local workflow tool for reviewing, curating and analyzing ComfyUI image outputs.
+ComfyReview is a local-first FastAPI workflow tool for reviewing, comparing,
+curating, analysing and reproducibly regenerating ComfyUI outputs. The active
+refactor branch uses one canonical writable SQLite database and a native
+ES-module Frontend V2.
 
-The project exists because large AI image batches quickly become difficult to review manually. ComfyReview provides a structured local review workflow with ratings, filtering, Arena-style comparisons, statistics, local SQLite storage and generator value handoff.
+## Implemented state
 
-## Public framing
+- canonical schema v8 with stable image/generation identity;
+- append-only Review events and rebuildable current-state/ranking views;
+- UID-based Arena and Curation;
+- audited, idempotent historical Output, Prompt, Feature and Composition
+  imports;
+- immutable prompt revisions, structured weighted atoms and reproducible
+  compositions;
+- versioned workflow blueprints, dedicated compiler and technical ComfyUI
+  provider;
+- generation lifecycle, reconciliation, multi-output collection and normalized
+  sampler/LoRA provenance;
+- canonical Analytics for Scopes, parameters, prompt combinations and observed
+  render setups;
+- Frontend V2 for Review, Top/Worst, Arena, Playground, Catalog, Generations,
+  Analytics and Settings;
+- workspace preferences and reusable generation profiles with ordered LoRA
+  stacks;
+- shared Python/frontend quality gate with architecture tests, coverage and
+  Playwright browser acceptance.
 
-Recommended repository framing:
+## Runtime rules
 
-```text
-Local FastAPI tool for reviewing, curating and analyzing ComfyUI image outputs with ratings, filters, Arena comparisons, SQLite stats and Playground handoff.
-```
+Normal runtime reads and writes only the canonical database. Legacy databases,
+sidecars and path relationships are available solely to explicit offline
+audit/import tools. Paths are attributes, not identity, and no cut-over feature
+dual-writes legacy state.
 
-The project should be presented as a practical local AI workflow tool and portfolio project, not as a polished commercial desktop application.
+New generation uses standard ComfyUI output nodes plus Blueprint v2. The
+compiler owns prompt, sampler, output-role and LoRA graph semantics; the
+provider owns only transport, job state, capabilities and raw output
+descriptors.
 
-## Current status
+## Remaining acceptance
 
-The current repository demonstrates a usable local workflow around ComfyUI outputs.
+The implementation slices are complete on `refactor/review-boundary`. Remaining
+work before the replacement pull request is user-facing visual acceptance, an
+optional real-ComfyUI smoke generation, the final dead-path usage audit and
+integration review. The branch is intentionally not merged automatically.
 
-Implemented areas include:
+## Scope and limitations
 
-- local FastAPI web app
-- canonical schema-v4 SQLite persistence for images, reviews, Arena and Curation
-- audited PNG and JSON sidecar import with stable image identity
-- append-only review history with rebuildable current-state views
-- image review and rating flow
-- character and set filtering
-- Top and aggregate views
-- Arena-style image comparison
-- Stats and analysis pages
-- Playground handoff back toward ComfyUI
-- native ComfyUI provider and standard `SaveImage` blueprint
-- shared lint, type, architecture, test and coverage quality gate
-
-## Workflow assumptions
-
-ComfyReview currently expects a versioned local blueprint:
-
-- ComfyUI generates PNG files
-- new output uses standard `SaveImage` and canonical output collection
-- image outputs are stored in a local output folder
-- an explicit audit/import workflow records new historical output provenance in
-  the canonical database
-- Review, Top/Worst, Arena and Curation use image UIDs instead of paths as
-  client identity
-- runtime databases, certificates, keys and private image output folders should not be committed
-
-## Local-first scope
-
-The application is designed as a local-first tool.
-
-It is not intended to be:
-
-- a hosted SaaS product
-- a multi-user web service
-- a cloud image platform
-- a finished desktop installer
-- a full production LoRA dataset manager
-
-## Known limitations
-
-Known limitations of the current public prototype:
-
-- setup still requires direct local path configuration
-- metadata extraction depends on the included ComfyUI custom node
-- new historical output imports require matching sidecars; already-canonical
-  sidecarless images remain usable in the cut-over review workflows
-- export and dataset-building logic is not a final production pipeline
-- Playground submission, generation and parts of statistics/projection
-  persistence remain transitional; the canonical revisioned prompt catalog is
-  implemented but not yet the Playground runtime dependency
-- documentation may lag behind experimental internal workflow ideas
-
-## Good public indicators
-
-The project is useful as a public portfolio repository because it demonstrates:
-
-- practical Python application structure
-- FastAPI routing and local web UI organization
-- SQLite-backed local persistence
-- workflow-oriented AI tooling
-- integration with an external local AI tool, ComfyUI
-- clear separation between source code and runtime data
-- documentation of assumptions and limitations
-
-## Suggested next polish tasks
-
-Useful future cleanup tasks, if the project is polished further:
-
-- add screenshots or a short GIF to the README
-- add a small sample workflow diagram
-- add a minimal example output pair for import testing, only if legally and personally safe
-- finish the ComfyUI generation-provider boundary
-- wire Playground selection/rendering to the canonical catalog before the
-  later native GenerationService cutover
-- complete the native ES-module frontend cleanup
-
-## License
+ComfyReview remains a local tool rather than a hosted multi-user service or a
+packaged desktop installer. Infrastructure paths and the ComfyUI endpoint are
+still configured through the local environment. Historical imports need their
+retained evidence; already-canonical sidecarless images remain usable. Export
+and dataset-packaging workflows are not final production pipelines.
 
 Project code is licensed under the MIT License. See `LICENSE`.

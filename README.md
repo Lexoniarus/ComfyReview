@@ -46,7 +46,7 @@ docs/project_status.md
 | **Best fit** | Character-heavy workflows, especially anime-style image generation |
 | **Main input** | Canonical generations and native ComfyUI outputs |
 | **Required dependency** | A reachable ComfyUI API with the blueprint capabilities |
-| **Main views** | Review, Top, Arena, Stats, Playground |
+| **Main views** | Review, Top/Worst, Arena, Playground, Catalog, Generations, Analytics, Settings |
 | **Storage** | One canonical writable SQLite database; legacy sources are offline migration evidence |
 | **Main benefit** | Faster selection, cleaner curation, reproducible reuse |
 
@@ -112,8 +112,11 @@ that prompt in ComfyUI and attach it explicitly with `--prompt-id PROMPT_ID`.
 | **Review** | Fast rating and delete workflow for image batches |
 | **Top** | Aggregated best-image views |
 | **Arena** | Pairwise comparison flow |
-| **Stats** | Local analysis and breakdown pages |
+| **Analytics** | Canonical Scope, parameter, combination and render evidence |
 | **Playground** | Prompt and value handoff back into ComfyUI |
+| **Catalog** | Prompt components, immutable revisions and archive state |
+| **Generations** | Lifecycle, reconciliation, provenance and all outputs |
+| **Settings** | Workspace preferences, generation profiles, LoRA stacks and diagnostics |
 
 ---
 
@@ -243,11 +246,13 @@ remains in the unchanged generation snapshot; it is not invented as a new
 catalog revision. Ambiguous or incomplete evidence remains unlinked and is
 reported rather than guessed.
 
-The active schema is v7. Prompt Catalog revisions and Playground drafts expose
+The active schema is v8. Prompt Catalog revisions and Playground drafts expose
 ordered positive/negative atom rows with separate numeric weights. Rendered
 whole prompts remain exact provenance snapshots produced by the server; they
-are not a second editable source of truth. Existing v6 databases require the
-explicit backed-up `canonical-db upgrade` command before startup.
+are not a second editable source of truth. Schema v8 additionally stores typed
+workspace preferences, generation profiles and ordered LoRA stacks. Existing
+older databases require the explicit backed-up `canonical-db upgrade` command
+before startup.
 
 Audit reports bind source files and databases by hash. Import commands
 revalidate that evidence, create a backup before writing, and commit all writes
@@ -425,9 +430,9 @@ audited import input for local testing.
   sidecarless images remain usable in Review, Top/Worst, Arena, Curation and
   Delete
 - Export and dataset-building workflows are not final production pipelines
-- Playground previews and submission use immutable canonical prompt revisions
-  and the native GenerationService; the current HTML/inline-JavaScript
-  presentation remains transitional until Frontend V2
+- Frontend V2 uses Jinja shells and native ES modules; Playground previews and
+  submission use immutable canonical prompt revisions and the native
+  GenerationService
 - Public documentation may lag behind internal workflow experiments
 
 ---

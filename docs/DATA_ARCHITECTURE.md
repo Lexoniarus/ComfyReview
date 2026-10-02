@@ -1,9 +1,10 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v7 and the live historical-data completion are
+Status: canonical schema v8 and the live historical-data completion are
 implemented for images, reviews, Arena, Curation, revisioned prompts and
-native generation outputs on the active refactor branch, 2026-10-02.
-Catalog authoring and Playground drafts use structured prompt atoms.
+native generation outputs on the active refactor branch, 2026-10-02. Catalog
+authoring and Playground drafts use structured prompt atoms; workspace
+preferences, generation profiles and LoRA usage are canonical.
 
 ## 1. Source-of-truth rule
 
@@ -21,11 +22,12 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v7
+## 2. Canonical schema v8
 
 The canonical database uses explicit schema metadata and foreign keys. Schema
-v7 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
-output provenance and normalized prompt-revision atom usages:
+v8 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
+output provenance, v7 normalized prompt-revision atom usages and v8 workspace
+settings/generation profiles:
 
 - `generations` and normalized generation provenance;
 - `images` with stable UID, output role, content hash, current paths and
@@ -38,10 +40,15 @@ output provenance and normalized prompt-revision atom usages:
 - ordered `prompt_revision_atom_usages` with positive/negative scope,
   position and `weight_milli` linked to canonical `prompt_atoms`;
 - `prompt_compositions` and their concrete revision membership;
+- singleton `workspace_preferences` and ordered
+  `workspace_curation_set_order`;
+- stable-UID `generation_profiles` and ordered
+  `generation_profile_loras`;
+- normalized `generation_loras` recording the exact LoRA stack used;
 - rebuildable current-state and aggregate views.
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
-a v3-to-v4, v4-to-v5, v5-to-v6 or v6-to-v7 migration. The explicit,
+a v3-to-v4, v4-to-v5, v5-to-v6, v6-to-v7 or v7-to-v8 migration. The explicit,
 backed-up command is:
 
 ```text
@@ -172,6 +179,23 @@ unlinked: two have ambiguous expression evidence and fourteen have no
 sufficient catalog evidence. There were no conflicts. These are observed data
 results, not hard-coded importer expectations.
 
+## 5.2 Workspace preferences, profiles and LoRA usage
+
+Schema v8 stores one typed workspace-preference row plus an ordered list of
+visible Curation sets. Preferences affect presentation/session defaults; they
+do not rewrite review or curation facts. Generation profiles retain stable
+profile UIDs and may be archived without becoming unusable for historical
+references. Each profile owns an ordered LoRA stack with independent Model and
+CLIP strengths.
+
+New generations persist the concrete LoRA stack used after validation and
+compilation. Capability discovery supplies available names, while the
+`WorkflowCompiler` alone inserts the ordered loader chain into Blueprint v2.
+The ComfyUI provider still receives only a compiled graph. Historical
+`loras_json` is retained as provenance; the explicit v7-to-v8 upgrade imports
+only unambiguous supported values and reports unsupported values rather than
+inventing normalized facts.
+
 ## 6. Audited historical output import
 
 Historical output migration has two explicit steps:
@@ -248,9 +272,9 @@ Normal runtime startup neither opens nor initializes these files. Known
 additive changes require the explicit `python -m comfyreview legacy-db upgrade`
 command.
 
-## 10. Completed canonical data migration and schema-v7 cutover
+## 10. Completed canonical data migration and schema-v8 cutover
 
-The live schema-v7 database now contains 379 generations, 379 images, 379
+The live schema-v8 database contains 379 generations, 379 images, 379
 sampler stages, 729 prompt components, 729 immutable first revisions, 275
 recovered compositions and 1,280 ordered composition memberships. All 379
 images have output role, output index and a verified content hash. The existing
@@ -261,9 +285,13 @@ The explicit v6-to-v7 migration was rehearsed on a byte-identical copy, then
 run against the stopped live application. Both upgrades created their own
 SQLite backup. The live migration preserved every component, revision,
 composition, generation and rendered prompt snapshot while creating 4,061
-ordered revision atom usages. Final `user_version` is 7,
+ordered revision atom usages. The later explicit v7-to-v8 upgrade was
+rehearsed on a database copy, backed up and applied with the application
+stopped. It added workspace preferences, generation profiles and normalized
+profile/generation LoRA relations without changing stable image, generation,
+component, revision or composition IDs. Final `user_version` is 8,
 `integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
-pre-upgrade backup remains schema v6 with all 729 revisions.
+pre-v7 backup remains schema v6 with all 729 revisions.
 
 Historical completion was rehearsed from a verified v4 backup through the full
 v4-to-v6 upgrade and all four fresh audit/import stages. The same ordered
