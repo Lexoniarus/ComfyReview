@@ -218,6 +218,26 @@ Detailed reports and all four pre-write backups remain ignored runtime
 artifacts. The counts above are observed migration results, not importer
 constants.
 
+### Frontend V2 analytics correction (completed)
+
+- the live canonical output import was rerun idempotently and all 379
+  generations now expose their normalized checkpoint without an `unknown`
+  fallback;
+- parameter summary distinguishes marginal calculated recommendations from
+  actually observed full render setups;
+- Checkpoint, Steps, CFG, Sampler and Scheduler are independent server-loaded
+  views, and changing views cancels the prior request;
+- observed setups are built from canonical generation and ordered sampler-stage
+  facts, never from browser parsing of `combo_key`;
+- prompt combinations and render setups are separate views, with a focused
+  per-composition render-setup endpoint;
+- example images remain bounded and lazy-loaded;
+- static ES modules require revalidation, and the corrected Analytics module
+  graph has a new stable filename to invalidate the previously cached graph;
+- the completed slice passed the full Python/frontend quality gate and browser
+  checks at desktop and 1180 x 820 without console errors or horizontal
+  overflow.
+
 ## Remaining slice order
 
 The dependency order is binding. In particular, Playground does not receive a

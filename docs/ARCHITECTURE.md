@@ -256,6 +256,24 @@ worker/jobs/cursors and their runtime have been removed.
 Legacy sources may be read by explicit migration tools. They must not become a
 second writable truth for an already cut-over feature.
 
+### 10.1 Canonical analytics boundaries
+
+Render analytics no longer treat a serialized `combo_key` as a technical
+configuration. `RenderAnalyticsService` separates marginal recommendations
+from actually observed complete render setups. The SQLite repository builds
+the latter from canonical generation columns plus ordered
+`generation_sampler_stages`; seed is intentionally excluded from grouping.
+`CompositionAnalyticsService` independently exposes canonical prompt
+compositions and the render setups observed for one composition.
+
+The HTTP boundary exposes summary, one selected parameter dimension, prompt
+combinations and render setups as distinct queries. Parameter tabs therefore
+load only their requested dimension, while prompt-combination details obtain
+their technical setups through a focused endpoint. The browser neither parses
+`combo_key` nor calculates statistics. Image URLs remain response-mapping
+concerns. Application-owned static assets require cache revalidation so a new
+ES-module entry point cannot leave its dependency graph silently stale.
+
 ## 11. Observability and quality
 
 Request middleware validates or generates `X-Request-ID`, binds it through a

@@ -273,5 +273,21 @@ sidecars as runtime truth.
 Before migrating a derived projection, prefer a direct canonical query, then a
 SQL view. Only measured needs justify a materialized projection and worker.
 
+### Canonical analytics queries
+
+Parameter evidence is read from canonical generation fields, ordered sampler
+stages, images and review projections. A calculated recommendation combines
+the best-supported marginal value per dimension and is labelled as not jointly
+tested. An observed render setup is a tuple of checkpoint and ordered sampler
+stages; seed is not part of that tuple. Prompt combinations are identified by
+canonical `prompt_composition_id`, and their observed render setups are queried
+through that relation. No analytics runtime reparses legacy `combo_key` values
+or materializes possible prompt/render cross-products.
+
+Single-parameter requests select exactly one of checkpoint, steps, CFG,
+sampler or scheduler in SQLite. Counts, evidence scores, ordering and bounded
+example-image selection remain server-side; the browser receives a typed,
+already grouped response.
+
 Character Chronicles may later reuse or extend this foundation, but its
 descriptions, embeddings, RAG and gameplay state remain separate concerns.
