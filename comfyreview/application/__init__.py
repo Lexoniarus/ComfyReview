@@ -37,6 +37,10 @@ from comfyreview.application.comfyui import (
     ComfyUiSubmission,
     ComfyUiTimeoutError,
 )
+from comfyreview.application.composition_analytics import (
+    CompositionAnalyticsRepository,
+    CompositionAnalyticsService,
+)
 from comfyreview.application.curation import (
     AssignCurationCommand,
     CurationAssignment,
@@ -179,6 +183,16 @@ from comfyreview.application.ranking import (
     RankingRepository,
     RankingService,
 )
+from comfyreview.application.render_analytics import (
+    CalculatedRenderRecommendation,
+    ParameterValueStatistic,
+    RenderAnalyticsRepository,
+    RenderAnalyticsService,
+    RenderAnalyticsSummary,
+    RenderParameter,
+    RenderSamplerStage,
+    RenderSetupStatistic,
+)
 from comfyreview.application.reviews import (
     InvalidOutputPathError,
     OutputDeletionManager,
@@ -227,6 +241,8 @@ __all__ = [
     "AnalyticsReportService",
     "AnalyticsService",
     "CompositionStatistic",
+    "CompositionAnalyticsRepository",
+    "CompositionAnalyticsService",
     "ArenaCompetitor",
     "ArenaDecision",
     "ArenaMutationError",
@@ -351,6 +367,14 @@ __all__ = [
     "PromptSelectionError",
     "PromptSelectionPolicy",
     "PromptTokenStatistic",
+    "CalculatedRenderRecommendation",
+    "ParameterValueStatistic",
+    "RenderAnalyticsRepository",
+    "RenderAnalyticsService",
+    "RenderAnalyticsSummary",
+    "RenderParameter",
+    "RenderSamplerStage",
+    "RenderSetupStatistic",
     "ScopeStatistic",
     "PromptMatchPreview",
     "PromptSnapshot",

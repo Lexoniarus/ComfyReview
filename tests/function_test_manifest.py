@@ -89,6 +89,22 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_normalizes_selected_tokens_and_matches"
     ),
+    "comfyreview.application.render_analytics:RenderAnalyticsService.summary": (
+        "tests/test_canonical_analytics.py::"
+        "test_focused_analytics_services_normalize_queries"
+    ),
+    "comfyreview.application.render_analytics:RenderAnalyticsService.parameter_values": (
+        "tests/test_canonical_analytics.py::"
+        "test_focused_analytics_services_normalize_queries"
+    ),
+    "comfyreview.application.composition_analytics:CompositionAnalyticsService.prompt_combinations": (
+        "tests/test_canonical_analytics.py::"
+        "test_focused_analytics_services_normalize_queries"
+    ),
+    "comfyreview.application.composition_analytics:CompositionAnalyticsService.render_setups": (
+        "tests/test_canonical_analytics.py::"
+        "test_focused_analytics_services_normalize_queries"
+    ),
     "comfyreview.application.playground:PlaygroundService.prepare_draft": (
         "tests/test_playground_application.py::"
         "test_playground_service_prepares_draft_without_generation_submission"

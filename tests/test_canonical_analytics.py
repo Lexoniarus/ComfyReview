@@ -11,10 +11,16 @@ from comfyreview.application import (
     AnalyticsImage,
     AnalyticsReportService,
     AnalyticsService,
+    CalculatedRenderRecommendation,
+    CompositionAnalyticsService,
     CompositionStatistic,
     ObservedPromptCombination,
     PromptMatchPreview,
     PromptTokenStatistic,
+    RenderAnalyticsService,
+    RenderParameter,
+    RenderSamplerStage,
+    RenderSetupStatistic,
     ScopeKind,
     ScopeStatistic,
 )
@@ -22,6 +28,8 @@ from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
+    SqliteCompositionAnalyticsRepository,
+    SqliteRenderAnalyticsRepository,
 )
 
 
@@ -113,6 +121,62 @@ class _AnalyticsReportRepository:
     def list_models(self):
         self.calls.append(("models", None))
         return ("sdxl",)
+
+
+class _RenderAnalyticsRepository:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+        self.setup = RenderSetupStatistic(
+            "setup",
+            "model.safetensors",
+            (RenderSamplerStage("base", 20, 7.0, "euler", "normal", 1.0),),
+            1,
+            2,
+            8.0,
+            0.75,
+            0.5,
+        )
+
+    def list_calculated_recommendations(self, **values):
+        self.calls.append(("recommendations", values))
+        return (
+            CalculatedRenderRecommendation(
+                "model.safetensors",
+                "euler",
+                "normal",
+                20,
+                7.0,
+                1.0,
+                0.7,
+                0.6,
+            ),
+        )
+
+    def list_observed_setups(self, **values):
+        self.calls.append(("setups", values))
+        return (self.setup,)
+
+    def list_parameter_values(self, parameter, **values):
+        self.calls.append(("values", (parameter, values)))
+        return ()
+
+
+class _CompositionAnalyticsRepository:
+    def __init__(self, setup: RenderSetupStatistic) -> None:
+        self.setup = setup
+        self.calls: list[tuple[str, object]] = []
+
+    def list_prompt_combinations(self, **values):
+        self.calls.append(("prompts", values))
+        return (
+            CompositionStatistic(
+                "composition-a", ("Aiko", "Rooftop"), 1, 2, 8.0
+            ),
+        )
+
+    def list_render_setups(self, composition_uid, **values):
+        self.calls.append(("setups", (composition_uid, values)))
+        return (self.setup,)
 
 
 def test_analytics_service_normalizes_canonical_queries() -> None:
@@ -331,6 +395,104 @@ def test_analytics_report_service_normalizes_queries() -> None:
         ),
         ("models", None),
     ]
+
+
+def test_focused_analytics_services_normalize_queries() -> None:
+    render_repository = _RenderAnalyticsRepository()
+    render_service = RenderAnalyticsService(render_repository)
+    summary = render_service.summary(
+        model=" sdxl ",
+        minimum_samples=-1,
+        success_threshold=4,
+        delete_weight=-2,
+        limit=-3,
+    )
+    values = render_service.parameter_values(
+        "steps",
+        model=" sdxl ",
+        minimum_samples=-1,
+        limit=-2,
+    )
+
+    assert summary.observed_setups == (render_repository.setup,)
+    assert summary.recommendations[0].checkpoint == "model.safetensors"
+    assert values == ()
+    assert render_repository.calls == [
+        (
+            "recommendations",
+            {
+                "model": "sdxl",
+                "minimum_samples": 0,
+                "success_threshold": 4,
+                "delete_weight": 0,
+                "limit": 0,
+            },
+        ),
+        (
+            "setups",
+            {
+                "model": "sdxl",
+                "minimum_samples": 0,
+                "success_threshold": 4,
+                "delete_weight": 0,
+                "limit": 0,
+            },
+        ),
+        (
+            "values",
+            (
+                RenderParameter.STEPS,
+                {
+                    "model": "sdxl",
+                    "minimum_samples": 0,
+                    "success_threshold": 4,
+                    "delete_weight": 5,
+                    "limit": 0,
+                },
+            ),
+        ),
+    ]
+    with pytest.raises(ValueError, match="unsupported render parameter"):
+        render_service.parameter_values("seed")
+
+    composition_repository = _CompositionAnalyticsRepository(
+        render_repository.setup
+    )
+    composition_service = CompositionAnalyticsService(composition_repository)
+    combinations = composition_service.prompt_combinations(
+        model=" sdxl ", minimum_samples=-1, limit=-1
+    )
+    setups = composition_service.render_setups(
+        " composition-a ",
+        model=" sdxl ",
+        minimum_samples=-1,
+        delete_weight=-1,
+        limit=-1,
+    )
+
+    assert combinations[0].composition_uid == "composition-a"
+    assert setups == (render_repository.setup,)
+    assert composition_repository.calls == [
+        (
+            "prompts",
+            {"model": "sdxl", "minimum_samples": 0, "limit": 0},
+        ),
+        (
+            "setups",
+            (
+                "composition-a",
+                {
+                    "model": "sdxl",
+                    "minimum_samples": 0,
+                    "success_threshold": 4,
+                    "delete_weight": 0,
+                    "limit": 0,
+                },
+            ),
+        ),
+    ]
+    with pytest.raises(ValueError, match="composition_uid is required"):
+        composition_service.render_setups(" ")
 
 
 def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
@@ -711,3 +873,66 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
         ),
     )
     assert repository.list_models() == ("sdxl",)
+
+
+def test_focused_sqlite_analytics_uses_normalized_render_facts(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _insert_analytics_fixture(database_path, tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE generations SET combo_key = 'not-a-render-contract'"
+        )
+
+    render_repository = SqliteRenderAnalyticsRepository(database_path)
+    recommendations = render_repository.list_calculated_recommendations(
+        model="sdxl",
+        minimum_samples=1,
+        success_threshold=4,
+        delete_weight=5,
+        limit=10,
+    )
+    setups = render_repository.list_observed_setups(
+        model="sdxl",
+        minimum_samples=1,
+        success_threshold=4,
+        delete_weight=5,
+        limit=10,
+    )
+    values = render_repository.list_parameter_values(
+        RenderParameter.STEPS,
+        model="sdxl",
+        minimum_samples=1,
+        success_threshold=4,
+        delete_weight=5,
+        limit=10,
+    )
+    composition_repository = SqliteCompositionAnalyticsRepository(
+        database_path
+    )
+    combinations = composition_repository.list_prompt_combinations(
+        model="sdxl", minimum_samples=1, limit=10
+    )
+    composition_setups = composition_repository.list_render_setups(
+        "composition-1",
+        model="sdxl",
+        minimum_samples=1,
+        success_threshold=4,
+        delete_weight=5,
+        limit=10,
+    )
+
+    assert recommendations[0].checkpoint == "model.safetensors"
+    assert setups[0].checkpoint == "model.safetensors"
+    assert setups[0].stages == (
+        RenderSamplerStage("base_sampler", 20, 7.0, "euler", "normal", 1.0),
+    )
+    assert setups[0].image_count == 1
+    assert setups[0].rating_count == 1
+    assert setups[0].best_images[0].png_path == tmp_path / "image.png"
+    assert values[0].parameter is RenderParameter.STEPS
+    assert values[0].value == "20"
+    assert combinations[0].composition_uid == "composition-1"
+    assert composition_setups == setups

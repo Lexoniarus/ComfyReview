@@ -9,6 +9,9 @@ from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
 )
+from comfyreview.repositories.sqlite.composition_analytics import (
+    SqliteCompositionAnalyticsRepository,
+)
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
     connect_read_only,
@@ -37,6 +40,9 @@ from comfyreview.repositories.sqlite.prompt_catalog import (
     SqlitePromptCatalogRepository,
 )
 from comfyreview.repositories.sqlite.ranking import SqliteRankingRepository
+from comfyreview.repositories.sqlite.render_analytics import (
+    SqliteRenderAnalyticsRepository,
+)
 from comfyreview.repositories.sqlite.reviews import (
     SqliteReviewHistoryRepository,
     SqliteReviewRepository,
@@ -45,6 +51,8 @@ from comfyreview.repositories.sqlite.reviews import (
 __all__ = [
     "SqliteAnalyticsRepository",
     "SqliteAnalyticsReportRepository",
+    "SqliteCompositionAnalyticsRepository",
+    "SqliteRenderAnalyticsRepository",
     "CanonicalSchemaManager",
     "CanonicalSchemaValidationError",
     "LegacySchemaManager",
