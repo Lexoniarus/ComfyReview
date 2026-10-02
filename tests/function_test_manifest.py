@@ -297,6 +297,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_workspace_settings.py::"
         "test_workspace_preferences_service_validates_and_sets_default_profile"
     ),
+    "comfyreview.application.runtime_diagnostics:RuntimeDiagnosticsService.inspect": (
+        "tests/test_workspace_settings.py::"
+        "test_runtime_diagnostics_normalizes_connected_and_offline_states"
+    ),
     "comfyreview.domain.prompts:parse_prompt_atoms": (
         "tests/test_prompt_atoms.py::"
         "test_parse_prompt_atoms_separates_text_and_explicit_weight"

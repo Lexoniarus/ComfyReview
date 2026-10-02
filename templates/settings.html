@@ -1,0 +1,27 @@
+{% extends "_v2_base.html" %} {% set page_title = "Einstellungen · ComfyReview"
+%} {% set active_nav = "settings" %} {% block styles %}
+<link rel="stylesheet" href="/static/css/v2/settings.css" />
+{% endblock %} {% block content %}
+<div class="settings-shell" data-v2-surface="settings">
+  <aside class="v2-panel settings-navigation" aria-label="Einstellungsbereiche">
+    <p class="settings-kicker">Workspace</p>
+    <h1>Einstellungen</h1>
+    <nav data-settings-navigation>
+      <button type="button" data-section="general">Allgemein</button>
+      <button type="button" data-section="profiles">Generierungsprofile</button>
+      <button type="button" data-section="review">Review</button>
+      <button type="button" data-section="curation">Curation</button>
+      <button type="button" data-section="comfyui">ComfyUI</button>
+      <button type="button" data-section="storage">
+        Speicher und Datenbank
+      </button>
+    </nav>
+  </aside>
+  <main class="v2-panel settings-content" data-settings-content>
+    <p class="settings-state">Einstellungen werden geladen …</p>
+  </main>
+  <p class="settings-status" data-settings-status aria-live="polite"></p>
+</div>
+{% endblock %} {% block scripts %}
+<script type="module" src="/static/js/entries/settings.js"></script>
+{% endblock %}

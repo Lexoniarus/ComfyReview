@@ -73,6 +73,28 @@ input:focus-visible {
   overflow-x: auto;
 }
 
+.v2-settings-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  padding: 0.45rem 0.65rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-control);
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.v2-settings-link:hover,
+.v2-settings-link[aria-current="page"] {
+  color: var(--color-accent-strong);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-selected);
+}
+
 .v2-navigation a {
   padding: 0.45rem 0.65rem;
   border-radius: var(--radius-control);
@@ -149,6 +171,12 @@ input:focus-visible {
 
   .v2-navigation {
     width: 100%;
+  }
+
+  .v2-settings-link {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
   }
 }
 

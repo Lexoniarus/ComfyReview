@@ -7,6 +7,12 @@ from pathlib import Path
 
 import pytest
 
+from comfyreview.application import (
+    ComfyUiCapabilities,
+    ComfyUiConnectionError,
+    RuntimeConfigurationSnapshot,
+    RuntimeDiagnosticsService,
+)
 from comfyreview.application.workspace_settings import (
     GenerationLoraSelection,
     GenerationProfile,
@@ -59,6 +65,16 @@ class _Preferences:
 class _Identities:
     def new_profile_uid(self) -> str:
         return "profile-created"
+
+
+class _ComfyUi:
+    def __init__(self, result: ComfyUiCapabilities | Exception) -> None:
+        self.result = result
+
+    def discover_capabilities(self) -> ComfyUiCapabilities:
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
 
 
 def _profile(
@@ -298,3 +314,37 @@ def test_sqlite_settings_repositories_reject_unknown_identities(
                 default_generation_profile_uid="missing",
             )
         )
+
+
+def test_runtime_diagnostics_normalizes_connected_and_offline_states() -> None:
+    configuration = RuntimeConfigurationSnapshot(
+        comfyui_base_url="http://localhost:8188",
+        output_root="output",
+        workflows_directory="workflows",
+        canonical_database_path="canonical.sqlite3",
+        schema_version=8,
+        runtime_mode="canonical",
+        environment_variables=("COMFYREVIEW_DATABASE",),
+    )
+    connected = RuntimeDiagnosticsService(
+        configuration,
+        _ComfyUi(
+            ComfyUiCapabilities(
+                ("LoraLoader",),
+                ("euler",),
+                ("normal",),
+                ("model.safetensors",),
+                ("style.safetensors",),
+            )
+        ),
+    ).inspect()
+    offline = RuntimeDiagnosticsService(
+        configuration,
+        _ComfyUi(ComfyUiConnectionError("offline")),
+    ).inspect()
+
+    assert connected.connected is True
+    assert connected.loras == ("style.safetensors",)
+    assert offline.connected is False
+    assert offline.message == "ComfyUiConnectionError"
+    assert offline.configuration == configuration

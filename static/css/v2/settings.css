@@ -1,0 +1,176 @@
+.settings-shell {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  gap: var(--space-4);
+  max-width: 90rem;
+  min-height: calc(100vh - var(--app-bar-height));
+  margin: 0 auto;
+  padding: var(--space-5);
+}
+
+.settings-navigation,
+.settings-content {
+  padding: var(--space-5);
+}
+
+.settings-navigation {
+  align-self: start;
+  position: sticky;
+  top: calc(var(--app-bar-height) + var(--space-4));
+}
+
+.settings-navigation h1,
+.settings-section h2,
+.settings-section h3,
+.settings-kicker {
+  margin-top: 0;
+}
+
+.settings-kicker,
+.settings-section-kicker {
+  color: var(--color-accent-strong);
+  font-size: var(--font-size-caption);
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-navigation nav,
+.settings-form,
+.settings-profile-list,
+.settings-lora-list,
+.settings-facts {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.settings-navigation button {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-navigation button[aria-current="true"] {
+  color: var(--color-accent-strong);
+  background: var(--color-surface-selected);
+}
+
+.settings-section {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 62rem;
+}
+
+.settings-group,
+.settings-profile-card,
+.settings-lora-row {
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface-subtle);
+}
+
+.settings-form-grid,
+.settings-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.settings-field {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-control);
+}
+
+.settings-field input,
+.settings-field select {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-soft);
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-actions button {
+  min-height: 2.35rem;
+  padding: 0.45rem 0.7rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-soft);
+  cursor: pointer;
+}
+
+.settings-lora-row {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) 8rem 8rem auto auto auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.settings-fact {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.35fr) minmax(0, 1fr);
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 0.0625rem solid var(--color-border);
+}
+
+.settings-fact dt {
+  color: var(--color-text-muted);
+}
+
+.settings-fact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-status {
+  grid-column: 2;
+  min-height: 1.5rem;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+@media (width <= 68rem) {
+  .settings-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-navigation {
+    position: static;
+  }
+
+  .settings-navigation nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settings-status {
+    grid-column: 1;
+  }
+}
+
+@media (width <= 44rem) {
+  .settings-shell {
+    padding: var(--space-3);
+  }
+
+  .settings-navigation nav,
+  .settings-form-grid,
+  .settings-profile-grid,
+  .settings-lora-row {
+    grid-template-columns: 1fr;
+  }
+}

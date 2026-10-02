@@ -218,6 +218,11 @@ from comfyreview.application.reviews import (
     StoredReview,
     SubmitReviewCommand,
 )
+from comfyreview.application.runtime_diagnostics import (
+    RuntimeConfigurationSnapshot,
+    RuntimeDiagnostics,
+    RuntimeDiagnosticsService,
+)
 from comfyreview.application.workflow_compilation import (
     CompiledOutputBinding,
     CompiledSamplerStage,
@@ -421,6 +426,9 @@ __all__ = [
     "ReviewService",
     "ReviewValidationError",
     "ReviewSummary",
+    "RuntimeConfigurationSnapshot",
+    "RuntimeDiagnostics",
+    "RuntimeDiagnosticsService",
     "RenderedPrompt",
     "StagedDeletion",
     "StoredReview",

@@ -45,6 +45,26 @@
         <a href="/stats">Analysen</a>
         {% endif %}
       </nav>
+      {% if active_nav == "settings" %}
+      <a
+        class="v2-settings-link"
+        href="/settings"
+        aria-current="page"
+        aria-label="Einstellungen öffnen"
+      >
+        <span aria-hidden="true">⚙</span>
+        Einstellungen
+      </a>
+      {% else %}
+      <a
+        class="v2-settings-link"
+        href="/settings"
+        aria-label="Einstellungen öffnen"
+      >
+        <span aria-hidden="true">⚙</span>
+        Einstellungen
+      </a>
+      {% endif %}
     </header>
     <main class="v2-page">{% block content %}{% endblock %}</main>
     {% block scripts %}{% endblock %}

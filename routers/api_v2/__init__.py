@@ -11,6 +11,7 @@ from routers.api_v2.images import router as images_router
 from routers.api_v2.playground import router as playground_router
 from routers.api_v2.review import router as review_router
 from routers.api_v2.scopes import router as scopes_router
+from routers.api_v2.settings import router as settings_router
 
 router = APIRouter(prefix="/api/v2")
 router.include_router(scopes_router)
@@ -22,5 +23,6 @@ router.include_router(playground_router)
 router.include_router(generations_router)
 router.include_router(curation_router)
 router.include_router(analytics_router)
+router.include_router(settings_router)
 
 __all__ = ["router"]

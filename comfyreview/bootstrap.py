@@ -20,6 +20,7 @@ from comfyreview.application import (
     CurationService,
     DraftOverridePolicy,
     GenerationOutputCollector,
+    GenerationProfileService,
     GenerationQueryService,
     GenerationReconciliationService,
     GenerationService,
@@ -36,9 +37,12 @@ from comfyreview.application import (
     ReviewCandidateService,
     ReviewHistoryService,
     ReviewService,
+    RuntimeConfigurationSnapshot,
+    RuntimeDiagnosticsService,
     ScopeFacetService,
     WorkflowCompiler,
     WorkflowDefaultsService,
+    WorkspacePreferencesService,
 )
 from comfyreview.observability import (
     RequestTracingMiddleware,
@@ -52,6 +56,7 @@ from comfyreview.providers import (
     OutputFileUrlMapper,
     UrlLibJsonTransport,
     UuidGenerationIdentitySource,
+    UuidGenerationProfileIdentitySource,
     UuidPromptIdentitySource,
 )
 from comfyreview.repositories.filesystem import (
@@ -67,6 +72,7 @@ from comfyreview.repositories.sqlite import (
     SqliteCompositionAnalyticsRepository,
     SqliteCurationRepository,
     SqliteGenerationOutputRepository,
+    SqliteGenerationProfileRepository,
     SqliteGenerationQueryRepository,
     SqliteGenerationRepository,
     SqliteImageContextRepository,
@@ -78,13 +84,16 @@ from comfyreview.repositories.sqlite import (
     SqliteReviewHistoryRepository,
     SqliteReviewRepository,
     SqliteScopeFacetRepository,
+    SqliteWorkspacePreferencesRepository,
 )
+from comfyreview.repositories.sqlite.canonical_schema import SCHEMA_VERSION
 from comfyreview.revalidating_static_files import RevalidatingStaticFiles
 from comfyreview.settings import Settings, load_settings
 from routers.api_v2_router import router as api_v2_router
 from routers.arena_router import router as arena_router
 from routers.index_router import router as index_router
 from routers.playground import router as playground_router
+from routers.settings_router import router as settings_router
 from routers.stats_router import router as stats_router
 from routers.top_router import router as top_router
 from services.analytics_page_service import AnalyticsPageService
@@ -127,6 +136,9 @@ class ApplicationContainer:
     review_history: ReviewHistoryService
     arena_service: ArenaService
     curation_service: CurationService
+    workspace_preferences: WorkspacePreferencesService
+    generation_profiles: GenerationProfileService
+    runtime_diagnostics: RuntimeDiagnosticsService
 
 
 def _prepare_directories(settings: Settings) -> None:
@@ -218,6 +230,12 @@ def build_application_container(
         ),
         comfyui=comfyui_provider,
         outputs=generation_output_collector,
+    )
+    profile_repository = SqliteGenerationProfileRepository(
+        configured.canonical_database_path
+    )
+    preferences_repository = SqliteWorkspacePreferencesRepository(
+        configured.canonical_database_path
     )
     return ApplicationContainer(
         settings=configured,
@@ -312,6 +330,34 @@ def build_application_container(
             files=LocalCurationFileManager(configured.output_root),
             allowed_set_keys=configured.curation_set_keys,
         ),
+        workspace_preferences=WorkspacePreferencesService(
+            preferences_repository,
+            profile_repository,
+            curation_set_keys=configured.curation_set_keys,
+        ),
+        generation_profiles=GenerationProfileService(
+            profile_repository,
+            UuidGenerationProfileIdentitySource(),
+        ),
+        runtime_diagnostics=RuntimeDiagnosticsService(
+            RuntimeConfigurationSnapshot(
+                comfyui_base_url=configured.comfyui_base_url,
+                output_root=str(configured.output_root),
+                workflows_directory=str(configured.workflows_directory),
+                canonical_database_path=str(
+                    configured.canonical_database_path
+                ),
+                schema_version=SCHEMA_VERSION,
+                runtime_mode="canonical",
+                environment_variables=(
+                    "COMFYREVIEW_COMFYUI_BASE_URL",
+                    "COMFYREVIEW_OUTPUT_ROOT",
+                    "COMFYREVIEW_WORKFLOWS_DIR",
+                    "COMFYREVIEW_DATABASE",
+                ),
+            ),
+            comfyui_provider,
+        ),
     )
 
 
@@ -349,6 +395,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     )
     application.include_router(index_router)
     application.include_router(api_v2_router)
+    application.include_router(settings_router)
     application.include_router(top_router)
     application.include_router(arena_router)
     application.include_router(stats_router)

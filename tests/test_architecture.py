@@ -164,4 +164,5 @@ def test_v2_router_is_a_focused_composition_module() -> None:
         "playground",
         "review",
         "scopes",
+        "settings",
     }

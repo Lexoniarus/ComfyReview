@@ -16,6 +16,7 @@ from comfyreview.application import (
     CanonicalSchemaReport,
     CurationImage,
     CurationService,
+    GenerationProfileService,
     GenerationQueryService,
     GenerationReconciliationService,
     GenerationService,
@@ -30,9 +31,11 @@ from comfyreview.application import (
     ReviewHistoryService,
     ReviewResult,
     ReviewService,
+    RuntimeDiagnosticsService,
     ScopeFacetService,
     SubmitReviewCommand,
     WorkflowDefaultsService,
+    WorkspacePreferencesService,
 )
 from comfyreview.bootstrap import (
     ApplicationContainer,
@@ -154,6 +157,9 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
             files=_EmptyCurationFiles(),
             allowed_set_keys=settings.curation_set_keys,
         ),
+        workspace_preferences=cast(WorkspacePreferencesService, object()),
+        generation_profiles=cast(GenerationProfileService, object()),
+        runtime_diagnostics=cast(RuntimeDiagnosticsService, object()),
     )
 
 

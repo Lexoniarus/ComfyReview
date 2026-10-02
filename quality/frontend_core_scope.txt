@@ -47,3 +47,7 @@ static/js/surfaces/playground-controller.js
 static/js/surfaces/catalog-controller.js
 static/js/surfaces/generations-controller.js
 static/js/surfaces/focused-analytics-controller.js
+static/js/settings/lora-stack-editor.js
+static/js/settings/generation-profile-editor.js
+static/js/settings/settings-view.js
+static/js/surfaces/settings-controller.js
