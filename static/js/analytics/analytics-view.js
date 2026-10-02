@@ -17,11 +17,13 @@ export class AnalyticsView {
   /** @param {HTMLElement} root */
   constructor(root) {
     this.root = root;
+    this.interactions = new AbortController();
   }
 
   /** @param {string} section @param {Record<string, any>} payload */
   render(section, payload) {
-    this.root.replaceChildren();
+    this.clear();
+    this.interactions = new AbortController();
     if (section === "overview") this.#renderOverview(payload);
     else if (section === "scopes") this.#renderScopes(payload);
     else if (section === "parameters") this.#renderParameters(payload);
@@ -30,6 +32,7 @@ export class AnalyticsView {
 
   /** Clear rendered report content. */
   clear() {
+    this.interactions.abort();
     this.root.replaceChildren();
   }
 
@@ -96,27 +99,19 @@ export class AnalyticsView {
     this.root.append(
       reportIntro(
         "Renderparameter",
-        "Berechnete Vorschläge und tatsächlich beobachtete Werte werden getrennt dargestellt. Beispielbilder bleiben an den realen Beobachtungen.",
+        "Wähle erst Berechnung oder getestete Kombination und anschließend genau einen Parameter. So bleiben Empfehlung, Evidenz und Bildbeispiele vergleichbar.",
       ),
-      bestCaseSection(arrayValue(payload.best)),
+      bestCaseComparison(
+        arrayValue(payload.best),
+        arrayValue(payload.best_tested),
+        this.interactions.signal,
+      ),
     );
     if (!sections.length) {
       this.root.append(emptyMessage("Keine Parameterdaten für diesen Filter."));
       return;
     }
-    for (const section of sections) {
-      const article = document.createElement("article");
-      article.className = "analytics-report-section";
-      const title = document.createElement("h2");
-      title.textContent = textValue(section.title || section.key);
-      const grid = document.createElement("div");
-      grid.className = "analytics-parameter-grid";
-      for (const row of arrayValue(section.rows)) {
-        grid.append(parameterCard(row));
-      }
-      article.append(title, grid);
-      this.root.append(article);
-    }
+    this.root.append(parameterTabs(sections, this.interactions.signal));
   }
 
   /** @param {Record<string, any>} payload */
@@ -298,8 +293,8 @@ function compositionCard(row) {
   return card;
 }
 
-/** @param {unknown[]} values */
-function bestCaseSection(values) {
+/** @param {unknown[]} calculated @param {unknown[]} tested @param {AbortSignal} signal */
+function bestCaseComparison(calculated, tested, signal) {
   const section = document.createElement("section");
   section.className = "analytics-best-cases";
   section.append(
@@ -308,9 +303,27 @@ function bestCaseSection(values) {
       "Pro Checkpoint wird je Parameter der stabilste beobachtete Wert gewählt. Das ist eine nachvollziehbare Empfehlung, aber noch kein Beleg für die gemeinsame Kombination.",
     ),
   );
+  const calculatedPanel = bestCalculatedPanel(calculated);
+  const testedPanel = bestTestedPanel(tested);
+  section.append(
+    tabbedPanels(
+      [
+        ["Berechnet", calculatedPanel],
+        ["Getestet", testedPanel],
+      ],
+      signal,
+      "Best-Case-Ansicht",
+    ),
+  );
+  return section;
+}
+
+/** @param {unknown[]} values */
+function bestCalculatedPanel(values) {
+  const panel = document.createElement("div");
   if (!values.length) {
-    section.append(emptyMessage("Keine berechneten Vorschläge."));
-    return section;
+    panel.append(emptyMessage("Keine berechneten Vorschläge."));
+    return panel;
   }
   const grid = document.createElement("div");
   grid.className = "analytics-best-grid";
@@ -334,8 +347,121 @@ function bestCaseSection(values) {
     card.append(title, settings, score);
     grid.append(card);
   }
-  section.append(grid);
-  return section;
+  panel.append(grid);
+  return panel;
+}
+
+/** @param {unknown[]} values */
+function bestTestedPanel(values) {
+  const panel = document.createElement("div");
+  if (!values.length) {
+    panel.append(emptyMessage("Keine ausreichend belegten Kombinationen."));
+    return panel;
+  }
+  const list = document.createElement("div");
+  list.className = "analytics-tested-list";
+  for (const value of values.slice(0, 8)) {
+    const item = recordValue(value);
+    const row = document.createElement("article");
+    const title = document.createElement("strong");
+    title.textContent = testedCombinationLabel(item);
+    const evidence = document.createElement("span");
+    evidence.textContent = `${textValue(item.n)} Belege · Ø ${decimalValue(item.avg_rating)} / 10`;
+    const confidence = document.createElement("span");
+    confidence.textContent = `Erwartet ${percentValue(item.exp_success_rate)} · Untergrenze ${percentValue(item.stability_lb05)}`;
+    row.append(title, evidence, confidence);
+    list.append(row);
+  }
+  panel.append(list);
+  return panel;
+}
+
+/** @param {unknown[]} sections @param {AbortSignal} signal */
+function parameterTabs(sections, signal) {
+  /** @type {Array<[string, HTMLElement]>} */
+  const panels = sections.map((value) => {
+    const section = recordValue(value);
+    const panel = document.createElement("div");
+    panel.className = "analytics-parameter-grid";
+    for (const row of arrayValue(section.rows))
+      panel.append(parameterCard(row));
+    if (!panel.children.length) {
+      panel.append(emptyMessage("Keine Werte für diesen Parameter."));
+    }
+    return [textValue(section.title || section.key), panel];
+  });
+  return tabbedPanels(panels, signal, "Parameter auswählen");
+}
+
+/** @param {Array<[string, HTMLElement]>} entries @param {AbortSignal} signal @param {string} label */
+function tabbedPanels(entries, signal, label) {
+  const container = document.createElement("div");
+  container.className = "analytics-tabbed-content";
+  const tabs = document.createElement("div");
+  tabs.className = "analytics-subtabs";
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", label);
+  const panels = document.createElement("div");
+  entries.forEach(([title, panel], index) => {
+    const button = document.createElement("button");
+    const tabId = `analytics-tab-${slug(title)}-${index}`;
+    const panelId = `analytics-panel-${slug(title)}-${index}`;
+    button.type = "button";
+    button.id = tabId;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-controls", panelId);
+    button.textContent = title;
+    panel.id = panelId;
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", tabId);
+    setTabSelected(button, panel, index === 0);
+    button.addEventListener(
+      "click",
+      () => {
+        const allTabs = tabs.querySelectorAll('[role="tab"]');
+        const allPanels = panels.querySelectorAll('[role="tabpanel"]');
+        allTabs.forEach((item, itemIndex) => {
+          setTabSelected(item, allPanels[itemIndex], item === button);
+        });
+      },
+      { signal },
+    );
+    tabs.append(button);
+    panels.append(panel);
+  });
+  container.append(tabs, panels);
+  return container;
+}
+
+/** @param {Element} tab @param {Element | undefined} panel @param {boolean} selected */
+function setTabSelected(tab, panel, selected) {
+  tab.setAttribute("aria-selected", String(selected));
+  tab.setAttribute("tabindex", selected ? "0" : "-1");
+  if (panel instanceof HTMLElement) panel.hidden = !selected;
+}
+
+/** @param {Record<string, any>} item */
+function testedCombinationLabel(item) {
+  const parts = String(item.combo_key || "")
+    .split("|")
+    .map((part) => part.split("=", 2))
+    .filter((part) => part.length === 2);
+  const values = Object.fromEntries(parts);
+  return (
+    [
+      values.sampler,
+      values.sched,
+      values.steps ? `${values.steps} Steps` : "",
+      values.cfg ? `CFG ${values.cfg}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || textValue(item.combo_key)
+  );
+}
+
+/** @param {string} value */
+function slug(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/gu, "-");
 }
 
 /** @param {Record<string, any>} row */

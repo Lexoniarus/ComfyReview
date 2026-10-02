@@ -106,6 +106,16 @@ describe("AnalyticsView", () => {
           },
         },
       ],
+      best_tested: [
+        {
+          combo_key:
+            "ckpt=model.safetensors|sampler=euler|sched=normal|steps=30|cfg=6.5|denoise=1",
+          n: 12,
+          avg_rating: 8.5,
+          exp_success_rate: 0.7,
+          stability_lb05: 0.6,
+        },
+      ],
       stats: [
         {
           key: "steps",
@@ -121,6 +131,12 @@ describe("AnalyticsView", () => {
             },
           ],
         },
+        {
+          key: "cfg",
+          title: "CFG",
+          rows: [{ value: 6.5, n: 8, avg_rating: 7.5 }],
+        },
+        { key: "sampler", title: "Sampler", rows: [] },
       ],
     });
 
@@ -128,9 +144,16 @@ describe("AnalyticsView", () => {
     expect(root.textContent).toContain("Sampler euler");
     expect(root.textContent).toContain("Steps 30");
     expect(root.querySelector("img")?.getAttribute("src")).toBe("best.png");
+    expect(root.textContent).toContain("Getestet");
+    expect(root.textContent).toContain("Keine Werte für diesen Parameter");
+    root.querySelectorAll('[role="tab"]')[1].click();
+    expect(root.textContent).toContain("euler · normal · 30 Steps · CFG 6.5");
+    root.querySelectorAll('[role="tab"]')[3].click();
+    expect(root.querySelectorAll('[role="tabpanel"]')[3].hidden).toBe(false);
 
-    view.render("parameters", { stats: [], best: [] });
+    view.render("parameters", { stats: [], best: [], best_tested: [] });
     expect(root.textContent).toContain("Keine berechneten Vorschläge");
+    expect(root.textContent).toContain("Keine ausreichend belegten");
     expect(root.textContent).toContain("Keine Parameterdaten");
   });
 

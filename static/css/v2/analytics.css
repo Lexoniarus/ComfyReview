@@ -200,6 +200,51 @@
   margin-top: var(--space-3);
 }
 
+.analytics-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.analytics-subtabs button {
+  min-height: 2.35rem;
+  padding: 0.45rem 0.75rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.analytics-subtabs button[aria-selected="true"] {
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  color: var(--color-accent-strong);
+  background: var(--color-surface-selected);
+}
+
+.analytics-tested-list {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.analytics-tested-list article {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1.4fr) minmax(10rem, 0.6fr) minmax(
+      14rem,
+      0.8fr
+    );
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 0.0625rem solid var(--color-border);
+}
+
+.analytics-tested-list span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-control);
+}
+
 .analytics-approx-grid article,
 .analytics-best-grid article {
   display: grid;
@@ -325,13 +370,12 @@
 
 .analytics-parameter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(26rem, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .analytics-parameter-card {
   display: grid;
-  grid-template-columns: minmax(8rem, 0.7fr) minmax(11rem, 1.3fr);
+  grid-template-columns: minmax(11rem, 0.65fr) minmax(16rem, 1.35fr);
   overflow: hidden;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-panel);
@@ -423,6 +467,10 @@
   }
 
   .analytics-parameter-card {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-tested-list article {
     grid-template-columns: 1fr;
   }
 }
