@@ -31,3 +31,15 @@ def test_parser_keeps_commas_inside_weighted_parentheses() -> None:
     assert atoms[0].text == "red, blue eyes"
     assert atoms[0].weight_milli == 1200
     assert atoms[1].text == "solo"
+
+
+def test_supported_prompt_grammar_preserves_order_and_default_weight() -> None:
+    atoms = parse_prompt_atoms(
+        "silver hair, (cyan blue eyes:1.2), (soft smile:1.0)"
+    )
+
+    assert tuple((atom.text, atom.weight_milli) for atom in atoms) == (
+        ("silver hair", 1000),
+        ("cyan blue eyes", 1200),
+        ("soft smile", 1000),
+    )
