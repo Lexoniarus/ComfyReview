@@ -82,28 +82,34 @@
 
 .playground-combination-grid {
   display: grid;
+  grid-auto-columns: minmax(18rem, 24rem);
+  grid-auto-flow: column;
   gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  scroll-snap-type: x proximity;
 }
 
 .playground-combination-card {
   display: grid;
-  grid-template-columns: minmax(11rem, 0.9fr) minmax(12rem, 1.1fr);
+  grid-template-columns: 7rem minmax(0, 1fr);
   overflow: hidden;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-panel);
   background: var(--color-surface-subtle);
+  scroll-snap-align: start;
 }
 
 .playground-combination-images {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(2rem, 1fr));
   min-height: 6rem;
   background: var(--color-surface-soft);
 }
 
 .playground-combination-images img {
   width: 100%;
-  height: 7.5rem;
+  height: 6.5rem;
   object-fit: cover;
 }
 
@@ -117,6 +123,17 @@
   align-content: center;
   gap: var(--space-1);
   padding: var(--space-3);
+}
+
+.playground-combination-card button {
+  justify-self: start;
+  padding: 0.35rem 0.55rem;
+  border: 0.0625rem solid var(--color-accent-border);
+  border-radius: var(--radius-control);
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+  font-size: var(--font-size-caption);
+  font-weight: 700;
 }
 
 .playground-selection,
