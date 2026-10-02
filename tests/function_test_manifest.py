@@ -269,6 +269,34 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_workflow_defaults.py::"
         "test_workflow_defaults_service_reads_explicit_roles"
     ),
+    "comfyreview.application.workspace_settings:GenerationProfileService.create": (
+        "tests/test_workspace_settings.py::"
+        "test_generation_profile_service_preserves_ordered_lora_stack"
+    ),
+    "comfyreview.application.workspace_settings:GenerationProfileService.list_profiles": (
+        "tests/test_workspace_settings.py::"
+        "test_generation_profile_service_preserves_ordered_lora_stack"
+    ),
+    "comfyreview.application.workspace_settings:GenerationProfileService.set_archived": (
+        "tests/test_workspace_settings.py::"
+        "test_generation_profile_service_updates_and_protects_default_profile"
+    ),
+    "comfyreview.application.workspace_settings:GenerationProfileService.update": (
+        "tests/test_workspace_settings.py::"
+        "test_generation_profile_service_updates_and_protects_default_profile"
+    ),
+    "comfyreview.application.workspace_settings:WorkspacePreferencesService.get": (
+        "tests/test_workspace_settings.py::"
+        "test_workspace_preferences_service_validates_and_sets_default_profile"
+    ),
+    "comfyreview.application.workspace_settings:WorkspacePreferencesService.set_default_profile": (
+        "tests/test_workspace_settings.py::"
+        "test_workspace_preferences_service_validates_and_sets_default_profile"
+    ),
+    "comfyreview.application.workspace_settings:WorkspacePreferencesService.update": (
+        "tests/test_workspace_settings.py::"
+        "test_workspace_preferences_service_validates_and_sets_default_profile"
+    ),
     "comfyreview.domain.prompts:parse_prompt_atoms": (
         "tests/test_prompt_atoms.py::"
         "test_parse_prompt_atoms_separates_text_and_explicit_weight"

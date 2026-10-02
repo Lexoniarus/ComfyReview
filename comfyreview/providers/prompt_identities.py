@@ -17,3 +17,11 @@ class UuidGenerationIdentitySource:
     def new_generation_uid(self) -> str:
         """Return one canonical generation UID."""
         return f"generation-{uuid4()}"
+
+
+class UuidGenerationProfileIdentitySource:
+    """Create opaque UUID-backed generation profile identities."""
+
+    def new_profile_uid(self) -> str:
+        """Return one canonical generation profile UID."""
+        return f"generation-profile-{uuid4()}"

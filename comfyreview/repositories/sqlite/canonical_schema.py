@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sqlite3
@@ -16,7 +17,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -442,6 +443,53 @@ _REQUIRED_REVISION_ATOM_COLUMNS_V7 = {
     "weight_milli",
 }
 
+_REQUIRED_OBJECTS_V8 = {
+    **_REQUIRED_OBJECTS_V7,
+    "generation_loras": "table",
+    "generation_profile_loras": "table",
+    "generation_profiles": "table",
+    "workspace_curation_set_order": "table",
+    "workspace_preferences": "table",
+}
+_REQUIRED_WORKSPACE_PREFERENCE_COLUMNS_V8 = {
+    "singleton_id",
+    "density",
+    "motion",
+    "analytics_page_size",
+    "default_generation_profile_id",
+    "review_unrated_only",
+    "review_max_attempts",
+    "default_curation_set_key",
+    "updated_at",
+}
+_REQUIRED_GENERATION_PROFILE_COLUMNS_V8 = {
+    "id",
+    "profile_uid",
+    "name",
+    "blueprint_uid",
+    "blueprint_version",
+    "checkpoint",
+    "sampler",
+    "scheduler",
+    "seed_mode",
+    "fixed_seed",
+    "steps_min",
+    "steps_max",
+    "cfg_min_milli",
+    "cfg_max_milli",
+    "denoise_milli",
+    "batch_size",
+    "archived_at",
+    "created_at",
+    "updated_at",
+}
+_REQUIRED_LORA_COLUMNS_V8 = {
+    "position",
+    "lora_name",
+    "model_strength_milli",
+    "clip_strength_milli",
+}
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -489,10 +537,10 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4, 5, 6}:
+        if current_version not in {1, 2, 3, 4, 5, 6, 7}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1, 2, 3, 4, 5, 6, or "
+                f"{current_version}; expected 1, 2, 3, 4, 5, 6, 7, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -506,8 +554,10 @@ class CanonicalSchemaManager:
             self._validate_version_four()
         elif current_version == 5:
             self._validate_version_five()
-        else:
+        elif current_version == 6:
             self._validate_version_six()
+        else:
+            self._validate_version_seven()
 
         backup_path = self._create_backup(backup_directory)
         committed = False
@@ -525,7 +575,9 @@ class CanonicalSchemaManager:
                     self._upgrade_v4_to_v5(connection)
                 if current_version <= 5:
                     self._upgrade_v5_to_v6(connection)
-                self._upgrade_v6_to_v7(connection)
+                if current_version <= 6:
+                    self._upgrade_v6_to_v7(connection)
+                self._upgrade_v7_to_v8(connection)
                 connection.commit()
                 committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
@@ -577,6 +629,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v6_to_v7(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v7_to_v8(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -589,7 +644,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3, 4, 5, 6}:
+            if version in {1, 2, 3, 4, 5, 6, 7}:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -706,6 +761,24 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_seven(self) -> None:
+        connection = self._open_read_only()
+        try:
+            version = self._schema_version(connection)
+            if version != 7:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 7 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V7)
+            self._validate_metadata_version(connection, 7)
+            self._validate_generation_columns(connection)
+            self._validate_output_identity_v6(connection)
+            self._validate_prompt_catalog_v5(connection)
+            self._validate_prompt_catalog_v7(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -714,12 +787,13 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V7)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V8)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
         self._validate_prompt_catalog_v5(connection)
         self._validate_prompt_catalog_v7(connection)
+        self._validate_workspace_settings_v8(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -1234,6 +1308,165 @@ class CanonicalSchemaManager:
         )
         connection.execute("PRAGMA user_version = 7")
 
+    @classmethod
+    def _upgrade_v7_to_v8(cls, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE generation_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                profile_uid TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                blueprint_uid TEXT NOT NULL,
+                blueprint_version INTEGER NOT NULL CHECK (blueprint_version > 0),
+                checkpoint TEXT NOT NULL,
+                sampler TEXT NOT NULL,
+                scheduler TEXT NOT NULL,
+                seed_mode TEXT NOT NULL
+                    CHECK (seed_mode IN ('fixed', 'random')),
+                fixed_seed INTEGER,
+                steps_min INTEGER NOT NULL CHECK (steps_min > 0),
+                steps_max INTEGER NOT NULL CHECK (steps_max >= steps_min),
+                cfg_min_milli INTEGER NOT NULL CHECK (cfg_min_milli > 0),
+                cfg_max_milli INTEGER NOT NULL
+                    CHECK (cfg_max_milli >= cfg_min_milli),
+                denoise_milli INTEGER NOT NULL
+                    CHECK (denoise_milli BETWEEN 0 AND 1000),
+                batch_size INTEGER NOT NULL CHECK (batch_size > 0),
+                archived_at TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                CHECK (seed_mode = 'random' OR fixed_seed IS NOT NULL)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE generation_profile_loras (
+                profile_id INTEGER NOT NULL
+                    REFERENCES generation_profiles(id) ON DELETE CASCADE,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                lora_name TEXT NOT NULL,
+                model_strength_milli INTEGER NOT NULL,
+                clip_strength_milli INTEGER NOT NULL,
+                PRIMARY KEY (profile_id, position),
+                UNIQUE (profile_id, lora_name)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE generation_loras (
+                generation_id INTEGER NOT NULL
+                    REFERENCES generations(id) ON DELETE CASCADE,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                lora_name TEXT NOT NULL,
+                model_strength_milli INTEGER NOT NULL,
+                clip_strength_milli INTEGER NOT NULL,
+                PRIMARY KEY (generation_id, position)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE workspace_preferences (
+                singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                density TEXT NOT NULL DEFAULT 'comfortable'
+                    CHECK (density IN ('comfortable', 'compact')),
+                motion TEXT NOT NULL DEFAULT 'system'
+                    CHECK (motion IN ('system', 'reduced')),
+                analytics_page_size INTEGER NOT NULL DEFAULT 24
+                    CHECK (analytics_page_size IN (12, 24, 48)),
+                default_generation_profile_id INTEGER
+                    REFERENCES generation_profiles(id),
+                review_unrated_only INTEGER NOT NULL DEFAULT 1
+                    CHECK (review_unrated_only IN (0, 1)),
+                review_max_attempts INTEGER NOT NULL DEFAULT 50
+                    CHECK (review_max_attempts > 0),
+                default_curation_set_key TEXT,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE workspace_curation_set_order (
+                singleton_id INTEGER NOT NULL DEFAULT 1
+                    REFERENCES workspace_preferences(singleton_id)
+                    ON DELETE CASCADE,
+                set_key TEXT NOT NULL,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                PRIMARY KEY (singleton_id, position),
+                UNIQUE (singleton_id, set_key)
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO workspace_preferences(singleton_id) VALUES (1)"
+        )
+        for generation_id, loras_json in connection.execute(
+            "SELECT id, loras_json FROM generations ORDER BY id"
+        ).fetchall():
+            for position, lora in enumerate(
+                cls._legacy_lora_selections(str(loras_json or "[]"))
+            ):
+                connection.execute(
+                    """
+                    INSERT INTO generation_loras(
+                        generation_id, position, lora_name,
+                        model_strength_milli, clip_strength_milli
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (int(generation_id), position, *lora),
+                )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '8' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 8")
+
+    @staticmethod
+    def _legacy_lora_selections(
+        payload: str,
+    ) -> tuple[tuple[str, int, int], ...]:
+        try:
+            values = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise CanonicalSchemaValidationError(
+                "generation LoRA provenance is not valid JSON"
+            ) from error
+        if not isinstance(values, list):
+            raise CanonicalSchemaValidationError(
+                "generation LoRA provenance must be a list"
+            )
+        result: list[tuple[str, int, int]] = []
+        for value in values:
+            if not isinstance(value, dict):
+                raise CanonicalSchemaValidationError(
+                    "generation LoRA provenance contains an invalid item"
+                )
+            name = value.get("name")
+            model_strength = value.get("strength_model")
+            clip_strength = value.get("strength_clip")
+            if (
+                not isinstance(name, str)
+                or not name.strip()
+                or isinstance(model_strength, bool)
+                or not isinstance(model_strength, (int, float))
+                or isinstance(clip_strength, bool)
+                or not isinstance(clip_strength, (int, float))
+            ):
+                raise CanonicalSchemaValidationError(
+                    "generation LoRA provenance is incomplete"
+                )
+            result.append(
+                (
+                    name.strip(),
+                    round(float(model_strength) * 1000),
+                    round(float(clip_strength) * 1000),
+                )
+            )
+        return tuple(result)
+
     @staticmethod
     def _create_review_views(connection: sqlite3.Connection) -> None:
         connection.execute(
@@ -1658,6 +1891,58 @@ class CanonicalSchemaManager:
                         "prompt revision atom usages do not match snapshots"
                     )
 
+    @classmethod
+    def _validate_workspace_settings_v8(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        preference_columns = cls._table_column_rows(
+            connection,
+            "workspace_preferences",
+        )
+        profile_columns = cls._table_column_rows(
+            connection,
+            "generation_profiles",
+        )
+        profile_lora_columns = cls._table_column_rows(
+            connection,
+            "generation_profile_loras",
+        )
+        generation_lora_columns = cls._table_column_rows(
+            connection,
+            "generation_loras",
+        )
+        missing = sorted(
+            (
+                _REQUIRED_WORKSPACE_PREFERENCE_COLUMNS_V8
+                - preference_columns.keys()
+            )
+            | (
+                _REQUIRED_GENERATION_PROFILE_COLUMNS_V8
+                - profile_columns.keys()
+            )
+            | (_REQUIRED_LORA_COLUMNS_V8 - profile_lora_columns.keys())
+            | (_REQUIRED_LORA_COLUMNS_V8 - generation_lora_columns.keys())
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical settings tables are missing required columns: "
+                + ", ".join(missing)
+            )
+        if connection.execute(
+            "SELECT COUNT(*) FROM workspace_preferences WHERE singleton_id = 1"
+        ).fetchone() != (1,):
+            raise CanonicalSchemaValidationError(
+                "workspace preferences singleton is missing"
+            )
+        if ("profile_uid",) not in cls._unique_index_columns(
+            connection,
+            "generation_profiles",
+        ):
+            raise CanonicalSchemaValidationError(
+                "generation profiles are missing stable UID uniqueness"
+            )
+
     def _is_valid_version(self, version: int) -> bool:
         try:
             if version == 1:
@@ -1672,6 +1957,8 @@ class CanonicalSchemaManager:
                 self._validate_version_five()
             elif version == 6:
                 self._validate_version_six()
+            elif version == 7:
+                self._validate_version_seven()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):

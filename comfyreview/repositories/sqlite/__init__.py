@@ -47,6 +47,10 @@ from comfyreview.repositories.sqlite.reviews import (
     SqliteReviewHistoryRepository,
     SqliteReviewRepository,
 )
+from comfyreview.repositories.sqlite.workspace_settings import (
+    SqliteGenerationProfileRepository,
+    SqliteWorkspacePreferencesRepository,
+)
 
 __all__ = [
     "SqliteAnalyticsRepository",
@@ -70,6 +74,8 @@ __all__ = [
     "SqliteReviewHistoryRepository",
     "SqliteReviewCandidateRepository",
     "SqliteScopeFacetRepository",
+    "SqliteGenerationProfileRepository",
+    "SqliteWorkspacePreferencesRepository",
     "connect_existing",
     "connect_read_only",
 ]

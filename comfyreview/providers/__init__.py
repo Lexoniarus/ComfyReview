@@ -16,6 +16,7 @@ from comfyreview.providers.legacy_output_import import (
 from comfyreview.providers.output_images import CanonicalOutputImageCatalog
 from comfyreview.providers.prompt_identities import (
     UuidGenerationIdentitySource,
+    UuidGenerationProfileIdentitySource,
     UuidPromptIdentitySource,
 )
 
@@ -29,5 +30,6 @@ __all__ = [
     "OutputFileUrlMapper",
     "UrlLibJsonTransport",
     "UuidGenerationIdentitySource",
+    "UuidGenerationProfileIdentitySource",
     "UuidPromptIdentitySource",
 ]

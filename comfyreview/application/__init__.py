@@ -233,6 +233,17 @@ from comfyreview.application.workflow_defaults import (
     GenerationSamplerDefaults,
     WorkflowDefaultsService,
 )
+from comfyreview.application.workspace_settings import (
+    GenerationLoraSelection,
+    GenerationProfile,
+    GenerationProfileIdentitySource,
+    GenerationProfileRepository,
+    GenerationProfileService,
+    PreferencesRepository,
+    WorkspacePreferences,
+    WorkspacePreferencesService,
+    WorkspaceSettingsValidationError,
+)
 
 __all__ = [
     "AssignCurationCommand",
@@ -284,6 +295,11 @@ __all__ = [
     "CurationValidationError",
     "DuplicateGenerationOutputError",
     "GenerationPort",
+    "GenerationLoraSelection",
+    "GenerationProfile",
+    "GenerationProfileIdentitySource",
+    "GenerationProfileRepository",
+    "GenerationProfileService",
     "GenerationDetail",
     "GenerationNotFoundError",
     "GenerationOutputPolicy",
@@ -369,6 +385,7 @@ __all__ = [
     "PromptSelectionError",
     "PromptSelectionPolicy",
     "PromptTokenStatistic",
+    "PreferencesRepository",
     "CalculatedRenderRecommendation",
     "ParameterValueStatistic",
     "RenderAnalyticsRepository",
@@ -423,6 +440,9 @@ __all__ = [
     "WorkflowInputBinding",
     "WorkflowOutputBinding",
     "WorkflowProvenance",
+    "WorkspacePreferences",
+    "WorkspacePreferencesService",
+    "WorkspaceSettingsValidationError",
     "imported_prompt_component_uid",
     "prompt_composition_identity",
     "prompt_component_key",

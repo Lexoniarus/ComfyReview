@@ -200,13 +200,13 @@ def test_version_two_upgrade_preserves_output_identity_and_reviews(
 
     report = CanonicalSchemaManager(database_path).upgrade(backup_root)
 
-    assert report.schema_version == 7
+    assert report.schema_version == 8
     assert report.upgraded_from == 2
     assert report.backup_path is not None
     assert report.backup_path.is_file()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (7,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         live = connection.execute(
             """
@@ -306,10 +306,10 @@ def test_version_one_can_upgrade_directly_to_current_schema(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 7
+    assert report.schema_version == 8
     assert report.upgraded_from == 1
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (7,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
         row = connection.execute(
             """
             SELECT generation_uid, source, status, seed
@@ -334,7 +334,7 @@ def test_version_three_upgrade_preserves_ids_and_replaces_writable_state(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 7
+    assert report.schema_version == 8
     assert report.upgraded_from == 3
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -373,7 +373,7 @@ def test_version_four_upgrade_adds_revisioned_prompt_catalog(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 7
+    assert report.schema_version == 8
     assert report.upgraded_from == 4
     with sqlite3.connect(database_path) as connection:
         objects = dict(
@@ -421,10 +421,10 @@ def test_version_five_upgrade_adds_output_provenance(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 7
+    assert report.schema_version == 8
     assert report.upgraded_from == 5
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (7,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
         image_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(images)")
         }
@@ -465,7 +465,7 @@ def test_version_six_upgrade_normalizes_prompt_atoms_without_changing_snapshots(
 
     report = manager.upgrade(tmp_path / "backups")
 
-    assert report.schema_version == 7
+    assert report.schema_version == 8
     assert report.upgraded_from == 6
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -489,6 +489,81 @@ def test_version_six_upgrade_normalizes_prompt_atoms_without_changing_snapshots(
             ("pos", 1, "cyan eyes", 1200),
             ("neg", 0, "multiple people", 1000),
         ]
+
+
+def test_version_seven_upgrade_adds_settings_and_normalizes_generation_loras(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    _create_version_four_database(database_path)
+    manager = CanonicalSchemaManager(database_path)
+    with sqlite3.connect(database_path) as connection:
+        manager._upgrade_v4_to_v5(connection)
+        manager._upgrade_v5_to_v6(connection)
+        manager._upgrade_v6_to_v7(connection)
+        connection.execute(
+            "UPDATE generations SET loras_json = ? WHERE id = 1",
+            (
+                '[{"name":"style.safetensors","strength_model":0.8,'
+                '"strength_clip":0.65}]',
+            ),
+        )
+        connection.commit()
+
+    report = manager.upgrade(tmp_path / "backups")
+
+    assert report.schema_version == 8
+    assert report.upgraded_from == 7
+    assert report.backup_path is not None
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (8,)
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert connection.execute(
+            "SELECT density, motion, analytics_page_size, "
+            "review_unrated_only, review_max_attempts "
+            "FROM workspace_preferences WHERE singleton_id = 1"
+        ).fetchone() == ("comfortable", "system", 24, 1, 50)
+        assert connection.execute(
+            "SELECT generation_id, position, lora_name, "
+            "model_strength_milli, clip_strength_milli "
+            "FROM generation_loras"
+        ).fetchall() == [(1, 0, "style.safetensors", 800, 650)]
+
+    with sqlite3.connect(report.backup_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (7,)
+
+
+def test_version_seven_upgrade_rejects_incomplete_lora_provenance(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    _create_version_four_database(database_path)
+    manager = CanonicalSchemaManager(database_path)
+    with sqlite3.connect(database_path) as connection:
+        manager._upgrade_v4_to_v5(connection)
+        manager._upgrade_v5_to_v6(connection)
+        manager._upgrade_v6_to_v7(connection)
+        connection.execute(
+            "UPDATE generations SET loras_json = ? WHERE id = 1",
+            ('[{"name":"style.safetensors"}]',),
+        )
+        connection.commit()
+
+    with pytest.raises(
+        CanonicalSchemaValidationError,
+        match="provenance is incomplete",
+    ):
+        manager.upgrade(tmp_path / "backups")
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (7,)
+        assert (
+            connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE name = 'generation_profiles'"
+            ).fetchone()
+            is None
+        )
 
 
 def test_upgrade_rolls_back_without_unnecessary_backup_restore(
@@ -551,8 +626,8 @@ def test_canonical_database_cli_validates_and_upgrades(
         == 0
     )
     output = capsys.readouterr().out
-    assert '"schema_version": 7' in output
+    assert '"schema_version": 8' in output
     assert '"upgraded_from": 2' in output
 
     assert main(["canonical-db", "validate"]) == 0
-    assert '"schema_version": 7' in capsys.readouterr().out
+    assert '"schema_version": 8' in capsys.readouterr().out
