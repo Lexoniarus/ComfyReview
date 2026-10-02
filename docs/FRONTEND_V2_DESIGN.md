@@ -81,6 +81,12 @@ scope colors as their only cue.
 - buttons, fields, tabs, dividers, loading, empty and error states;
 - drawers and rail-collapse controls.
 
+The Playground keeps its compact evidence preview: one ranked group for
+Character + Scene and one for Character + Scene + Outfit, with up to three
+real example images per combination. These groups are derived from canonical
+composition memberships; the broader Analytics composition view remains a
+separate surface and does not replace them.
+
 Top/Worst is the reference surface. Its cards show only rank, rating on the
 1-10 scale, rating count and a small scope summary. Full technical metadata
 belongs in the inspector.

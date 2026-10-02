@@ -42,13 +42,12 @@ class PromptMatchPreview:
 
 @dataclass(frozen=True, slots=True)
 class ObservedPromptCombination:
-    """Describe one actually generated legacy-compatible prompt combination."""
+    """Describe one generated canonical prompt-component combination."""
 
     combo_key: str
     combo_size: int
-    character_id: int
-    scene_id: int
-    outfit_id: int | None
+    component_uids: tuple[str, ...]
+    component_names: tuple[str, ...]
     label: str
     average_rating: float | None
     image_count: int

@@ -43,9 +43,16 @@ class _Analytics:
             ObservedPromptCombination(
                 combo_key=f"character:1|scene:2{suffix}",
                 combo_size=combo_size,
-                character_id=1,
-                scene_id=2,
-                outfit_id=outfit_id,
+                component_uids=(
+                    "character-a",
+                    "scene-a",
+                    *(("outfit-a",) if outfit_id is not None else ()),
+                ),
+                component_names=(
+                    "Hero",
+                    "Rooftop",
+                    *(("Red Coat",) if outfit_id is not None else ()),
+                ),
                 label="Hero + Rooftop",
                 average_rating=8.5,
                 image_count=1,
@@ -135,6 +142,7 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
     )
 
     stats = service.composition_context(model=" sdxl ", min_n=2, limit=5)
+    playground = service.playground_combinations_context(limit=4)
     recommendations = service.recommendations_context(model="sdxl")
 
     assert stats["rows"] == [
@@ -150,6 +158,23 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
         }
     ]
     assert stats["model_list"] == ["sdxl"]
+    assert playground["two_component"][0] == {
+        "combo_key": "character:1|scene:2",
+        "component_uids": ["character-a", "scene-a"],
+        "component_names": ["Hero", "Rooftop"],
+        "label": "Hero + Rooftop",
+        "average_rating": 8.5,
+        "image_count": 1,
+        "rating_count": 4,
+        "best_images": [
+            {"url": "url:image.png", "avg_rating": 8.5, "runs": 4}
+        ],
+    }
+    assert playground["three_component"][0]["component_uids"] == [
+        "character-a",
+        "scene-a",
+        "outfit-a",
+    ]
     assert recommendations["stable"] == ["yes"]
     assert recommendations["approx"] == {
         "base": None,

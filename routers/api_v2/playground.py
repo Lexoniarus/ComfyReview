@@ -61,6 +61,15 @@ def playground_capabilities(request: Request) -> JSONResponse:
     )
 
 
+@router.get("/playground/top-combinations")
+def playground_top_combinations(request: Request) -> JSONResponse:
+    """Return top canonical two- and three-component examples."""
+    context = get_application_container(
+        request
+    ).analytics_pages.playground_combinations_context(limit=8)
+    return JSONResponse(context)
+
+
 @router.post("/playground/drafts")
 def prepare_playground_draft(
     request: Request,

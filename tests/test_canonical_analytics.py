@@ -506,11 +506,10 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
     assert parameter_images["20"][0].rating_count == 1
     assert observed == (
         ObservedPromptCombination(
-            combo_key=combo_key,
+            combo_key="component-1|component-2|component-3",
             combo_size=3,
-            character_id=1,
-            scene_id=2,
-            outfit_id=3,
+            component_uids=("component-1", "component-2", "component-3"),
+            component_names=("Alice", "Rooftop", "Red Coat"),
             label="Alice + Rooftop + Red Coat",
             average_rating=8.0,
             image_count=1,

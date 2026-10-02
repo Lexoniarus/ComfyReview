@@ -251,43 +251,82 @@ class SqliteAnalyticsRepository:
         combo_size: int,
         limit: int,
     ) -> tuple[ObservedPromptCombination, ...]:
-        """Aggregate combinations that have canonical generation evidence."""
-        names = self._legacy_component_names()
+        """Aggregate canonical character/scene[/outfit] memberships."""
         connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
                 """
+                WITH composition_scopes AS (
+                    SELECT
+                        membership.composition_id,
+                        MAX(CASE WHEN component.kind = 'character'
+                            THEN component.component_uid END) AS character_uid,
+                        MAX(CASE WHEN component.kind = 'character'
+                            THEN component.name END) AS character_name,
+                        COUNT(DISTINCT CASE WHEN component.kind = 'character'
+                            THEN component.id END) AS character_count,
+                        MAX(CASE WHEN component.kind = 'scene'
+                            THEN component.component_uid END) AS scene_uid,
+                        MAX(CASE WHEN component.kind = 'scene'
+                            THEN component.name END) AS scene_name,
+                        COUNT(DISTINCT CASE WHEN component.kind = 'scene'
+                            THEN component.id END) AS scene_count,
+                        MAX(CASE WHEN component.kind = 'outfit'
+                            THEN component.component_uid END) AS outfit_uid,
+                        MAX(CASE WHEN component.kind = 'outfit'
+                            THEN component.name END) AS outfit_name,
+                        COUNT(DISTINCT CASE WHEN component.kind = 'outfit'
+                            THEN component.id END) AS outfit_count
+                    FROM prompt_composition_revisions AS membership
+                    JOIN prompt_revisions AS revision
+                        ON revision.id = membership.revision_id
+                    JOIN prompt_components AS component
+                        ON component.id = revision.component_id
+                    GROUP BY membership.composition_id
+                )
                 SELECT
-                    generation.combo_key,
+                    scope.character_uid,
+                    scope.character_name,
+                    scope.scene_uid,
+                    scope.scene_name,
+                    scope.outfit_uid,
+                    scope.outfit_name,
                     image.png_path,
                     image.json_path,
                     summary.average_rating,
                     summary.rating_count
                 FROM generations AS generation
+                JOIN composition_scopes AS scope
+                    ON scope.composition_id = generation.prompt_composition_id
                 JOIN images AS image ON image.generation_id = generation.id
                 LEFT JOIN image_review_summary AS summary
                     ON summary.image_id = image.id
                 WHERE image.deleted_at IS NULL
-                  AND generation.combo_key <> ''
-                ORDER BY generation.combo_key, summary.average_rating DESC,
+                  AND scope.character_count = 1
+                  AND scope.scene_count = 1
+                  AND (? = 2 OR scope.outfit_count = 1)
+                ORDER BY scope.character_uid, scope.scene_uid,
+                         scope.outfit_uid, summary.average_rating DESC,
                          summary.rating_count DESC, image.image_uid
-                """
+                """,
+                (combo_size,),
             ).fetchall()
         finally:
             connection.close()
-        grouped: dict[str, list[Any]] = defaultdict(list)
+        grouped: dict[tuple[str, ...], list[Any]] = defaultdict(list)
         for row in rows:
-            grouped[str(row["combo_key"])].append(row)
+            key: tuple[str, ...] = (
+                str(row["character_uid"]),
+                str(row["scene_uid"]),
+            )
+            if combo_size == 3:
+                outfit_uid = str(row["outfit_uid"] or "")
+                if not outfit_uid:
+                    continue
+                key = (*key, outfit_uid)
+            grouped[key].append(row)
         combinations: list[ObservedPromptCombination] = []
-        for combo_key, combo_rows in grouped.items():
-            identities = self._parse_legacy_combo_key(combo_key)
-            if len(identities) != combo_size:
-                continue
-            character_id = identities.get("character")
-            scene_id = identities.get("scene")
-            if character_id is None or scene_id is None:
-                continue
-            outfit_id = identities.get("outfit")
+        for component_uids, combo_rows in grouped.items():
             images = tuple(
                 self._analytics_image(row) for row in combo_rows[:3]
             )
@@ -299,24 +338,19 @@ class SqliteAnalyticsRepository:
                 * int(row["rating_count"] or 0)
                 for row in combo_rows
             )
-            label_parts = [
-                names.get(
-                    ("character", character_id), f"Character {character_id}"
-                ),
-                names.get(("scene", scene_id), f"Scene {scene_id}"),
-            ]
-            if outfit_id is not None:
-                label_parts.append(
-                    names.get(("outfit", outfit_id), f"Outfit {outfit_id}")
-                )
+            first = combo_rows[0]
+            component_names = (
+                str(first["character_name"]),
+                str(first["scene_name"]),
+                *((str(first["outfit_name"]),) if combo_size == 3 else ()),
+            )
             combinations.append(
                 ObservedPromptCombination(
-                    combo_key=combo_key,
+                    combo_key="|".join(component_uids),
                     combo_size=combo_size,
-                    character_id=character_id,
-                    scene_id=scene_id,
-                    outfit_id=outfit_id,
-                    label=" + ".join(label_parts),
+                    component_uids=component_uids,
+                    component_names=component_names,
+                    label=" + ".join(component_names),
                     average_rating=(
                         weighted_sum / total_count if total_count else None
                     ),
@@ -420,35 +454,3 @@ class SqliteAnalyticsRepository:
             ),
             rating_count=int(row["rating_count"] or 0),
         )
-
-    def _legacy_component_names(self) -> dict[tuple[str, int], str]:
-        connection = connect_read_only(self._database_path, rows=True)
-        try:
-            rows = connection.execute(
-                """
-                SELECT component.kind, source.source_key, component.name
-                FROM legacy_prompt_component_sources AS source
-                JOIN prompt_components AS component
-                    ON component.id = source.component_id
-                WHERE source.source = 'legacy_playground'
-                """
-            ).fetchall()
-            return {
-                (str(row["kind"]), int(row["source_key"])): str(row["name"])
-                for row in rows
-            }
-        finally:
-            connection.close()
-
-    @staticmethod
-    def _parse_legacy_combo_key(combo_key: str) -> dict[str, int]:
-        identities: dict[str, int] = {}
-        for part in str(combo_key or "").split("|"):
-            kind, separator, raw_id = part.partition(":")
-            if not separator or kind not in {"character", "scene", "outfit"}:
-                return {}
-            try:
-                identities[kind] = int(raw_id)
-            except ValueError:
-                return {}
-        return identities

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { DraftPreview } from "../../static/js/playground/draft-preview.js";
 import { GenerationControls } from "../../static/js/playground/generation-controls.js";
 import { PromptModeEditor } from "../../static/js/playground/prompt-mode-editor.js";
+import { TopCombinationsView } from "../../static/js/playground/top-combinations.js";
 
 const components = [
   component("character-a", "character", "Aiko"),
@@ -131,6 +132,37 @@ describe("Playground browser components", () => {
     );
     expect(preview.generationPayload({})).toBeNull();
     preview.dispose();
+  });
+
+  it("renders separate top two- and three-component evidence", () => {
+    const root = document.createElement("div");
+    const view = new TopCombinationsView(root);
+
+    view.render({
+      two_component: [
+        {
+          label: "Aiko + Rooftop",
+          image_count: 2,
+          rating_count: 4,
+          average_rating: 8.5,
+          best_images: [{ url: "best.png" }, { url: "" }],
+        },
+        null,
+      ],
+      three_component: [],
+    });
+
+    expect(root.textContent).toContain("Top 2er-Kombinationen");
+    expect(root.textContent).toContain("Charakter + Szene + Outfit");
+    expect(root.textContent).toContain("Aiko + Rooftop");
+    expect(root.textContent).toContain("2 Bilder · 4 Bewertungen · Ø 8,5 / 10");
+    expect(root.textContent).toContain("Noch keine ausreichend belegten");
+    expect(root.textContent).toContain("Unbenannte Kombination");
+    expect(root.textContent).toContain("Kein Bildbeispiel");
+    expect(root.querySelector("img")?.getAttribute("src")).toBe("best.png");
+
+    view.dispose();
+    expect(root.children).toHaveLength(0);
   });
 });
 

@@ -415,6 +415,24 @@ class _AnalyticsPages:
             "model_list": ["anime"],
         }
 
+    def playground_combinations_context(self, **values):
+        self.call = ("playground-combinations", values)
+        return {
+            "two_component": [
+                {
+                    "combo_key": "character-a|scene-a",
+                    "component_uids": ["character-a", "scene-a"],
+                    "component_names": ["Aiko", "Rooftop"],
+                    "label": "Aiko + Rooftop",
+                    "average_rating": 8.5,
+                    "image_count": 2,
+                    "rating_count": 4,
+                    "best_images": [{"url": "/files/output/image-1.png"}],
+                }
+            ],
+            "three_component": [],
+        }
+
 
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
     client, container = _client()
@@ -606,6 +624,12 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
             "denoise": 1.0,
         },
     }
+    combinations = client.get("/api/v2/playground/top-combinations")
+    assert combinations.status_code == 200
+    assert combinations.json()["two_component"][0]["component_uids"] == [
+        "character-a",
+        "scene-a",
+    ]
 
 
 def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (

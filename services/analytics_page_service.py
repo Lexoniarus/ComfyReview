@@ -9,6 +9,7 @@ from comfyreview.application import (
     AnalyticsImage,
     AnalyticsReportService,
     AnalyticsService,
+    ObservedPromptCombination,
 )
 from comfyreview.application.rating_evidence import (
     DELETE_WEIGHT_DEFAULT,
@@ -63,6 +64,27 @@ class AnalyticsPageService:
             "min_n": min_n,
             "limit": limit,
             "model_list": self._models(),
+        }
+
+    def playground_combinations_context(
+        self,
+        *,
+        limit: int = 8,
+    ) -> dict[str, Any]:
+        """Build top canonical two- and three-component examples."""
+        return {
+            "two_component": self._combination_views(
+                self._analytics.observed_combinations(
+                    combo_size=2,
+                    limit=int(limit),
+                )
+            ),
+            "three_component": self._combination_views(
+                self._analytics.observed_combinations(
+                    combo_size=3,
+                    limit=int(limit),
+                )
+            ),
         }
 
     def scope_context(
@@ -237,3 +259,21 @@ class AnalyticsPageService:
                 }
             )
         return output
+
+    def _combination_views(
+        self,
+        combinations: tuple[ObservedPromptCombination, ...],
+    ) -> list[dict[str, object]]:
+        return [
+            {
+                "combo_key": item.combo_key,
+                "component_uids": list(item.component_uids),
+                "component_names": list(item.component_names),
+                "label": item.label,
+                "average_rating": item.average_rating,
+                "image_count": item.image_count,
+                "rating_count": item.total_rating_count,
+                "best_images": self._image_views(item.best_images),
+            }
+            for item in combinations
+        ]

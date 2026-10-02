@@ -3,7 +3,8 @@
 /** @typedef {{render: (capabilities: any) => void, value: () => any, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
 /** @typedef {{render: (draft: any, draftUid: string) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, requests: RequestBoundary, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, newDraftUid: () => string}} PlaygroundDependencies */
+/** @typedef {{render: (payload: Record<string, any>) => void, dispose: () => void}} CombinationsBoundary */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, combinations: CombinationsBoundary, requests: RequestBoundary, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, newDraftUid: () => string}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -13,6 +14,7 @@ export class PlaygroundController {
     this.modes = dependencies.modes;
     this.controls = dependencies.controls;
     this.draft = dependencies.draft;
+    this.combinations = dependencies.combinations;
     this.requests = dependencies.requests;
     this.prepareButton = dependencies.prepareButton;
     this.submitButton = dependencies.submitButton;
@@ -32,14 +34,17 @@ export class PlaygroundController {
       signal: this.abortController.signal,
     });
     try {
-      const [catalog, capabilities] = await this.requests.run((signal) =>
-        Promise.all([
-          this.api.get("catalog/components", { signal }),
-          this.api.get("playground/capabilities", { signal }),
-        ]),
+      const [catalog, capabilities, combinations] = await this.requests.run(
+        (signal) =>
+          Promise.all([
+            this.api.get("catalog/components", { signal }),
+            this.api.get("playground/capabilities", { signal }),
+            this.api.get("playground/top-combinations", { signal }),
+          ]),
       );
       this.modes.render(catalog.components || []);
       this.controls.render(capabilities);
+      this.combinations.render(combinations);
       this.status.textContent = "Bereit für deinen Entwurf";
     } catch (error) {
       this.status.textContent = errorMessage(error);
@@ -96,6 +101,7 @@ export class PlaygroundController {
     this.modes.dispose();
     this.controls.dispose();
     this.draft.dispose();
+    this.combinations.dispose();
   }
 
   /** @param {boolean} busy */

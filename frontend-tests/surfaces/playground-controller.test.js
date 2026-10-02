@@ -11,6 +11,9 @@ describe("PlaygroundController", () => {
     await fixture.controller.start();
     expect(fixture.modes.render).toHaveBeenCalledWith([{ component_uid: "a" }]);
     expect(fixture.controls.render).toHaveBeenCalled();
+    expect(fixture.combinations.render).toHaveBeenCalledWith({
+      two_component: [],
+    });
 
     await fixture.controller.prepare();
     expect(fixture.api.post).toHaveBeenCalledWith(
@@ -36,6 +39,7 @@ describe("PlaygroundController", () => {
     expect(fixture.modes.dispose).toHaveBeenCalledOnce();
     expect(fixture.controls.dispose).toHaveBeenCalledOnce();
     expect(fixture.draft.dispose).toHaveBeenCalledOnce();
+    expect(fixture.combinations.dispose).toHaveBeenCalledOnce();
   });
 
   it("surfaces load, draft and generation failures without stale submits", async () => {
@@ -100,13 +104,16 @@ function createFixture(options = {}) {
       options.emptyPayload ? null : { draft_uid: "draft-1" },
     ),
   });
+  const combinations = disposable({ render: vi.fn() });
   const api = {
     get: vi.fn((path) => {
       if (options.loadError) return Promise.reject(options.loadError);
       return Promise.resolve(
         path === "catalog/components"
           ? { components: [{ component_uid: "a" }] }
-          : { defaults: {} },
+          : path === "playground/top-combinations"
+            ? { two_component: [] }
+            : { defaults: {} },
       );
     }),
     post: vi.fn((path) => {
@@ -128,6 +135,7 @@ function createFixture(options = {}) {
     modes,
     controls,
     draft,
+    combinations,
     requests: new RequestLifecycle(),
     prepareButton,
     submitButton,
@@ -141,6 +149,7 @@ function createFixture(options = {}) {
     modes,
     controls,
     draft,
+    combinations,
     prepareButton,
     submitButton,
     status,
