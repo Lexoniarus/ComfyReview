@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DraftPreview } from "../../static/js/playground/draft-preview.js";
+import {
+  DualRangeControl,
+  orderedRange,
+} from "../../static/js/playground/dual-range-control.js";
 import { GenerationControls } from "../../static/js/playground/generation-controls.js";
 import { PromptModeEditor } from "../../static/js/playground/prompt-mode-editor.js";
 import { TopCombinationsView } from "../../static/js/playground/top-combinations.js";
@@ -87,6 +91,7 @@ describe("Playground browser components", () => {
         cfg_max: 6.5,
         cfg_step: 0.1,
       },
+      loras: [],
     });
     controls.applyIntent({
       checkpoint: "model.safetensors",
@@ -120,6 +125,100 @@ describe("Playground browser components", () => {
     expect(root.querySelector("select")?.disabled).toBe(true);
     controls.setBusy(false);
     expect(seed.disabled).toBe(true);
+    controls.dispose();
+  });
+
+  it("synchronizes accessible dual range inputs and clamps values", () => {
+    expect(orderedRange(12, 4, { minimum: 0, maximum: 10, step: 0.5 })).toEqual(
+      { lower: 4, upper: 10 },
+    );
+    expect(
+      orderedRange(Number.NaN, 2.24, {
+        minimum: 1,
+        maximum: 10,
+        step: 0.5,
+      }),
+    ).toEqual({ lower: 1, upper: 2 });
+
+    const range = new DualRangeControl({
+      label: "Test",
+      minimum: 0,
+      maximum: 10,
+      step: 1,
+      lower: 2,
+      upper: 8,
+      lowerName: "lower",
+      upperName: "upper",
+    });
+    document.body.append(range.element);
+    range.lowerRange.value = "9";
+    range.lowerRange.dispatchEvent(new Event("input"));
+    expect(range.value()).toEqual({ lower: 8, upper: 9 });
+    range.upperNumber.value = "3";
+    range.upperNumber.dispatchEvent(new Event("input"));
+    expect(range.value()).toEqual({ lower: 3, upper: 8 });
+    range.setDisabled(true);
+    expect(range.lowerNumber.disabled).toBe(true);
+    range.dispose();
+  });
+
+  it("applies active generation profiles and preserves ordered LoRAs", () => {
+    const root = document.createElement("div");
+    const controls = new GenerationControls(root);
+    controls.render({
+      checkpoints: ["model-a.safetensors", "model-b.safetensors"],
+      samplers: ["euler", "dpmpp_2m"],
+      schedulers: ["normal", "karras"],
+      loras: ["style.safetensors"],
+      defaults: {
+        checkpoint: "model-a.safetensors",
+        seed: 7,
+        steps: 20,
+        cfg: 5,
+        sampler: "euler",
+        scheduler: "normal",
+        denoise: 1,
+      },
+      profiles: [
+        generationProfile({ archived: true }),
+        generationProfile({
+          profile_uid: "profile-active",
+          is_default: true,
+        }),
+      ],
+    });
+
+    expect(controls.value()).toEqual(
+      expect.objectContaining({
+        checkpoint: "model-b.safetensors",
+        loras: [
+          {
+            name: "style.safetensors",
+            model_strength: 0.8,
+            clip_strength: 0.6,
+          },
+        ],
+        sampler: expect.objectContaining({
+          seed: 42,
+          steps: 24,
+          steps_max: 36,
+          cfg: 4.5,
+          cfg_max: 7,
+          randomize_seed: false,
+        }),
+      }),
+    );
+    controls.applyIntent({
+      generationProfileUid: "profile-active",
+      steps_min: "invalid",
+      cfg_max: 8,
+    });
+    expect(controls.value().sampler).toEqual(
+      expect.objectContaining({ steps: 24, cfg_max: 8 }),
+    );
+    const profile = root.querySelector('[data-field="profile_uid"]');
+    profile.value = "";
+    profile.dispatchEvent(new Event("change"));
     controls.dispose();
   });
 
@@ -166,12 +265,14 @@ describe("Playground browser components", () => {
       preview.generationPayload({
         checkpoint: "model.safetensors",
         sampler: { seed: 1 },
+        loras: [{ name: "style.safetensors" }],
       }),
     ).toEqual(
       expect.objectContaining({
         draft_uid: "draft-1",
         component_uids: components.map((item) => item.component_uid),
         positive_atoms: [{ text: "edited", weight: 1 }],
+        loras: [{ name: "style.safetensors" }],
       }),
     );
 
@@ -253,5 +354,33 @@ function component(componentUid, kind, name) {
     kind,
     name,
     latest_revision: { revision_number: 1 },
+  };
+}
+
+function generationProfile(overrides = {}) {
+  return {
+    profile_uid: "profile-a",
+    name: "Editorial",
+    checkpoint: "model-b.safetensors",
+    sampler: "dpmpp_2m",
+    scheduler: "karras",
+    seed_mode: "fixed",
+    fixed_seed: 42,
+    steps_min: 24,
+    steps_max: 36,
+    cfg_min: 4.5,
+    cfg_max: 7,
+    denoise: 0.9,
+    batch_size: 2,
+    loras: [
+      {
+        name: "style.safetensors",
+        model_strength: 0.8,
+        clip_strength: 0.6,
+      },
+    ],
+    archived: false,
+    is_default: false,
+    ...overrides,
   };
 }

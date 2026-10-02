@@ -54,16 +54,20 @@ export class PlaygroundController {
       signal: this.abortController.signal,
     });
     try {
-      const [catalog, capabilities, combinations] = await this.requests.run(
-        (signal) =>
+      const [catalog, capabilities, profiles, combinations] =
+        await this.requests.run((signal) =>
           Promise.all([
             this.api.get("catalog/components", { signal }),
             this.api.get("playground/capabilities", { signal }),
+            this.api.get("settings/generation-profiles", { signal }),
             this.api.get("playground/top-combinations", { signal }),
           ]),
-      );
+        );
       this.modes.render(catalog.components || []);
-      this.controls.render(capabilities);
+      this.controls.render({
+        ...capabilities,
+        profiles: profiles.items || [],
+      });
       this.combinations.render(combinations);
       await this.#applyIntent();
       this.status.textContent = hasPrefill(this.intent)

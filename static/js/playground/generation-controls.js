@@ -1,21 +1,54 @@
-/** Own technical generation fields populated from blueprint defaults. */
+import { LoraStackEditor } from "../settings/lora-stack-editor.js";
+import { DualRangeControl } from "./dual-range-control.js";
+
+/** Own technical generation fields populated from profiles and blueprint defaults. */
 export class GenerationControls {
   /** @param {HTMLElement} root */
   constructor(root) {
     this.root = root;
     /** @type {Map<string, HTMLInputElement | HTMLSelectElement>} */
     this.fields = new Map();
+    /** @type {Array<Record<string, any>>} */
+    this.profiles = [];
+    /** @type {Record<string, any>} */
+    this.capabilities = {};
+    /** @type {DualRangeControl | null} */
+    this.steps = null;
+    /** @type {DualRangeControl | null} */
+    this.cfg = null;
+    /** @type {LoraStackEditor | null} */
+    this.loras = null;
     this.abortController = new AbortController();
   }
 
   /** @param {Record<string, any>} capabilities */
   render(capabilities) {
+    this.#releaseChildren();
     this.abortController.abort();
     this.abortController = new AbortController();
     this.fields.clear();
     this.root.replaceChildren();
     this.root.className = "generation-controls";
+    this.capabilities = capabilities;
+    this.profiles = Array.isArray(capabilities.profiles)
+      ? capabilities.profiles.filter((profile) => !profile.archived)
+      : [];
     const defaults = capabilities.defaults || {};
+    this.#selectOptions(
+      "profile_uid",
+      "Generierungsprofil",
+      [
+        ["", "Blueprint-Defaults"],
+        ...this.profiles.map(
+          (profile) =>
+            /** @type {[string, string]} */ ([
+              String(profile.profile_uid),
+              String(profile.name),
+            ]),
+        ),
+      ],
+      this.profiles.find((profile) => profile.is_default)?.profile_uid || "",
+    );
     this.#select(
       "checkpoint",
       "Checkpoint",
@@ -31,7 +64,7 @@ export class GenerationControls {
     );
     this.#selectOptions(
       "seed_mode",
-      "Seed-Modus",
+      "ComfyUI-Sampler-Seed-Modus",
       [
         ["fixed", "Fest"],
         ["random", "Zufällig"],
@@ -42,74 +75,116 @@ export class GenerationControls {
     numbers.className = "generation-number-grid";
     numbers.append(
       this.#number("batch_runs", "Batch", 1, "1"),
-      this.#number("seed", "Seed", defaults.seed, "1"),
-      this.#number("steps_min", "Steps von", defaults.steps, "1"),
-      this.#number("steps_max", "Steps bis", defaults.steps, "1"),
-      this.#number("cfg_min", "CFG von", defaults.cfg, "0.1"),
-      this.#number("cfg_max", "CFG bis", defaults.cfg, "0.1"),
+      this.#number("seed", "ComfyUI-Sampler-Seed", defaults.seed, "1"),
       this.#number("cfg_step", "CFG Schritt", 0.1, "0.1"),
       this.#number("denoise", "Denoise", defaults.denoise, "0.01"),
     );
-    this.root.append(numbers);
-    const seedMode = this.fields.get("seed_mode");
-    seedMode?.addEventListener("change", () => this.#syncSeedMode(), {
-      signal: this.abortController.signal,
+    this.steps = new DualRangeControl({
+      label: "Steps-Bereich",
+      minimum: 1,
+      maximum: 100,
+      step: 1,
+      lower: Number(defaults.steps ?? 24),
+      upper: Number(defaults.steps ?? 24),
+      lowerName: "steps_min",
+      upperName: "steps_max",
     });
+    this.cfg = new DualRangeControl({
+      label: "CFG-Bereich",
+      minimum: 0,
+      maximum: 30,
+      step: 0.1,
+      lower: Number(defaults.cfg ?? 7),
+      upper: Number(defaults.cfg ?? 7),
+      lowerName: "cfg_min",
+      upperName: "cfg_max",
+    });
+    const loraRoot = document.createElement("section");
+    loraRoot.className = "generation-lora-editor";
+    this.loras = new LoraStackEditor(loraRoot);
+    this.loras.render([], capabilities.loras || []);
+    this.root.append(numbers, this.steps.element, this.cfg.element, loraRoot);
+    this.fields
+      .get("profile_uid")
+      ?.addEventListener("change", () => this.#applySelectedProfile(), {
+        signal: this.abortController.signal,
+      });
+    this.fields
+      .get("seed_mode")
+      ?.addEventListener("change", () => this.#syncSeedMode(), {
+        signal: this.abortController.signal,
+      });
+    this.#applySelectedProfile();
     this.#syncSeedMode();
   }
 
-  /** Return one typed API sampler configuration. */
+  /** Return one typed API sampler and LoRA configuration. */
   value() {
+    const steps = this.steps?.value() || { lower: 1, upper: 1 };
+    const cfg = this.cfg?.value() || { lower: 0, upper: 0 };
     return {
       checkpoint: this.#text("checkpoint"),
       sampler: {
         seed: this.#integer("seed"),
-        steps: this.#integer("steps_min"),
-        cfg: this.#numberValue("cfg_min"),
+        steps: steps.lower,
+        cfg: cfg.lower,
         sampler: this.#text("sampler"),
         scheduler: this.#text("scheduler"),
         denoise: this.#numberValue("denoise"),
         batch_runs: this.#integer("batch_runs"),
         randomize_seed: this.#text("seed_mode") === "random",
-        steps_max: this.#integer("steps_max"),
-        cfg_max: this.#numberValue("cfg_max"),
+        steps_max: steps.upper,
+        cfg_max: cfg.upper,
         cfg_step: this.#numberValue("cfg_step"),
       },
+      loras: this.loras?.value() || [],
     };
   }
 
   /** @param {Record<string, any>} intent */
   applyIntent(intent) {
+    if (intent.generationProfileUid) {
+      this.#set("profile_uid", intent.generationProfileUid);
+      this.#applySelectedProfile();
+    }
     for (const [intentName, fieldName] of [
       ["checkpoint", "checkpoint"],
       ["sampler", "sampler"],
       ["scheduler", "scheduler"],
       ["seedMode", "seed_mode"],
       ["seed", "seed"],
-      ["steps_min", "steps_min"],
-      ["steps_max", "steps_max"],
-      ["cfg_min", "cfg_min"],
-      ["cfg_max", "cfg_max"],
       ["denoise", "denoise"],
     ]) {
       const value = intent[intentName];
-      const field = this.fields.get(fieldName);
-      if (field && value !== undefined && value !== null && value !== "") {
-        field.value = String(value);
+      if (value !== undefined && value !== null && value !== "") {
+        this.#set(fieldName, value);
       }
     }
+    const currentSteps = this.steps?.value();
+    const currentCfg = this.cfg?.value();
+    this.steps?.set(
+      numeric(intent.steps_min, currentSteps?.lower ?? 1),
+      numeric(intent.steps_max, currentSteps?.upper ?? 1),
+    );
+    this.cfg?.set(
+      numeric(intent.cfg_min, currentCfg?.lower ?? 0),
+      numeric(intent.cfg_max, currentCfg?.upper ?? 0),
+    );
     this.#syncSeedMode();
   }
 
   /** @param {boolean} busy */
   setBusy(busy) {
     for (const field of this.fields.values()) field.disabled = busy;
+    this.steps?.setDisabled(busy);
+    this.cfg?.setDisabled(busy);
     if (!busy) this.#syncSeedMode();
   }
 
-  /** Clear retained field references. */
+  /** Clear retained field references and child resources. */
   dispose() {
     this.abortController.abort();
+    this.#releaseChildren();
     this.fields.clear();
   }
 
@@ -140,9 +215,34 @@ export class GenerationControls {
     this.root.append(wrapper);
   }
 
+  #applySelectedProfile() {
+    const profileUid = this.#text("profile_uid");
+    const profile = this.profiles.find(
+      (candidate) => candidate.profile_uid === profileUid,
+    );
+    if (!profile) return;
+    this.#set("checkpoint", profile.checkpoint);
+    this.#set("sampler", profile.sampler);
+    this.#set("scheduler", profile.scheduler);
+    this.#set("seed_mode", profile.seed_mode);
+    if (profile.fixed_seed !== null) this.#set("seed", profile.fixed_seed);
+    this.#set("batch_runs", profile.batch_size);
+    this.#set("denoise", profile.denoise);
+    this.steps?.set(profile.steps_min, profile.steps_max);
+    this.cfg?.set(profile.cfg_min, profile.cfg_max);
+    this.loras?.render(profile.loras || [], this.capabilities.loras || []);
+    this.#syncSeedMode();
+  }
+
   #syncSeedMode() {
     const seed = this.fields.get("seed");
     if (seed) seed.disabled = this.#text("seed_mode") === "random";
+  }
+
+  /** @param {string} name @param {unknown} value */
+  #set(name, value) {
+    const field = this.fields.get(name);
+    if (field) field.value = String(value);
   }
 
   /** @param {string} name @param {string} label @param {unknown} value @param {string} step */
@@ -172,6 +272,21 @@ export class GenerationControls {
   #numberValue(name) {
     return Number.parseFloat(this.#text(name));
   }
+
+  #releaseChildren() {
+    this.steps?.dispose();
+    this.cfg?.dispose();
+    this.loras?.dispose();
+    this.steps = null;
+    this.cfg = null;
+    this.loras = null;
+  }
+}
+
+/** @param {unknown} value @param {number} fallback */
+function numeric(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 /** @param {string} label */
@@ -182,7 +297,7 @@ function field(label) {
   return wrapper;
 }
 
-/** @param {string} value */
+/** @param {string} value @param {string} [label] */
 function option(value, label = value) {
   const element = document.createElement("option");
   element.value = value;

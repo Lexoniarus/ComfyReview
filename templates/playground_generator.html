@@ -8,8 +8,8 @@
       <p class="playground-kicker">Kanonischer Prompt-Entwurf</p>
       <h1>Playground</h1>
       <p class="muted">
-        Kombiniere konkrete Katalogrevisionen, prüfe den Snapshot und sende
-        ihn anschließend als reproduzierbare Generierung.
+        Kombiniere konkrete Katalogrevisionen, prüfe den Snapshot und sende ihn
+        anschließend als reproduzierbare Generierung.
       </p>
     </div>
     <span class="playground-status" data-playground-status aria-live="polite"
@@ -26,14 +26,17 @@
   </section>
 
   <div class="playground-workspace">
-    <section class="v2-panel playground-selection" aria-labelledby="selection-title">
+    <section
+      class="v2-panel playground-selection"
+      aria-labelledby="selection-title"
+    >
       <div class="playground-section-heading">
         <div>
           <p class="playground-kicker">01 · Auswahl</p>
           <h2 id="selection-title">Prompt-Bausteine</h2>
         </div>
         <label class="seed-field">
-          Auswahl-Seed
+          Prompt-Auswahl-Seed
           <input type="number" value="17" data-selection-seed />
         </label>
       </div>
@@ -59,7 +62,10 @@
       </div>
     </section>
 
-    <aside class="v2-panel playground-generation" aria-labelledby="generation-title">
+    <aside
+      class="v2-panel playground-generation"
+      aria-labelledby="generation-title"
+    >
       <div class="playground-section-heading">
         <div>
           <p class="playground-kicker">03 · Ausgabe</p>
@@ -67,13 +73,25 @@
         </div>
       </div>
       <div data-generation-controls></div>
-      <button class="primary-button" type="button" data-submit-generation disabled>
+      <button
+        class="primary-button"
+        type="button"
+        data-submit-generation
+        disabled
+      >
         An ComfyUI senden
       </button>
-      <div class="generation-result" data-generation-result aria-live="polite"></div>
+      <div
+        class="generation-result"
+        data-generation-result
+        aria-live="polite"
+      ></div>
     </aside>
   </div>
 </div>
 {% endblock %} {% block scripts %}
-<script type="module" src="/static/js/entries/playground.js?v=20261002"></script>
+<script
+  type="module"
+  src="/static/js/entries/playground.js?v=20261002"
+></script>
 {% endblock %}

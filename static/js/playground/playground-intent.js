@@ -7,7 +7,7 @@ const numericFields = [
   "denoise",
 ];
 
-/** @typedef {{componentUids?: string[], revisionUids?: string[], compositionUid?: string, imageUid?: string, checkpoint?: string, sampler?: string, scheduler?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
+/** @typedef {{componentUids?: string[], revisionUids?: string[], compositionUid?: string, imageUid?: string, generationProfileUid?: string, checkpoint?: string, sampler?: string, scheduler?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
 
 /** @param {HTMLElement} element @returns {PlaygroundIntent} */
 export function intentFromAnalyticsAction(element) {
@@ -53,6 +53,7 @@ export function playgroundIntentUrl(intent) {
   for (const uid of intent.revisionUids || []) query.append("revision", uid);
   set(query, "composition", intent.compositionUid);
   set(query, "image", intent.imageUid);
+  set(query, "profile", intent.generationProfileUid);
   set(query, "checkpoint", intent.checkpoint);
   set(query, "sampler", intent.sampler);
   set(query, "scheduler", intent.scheduler);
@@ -71,6 +72,7 @@ export function readPlaygroundIntent(search) {
     revisionUids: cleanValues(query.getAll("revision")),
     compositionUid: text(query.get("composition")),
     imageUid: text(query.get("image")),
+    generationProfileUid: text(query.get("profile")),
     checkpoint: text(query.get("checkpoint")),
     sampler: text(query.get("sampler")),
     scheduler: text(query.get("scheduler")),

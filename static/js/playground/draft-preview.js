@@ -91,6 +91,7 @@ export class DraftPreview {
       negative_atoms: this.negative.value(),
       checkpoint: settings.checkpoint,
       sampler: settings.sampler,
+      loras: settings.loras || [],
     };
   }
 

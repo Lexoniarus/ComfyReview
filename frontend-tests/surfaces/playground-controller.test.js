@@ -11,6 +11,9 @@ describe("PlaygroundController", () => {
     await fixture.controller.start();
     expect(fixture.modes.render).toHaveBeenCalledWith([{ component_uid: "a" }]);
     expect(fixture.controls.render).toHaveBeenCalled();
+    expect(fixture.controls.render).toHaveBeenCalledWith(
+      expect.objectContaining({ profiles: [] }),
+    );
     expect(fixture.modes.applyIntent).toHaveBeenCalledWith({});
     expect(fixture.controls.applyIntent).toHaveBeenCalledWith({});
     expect(fixture.combinations.render).toHaveBeenCalledWith({
@@ -224,7 +227,9 @@ function createFixture(options = {}) {
             ? { components: [{ component_uid: "a" }] }
             : path === "playground/top-combinations"
               ? { two_component: [] }
-              : { defaults: {} },
+              : path === "settings/generation-profiles"
+                ? { items: [] }
+                : { defaults: {} },
       );
     }),
     post: vi.fn((path) => {

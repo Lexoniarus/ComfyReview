@@ -14,6 +14,7 @@ describe("Playground intent codec", () => {
       revisionUids: ["revision-a"],
       compositionUid: "composition-a",
       imageUid: "image-a",
+      generationProfileUid: "profile-a",
       checkpoint: "model.safetensors",
       sampler: "euler",
       scheduler: "normal",
