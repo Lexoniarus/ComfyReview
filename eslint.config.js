@@ -3,7 +3,12 @@ import globals from "globals";
 
 export default [
   {
-    ignores: ["coverage/**", "node_modules/**"],
+    ignores: [
+      "coverage/**",
+      "node_modules/**",
+      "playwright-report/**",
+      "test-results/**",
+    ],
   },
   eslint.configs.recommended,
   {
@@ -18,7 +23,7 @@ export default [
     },
   },
   {
-    files: ["frontend-tests/**/*.js", "*.config.js"],
+    files: ["frontend-tests/**/*.js", "frontend-e2e/**/*.js", "*.config.js"],
     languageOptions: {
       ecmaVersion: 2024,
       globals: {

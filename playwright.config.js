@@ -22,4 +22,10 @@ export default defineConfig({
     },
   ],
   outputDir: "test-results/playwright",
+  webServer: {
+    command: "python frontend-e2e/support/e2e_server.py",
+    url: `${baseURL}/_e2e/health`,
+    reuseExistingServer: false,
+    timeout: 120_000,
+  },
 });

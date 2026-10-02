@@ -6,13 +6,13 @@
     "node": ">=24"
   },
   "scripts": {
-    "lint": "eslint static/js frontend-tests eslint.config.js vitest.config.js playwright.config.js",
-    "format:check": "prettier --check static/js frontend-tests static/css/v2 package.json jsconfig.json eslint.config.js vitest.config.js playwright.config.js .stylelintrc.json",
+    "lint": "eslint static/js frontend-tests frontend-e2e eslint.config.js vitest.config.js playwright.config.js",
+    "format:check": "prettier --check static/js frontend-tests frontend-e2e static/css/v2 package.json jsconfig.json eslint.config.js vitest.config.js playwright.config.js .stylelintrc.json",
     "style:check": "stylelint \"static/css/**/*.css\"",
     "typecheck": "tsc --noEmit --project jsconfig.json",
     "test": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "quality": "npm run lint && npm run format:check && npm run style:check && npm run typecheck && npm run test"
+    "quality": "npm run lint && npm run format:check && npm run style:check && npm run typecheck && npm run test && npm run test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

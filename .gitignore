@@ -13,6 +13,8 @@ __pycache__/
 htmlcov/
 node_modules/
 coverage/frontend/
+test-results/
+playwright-report/
 
 # local state
 data/ui_state/
