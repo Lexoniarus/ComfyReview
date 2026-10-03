@@ -223,13 +223,17 @@ def test_sqlite_image_queries_apply_canonical_content_visibility(
             "UPDATE prompt_components SET tags = 'legacy-tag' "
             "WHERE component_uid = 'character-a'"
         )
+        connection.execute(
+            "UPDATE prompt_components SET tags = '[\"lewd\"]' "
+            "WHERE component_uid = 'outfit-x'"
+        )
         connection.commit()
     finally:
         connection.close()
     repository = SqliteImageContextRepository(database_path)
     standard = repository.list_images(ImageQuery())
 
-    assert standard.total == 3
+    assert standard.total == 1
     assert "image-3" not in {image.image_uid for image in standard.entries}
     assert repository.get_image("image-3") is None
 
@@ -244,7 +248,7 @@ def test_sqlite_image_queries_apply_canonical_content_visibility(
         connection.close()
 
     visible = repository.list_images(ImageQuery())
-    assert visible.total == 4
+    assert visible.total == 2
     assert repository.get_image("image-3") is not None
 
 

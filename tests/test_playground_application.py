@@ -524,6 +524,7 @@ def _service(catalog: _CatalogService) -> PlaygroundService:
 def test_playground_content_policy_filters_explicit_levels() -> None:
     components = (
         _component("character-a", "character", tags=("adult",)),
+        _component("pose-lewd", "pose", tags=("lewd",)),
         _component(
             "modifier-nude",
             "modifier",
@@ -544,6 +545,14 @@ def test_playground_content_policy_filters_explicit_levels() -> None:
     assert tuple(component.component_uid for component in nude) == (
         "character-a",
         "modifier-nude",
+    )
+    lewd = policy.filter(
+        components,
+        (ContentLevel.STANDARD, ContentLevel.LEWD),
+    )
+    assert tuple(component.component_uid for component in lewd) == (
+        "character-a",
+        "pose-lewd",
     )
 
 

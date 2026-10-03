@@ -27,6 +27,11 @@ class ContentLevel(StrEnum):
 
 CONTENT_LEVEL_TAGS: Final[Mapping[str, ContentLevel]] = MappingProxyType(
     {
+        "suggestive": ContentLevel.SEXY,
+        "seductive": ContentLevel.SEXY,
+        "sensual": ContentLevel.SEXY,
+        "lingerie": ContentLevel.SEXY,
+        "lewd": ContentLevel.LEWD,
         "nsfw_level_suggestive": ContentLevel.SEXY,
         "nsfw_level_partial": ContentLevel.LEWD,
         "nsfw_level_nude": ContentLevel.NUDE,
