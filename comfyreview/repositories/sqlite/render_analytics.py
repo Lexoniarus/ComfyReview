@@ -25,6 +25,9 @@ from comfyreview.application.render_analytics import (
 )
 from comfyreview.repositories.sqlite.analytics import SqliteAnalyticsRepository
 from comfyreview.repositories.sqlite.connection import connect_read_only
+from comfyreview.repositories.sqlite.content_visibility import (
+    content_visibility_predicate,
+)
 from comfyreview.repositories.sqlite.page_analytics_parameters import (
     fetch_calculated_best_cases,
     fetch_param_stats,
@@ -100,7 +103,7 @@ class SqliteRenderSetupQuery:
         )
 
     def _load_rows(self, *, model: str, composition_uid: str) -> list[Any]:
-        conditions: list[str] = []
+        conditions: list[str] = [content_visibility_predicate()]
         parameters: list[object] = []
         if model:
             conditions.append("generation.model_branch = ?")
@@ -108,7 +111,7 @@ class SqliteRenderSetupQuery:
         if composition_uid:
             conditions.append("composition.composition_uid = ?")
             parameters.append(composition_uid)
-        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        where = "WHERE " + " AND ".join(conditions)
         connection = connect_read_only(self._database_path, rows=True)
         try:
             return connection.execute(

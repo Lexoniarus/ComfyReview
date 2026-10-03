@@ -13,6 +13,9 @@ from comfyreview.application.rating_evidence import (
     _sigmoid,
 )
 from comfyreview.repositories.sqlite.connection import connect_read_only
+from comfyreview.repositories.sqlite.content_visibility import (
+    content_visibility_predicate,
+)
 
 
 def fetch_combo_stats(
@@ -27,16 +30,22 @@ def fetch_combo_stats(
     """Aggregate review evidence by model, checkpoint, and combo key."""
     con = connect_read_only(db_path, rows=True)
 
-    where = ""
+    conditions = [content_visibility_predicate()]
     args: list[Any] = []
     if model:
-        where = "WHERE model_branch = ?"
+        conditions.append("rating.model_branch = ?")
         args.append(model)
+    where = "WHERE " + " AND ".join(conditions)
 
     rows = con.execute(
         f"""
-        SELECT model_branch, checkpoint, combo_key, run, rating, deleted
-        FROM ratings
+        SELECT rating.model_branch, rating.checkpoint, rating.combo_key,
+               rating.run, rating.rating, rating.deleted
+        FROM ratings AS rating
+        JOIN current_image_reviews AS current_review
+          ON current_review.sequence = rating.run
+        JOIN images AS image ON image.id = current_review.image_id
+        JOIN generations AS generation ON generation.id = image.generation_id
         {where}
         """,
         args,
@@ -146,16 +155,22 @@ def fetch_combo_stats(
 def _load_combo_prediction_rows(db_path: Path, *, model: str) -> list[Any]:
     """Load rating rows needed for combo prediction."""
     con = connect_read_only(db_path, rows=True)
-    where = ""
+    conditions = [content_visibility_predicate()]
     args: list[Any] = []
     if model:
-        where = "WHERE model_branch = ?"
+        conditions.append("rating.model_branch = ?")
         args.append(model)
+    where = "WHERE " + " AND ".join(conditions)
 
     rows = con.execute(
         f"""
-        SELECT run, steps, ROUND(cfg,1) as cfg_bin, sampler, scheduler, rating, deleted
-        FROM ratings
+        SELECT rating.run, rating.steps, ROUND(rating.cfg,1) as cfg_bin,
+               rating.sampler, rating.scheduler, rating.rating, rating.deleted
+        FROM ratings AS rating
+        JOIN current_image_reviews AS current_review
+          ON current_review.sequence = rating.run
+        JOIN images AS image ON image.id = current_review.image_id
+        JOIN generations AS generation ON generation.id = image.generation_id
         {where}
         """,
         args,

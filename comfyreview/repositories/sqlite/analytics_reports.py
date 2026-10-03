@@ -14,6 +14,9 @@ from comfyreview.application.analytics import (
 from comfyreview.application.image_queries import ScopeKind
 from comfyreview.application.pagination import CollectionPage
 from comfyreview.repositories.sqlite.connection import connect_read_only
+from comfyreview.repositories.sqlite.content_visibility import (
+    content_visibility_predicate,
+)
 from comfyreview.repositories.sqlite.page_analytics_combos import (
     fetch_combo_stats,
     fetch_recommendations,
@@ -241,6 +244,7 @@ def _scope_statistics_base(filter_model: bool, filter_kind: bool) -> str:
             JOIN images AS image ON image.generation_id = generation.id
             JOIN image_review_summary AS summary ON summary.image_id = image.id
             WHERE image.deleted_at IS NULL
+              AND {content_visibility_predicate()}
               {model_filter}
         )
         SELECT
@@ -305,6 +309,7 @@ def _composition_statistics_base(filter_model: bool) -> str:
             JOIN images AS image ON image.generation_id = generation.id
             JOIN image_review_summary AS summary ON summary.image_id = image.id
             WHERE image.deleted_at IS NULL
+              AND {content_visibility_predicate()}
               {model_filter}
         )
         SELECT
@@ -414,6 +419,7 @@ def _scope_example_images(
             JOIN image_review_summary AS summary ON summary.image_id = image.id
             WHERE component.id IN ({placeholders})
               AND image.deleted_at IS NULL
+              AND {content_visibility_predicate()}
               {model_filter}
         )
         SELECT * FROM ranked
@@ -464,6 +470,7 @@ def _composition_example_images(
             JOIN image_review_summary AS summary ON summary.image_id = image.id
             WHERE composition.id IN ({placeholders})
               AND image.deleted_at IS NULL
+              AND {content_visibility_predicate()}
               {model_filter}
         )
         SELECT * FROM ranked

@@ -12,6 +12,9 @@ from comfyreview.application.rating_evidence import (
     _rating_weight_for_run,
 )
 from comfyreview.repositories.sqlite.connection import connect_read_only
+from comfyreview.repositories.sqlite.content_visibility import (
+    content_visibility_predicate,
+)
 
 
 def _load_ratings_rows_for_best_cases(
@@ -22,15 +25,21 @@ def _load_ratings_rows_for_best_cases(
     Reads from ratings.sqlite3 (table ratings) and returns sqlite3.Row objects.
     """
     con = connect_read_only(db_path, rows=True)
-    where = ""
+    conditions = [content_visibility_predicate()]
     args: list[Any] = []
     if model:
-        where = "WHERE model_branch = ?"
+        conditions.append("rating.model_branch = ?")
         args.append(model)
+    where = "WHERE " + " AND ".join(conditions)
     rows = con.execute(
         f"""
-        SELECT checkpoint, steps, cfg, sampler, scheduler, rating, deleted
-        FROM ratings
+        SELECT rating.checkpoint, rating.steps, rating.cfg,
+               rating.sampler, rating.scheduler, rating.rating, rating.deleted
+        FROM ratings AS rating
+        JOIN current_image_reviews AS current_review
+          ON current_review.sequence = rating.run
+        JOIN images AS image ON image.id = current_review.image_id
+        JOIN generations AS generation ON generation.id = image.generation_id
         {where}
         """,
         args,
@@ -322,16 +331,23 @@ def _load_param_rows(
     """Load rating rows used for param stats."""
     con = connect_read_only(db_path, rows=True)
 
-    where = ""
+    conditions = [content_visibility_predicate()]
     args: list[Any] = []
     if model:
-        where = "WHERE model_branch = ?"
+        conditions.append("rating.model_branch = ?")
         args.append(model)
+    where = "WHERE " + " AND ".join(conditions)
 
     rows = con.execute(
         f"""
-        SELECT run, checkpoint, steps, ROUND(cfg,1) as cfg_bin, sampler, scheduler, rating, deleted
-        FROM ratings
+        SELECT rating.run, rating.checkpoint, rating.steps,
+               ROUND(rating.cfg,1) as cfg_bin, rating.sampler,
+               rating.scheduler, rating.rating, rating.deleted
+        FROM ratings AS rating
+        JOIN current_image_reviews AS current_review
+          ON current_review.sequence = rating.run
+        JOIN images AS image ON image.id = current_review.image_id
+        JOIN generations AS generation ON generation.id = image.generation_id
         {where}
         """,
         args,

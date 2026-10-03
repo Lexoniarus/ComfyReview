@@ -25,6 +25,9 @@ from comfyreview.application.image_queries import (
     WorkflowProvenance,
 )
 from comfyreview.repositories.sqlite.connection import connect_read_only
+from comfyreview.repositories.sqlite.content_visibility import (
+    content_visibility_predicate,
+)
 
 _SCOPE_KINDS = tuple(kind.value for kind in ScopeKind)
 
@@ -117,7 +120,9 @@ class SqliteImageContextRepository(_CanonicalScopeLookup):
         connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
-                _context_statement("image.image_uid = ?"),
+                _context_statement(
+                    "image.image_uid = ? AND " + content_visibility_predicate()
+                ),
                 (image_uid,),
             ).fetchall()
             contexts = _map_context_rows(connection, rows)
@@ -201,6 +206,7 @@ def _filter_fragment(
 ) -> _SqlFragment:
     conditions = ["image.deleted_at IS NULL"]
     parameters: list[object] = []
+    conditions.append(content_visibility_predicate())
     if filters.classification is ImageClassification.CLASSIFIED:
         conditions.append("generation.prompt_composition_id IS NOT NULL")
     elif filters.classification is ImageClassification.UNCLASSIFIED:

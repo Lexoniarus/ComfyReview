@@ -6,6 +6,9 @@ from pathlib import Path
 
 from comfyreview.application.catalog_evidence import CatalogEvidenceImage
 from comfyreview.repositories.sqlite.connection import connect_read_only
+from comfyreview.repositories.sqlite.content_visibility import (
+    content_visibility_predicate,
+)
 
 
 class SqliteCatalogEvidenceRepository:
@@ -24,7 +27,7 @@ class SqliteCatalogEvidenceRepository:
         connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
-                """
+                f"""
                 WITH candidates AS (
                     SELECT DISTINCT
                         image.image_uid,
@@ -44,6 +47,7 @@ class SqliteCatalogEvidenceRepository:
                       ON summary.image_id = image.id
                     WHERE component.component_uid = ?
                       AND image.deleted_at IS NULL
+                      AND {content_visibility_predicate()}
                 )
                 SELECT image_uid, average_rating, rating_count
                 FROM candidates

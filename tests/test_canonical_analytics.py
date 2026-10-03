@@ -817,6 +817,53 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         )
 
 
+def test_sqlite_analytics_apply_workspace_content_visibility(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _insert_analytics_fixture(database_path, tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE prompt_components SET tags = ? "
+            "WHERE component_uid = 'component-3'",
+            ('["nsfw_level_nude"]',),
+        )
+        connection.commit()
+
+    analytics = SqliteAnalyticsRepository(database_path)
+    reports = SqliteAnalyticsReportRepository(database_path)
+
+    assert analytics.list_observed_combinations(combo_size=3, limit=8) == ()
+    assert (
+        analytics.list_best_images_for_parameter(
+            "steps",
+            ("20",),
+            model_branch="",
+            limit_per_value=3,
+        )
+        == {}
+    )
+    assert (
+        reports.scope_statistics(
+            model="",
+            min_n=0,
+            kind=ScopeKind.OUTFIT,
+            limit=24,
+        ).entries
+        == ()
+    )
+    assert (
+        reports.parameter_statistics(
+            model="",
+            min_n=0,
+            success_threshold=4,
+            delete_weight=0,
+        )
+        == []
+    )
+
+
 def test_sqlite_analytics_reports_query_canonical_compatibility_views(
     tmp_path: Path,
 ) -> None:

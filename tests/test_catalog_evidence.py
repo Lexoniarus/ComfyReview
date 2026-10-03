@@ -61,6 +61,29 @@ def test_sqlite_catalog_evidence_ranks_live_images_and_keeps_unrated_fallback(
     assert images[-1].rating_count == 0
 
 
+def test_sqlite_catalog_evidence_applies_workspace_content_levels(
+    tmp_path: Path,
+) -> None:
+    database_path = _seed_evidence_database(tmp_path)
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            "UPDATE prompt_components SET tags = ? "
+            "WHERE component_uid = 'component-a'",
+            ('["nsfw_level_nude"]',),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    images = SqliteCatalogEvidenceRepository(database_path).list_top_images(
+        "component-a",
+        limit=3,
+    )
+
+    assert images == ()
+
+
 def _seed_evidence_database(tmp_path: Path) -> Path:
     database_path = tmp_path / "comfyreview.sqlite3"
     CanonicalSchemaManager(database_path).prepare_startup()

@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from comfyreview.application.image_queries import (
     DraftOverridePolicy,
     ImageClassification,
@@ -20,6 +22,9 @@ from comfyreview.repositories.sqlite import (
     SqliteImageContextRepository,
     SqliteReviewCandidateRepository,
     SqliteScopeFacetRepository,
+)
+from comfyreview.repositories.sqlite.content_visibility import (
+    content_visibility_predicate,
 )
 
 
@@ -201,6 +206,51 @@ def test_sqlite_image_query_orders_rankings_with_stable_uid_tiebreaker(
         "image-2",
         "image-1",
     ]
+
+
+def test_sqlite_image_queries_apply_canonical_content_visibility(
+    tmp_path: Path,
+) -> None:
+    database_path = _seed_scope_database(tmp_path)
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            "UPDATE prompt_components SET tags = ? "
+            "WHERE component_uid = 'scene-old'",
+            ('["nsfw_level_nude"]',),
+        )
+        connection.execute(
+            "UPDATE prompt_components SET tags = 'legacy-tag' "
+            "WHERE component_uid = 'character-a'"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    repository = SqliteImageContextRepository(database_path)
+    standard = repository.list_images(ImageQuery())
+
+    assert standard.total == 3
+    assert "image-3" not in {image.image_uid for image in standard.entries}
+    assert repository.get_image("image-3") is None
+
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            "INSERT INTO workspace_content_levels(level, position) "
+            "VALUES ('nude', 1)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    visible = repository.list_images(ImageQuery())
+    assert visible.total == 4
+    assert repository.get_image("image-3") is not None
+
+
+def test_content_visibility_predicate_rejects_unsafe_aliases() -> None:
+    with pytest.raises(ValueError, match="SQL identifier"):
+        content_visibility_predicate("generation; DROP TABLE images")
 
 
 def _seed_scope_database(tmp_path: Path) -> Path:

@@ -13,6 +13,9 @@ from comfyreview.application.analytics import (
     PromptTokenStatistic,
 )
 from comfyreview.repositories.sqlite.connection import connect_read_only
+from comfyreview.repositories.sqlite.content_visibility import (
+    content_visibility_predicate,
+)
 
 _PARAMETER_COLUMNS = {
     "checkpoint": "generation.checkpoint",
@@ -198,9 +201,12 @@ class SqliteAnalyticsRepository:
                        summary.rating_count
                 FROM candidates AS candidate
                 JOIN images AS image ON image.json_path = candidate.json_path
+                JOIN generations AS generation
+                    ON generation.id = image.generation_id
                 JOIN image_review_summary AS summary
                     ON summary.image_id = image.id
                 WHERE image.deleted_at IS NULL
+                  AND {content_visibility_predicate()}
                   AND summary.rating_count >= ?
                 ORDER BY candidate.token_hits DESC,
                          summary.average_rating DESC,
@@ -255,7 +261,7 @@ class SqliteAnalyticsRepository:
         connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
-                """
+                f"""
                 WITH composition_scopes AS (
                     SELECT
                         membership.composition_id,
@@ -303,6 +309,7 @@ class SqliteAnalyticsRepository:
                 LEFT JOIN image_review_summary AS summary
                     ON summary.image_id = image.id
                 WHERE image.deleted_at IS NULL
+                  AND {content_visibility_predicate()}
                   AND scope.character_count = 1
                   AND scope.scene_count = 1
                   AND (? = 2 OR scope.outfit_count = 1)
@@ -416,6 +423,7 @@ class SqliteAnalyticsRepository:
                     JOIN image_review_summary AS summary
                         ON summary.image_id = image.id
                     WHERE image.deleted_at IS NULL
+                      AND {content_visibility_predicate()}
                       AND CAST({expression} AS TEXT) IN ({placeholders})
                       {model_clause}
                     ORDER BY group_value, summary.average_rating DESC,
