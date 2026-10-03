@@ -72,15 +72,20 @@ describe("Settings components", () => {
     };
     const editor = new GenerationProfileEditor(root, actions);
     editor.render(null, capabilities());
+    const resolution = root.querySelectorAll("select")[4];
+    resolution.value = "768x1152";
+    resolution.dispatchEvent(new Event("change"));
     root
       .querySelector("form")
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     expect(actions.onSave).toHaveBeenCalledWith(
       null,
       expect.objectContaining({
-        blueprint_version: 2,
+        blueprint_version: 3,
         checkpoint: "model-a.safetensors",
         fixed_seed: null,
+        image_width: 768,
+        image_height: 1152,
       }),
     );
 
@@ -129,6 +134,19 @@ describe("Settings components", () => {
       expect.objectContaining({ review_unrated_only: false }),
     );
 
+    view.render("content", data);
+    expect(root.textContent).toContain("Inhaltsstufen");
+    expect(root.textContent).toContain("Explicit");
+    const contentBoxes = root.querySelectorAll("input[type='checkbox']");
+    expect(contentBoxes[0].disabled).toBe(true);
+    contentBoxes[1].click();
+    root
+      .querySelector("form")
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(actions.onPreferencesSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({ enabled_content_levels: ["standard", "sexy"] }),
+    );
+
     view.render("curation", data);
     root.querySelectorAll("input")[0].value = "favorites, archive";
     root
@@ -154,7 +172,7 @@ describe("Settings components", () => {
     expect(root.textContent).toContain("Nicht live geprüft · letzte Erkennung");
 
     view.render("storage", data);
-    expect(root.textContent).toContain("v8");
+    expect(root.textContent).toContain("v9");
     expect(root.textContent).toContain("COMFYUI_BASE_URL");
     view.dispose();
   });
@@ -214,6 +232,8 @@ function profile(overrides = {}) {
     cfg_max: 7,
     denoise: 1,
     batch_size: 2,
+    image_width: 768,
+    image_height: 1152,
     loras: [],
     ...overrides,
   };
@@ -230,6 +250,7 @@ function settingsData() {
       review_max_attempts: 20,
       default_curation_set_key: "favorites",
       curation_set_order: ["favorites"],
+      enabled_content_levels: ["standard"],
     },
     generation_profiles: [profile({ is_default: true, archived: false })],
     curation_set_keys: ["favorites", "archive"],
@@ -241,7 +262,7 @@ function settingsData() {
         output_root: "C:/output",
         workflows_directory: "C:/workflows",
         canonical_database_path: "C:/canonical.sqlite3",
-        schema_version: 8,
+        schema_version: 9,
         runtime_mode: "canonical",
         environment_variables: ["COMFYUI_BASE_URL"],
       },

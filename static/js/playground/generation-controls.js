@@ -55,6 +55,17 @@ export class GenerationControls {
       capabilities.checkpoints,
       defaults.checkpoint,
     );
+    this.#selectOptions(
+      "resolution",
+      "Auflösung",
+      [
+        ["1024x1024", "Quadrat · 1024 × 1024"],
+        ["768x1152", "Charakterportrait · 768 × 1152"],
+        ["1280x720", "Scene / CG · 1280 × 720"],
+        ["720x1280", "VN-Sprite · 720 × 1280"],
+      ],
+      "1024x1024",
+    );
     this.#select("sampler", "Sampler", capabilities.samplers, defaults.sampler);
     this.#select(
       "scheduler",
@@ -122,8 +133,18 @@ export class GenerationControls {
   value() {
     const steps = this.steps?.value() || { lower: 1, upper: 1 };
     const cfg = this.cfg?.value() || { lower: 0, upper: 0 };
+    const profile = this.profiles.find(
+      (candidate) => candidate.profile_uid === this.#text("profile_uid"),
+    );
+    const [imageWidth, imageHeight] = this.#text("resolution")
+      .split("x")
+      .map(Number);
     return {
       checkpoint: this.#text("checkpoint"),
+      blueprint_uid: profile?.blueprint_uid || "default-character",
+      blueprint_version: Number(profile?.blueprint_version || 3),
+      image_width: imageWidth,
+      image_height: imageHeight,
       sampler: {
         seed: this.#integer("seed"),
         steps: steps.lower,
@@ -228,6 +249,15 @@ export class GenerationControls {
     if (profile.fixed_seed !== null) this.#set("seed", profile.fixed_seed);
     this.#set("batch_runs", profile.batch_size);
     this.#set("denoise", profile.denoise);
+    const resolution = `${Number(profile.image_width || 1024)}x${Number(profile.image_height || 1024)}`;
+    const resolutionField = this.fields.get("resolution");
+    if (
+      resolutionField instanceof HTMLSelectElement &&
+      ![...resolutionField.options].some((item) => item.value === resolution)
+    ) {
+      resolutionField.append(option(resolution, `Profil · ${resolution}`));
+    }
+    this.#set("resolution", resolution);
     this.steps?.set(profile.steps_min, profile.steps_max);
     this.cfg?.set(profile.cfg_min, profile.cfg_max);
     this.loras?.render(profile.loras || [], this.capabilities.loras || []);

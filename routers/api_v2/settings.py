@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from comfyreview.api import get_application_container
 from comfyreview.application import (
+    ContentLevel,
     GenerationLoraSelection,
     GenerationProfile,
     RuntimeDiagnostics,
@@ -32,6 +33,9 @@ class WorkspacePreferencesRequest(BaseModel):
     review_max_attempts: int
     default_curation_set_key: str | None = None
     curation_set_order: list[str] = Field(default_factory=list)
+    enabled_content_levels: list[ContentLevel] = Field(
+        default_factory=lambda: [ContentLevel.STANDARD]
+    )
 
 
 class ProfileLoraRequest(BaseModel):
@@ -51,7 +55,7 @@ class GenerationProfileRequest(BaseModel):
 
     name: str
     blueprint_uid: str = "default-character"
-    blueprint_version: int = 2
+    blueprint_version: int = 3
     checkpoint: str
     sampler: str
     scheduler: str
@@ -63,6 +67,8 @@ class GenerationProfileRequest(BaseModel):
     cfg_max: float
     denoise: float
     batch_size: int
+    image_width: int = 1024
+    image_height: int = 1024
     loras: list[ProfileLoraRequest] = Field(default_factory=list)
 
 
@@ -113,6 +119,7 @@ def update_preferences(
                 review_max_attempts=payload.review_max_attempts,
                 default_curation_set_key=payload.default_curation_set_key,
                 curation_set_order=tuple(payload.curation_set_order),
+                enabled_content_levels=tuple(payload.enabled_content_levels),
             )
         )
     except (WorkspaceSettingsValidationError, KeyError) as error:
@@ -246,6 +253,8 @@ def profile_value(
         cfg_max_milli=round(payload.cfg_max * 1000),
         denoise_milli=round(payload.denoise * 1000),
         batch_size=payload.batch_size,
+        image_width=payload.image_width,
+        image_height=payload.image_height,
         loras=tuple(
             GenerationLoraSelection(
                 name=item.name,
@@ -276,6 +285,8 @@ def profile_response(profile: GenerationProfile) -> dict[str, object]:
         "cfg_max": profile.cfg_max_milli / 1000,
         "denoise": profile.denoise_milli / 1000,
         "batch_size": profile.batch_size,
+        "image_width": profile.image_width,
+        "image_height": profile.image_height,
         "archived": profile.archived,
         "is_default": profile.is_default,
         "loras": [
@@ -305,6 +316,9 @@ def preferences_response(
         "review_max_attempts": preferences.review_max_attempts,
         "default_curation_set_key": preferences.default_curation_set_key,
         "curation_set_order": list(preferences.curation_set_order),
+        "enabled_content_levels": [
+            level.value for level in preferences.enabled_content_levels
+        ],
     }
 
 

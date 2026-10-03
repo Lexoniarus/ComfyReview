@@ -32,6 +32,7 @@ from comfyreview.application import (
     PlaygroundService,
     PlaygroundSubmissionService,
     PromptCatalogService,
+    PromptContentPolicy,
     PromptRenderer,
     PromptSelectionPolicy,
     RenderAnalyticsService,
@@ -171,6 +172,12 @@ def build_application_container(
     file_urls = OutputFileUrlMapper(configured.output_root)
     prompt_renderer = PromptRenderer()
     draft_overrides = DraftOverridePolicy(prompt_renderer)
+    profile_repository = SqliteGenerationProfileRepository(
+        configured.canonical_database_path
+    )
+    preferences_repository = SqliteWorkspacePreferencesRepository(
+        configured.canonical_database_path
+    )
     image_contexts = ImageContextQueryService(
         SqliteImageContextRepository(configured.canonical_database_path),
         draft_overrides,
@@ -237,12 +244,6 @@ def build_application_container(
         comfyui=comfyui_provider,
         outputs=generation_output_collector,
     )
-    profile_repository = SqliteGenerationProfileRepository(
-        configured.canonical_database_path
-    )
-    preferences_repository = SqliteWorkspacePreferencesRepository(
-        configured.canonical_database_path
-    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -307,12 +308,14 @@ def build_application_container(
             catalog=prompt_catalog_service,
             selection_policy=PromptSelectionPolicy(),
             renderer=prompt_renderer,
+            preferences=preferences_repository,
+            content_policy=PromptContentPolicy(),
         ),
         playground_submission_service=PlaygroundSubmissionService(
             generation=generation_service,
             policy=PlaygroundGenerationPolicy(
                 blueprint_uid="default-character",
-                blueprint_version=2,
+                blueprint_version=3,
                 expected_output_roles=("primary",),
             ),
         ),

@@ -117,6 +117,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_application.py::"
         "test_playground_service_prepares_draft_without_generation_submission"
     ),
+    "comfyreview.application.playground:PlaygroundService.list_available_components": (
+        "tests/test_playground_application.py::"
+        "test_playground_content_policy_filters_explicit_levels"
+    ),
+    "comfyreview.application.playground:PromptContentPolicy.filter": (
+        "tests/test_playground_application.py::"
+        "test_playground_content_policy_filters_explicit_levels"
+    ),
     "comfyreview.application.playground:PlaygroundService.prepare_revision_draft": (
         "tests/test_playground_application.py::"
         "test_playground_service_restores_exact_revisions_and_compositions"

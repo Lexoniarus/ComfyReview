@@ -90,6 +90,10 @@ export class SettingsView {
       general: ["Allgemein", "Darstellung und Standardprofil"],
       review: ["Review", "Sitzungsdefaults ohne neue Rating-Semantik"],
       curation: ["Curation", "Vorhandene kanonische Sets und Reihenfolge"],
+      content: [
+        "Inhaltsstufen",
+        "Freigegebene NSFW-Stufen nach Character-Chronicles-Semantik",
+      ],
     };
     const titleKey = /** @type {keyof typeof titles} */ (
       section in titles ? section : "general"
@@ -171,6 +175,9 @@ export class SettingsView {
 
 /** @param {string} section @param {Record<string, any>} preferences @param {Record<string, any>} data */
 function preferenceFields(section, preferences, data) {
+  if (section === "content") {
+    return [contentLevelField(preferences.enabled_content_levels || [])];
+  }
   if (section === "review") {
     return [
       checkboxField(
@@ -249,6 +256,42 @@ function preferenceFields(section, preferences, data) {
       preferences.default_generation_profile_uid || "",
     ),
   ];
+}
+
+/** @param {Array<string>} selected */
+function contentLevelField(selected) {
+  const wrapper = document.createElement("fieldset");
+  wrapper.className = "settings-content-levels";
+  const legend = document.createElement("legend");
+  legend.textContent = "Erlaubte Inhaltsstufen";
+  wrapper.append(legend);
+  /** @type {Array<HTMLInputElement>} */
+  const controls = [];
+  for (const [value, label] of [
+    ["standard", "Standard"],
+    ["sexy", "Sexy"],
+    ["lewd", "Lewd"],
+    ["nude", "Nude"],
+    ["explicit", "Explicit"],
+  ]) {
+    const row = document.createElement("label");
+    const control = document.createElement("input");
+    control.type = "checkbox";
+    control.value = value;
+    control.checked = value === "standard" || selected.includes(value);
+    control.disabled = value === "standard";
+    row.append(control, document.createTextNode(label));
+    wrapper.append(row);
+    controls.push(control);
+  }
+  return {
+    name: "enabled_content_levels",
+    wrapper,
+    read: () =>
+      controls
+        .filter((control) => control.checked)
+        .map((control) => control.value),
+  };
 }
 
 /** @typedef {{value: string | number, label: string}} SelectOption */

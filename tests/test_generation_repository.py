@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from comfyreview.application import (
+    GenerationCanvas,
     GenerationLoraSelection,
     GenerationOutputPolicy,
     GenerationPromptSnapshot,
@@ -44,6 +45,7 @@ def _blueprint_payload() -> dict[str, object]:
                 }
             },
             "save": {"inputs": {"subfolder": "", "prefix": ""}},
+            "latent": {"inputs": {"width": 1024, "height": 1024}},
         },
         "role_bindings": {
             "positive_prompt": {"node_id": "positive", "input_name": "text"},
@@ -58,6 +60,8 @@ def _blueprint_payload() -> dict[str, object]:
                 "input_name": "subfolder",
             },
             "filename_prefix": {"node_id": "save", "input_name": "prefix"},
+            "image_width": {"node_id": "latent", "input_name": "width"},
+            "image_height": {"node_id": "latent", "input_name": "height"},
         },
         "output_bindings": [{"role": "primary", "node_id": "save"}],
         "sampler_roles": ["base_sampler"],
@@ -90,6 +94,7 @@ def _request(revision_uid: str) -> GenerationRequest:
             "playground/Hero", "hero_", ("primary",)
         ),
         loras=(GenerationLoraSelection("style.safetensors", 800, 650, 0),),
+        canvas=GenerationCanvas(768, 1152),
     )
 
 
@@ -208,7 +213,7 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
         generation = connection.execute(
             """
             SELECT source, status, workflow_hash, prompt_composition_id,
-                   raw_metadata_json
+                   raw_metadata_json, image_width, image_height
             FROM generations WHERE generation_uid = 'generation-native'
             """
         ).fetchone()
@@ -241,6 +246,7 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
         1,
     )
     assert json.loads(generation[4])["revision_uids"] == [revision_uid]
+    assert generation[5:] == (768, 1152)
     assert stages == [
         ("base_sampler", "sampler", 0),
         ("base_sampler", "sampler", 0),

@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 from comfyreview.application import (
+    GenerationCanvas,
     GenerationMutationError,
     GenerationRequest,
     GenerationSamplerSettings,
@@ -80,6 +81,9 @@ def test_playground_generation_policy_builds_reproducible_request() -> None:
         .model_branch
         == "model-without-suffix"
     )
+    assert _policy().build_request(
+        replace(_draft(), image_width=768, image_height=1152)
+    ).canvas == GenerationCanvas(768, 1152)
 
 
 @pytest.mark.parametrize(
@@ -97,6 +101,10 @@ def test_playground_generation_policy_builds_reproducible_request() -> None:
         (
             replace(_draft(), output_subdirectory="playground//hero"),
             "safe relative",
+        ),
+        (
+            replace(_draft(), image_width=768, image_height=None),
+            "provided together",
         ),
     ),
 )

@@ -14,7 +14,12 @@ if TYPE_CHECKING:
 _PROMPT_ROLES = {"positive_prompt", "negative_prompt"}
 _SAMPLER_ROLES = {"base_sampler", "refiner_sampler", "detail_sampler"}
 _POLICY_ROLES = {"output_subdirectory", "filename_prefix"}
-_DIRECT_ROLES = {"checkpoint", "reference_image"}
+_DIRECT_ROLES = {
+    "checkpoint",
+    "reference_image",
+    "image_width",
+    "image_height",
+}
 _SUPPORTED_ROLES = (
     _PROMPT_ROLES
     | _SAMPLER_ROLES
@@ -164,6 +169,21 @@ class WorkflowCompiler:
                 blueprint,
                 "reference_image",
                 request.reference_image,
+                resolved_roles,
+            )
+        if request.canvas is not None:
+            self._write_required_role(
+                graph,
+                blueprint,
+                "image_width",
+                request.canvas.width,
+                resolved_roles,
+            )
+            self._write_required_role(
+                graph,
+                blueprint,
+                "image_height",
+                request.canvas.height,
                 resolved_roles,
             )
 

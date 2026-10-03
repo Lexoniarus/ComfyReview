@@ -7,9 +7,11 @@ from typing import Any
 from comfyreview.application import (
     PlaygroundService,
     PromptComponent,
+    PromptContentPolicy,
     PromptRenderer,
     PromptRevision,
     PromptSelectionPolicy,
+    WorkspacePreferences,
     imported_prompt_component_uid,
 )
 from services.playground_generator_ui import generation
@@ -45,6 +47,14 @@ class _Catalog:
     ) -> tuple[PromptComponent, ...]:
         del composition_uid
         return self._components
+
+
+class _Preferences:
+    def get(self) -> WorkspacePreferences:
+        return WorkspacePreferences()
+
+    def save(self, preferences: WorkspacePreferences) -> WorkspacePreferences:
+        return preferences
 
 
 def _component(
@@ -90,6 +100,8 @@ def test_preview_generation_uses_catalog_revisions_and_keeps_legacy_submit_shape
         catalog=_Catalog(components),
         selection_policy=PromptSelectionPolicy(),
         renderer=PromptRenderer(),
+        preferences=_Preferences(),
+        content_policy=PromptContentPolicy(),
     )
     del monkeypatch
     head: dict[str, Any] = {

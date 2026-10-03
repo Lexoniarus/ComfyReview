@@ -15,6 +15,7 @@ from comfyreview.application import (
     RuntimeDiagnosticsService,
 )
 from comfyreview.application.workspace_settings import (
+    ContentLevel,
     GenerationLoraSelection,
     GenerationProfile,
     GenerationProfileService,
@@ -112,6 +113,8 @@ def _profile(
     cfg_max_milli: int = 7000,
     denoise_milli: int = 1000,
     batch_size: int = 1,
+    image_width: int = 1024,
+    image_height: int = 1024,
     loras: tuple[GenerationLoraSelection, ...] = (
         GenerationLoraSelection("style.safetensors", 800, 600, 0),
     ),
@@ -134,6 +137,8 @@ def _profile(
         cfg_max_milli=cfg_max_milli,
         denoise_milli=denoise_milli,
         batch_size=batch_size,
+        image_width=image_width,
+        image_height=image_height,
         loras=loras,
         archived=archived,
         is_default=is_default,
@@ -179,6 +184,8 @@ def test_generation_profile_service_validates_ranges_and_lora_positions() -> (
         _profile(seed_mode="fixed", fixed_seed=None),
         _profile(denoise_milli=1001),
         _profile(batch_size=0),
+        _profile(image_width=1001),
+        _profile(image_height=4104),
         _profile(loras=(GenerationLoraSelection("style", 1000, 1000, 1),)),
         _profile(loras=(GenerationLoraSelection("", 1000, 1000, 0),)),
         _profile(
@@ -240,11 +247,17 @@ def test_workspace_preferences_service_validates_and_sets_default_profile() -> (
             review_max_attempts=20,
             default_curation_set_key="keep",
             curation_set_order=("archive", "keep"),
+            enabled_content_levels=(
+                ContentLevel.STANDARD,
+                ContentLevel.SEXY,
+                ContentLevel.LEWD,
+            ),
         )
     )
     selected = service.set_default_profile(profile.profile_uid)
 
     assert saved.density == "compact"
+    assert saved.enabled_content_levels[-1] is ContentLevel.LEWD
     assert selected.default_generation_profile_uid == profile.profile_uid
     assert service.get() == selected
 
@@ -282,6 +295,20 @@ def test_workspace_preferences_service_rejects_unknown_or_duplicate_values() -> 
         WorkspacePreferences(curation_set_order=("keep", "keep")),
         WorkspacePreferences(curation_set_order=("unknown",)),
         WorkspacePreferences(default_curation_set_key="unknown"),
+        WorkspacePreferences(enabled_content_levels=(ContentLevel.SEXY,)),
+        WorkspacePreferences(
+            enabled_content_levels=(
+                ContentLevel.STANDARD,
+                ContentLevel.STANDARD,
+            )
+        ),
+        WorkspacePreferences(
+            enabled_content_levels=(
+                ContentLevel.STANDARD,
+                ContentLevel.LEWD,
+                ContentLevel.SEXY,
+            )
+        ),
     )
     for preferences in invalid_preferences:
         with pytest.raises(WorkspaceSettingsValidationError):
@@ -307,11 +334,20 @@ def test_sqlite_settings_repositories_persist_profiles_and_preferences(
             review_max_attempts=12,
             default_curation_set_key="keep",
             curation_set_order=("archive", "keep"),
+            enabled_content_levels=(
+                ContentLevel.STANDARD,
+                ContentLevel.SEXY,
+            ),
         )
     )
 
     assert saved_preferences.default_generation_profile_uid == "profile-one"
     assert saved_preferences.curation_set_order == ("archive", "keep")
+    assert saved_preferences.enabled_content_levels == (
+        ContentLevel.STANDARD,
+        ContentLevel.SEXY,
+    )
+    assert profiles.get("profile-one").image_width == 1024
     assert profiles.get("profile-one").is_default is True
     archived = profiles.set_archived("profile-one", True)
     assert archived.archived is True
@@ -344,7 +380,7 @@ def test_runtime_diagnostics_normalizes_connected_and_offline_states() -> None:
         output_root="output",
         workflows_directory="workflows",
         canonical_database_path="canonical.sqlite3",
-        schema_version=8,
+        schema_version=9,
         runtime_mode="canonical",
         environment_variables=("COMFYREVIEW_DATABASE",),
     )
@@ -378,7 +414,7 @@ def test_runtime_diagnostics_snapshot_avoids_provider_access() -> None:
         output_root="output",
         workflows_directory="workflows",
         canonical_database_path="canonical.sqlite3",
-        schema_version=8,
+        schema_version=9,
         runtime_mode="canonical",
         environment_variables=("COMFYREVIEW_DATABASE",),
     )
@@ -400,7 +436,7 @@ def test_runtime_diagnostics_caches_capabilities_for_fast_snapshots() -> None:
         output_root="output",
         workflows_directory="workflows",
         canonical_database_path="canonical.sqlite3",
-        schema_version=8,
+        schema_version=9,
         runtime_mode="canonical",
         environment_variables=("COMFYREVIEW_DATABASE",),
     )

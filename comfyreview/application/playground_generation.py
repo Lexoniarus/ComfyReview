@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass, replace
 
 from comfyreview.application.generation import (
+    GenerationCanvas,
     GenerationLoraSelection,
     GenerationMutationError,
     GenerationOutputPolicy,
@@ -32,6 +33,10 @@ class PlaygroundGenerationDraft:
     sampler: GenerationSamplerSettings
     output_subdirectory: str
     loras: tuple[GenerationLoraSelection, ...] = ()
+    blueprint_uid: str | None = None
+    blueprint_version: int | None = None
+    image_width: int | None = None
+    image_height: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,8 +212,12 @@ class PlaygroundGenerationPolicy:
                 positive_atoms=draft.prompt.positive_atoms,
                 negative_atoms=draft.prompt.negative_atoms,
             ),
-            blueprint_uid=self._blueprint_uid,
-            blueprint_version=self._blueprint_version,
+            blueprint_uid=draft.blueprint_uid or self._blueprint_uid,
+            blueprint_version=(
+                draft.blueprint_version
+                if draft.blueprint_version is not None
+                else self._blueprint_version
+            ),
             model_branch=self._model_branch(checkpoint),
             combo_key=self._combo_key(checkpoint, draft.sampler),
             checkpoint=checkpoint,
@@ -222,7 +231,18 @@ class PlaygroundGenerationPolicy:
                 expected_roles=self._expected_output_roles,
             ),
             loras=draft.loras,
+            canvas=self._canvas(draft),
         )
+
+    @staticmethod
+    def _canvas(draft: PlaygroundGenerationDraft) -> GenerationCanvas | None:
+        if draft.image_width is None and draft.image_height is None:
+            return None
+        if draft.image_width is None or draft.image_height is None:
+            raise GenerationValidationError(
+                "image width and height must be provided together"
+            )
+        return GenerationCanvas(draft.image_width, draft.image_height)
 
     @staticmethod
     def _required(value: str, field: str) -> str:

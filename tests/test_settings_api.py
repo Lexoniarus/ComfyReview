@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from comfyreview.application import (
+    ContentLevel,
     GenerationLoraSelection,
     GenerationProfile,
     RuntimeConfigurationSnapshot,
@@ -92,7 +93,7 @@ class _Diagnostics:
                 output_root="C:/output",
                 workflows_directory="C:/workflows",
                 canonical_database_path="C:/canonical.sqlite3",
-                schema_version=8,
+                schema_version=9,
                 runtime_mode="canonical",
                 environment_variables=("COMFYUI_BASE_URL",),
             ),
@@ -121,11 +122,12 @@ def test_settings_api_reads_and_updates_canonical_preferences() -> None:
             "review_max_attempts": 25,
             "default_curation_set_key": "favorites",
             "curation_set_order": ["favorites", "archive"],
+            "enabled_content_levels": ["standard", "sexy"],
         },
     )
 
     assert response.status_code == 200
-    assert response.json()["runtime"]["configuration"]["schema_version"] == 8
+    assert response.json()["runtime"]["configuration"]["schema_version"] == 9
     assert response.json()["runtime"]["message"] == "not_checked"
     assert response.json()["generation_profiles"][0]["loras"] == [
         {
@@ -138,6 +140,10 @@ def test_settings_api_reads_and_updates_canonical_preferences() -> None:
     assert updated.status_code == 200
     assert updated.json()["density"] == "compact"
     assert container.workspace_preferences.value.review_max_attempts == 25
+    assert container.workspace_preferences.value.enabled_content_levels == (
+        ContentLevel.STANDARD,
+        ContentLevel.SEXY,
+    )
 
 
 def test_settings_api_manages_profiles_and_capabilities() -> None:
@@ -249,6 +255,8 @@ def _profile() -> GenerationProfile:
         cfg_max_milli=7000,
         denoise_milli=1000,
         batch_size=1,
+        image_width=768,
+        image_height=1152,
         loras=(
             GenerationLoraSelection(
                 name="style.safetensors",
@@ -276,6 +284,8 @@ def _profile_payload() -> dict[str, object]:
         "cfg_max": 7,
         "denoise": 1,
         "batch_size": 1,
+        "image_width": 768,
+        "image_height": 1152,
         "loras": [
             {
                 "name": "style.safetensors",

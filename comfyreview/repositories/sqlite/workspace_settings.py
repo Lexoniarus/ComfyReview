@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from comfyreview.application.workspace_settings import (
+    ContentLevel,
     GenerationLoraSelection,
     GenerationProfile,
     WorkspacePreferences,
@@ -50,6 +51,17 @@ class SqliteWorkspacePreferencesRepository:
                     """
                 ).fetchall()
             )
+            content_levels = tuple(
+                ContentLevel(str(item[0]))
+                for item in connection.execute(
+                    """
+                    SELECT level
+                    FROM workspace_content_levels
+                    WHERE singleton_id = 1
+                    ORDER BY position
+                    """
+                ).fetchall()
+            )
             return WorkspacePreferences(
                 density=str(row["density"]),
                 motion=str(row["motion"]),
@@ -67,6 +79,7 @@ class SqliteWorkspacePreferencesRepository:
                     else None
                 ),
                 curation_set_order=order,
+                enabled_content_levels=content_levels,
             )
 
     def save(self, preferences: WorkspacePreferences) -> WorkspacePreferences:
@@ -114,6 +127,22 @@ class SqliteWorkspacePreferencesRepository:
                     (set_key, position)
                     for position, set_key in enumerate(
                         preferences.curation_set_order
+                    )
+                ),
+            )
+            connection.execute(
+                "DELETE FROM workspace_content_levels WHERE singleton_id = 1"
+            )
+            connection.executemany(
+                """
+                INSERT INTO workspace_content_levels(
+                    singleton_id, level, position
+                ) VALUES (1, ?, ?)
+                """,
+                tuple(
+                    (level.value, position)
+                    for position, level in enumerate(
+                        preferences.enabled_content_levels
                     )
                 ),
             )
@@ -173,8 +202,9 @@ class SqliteGenerationProfileRepository:
                     profile_uid, name, blueprint_uid, blueprint_version,
                     checkpoint, sampler, scheduler, seed_mode, fixed_seed,
                     steps_min, steps_max, cfg_min_milli, cfg_max_milli,
-                    denoise_milli, batch_size, archived_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    denoise_milli, batch_size, image_width, image_height,
+                    archived_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(profile_uid) DO UPDATE SET
                     name = excluded.name,
                     blueprint_uid = excluded.blueprint_uid,
@@ -190,6 +220,8 @@ class SqliteGenerationProfileRepository:
                     cfg_max_milli = excluded.cfg_max_milli,
                     denoise_milli = excluded.denoise_milli,
                     batch_size = excluded.batch_size,
+                    image_width = excluded.image_width,
+                    image_height = excluded.image_height,
                     archived_at = excluded.archived_at,
                     updated_at = datetime('now')
                 """,
@@ -209,6 +241,8 @@ class SqliteGenerationProfileRepository:
                     profile.cfg_max_milli,
                     profile.denoise_milli,
                     profile.batch_size,
+                    profile.image_width,
+                    profile.image_height,
                     "1970-01-01 00:00:00" if profile.archived else None,
                 ),
             )
@@ -316,6 +350,8 @@ class SqliteGenerationProfileRepository:
             cfg_max_milli=int(row["cfg_max_milli"]),
             denoise_milli=int(row["denoise_milli"]),
             batch_size=int(row["batch_size"]),
+            image_width=int(row["image_width"]),
+            image_height=int(row["image_height"]),
             loras=loras,
             archived=row["archived_at"] is not None,
             is_default=bool(row["is_default"]),

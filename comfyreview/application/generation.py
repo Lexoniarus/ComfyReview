@@ -69,6 +69,14 @@ class GenerationLoraSelection:
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationCanvas:
+    """Describe the latent canvas compiled into an explicit workflow role."""
+
+    width: int
+    height: int
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationOutputPolicy:
     """Carry output naming intent decided before workflow compilation."""
 
@@ -91,6 +99,7 @@ class GenerationRequest:
     output_policy: GenerationOutputPolicy
     loras: tuple[GenerationLoraSelection, ...] = ()
     reference_image: str | None = None
+    canvas: GenerationCanvas | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -424,6 +433,12 @@ class GenerationService:
             )
         if any(not lora.name.strip() for lora in request.loras):
             raise GenerationValidationError("LoRA name is required")
+        if request.canvas is not None:
+            for value in (request.canvas.width, request.canvas.height):
+                if value < 64 or value > 4096 or value % 8:
+                    raise GenerationValidationError(
+                        "image dimensions must be multiples of 8 between 64 and 4096"
+                    )
 
     @staticmethod
     def _required(value: str, field: str) -> str:

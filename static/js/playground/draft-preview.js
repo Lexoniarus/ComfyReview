@@ -90,6 +90,10 @@ export class DraftPreview {
       positive_atoms: this.positive.value(),
       negative_atoms: this.negative.value(),
       checkpoint: settings.checkpoint,
+      blueprint_uid: settings.blueprint_uid,
+      blueprint_version: settings.blueprint_version,
+      image_width: settings.image_width,
+      image_height: settings.image_height,
       sampler: settings.sampler,
       loras: settings.loras || [],
     };

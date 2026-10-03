@@ -59,6 +59,7 @@ from comfyreview.application.curation import (
     StagedCurationMove,
 )
 from comfyreview.application.generation import (
+    GenerationCanvas,
     GenerationIdentitySource,
     GenerationLoraSelection,
     GenerationMutationError,
@@ -148,6 +149,7 @@ from comfyreview.application.playground import (
     PlaygroundDraft,
     PlaygroundService,
     PromptCatalogReader,
+    PromptContentPolicy,
     PromptDraftOverrides,
     PromptRenderer,
     PromptSelection,
@@ -247,6 +249,7 @@ from comfyreview.application.workflow_defaults import (
     WorkflowDefaultsService,
 )
 from comfyreview.application.workspace_settings import (
+    ContentLevel,
     GenerationProfile,
     GenerationProfileIdentitySource,
     GenerationProfileRepository,
@@ -267,6 +270,7 @@ __all__ = [
     "CompositionStatistic",
     "CompositionAnalyticsRepository",
     "CompositionAnalyticsService",
+    "ContentLevel",
     "ArenaCompetitor",
     "ArenaDecision",
     "ArenaMutationError",
@@ -321,6 +325,7 @@ __all__ = [
     "GenerationOutputSummary",
     "GenerationPage",
     "GenerationIdentitySource",
+    "GenerationCanvas",
     "GenerationSettings",
     "GenerationDefaults",
     "GenerationMutationError",
@@ -391,6 +396,7 @@ __all__ = [
     "PromptCatalogValidationError",
     "PromptCompositionMembership",
     "PromptComponent",
+    "PromptContentPolicy",
     "PromptIdentitySource",
     "PromptRenderer",
     "PromptRevision",

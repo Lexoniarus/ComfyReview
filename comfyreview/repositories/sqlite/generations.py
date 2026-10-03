@@ -56,6 +56,14 @@ class SqliteGenerationRepository:
                         {"role": binding.role, "node_id": binding.node_id}
                         for binding in generation.compiled_workflow.output_bindings
                     ],
+                    "canvas": (
+                        {
+                            "width": generation.request.canvas.width,
+                            "height": generation.request.canvas.height,
+                        }
+                        if generation.request.canvas is not None
+                        else None
+                    ),
                 },
                 ensure_ascii=False,
                 sort_keys=True,
@@ -66,11 +74,12 @@ class SqliteGenerationRepository:
                 INSERT INTO generations(
                     generation_uid, model_branch, checkpoint, combo_key,
                     seed, steps, cfg, sampler, scheduler, denoise,
-                    loras_json, positive_prompt_id, negative_prompt_id,
+                    loras_json, image_width, image_height,
+                    positive_prompt_id, negative_prompt_id,
                     source, raw_metadata_json, workflow_json, workflow_hash,
                     status, prompt_composition_id
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     'native_comfyui', ?, ?, ?, 'prepared', ?
                 )
                 """,
@@ -86,6 +95,16 @@ class SqliteGenerationRepository:
                     self._primary_stage_value(generation, "scheduler"),
                     self._primary_stage_value(generation, "denoise"),
                     self._loras_json(generation),
+                    (
+                        generation.request.canvas.width
+                        if generation.request.canvas is not None
+                        else None
+                    ),
+                    (
+                        generation.request.canvas.height
+                        if generation.request.canvas is not None
+                        else None
+                    ),
                     positive_id,
                     negative_id,
                     metadata,

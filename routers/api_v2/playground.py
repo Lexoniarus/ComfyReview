@@ -57,7 +57,7 @@ def playground_capabilities(request: Request) -> JSONResponse:
     """Return cached-or-live native ComfyUI enum capabilities."""
     container = get_application_container(request)
     discovery = container.playground_discovery.discover()
-    defaults = container.workflow_defaults.load("default-character", 2)
+    defaults = container.workflow_defaults.load("default-character", 3)
     return JSONResponse(
         {
             "checkpoints": discovery.checkpoints,
@@ -74,6 +74,17 @@ def playground_capabilities(request: Request) -> JSONResponse:
                 "denoise": defaults.sampler.denoise,
             },
         }
+    )
+
+
+@router.get("/playground/components")
+def playground_components(request: Request) -> JSONResponse:
+    """Return active components allowed by workspace content policy."""
+    components = get_application_container(
+        request
+    ).playground_service.list_available_components()
+    return JSONResponse(
+        {"components": [component_response(item) for item in components]}
     )
 
 

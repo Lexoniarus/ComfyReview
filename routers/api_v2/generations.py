@@ -65,6 +65,10 @@ class PlaygroundGenerationRequest(BaseModel):
     positive_atoms: list[PromptAtomRequest]
     negative_atoms: list[PromptAtomRequest]
     checkpoint: str
+    blueprint_uid: str = "default-character"
+    blueprint_version: int = 3
+    image_width: int = 1024
+    image_height: int = 1024
     sampler: PlaygroundSamplerRequest
     loras: list[GenerationLoraRequest] = Field(default_factory=list)
 
@@ -172,6 +176,10 @@ def submit_generation(
             character_name=character.name,
             prompt=confirmed.prompt,
             checkpoint=payload.checkpoint,
+            blueprint_uid=payload.blueprint_uid,
+            blueprint_version=payload.blueprint_version,
+            image_width=payload.image_width,
+            image_height=payload.image_height,
             sampler=GenerationSamplerSettings(
                 role="base_sampler",
                 seed=payload.sampler.seed,

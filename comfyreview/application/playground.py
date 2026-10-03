@@ -10,6 +10,11 @@ from typing import Protocol
 from comfyreview.application.prompt_catalog import (
     PromptComponent,
 )
+from comfyreview.application.workspace_settings import (
+    CONTENT_LEVEL_TAGS,
+    ContentLevel,
+    PreferencesRepository,
+)
 from comfyreview.domain import (
     PromptAtomUsage,
     prompt_atom_usages_from_text,
@@ -76,6 +81,35 @@ _GATES = {
 
 class PromptSelectionError(ValueError):
     """Reject an impossible or invalid Playground selection."""
+
+
+class PromptContentPolicy:
+    """Filter catalog components by explicit workspace content levels."""
+
+    def filter(
+        self,
+        components: tuple[PromptComponent, ...],
+        enabled_levels: tuple[ContentLevel, ...],
+    ) -> tuple[PromptComponent, ...]:
+        """Return components whose explicit level is enabled."""
+        enabled = set(enabled_levels)
+        return tuple(
+            component
+            for component in components
+            if self._level(component) in enabled
+        )
+
+    @classmethod
+    def _level(cls, component: PromptComponent) -> ContentLevel:
+        tags = {tag.strip().lower() for tag in component.tags}
+        levels = {
+            level for tag, level in CONTENT_LEVEL_TAGS.items() if tag in tags
+        }
+        if len(levels) > 1:
+            raise PromptSelectionError(
+                f"component has conflicting content levels: {component.component_uid}"
+            )
+        return next(iter(levels), ContentLevel.STANDARD)
 
 
 class PromptCatalogReader(Protocol):
@@ -529,10 +563,22 @@ class PlaygroundService:
         catalog: PromptCatalogReader,
         selection_policy: PromptSelectionPolicy,
         renderer: PromptRenderer,
+        preferences: PreferencesRepository,
+        content_policy: PromptContentPolicy,
     ) -> None:
         self._catalog = catalog
         self._selection_policy = selection_policy
         self._renderer = renderer
+        self._preferences = preferences
+        self._content_policy = content_policy
+
+    def list_available_components(self) -> tuple[PromptComponent, ...]:
+        """Return active catalog components allowed by workspace policy."""
+        components = self._catalog.list_components(include_archived=False)
+        return self._content_policy.filter(
+            components,
+            self._preferences.get().enabled_content_levels,
+        )
 
     def prepare_draft(
         self,
@@ -541,7 +587,7 @@ class PlaygroundService:
         overrides: PromptDraftOverrides | None = None,
     ) -> PlaygroundDraft:
         """Select concrete revisions and render a non-persisting draft."""
-        components = self._catalog.list_components(include_archived=False)
+        components = self.list_available_components()
         selection = self._selection_policy.select(components, command)
         return PlaygroundDraft(
             selection=selection,
@@ -554,6 +600,7 @@ class PlaygroundService:
     ) -> PlaygroundDraft:
         """Render one exact immutable revision selection for a handoff."""
         components = self._catalog.list_components_for_revisions(revision_uids)
+        self._require_allowed(components)
         selection = self._exact_selection(components, revision_uids)
         return PlaygroundDraft(
             selection=selection,
@@ -569,6 +616,7 @@ class PlaygroundService:
         if not normalized_uid:
             raise PromptSelectionError("composition_uid is required")
         components = self._catalog.list_composition_components(normalized_uid)
+        self._require_allowed(components)
         revision_uids = tuple(
             component.latest_revision.revision_uid for component in components
         )
@@ -583,7 +631,7 @@ class PlaygroundService:
         command: ConfirmPlaygroundDraftCommand,
     ) -> PlaygroundDraft:
         """Revalidate a reviewed draft against current canonical revisions."""
-        components = self._catalog.list_components(include_archived=False)
+        components = self.list_available_components()
         selection = self._selection_policy.confirm(
             components,
             command.component_uids,
@@ -608,6 +656,19 @@ class PlaygroundService:
             selection=selection,
             prompt=self._renderer.render(selection, overrides),
         )
+
+    def _require_allowed(
+        self,
+        components: tuple[PromptComponent, ...],
+    ) -> None:
+        allowed = self._content_policy.filter(
+            components,
+            self._preferences.get().enabled_content_levels,
+        )
+        if len(allowed) != len(components):
+            raise PromptSelectionError(
+                "prompt selection contains a disabled content level"
+            )
 
     @staticmethod
     def _exact_selection(

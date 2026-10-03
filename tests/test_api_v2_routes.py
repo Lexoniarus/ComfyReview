@@ -240,6 +240,9 @@ class _Playground:
     confirm_command = None
     overrides = None
 
+    def list_available_components(self):
+        return (_prompt_component(),)
+
     def prepare_draft(self, command, *, overrides=None):
         self.command = command
         self.overrides = overrides
@@ -393,7 +396,7 @@ class _PlaygroundDiscovery:
 
 class _WorkflowDefaults:
     def load(self, blueprint_uid, version):
-        assert (blueprint_uid, version) == ("default-character", 2)
+        assert (blueprint_uid, version) == ("default-character", 3)
         return SimpleNamespace(
             checkpoint="model.safetensors",
             sampler=SimpleNamespace(
@@ -677,6 +680,7 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
     client, _container = _client()
 
     catalog = client.get("/api/v2/catalog/components")
+    playground_catalog = client.get("/api/v2/playground/components")
     capabilities = client.get("/api/v2/playground/capabilities")
 
     assert catalog.status_code == 200
@@ -689,6 +693,10 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "positive_atoms": [{"text": "positive character-a", "weight": 1.0}],
         "negative_atoms": [{"text": "negative", "weight": 1.0}],
     }
+    assert playground_catalog.status_code == 200
+    assert playground_catalog.json()["components"][0]["component_uid"] == (
+        "character-a"
+    )
     assert capabilities.json() == {
         "checkpoints": ["model.safetensors"],
         "samplers": ["euler"],
@@ -917,6 +925,10 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
         "positive_atoms": [{"text": "edited positive", "weight": 1.0}],
         "negative_atoms": [{"text": "edited negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
+        "blueprint_uid": "default-character",
+        "blueprint_version": 3,
+        "image_width": 768,
+        "image_height": 1152,
         "sampler": {
             "seed": 42,
             "steps": 24,
@@ -949,6 +961,8 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
         "revision-scene-a",
     )
     assert draft.output_subdirectory == "playground/character-a-key"
+    assert (draft.image_width, draft.image_height) == (768, 1152)
+    assert draft.blueprint_version == 3
     assert container.playground_service.confirm_command.component_uids == (
         "character-a",
         "scene-a",

@@ -89,6 +89,28 @@
   font-size: var(--font-size-control);
 }
 
+.settings-content-levels {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface-subtle);
+}
+
+.settings-content-levels legend {
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+  font-weight: 750;
+}
+
+.settings-content-levels label {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
 .settings-field input,
 .settings-field select {
   min-height: 2.5rem;

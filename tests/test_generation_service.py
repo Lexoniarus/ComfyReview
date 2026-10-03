@@ -14,6 +14,7 @@ from comfyreview.application import (
     ComfyUiRejectionError,
     ComfyUiSubmission,
     ComfyUiTimeoutError,
+    GenerationCanvas,
     GenerationLoraSelection,
     GenerationMutationError,
     GenerationOutputPolicy,
@@ -278,6 +279,10 @@ def test_generation_service_submits_without_open_external_transaction() -> (
                 loras=(GenerationLoraSelection("", 1000, 1000, 0),),
             ),
             "name",
+        ),
+        (
+            replace(_request(), canvas=GenerationCanvas(65, 1024)),
+            "image dimensions",
         ),
     ),
 )

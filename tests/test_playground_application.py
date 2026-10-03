@@ -8,15 +8,18 @@ import pytest
 
 from comfyreview.application import (
     ConfirmPlaygroundDraftCommand,
+    ContentLevel,
     ManualPromptSelection,
     PlaygroundService,
     PromptComponent,
+    PromptContentPolicy,
     PromptDraftOverrides,
     PromptRenderer,
     PromptRevision,
     PromptSelectionCommand,
     PromptSelectionError,
     PromptSelectionPolicy,
+    WorkspacePreferences,
 )
 from comfyreview.domain import prompt_atom_usages_from_text
 
@@ -496,15 +499,73 @@ class _CatalogService:
         return self.components[:2]
 
 
+class _Preferences:
+    def __init__(self, value: WorkspacePreferences | None = None) -> None:
+        self.value = value or WorkspacePreferences()
+
+    def get(self) -> WorkspacePreferences:
+        return self.value
+
+    def save(self, preferences: WorkspacePreferences) -> WorkspacePreferences:
+        self.value = preferences
+        return preferences
+
+
+def _service(catalog: _CatalogService) -> PlaygroundService:
+    return PlaygroundService(
+        catalog=catalog,
+        selection_policy=PromptSelectionPolicy(),
+        renderer=PromptRenderer(),
+        preferences=_Preferences(),
+        content_policy=PromptContentPolicy(),
+    )
+
+
+def test_playground_content_policy_filters_explicit_levels() -> None:
+    components = (
+        _component("character-a", "character", tags=("adult",)),
+        _component(
+            "modifier-nude",
+            "modifier",
+            tags=("nsfw_level_nude",),
+        ),
+    )
+    policy = PromptContentPolicy()
+
+    standard = policy.filter(components, (ContentLevel.STANDARD,))
+    nude = policy.filter(
+        components,
+        (ContentLevel.STANDARD, ContentLevel.NUDE),
+    )
+
+    assert tuple(component.component_uid for component in standard) == (
+        "character-a",
+    )
+    assert tuple(component.component_uid for component in nude) == (
+        "character-a",
+        "modifier-nude",
+    )
+
+
+def test_playground_content_policy_rejects_conflicting_levels() -> None:
+    component = _component(
+        "modifier-conflict",
+        "modifier",
+        tags=("nsfw_level_suggestive", "nsfw_level_nude"),
+    )
+
+    with pytest.raises(PromptSelectionError, match="conflicting"):
+        PromptContentPolicy().filter(
+            (component,),
+            (ContentLevel.STANDARD, ContentLevel.SEXY, ContentLevel.NUDE),
+        )
+
+
 def test_playground_service_prepares_draft_without_generation_submission() -> (
     None
 ):
     catalog = _CatalogService(_catalog())
-    service = PlaygroundService(
-        catalog=catalog,
-        selection_policy=PromptSelectionPolicy(),
-        renderer=PromptRenderer(),
-    )
+    service = _service(catalog)
 
     draft = service.prepare_draft(
         PromptSelectionCommand(
@@ -536,11 +597,7 @@ def test_playground_service_revalidates_confirmed_draft_and_derives_revisions() 
     catalog = _CatalogService(
         tuple(component for component in _catalog() if not component.archived)
     )
-    service = PlaygroundService(
-        catalog=catalog,
-        selection_policy=PromptSelectionPolicy(),
-        renderer=PromptRenderer(),
-    )
+    service = _service(catalog)
 
     draft = service.confirm_draft(
         ConfirmPlaygroundDraftCommand(
@@ -565,11 +622,7 @@ def test_playground_service_restores_exact_revisions_and_compositions() -> (
     None
 ):
     catalog = _CatalogService(_catalog())
-    service = PlaygroundService(
-        catalog=catalog,
-        selection_policy=PromptSelectionPolicy(),
-        renderer=PromptRenderer(),
-    )
+    service = _service(catalog)
 
     revision_draft = service.prepare_revision_draft(
         ("revision-character-a", "revision-scene-night")
@@ -586,6 +639,24 @@ def test_playground_service_restores_exact_revisions_and_compositions() -> (
     )
 
 
+def test_playground_service_rejects_disabled_exact_revision_handoff() -> None:
+    catalog = _CatalogService(
+        (
+            _component("character-a", "character"),
+            _component(
+                "modifier-nude",
+                "modifier",
+                tags=("nsfw_level_nude",),
+            ),
+        )
+    )
+
+    with pytest.raises(PromptSelectionError, match="disabled content level"):
+        _service(catalog).prepare_revision_draft(
+            ("revision-character-a", "revision-modifier-nude")
+        )
+
+
 @pytest.mark.parametrize(
     ("revision_uids", "message"),
     (
@@ -600,11 +671,7 @@ def test_playground_service_rejects_invalid_revision_handoffs(
     revision_uids: tuple[str, ...],
     message: str,
 ) -> None:
-    service = PlaygroundService(
-        catalog=_CatalogService(_catalog()),
-        selection_policy=PromptSelectionPolicy(),
-        renderer=PromptRenderer(),
-    )
+    service = _service(_CatalogService(_catalog()))
 
     with pytest.raises(PromptSelectionError, match=message):
         service.prepare_revision_draft(revision_uids)
@@ -619,11 +686,7 @@ def test_playground_service_rejects_duplicate_kinds_in_exact_handoff() -> None:
             _component("character-b", "character"),
         )
     )
-    service = PlaygroundService(
-        catalog=catalog,
-        selection_policy=PromptSelectionPolicy(),
-        renderer=PromptRenderer(),
-    )
+    service = _service(catalog)
 
     with pytest.raises(
         PromptSelectionError, match="duplicate prompt component kind"

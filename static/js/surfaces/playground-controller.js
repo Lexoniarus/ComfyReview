@@ -57,7 +57,7 @@ export class PlaygroundController {
       const [catalog, capabilities, profiles, combinations] =
         await this.requests.run((signal) =>
           Promise.all([
-            this.api.get("catalog/components", { signal }),
+            this.api.get("playground/components", { signal }),
             this.api.get("playground/capabilities", { signal }),
             this.api.get("settings/generation-profiles", { signal }),
             this.api.get("playground/top-combinations", { signal }),

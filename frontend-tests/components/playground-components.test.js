@@ -78,6 +78,10 @@ describe("Playground browser components", () => {
 
     expect(controls.value()).toEqual({
       checkpoint: "model.safetensors",
+      blueprint_uid: "default-character",
+      blueprint_version: 3,
+      image_width: 1024,
+      image_height: 1024,
       sampler: {
         seed: 7,
         steps: 24,
@@ -184,6 +188,8 @@ describe("Playground browser components", () => {
         generationProfile({
           profile_uid: "profile-active",
           is_default: true,
+          image_width: 832,
+          image_height: 1216,
         }),
       ],
     });
@@ -198,6 +204,10 @@ describe("Playground browser components", () => {
             clip_strength: 0.6,
           },
         ],
+        blueprint_uid: "default-character",
+        blueprint_version: 3,
+        image_width: 832,
+        image_height: 1216,
         sampler: expect.objectContaining({
           seed: 42,
           steps: 24,
@@ -264,6 +274,10 @@ describe("Playground browser components", () => {
     expect(
       preview.generationPayload({
         checkpoint: "model.safetensors",
+        blueprint_uid: "default-character",
+        blueprint_version: 3,
+        image_width: 768,
+        image_height: 1152,
         sampler: { seed: 1 },
         loras: [{ name: "style.safetensors" }],
       }),
@@ -399,6 +413,8 @@ function generationProfile(overrides = {}) {
     profile_uid: "profile-a",
     name: "Editorial",
     checkpoint: "model-b.safetensors",
+    blueprint_uid: "default-character",
+    blueprint_version: 3,
     sampler: "dpmpp_2m",
     scheduler: "karras",
     seed_mode: "fixed",
@@ -409,6 +425,8 @@ function generationProfile(overrides = {}) {
     cfg_max: 7,
     denoise: 0.9,
     batch_size: 2,
+    image_width: 768,
+    image_height: 1152,
     loras: [
       {
         name: "style.safetensors",

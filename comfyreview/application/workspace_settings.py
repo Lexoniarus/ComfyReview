@@ -2,14 +2,38 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from typing import Protocol
+from enum import StrEnum
+from types import MappingProxyType
+from typing import Final, Protocol
 
 from comfyreview.application.generation import GenerationLoraSelection
 
 
 class WorkspaceSettingsValidationError(ValueError):
     """Reject invalid workspace preferences or generation profiles."""
+
+
+class ContentLevel(StrEnum):
+    """Name one ordered workspace content level."""
+
+    STANDARD = "standard"
+    SEXY = "sexy"
+    LEWD = "lewd"
+    NUDE = "nude"
+    EXPLICIT = "explicit"
+
+
+CONTENT_LEVEL_TAGS: Final[Mapping[str, ContentLevel]] = MappingProxyType(
+    {
+        "nsfw_level_suggestive": ContentLevel.SEXY,
+        "nsfw_level_partial": ContentLevel.LEWD,
+        "nsfw_level_nude": ContentLevel.NUDE,
+        "nsfw_level_explicit_exposure": ContentLevel.EXPLICIT,
+        "nsfw_level_explicit_act": ContentLevel.EXPLICIT,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +55,8 @@ class GenerationProfile:
     cfg_max_milli: int
     denoise_milli: int
     batch_size: int
+    image_width: int = 1024
+    image_height: int = 1024
     loras: tuple[GenerationLoraSelection, ...] = ()
     archived: bool = False
     is_default: bool = False
@@ -48,6 +74,7 @@ class WorkspacePreferences:
     review_max_attempts: int = 50
     default_curation_set_key: str | None = None
     curation_set_order: tuple[str, ...] = ()
+    enabled_content_levels: tuple[ContentLevel, ...] = (ContentLevel.STANDARD,)
 
 
 class PreferencesRepository(Protocol):
@@ -146,6 +173,20 @@ class WorkspacePreferencesService:
         if preferences.review_max_attempts < 1:
             raise WorkspaceSettingsValidationError(
                 "review attempts must be positive"
+            )
+        levels = preferences.enabled_content_levels
+        if not levels or levels[0] is not ContentLevel.STANDARD:
+            raise WorkspaceSettingsValidationError(
+                "content levels must start with standard"
+            )
+        if len(set(levels)) != len(levels):
+            raise WorkspaceSettingsValidationError(
+                "content levels contain duplicates"
+            )
+        allowed_level_order = tuple(ContentLevel)
+        if tuple(sorted(levels, key=allowed_level_order.index)) != levels:
+            raise WorkspaceSettingsValidationError(
+                "content levels must follow the canonical order"
             )
         if len(set(preferences.curation_set_order)) != len(
             preferences.curation_set_order
@@ -258,6 +299,11 @@ class GenerationProfileService:
             raise WorkspaceSettingsValidationError(
                 "batch size must be positive"
             )
+        for value in (profile.image_width, profile.image_height):
+            if value < 64 or value > 4096 or value % 8:
+                raise WorkspaceSettingsValidationError(
+                    "image dimensions must be multiples of 8 between 64 and 4096"
+                )
         expected_positions = tuple(range(len(profile.loras)))
         if (
             tuple(item.position for item in profile.loras)

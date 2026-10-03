@@ -223,7 +223,7 @@ function createFixture(options = {}) {
       return Promise.resolve(
         path.startsWith("images/")
           ? options.image
-          : path === "catalog/components"
+          : path === "playground/components"
             ? { components: [{ component_uid: "a" }] }
             : path === "playground/top-combinations"
               ? { two_component: [] }

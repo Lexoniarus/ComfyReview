@@ -26,6 +26,12 @@ export class GenerationProfileEditor {
     form.className = "settings-form";
     const grid = document.createElement("div");
     grid.className = "settings-profile-grid";
+    const resolution = this.#select(
+      "resolution_preset",
+      "Auflösungsprofil",
+      resolutionOptions(),
+      resolutionKey(value.image_width, value.image_height),
+    );
     grid.append(
       this.#input("name", "Name", value.name),
       this.#select(
@@ -57,7 +63,15 @@ export class GenerationProfileEditor {
       this.#number("cfg_max", "CFG bis", value.cfg_max, "0.1"),
       this.#number("denoise", "Denoise", value.denoise, "0.01"),
       this.#number("batch_size", "Batchgröße", value.batch_size, "1"),
+      resolution,
+      this.#number("image_width", "Breite", value.image_width, "8"),
+      this.#number("image_height", "Höhe", value.image_height, "8"),
     );
+    this.fields
+      .get("resolution_preset")
+      ?.addEventListener("change", () => this.#applyResolutionPreset(), {
+        signal: this.abortController.signal,
+      });
     this.loras.render(value.loras || [], capabilities.loras || []);
     const actions = document.createElement("div");
     actions.className = "settings-actions";
@@ -101,7 +115,7 @@ export class GenerationProfileEditor {
     return {
       name: this.#text("name"),
       blueprint_uid: "default-character",
-      blueprint_version: 2,
+      blueprint_version: 3,
       checkpoint: this.#text("checkpoint"),
       sampler: this.#text("sampler"),
       scheduler: this.#text("scheduler"),
@@ -116,6 +130,8 @@ export class GenerationProfileEditor {
       cfg_max: this.#numberValue("cfg_max"),
       denoise: this.#numberValue("denoise"),
       batch_size: this.#integer("batch_size"),
+      image_width: this.#integer("image_width"),
+      image_height: this.#integer("image_height"),
       loras: this.loras.value(),
     };
   }
@@ -186,6 +202,18 @@ export class GenerationProfileEditor {
   #numberValue(name) {
     return Number.parseFloat(this.#text(name));
   }
+
+  #applyResolutionPreset() {
+    const [width, height] = this.#text("resolution_preset")
+      .split("x")
+      .map(Number);
+    if (Number.isInteger(width) && Number.isInteger(height)) {
+      const widthField = this.fields.get("image_width");
+      const heightField = this.fields.get("image_height");
+      if (widthField) widthField.value = String(width);
+      if (heightField) heightField.value = String(height);
+    }
+  }
 }
 
 /** @param {Record<string, any>} capabilities */
@@ -203,10 +231,29 @@ function newProfile(capabilities) {
     cfg_max: 7,
     denoise: 1,
     batch_size: 1,
+    image_width: 1024,
+    image_height: 1024,
     archived: false,
     is_default: false,
     loras: [],
   };
+}
+
+function resolutionOptions() {
+  return [
+    { value: "1024x1024", label: "Quadrat · 1024 × 1024" },
+    { value: "768x1152", label: "Charakterportrait · 768 × 1152" },
+    { value: "1280x720", label: "Scene / CG · 1280 × 720" },
+    { value: "720x1280", label: "VN-Sprite · 720 × 1280" },
+  ];
+}
+
+/** @param {number} width @param {number} height */
+function resolutionKey(width, height) {
+  const key = `${Number(width)}x${Number(height)}`;
+  return resolutionOptions().some((option) => option.value === key)
+    ? key
+    : "1024x1024";
 }
 
 /** @param {string} label */

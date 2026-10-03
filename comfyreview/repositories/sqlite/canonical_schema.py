@@ -17,7 +17,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -490,6 +490,19 @@ _REQUIRED_LORA_COLUMNS_V8 = {
     "clip_strength_milli",
 }
 
+_REQUIRED_OBJECTS_V9 = {
+    **_REQUIRED_OBJECTS_V8,
+    "workspace_content_levels": "table",
+}
+_REQUIRED_WORKSPACE_CONTENT_LEVEL_COLUMNS_V9 = {
+    "singleton_id",
+    "level",
+    "position",
+}
+_REQUIRED_GENERATION_PROFILE_COLUMNS_V9 = (
+    _REQUIRED_GENERATION_PROFILE_COLUMNS_V8 | {"image_width", "image_height"}
+)
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -537,10 +550,10 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4, 5, 6, 7}:
+        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1, 2, 3, 4, 5, 6, 7, or "
+                f"{current_version}; expected 1, 2, 3, 4, 5, 6, 7, 8, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -556,8 +569,10 @@ class CanonicalSchemaManager:
             self._validate_version_five()
         elif current_version == 6:
             self._validate_version_six()
-        else:
+        elif current_version == 7:
             self._validate_version_seven()
+        else:
+            self._validate_version_eight()
 
         backup_path = self._create_backup(backup_directory)
         committed = False
@@ -578,7 +593,9 @@ class CanonicalSchemaManager:
                     self._upgrade_v5_to_v6(connection)
                 if current_version <= 6:
                     self._upgrade_v6_to_v7(connection)
-                skipped_lora_items = self._upgrade_v7_to_v8(connection)
+                if current_version <= 7:
+                    skipped_lora_items = self._upgrade_v7_to_v8(connection)
+                self._upgrade_v8_to_v9(connection)
                 connection.commit()
                 committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
@@ -641,6 +658,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v7_to_v8(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v8_to_v9(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -653,7 +673,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3, 4, 5, 6, 7}:
+            if version in {1, 2, 3, 4, 5, 6, 7, 8}:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -788,6 +808,25 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_eight(self) -> None:
+        connection = self._open_read_only()
+        try:
+            version = self._schema_version(connection)
+            if version != 8:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 8 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V8)
+            self._validate_metadata_version(connection, 8)
+            self._validate_generation_columns(connection)
+            self._validate_output_identity_v6(connection)
+            self._validate_prompt_catalog_v5(connection)
+            self._validate_prompt_catalog_v7(connection)
+            self._validate_workspace_settings_v8(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -796,13 +835,14 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V8)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V9)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
         self._validate_prompt_catalog_v5(connection)
         self._validate_prompt_catalog_v7(connection)
         self._validate_workspace_settings_v8(connection)
+        self._validate_workspace_settings_v9(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -1438,6 +1478,52 @@ class CanonicalSchemaManager:
         return skipped_lora_items
 
     @staticmethod
+    def _upgrade_v8_to_v9(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "ALTER TABLE generation_profiles ADD COLUMN "
+            "image_width INTEGER NOT NULL DEFAULT 1024 "
+            "CHECK (image_width BETWEEN 64 AND 4096 AND image_width % 8 = 0)"
+        )
+        connection.execute(
+            "ALTER TABLE generation_profiles ADD COLUMN "
+            "image_height INTEGER NOT NULL DEFAULT 1024 "
+            "CHECK (image_height BETWEEN 64 AND 4096 AND image_height % 8 = 0)"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN image_width INTEGER "
+            "CHECK (image_width IS NULL OR "
+            "(image_width BETWEEN 64 AND 4096 AND image_width % 8 = 0))"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN image_height INTEGER "
+            "CHECK (image_height IS NULL OR "
+            "(image_height BETWEEN 64 AND 4096 AND image_height % 8 = 0))"
+        )
+        connection.execute(
+            """
+            CREATE TABLE workspace_content_levels (
+                singleton_id INTEGER NOT NULL DEFAULT 1
+                    REFERENCES workspace_preferences(singleton_id)
+                    ON DELETE CASCADE,
+                level TEXT NOT NULL
+                    CHECK (level IN ('standard', 'sexy', 'lewd', 'nude', 'explicit')),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                PRIMARY KEY (singleton_id, position),
+                UNIQUE (singleton_id, level)
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO workspace_content_levels(singleton_id, level, position) "
+            "VALUES (1, 'standard', 0)"
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '9' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 9")
+
+    @staticmethod
     def _legacy_lora_selections(
         payload: str,
     ) -> tuple[tuple[tuple[str, int, int], ...], int]:
@@ -1982,6 +2068,42 @@ class CanonicalSchemaManager:
                 "generation profiles are missing stable UID uniqueness"
             )
 
+    @classmethod
+    def _validate_workspace_settings_v9(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        profile_columns = cls._table_column_rows(
+            connection,
+            "generation_profiles",
+        )
+        generation_columns = cls._table_column_rows(connection, "generations")
+        level_columns = cls._table_column_rows(
+            connection,
+            "workspace_content_levels",
+        )
+        missing = sorted(
+            (_REQUIRED_GENERATION_PROFILE_COLUMNS_V9 - profile_columns.keys())
+            | ({"image_width", "image_height"} - generation_columns.keys())
+            | (
+                _REQUIRED_WORKSPACE_CONTENT_LEVEL_COLUMNS_V9
+                - level_columns.keys()
+            )
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical content and resolution settings are missing "
+                "required columns: " + ", ".join(missing)
+            )
+        levels = connection.execute(
+            "SELECT level FROM workspace_content_levels "
+            "WHERE singleton_id = 1 ORDER BY position"
+        ).fetchall()
+        if not levels or levels[0] != ("standard",):
+            raise CanonicalSchemaValidationError(
+                "workspace content levels must start with standard"
+            )
+
     def _is_valid_version(self, version: int) -> bool:
         try:
             if version == 1:
@@ -1998,6 +2120,8 @@ class CanonicalSchemaManager:
                 self._validate_version_six()
             elif version == 7:
                 self._validate_version_seven()
+            elif version == 8:
+                self._validate_version_eight()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):
