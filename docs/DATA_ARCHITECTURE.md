@@ -1,10 +1,10 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v8 and the live historical-data completion are
+Status: canonical schema v9 and the live historical-data completion are
 implemented for images, reviews, Arena, Curation, revisioned prompts and
-native generation outputs on the active refactor branch, 2026-10-02. Catalog
+native generation outputs on the active refactor branch, 2026-10-03. Catalog
 authoring and Playground drafts use structured prompt atoms; workspace
-preferences, generation profiles and LoRA usage are canonical.
+preferences, content levels, generation profiles and LoRA usage are canonical.
 
 ## 1. Source-of-truth rule
 
@@ -22,12 +22,12 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v8
+## 2. Canonical schema v9
 
 The canonical database uses explicit schema metadata and foreign keys. Schema
-v8 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
-output provenance, v7 normalized prompt-revision atom usages and v8 workspace
-settings/generation profiles:
+v9 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
+output provenance, v7 normalized prompt-revision atom usages, v8 workspace
+settings/generation profiles and v9 content/canvas settings:
 
 - `generations` and normalized generation provenance;
 - `images` with stable UID, output role, content hash, current paths and
@@ -42,13 +42,15 @@ settings/generation profiles:
 - `prompt_compositions` and their concrete revision membership;
 - singleton `workspace_preferences` and ordered
   `workspace_curation_set_order`;
+- ordered `workspace_content_levels`, beginning with mandatory `standard`;
 - stable-UID `generation_profiles` and ordered
   `generation_profile_loras`;
+- explicit width/height on generation profiles and concrete generations;
 - normalized `generation_loras` recording the exact LoRA stack used;
 - rebuildable current-state and aggregate views.
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
-a v3-to-v4, v4-to-v5, v5-to-v6, v6-to-v7 or v7-to-v8 migration. The explicit,
+a v3-to-v4, v4-to-v5, v5-to-v6, v6-to-v7, v7-to-v8 or v8-to-v9 migration. The explicit,
 backed-up command is:
 
 ```text
@@ -179,7 +181,7 @@ unlinked: two have ambiguous expression evidence and fourteen have no
 sufficient catalog evidence. There were no conflicts. These are observed data
 results, not hard-coded importer expectations.
 
-## 5.2 Workspace preferences, profiles and LoRA usage
+## 5.2 Workspace preferences, content, profiles and LoRA usage
 
 Schema v8 stores one typed workspace-preference row plus an ordered list of
 visible Curation sets. Preferences affect presentation/session defaults; they
@@ -195,6 +197,15 @@ The ComfyUI provider still receives only a compiled graph. Historical
 `loras_json` is retained as provenance; the explicit v7-to-v8 upgrade imports
 only unambiguous supported values and reports unsupported values rather than
 inventing normalized facts.
+
+Schema v9 adds an ordered content-level relation and validated image width and
+height fields. Content visibility is evaluated from canonical composition
+memberships and authored component tags in shared SQLite repository logic.
+The same predicate gates ranking, review candidates, Arena pairs, Scope facets,
+Analytics, Catalog evidence and Playground selection. It never reads paths,
+sidecars, full prompts or pixels. Unrecognized tags remain Standard so that
+classification gaps are visible catalog-data work rather than hidden runtime
+heuristics.
 
 ## 6. Audited historical output import
 
@@ -272,9 +283,9 @@ Normal runtime startup neither opens nor initializes these files. Known
 additive changes require the explicit `python -m comfyreview legacy-db upgrade`
 command.
 
-## 10. Completed canonical data migration and schema-v8 cutover
+## 10. Completed canonical data migration and schema-v9 cutover
 
-The live schema-v8 database contains 379 generations, 379 images, 379
+The live schema-v9 database contains 379 generations, 379 images, 379
 sampler stages, 729 prompt components, 729 immutable first revisions, 275
 recovered compositions and 1,280 ordered composition memberships. All 379
 images have output role, output index and a verified content hash. The existing
@@ -289,7 +300,10 @@ ordered revision atom usages. The later explicit v7-to-v8 upgrade was
 rehearsed on a database copy, backed up and applied with the application
 stopped. It added workspace preferences, generation profiles and normalized
 profile/generation LoRA relations without changing stable image, generation,
-component, revision or composition IDs. Final `user_version` is 8,
+component, revision or composition IDs. The explicit v8-to-v9 upgrade was
+rehearsed on a read-safe SQLite copy, backed up and applied with ComfyReview
+stopped on 2026-10-03. It preserved all 379 generation/image identities and
+added content/canvas settings. Final `user_version` is 9,
 `integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
 pre-v7 backup remains schema v6 with all 729 revisions.
 

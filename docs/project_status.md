@@ -9,7 +9,7 @@ ES-module Frontend V2.
 
 ## Implemented state
 
-- canonical schema v8 with stable image/generation identity;
+- canonical schema v9 with stable image/generation identity;
 - append-only Review events and rebuildable current-state/ranking views;
 - UID-based Arena and Curation;
 - audited, idempotent historical Output, Prompt, Feature and Composition
@@ -25,7 +25,7 @@ ES-module Frontend V2.
 - Frontend V2 for Review, Top/Worst, Arena, Playground, Catalog, Generations,
   Analytics and Settings;
 - workspace preferences and reusable generation profiles with ordered LoRA
-  stacks;
+  stacks, explicit canvas sizes and cumulative content visibility;
 - shared Python/frontend quality gate with architecture tests, coverage and
   Playwright browser acceptance.
 
@@ -36,10 +36,15 @@ sidecars and path relationships are available solely to explicit offline
 audit/import tools. Paths are attributes, not identity, and no cut-over feature
 dual-writes legacy state.
 
-New generation uses standard ComfyUI output nodes plus Blueprint v2. The
+New generation uses standard ComfyUI output nodes plus Blueprint v3. The
 compiler owns prompt, sampler, output-role and LoRA graph semantics; the
 provider owns only transport, job state, capabilities and raw output
 descriptors.
+
+One canonical catalog-tag policy controls content visibility across Top/Worst,
+Review, Arena, Scopes, Analytics, Catalog evidence and Playground. The browser
+does not filter an already-loaded superset, and no runtime path/prompt heuristic
+acts as a second classification truth.
 
 ## Remaining acceptance
 

@@ -116,7 +116,7 @@ that prompt in ComfyUI and attach it explicitly with `--prompt-id PROMPT_ID`.
 | **Playground** | Prompt and value handoff back into ComfyUI |
 | **Catalog** | Prompt components, immutable revisions and archive state |
 | **Generations** | Lifecycle, reconciliation, provenance and all outputs |
-| **Settings** | Workspace preferences, generation profiles, LoRA stacks and diagnostics |
+| **Settings** | Workspace preferences, content levels, generation profiles, canvas sizes, LoRA stacks and diagnostics |
 
 ---
 
@@ -246,13 +246,16 @@ remains in the unchanged generation snapshot; it is not invented as a new
 catalog revision. Ambiguous or incomplete evidence remains unlinked and is
 reported rather than guessed.
 
-The active schema is v8. Prompt Catalog revisions and Playground drafts expose
+The active schema is v9. Prompt Catalog revisions and Playground drafts expose
 ordered positive/negative atom rows with separate numeric weights. Rendered
 whole prompts remain exact provenance snapshots produced by the server; they
-are not a second editable source of truth. Schema v8 additionally stores typed
-workspace preferences, generation profiles and ordered LoRA stacks. Existing
-older databases require the explicit backed-up `canonical-db upgrade` command
-before startup.
+are not a second editable source of truth. Schema v8 stores typed workspace
+preferences, generation profiles and ordered LoRA stacks. Schema v9 adds
+ordered workspace content levels plus explicit generation canvas dimensions.
+Standard content visibility is enforced by canonical repository queries across
+Top/Worst, Review, Arena, Scopes, Analytics, Catalog evidence and Playground;
+the browser does not reimplement that policy. Existing older databases require
+the explicit backed-up `canonical-db upgrade` command before startup.
 
 Audit reports bind source files and databases by hash. Import commands
 revalidate that evidence, create a backup before writing, and commit all writes

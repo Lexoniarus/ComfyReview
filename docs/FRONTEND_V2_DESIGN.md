@@ -89,16 +89,19 @@ Settings uses the same dark navy shell and compact editorial hierarchy as the
 other V2 surfaces. A narrow section navigator remains visible beside one
 focused form region; settings are not spread across modal dialogs.
 
-The surface contains General, Generation profiles, Review, Curation, ComfyUI,
-and Storage and database sections. General preferences and generation profiles
-are live canonical data. Environment-derived infrastructure settings are
-read-only, name their controlling environment variable, and state when a
-restart is required. The browser never writes `.env`.
+The surface contains General, Generation profiles, Content levels, Review,
+Curation, ComfyUI, and Storage and database sections. General preferences,
+content levels and generation profiles are live canonical data.
+Environment-derived infrastructure settings are read-only, name their
+controlling environment variable, and state when a restart is required. The
+browser never writes `.env`.
 
 Generation profiles own reproducible sampler defaults and an ordered LoRA
-stack with separate model and CLIP strengths. Review and Curation settings are
-UI/session defaults only and do not change review-event or assignment
-semantics.
+stack with separate model and CLIP strengths plus a validated canvas preset or
+custom width/height. Content levels begin with mandatory Standard and are
+enforced server-side across all image collections; the browser only edits the
+canonical preference. Review and Curation settings are UI/session defaults only
+and do not change review-event or assignment semantics.
 
 ## Collection and evidence contract
 

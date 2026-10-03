@@ -1,8 +1,8 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover, structured prompt catalog, schema-v8
+Status: the canonical backend cutover, structured prompt catalog, schema-v9
 data migration and Frontend V2 overhaul are implemented on
-`refactor/review-boundary`, 2026-10-02. Analytics collections are bounded,
+`refactor/review-boundary`, 2026-10-03. Analytics collections are bounded,
 Playground handoffs are explicit, generation profiles and ordered LoRA stacks
 are canonical, Settings is a complete product surface, the Inspector is
 composed from focused views and Playwright covers the browser acceptance
@@ -259,7 +259,7 @@ constants.
 - this slice concluded with a valid schema-v7 database; the later explicit
   schema-v8 Settings/Profile upgrade is recorded below.
 
-### Frontend V2 overhaul and schema v8 (completed)
+### Frontend V2 overhaul and schema v9 (completed)
 
 - Analytics collections use deterministic pagination, one lifecycle-owned
   collection controller, stale-request cancellation and bounded lazy image
@@ -268,6 +268,17 @@ constants.
   Playground intent and never create or submit a draft automatically;
 - schema v8 adds typed workspace preferences, generation profiles, ordered
   profile LoRAs and normalized LoRAs actually used by generations;
+- schema v9 adds cumulative workspace content levels and explicit profile/
+  generation canvas dimensions; the upgrade was rehearsed, backed up and
+  applied to the stopped live database without changing the 379 stable image
+  or generation identities;
+- one shared SQLite content predicate gates Top/Worst, Review, Arena, Scopes,
+  Analytics and evidence lists from canonical component tags; browser filters,
+  paths and prompt heuristics are not alternative policy implementations;
+- Playground selection applies the same content policy before draft creation
+  and again when exact revision/composition handoffs are restored;
+- Blueprint v3 maps explicit canvas width/height roles; the compiler validates
+  dimensions while the ComfyUI provider remains graph-semantic-free;
 - Blueprint v2 exposes an explicit LoRA insertion role and the compiler builds
   a deterministic Model/CLIP loader chain without provider-side graph logic;
 - `/settings` owns General, Generation profiles, Review, Curation, ComfyUI and
@@ -278,7 +289,7 @@ constants.
   at once;
 - Playground top combinations use cyclic arrow-controlled evidence carousels;
   native scrollbars are hidden and one to three images fill a bounded card;
-- Playwright runs against a temporary schema-v8 database and fake ComfyUI and
+- Playwright runs against a temporary schema-v9 database and fake ComfyUI and
   covers bounded Analytics, Settings persistence, the Playground carousel and
   the four required viewport sizes;
 - Node 24, ESLint, Prettier, Stylelint, checkJs, Vitest coverage and Playwright

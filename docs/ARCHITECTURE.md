@@ -1,8 +1,8 @@
 # ComfyReview Architecture
 
 Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, live schema-v8 data and Frontend V2 including
-Settings are implemented on the active refactor branch, 2026-10-02. Final user
+analytics, native Generation, live schema-v9 data and Frontend V2 including
+Settings are implemented on the active refactor branch, 2026-10-03. Final user
 acceptance and integration review remain open.
 
 ## 1. Product boundary
@@ -41,11 +41,12 @@ only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v8 is the active
+The canonical database has an explicit schema version. Schema v9 is the active
 shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
 catalog, records v6 native output roles/content hashes, normalizes ordered
 prompt-revision atom usages in v7 and adds workspace preferences, generation
-profiles and normalized LoRA relations in v8. Stable `image_uid`
+profiles and normalized LoRA relations in v8. Schema v9 adds ordered workspace
+content levels and explicit generation canvas dimensions. Stable `image_uid`
 and `generation_uid` values are identity; PNG and optional sidecar paths are
 mutable attributes.
 
@@ -68,6 +69,13 @@ Profiles own sampler defaults, range policies, seed policy, batch size and an
 ordered LoRA stack with separate Model and CLIP strengths. Generations record
 the exact LoRAs they actually used. Historical `loras_json` remains provenance,
 not a second writable runtime contract.
+
+Schema v9 stores the enabled content-level sequence and the width/height owned
+by generation profiles and concrete generation requests. One focused SQLite
+predicate applies the same authored catalog-tag policy to every image-bearing
+read model. Services and browser surfaces do not duplicate OR/AND or content
+visibility semantics, and no path, prompt substring or image inspection is
+used to infer a missing level at runtime.
 
 `images.deleted_at`, `current_image_reviews`, `image_review_summary` and ranking
 results are projections derived from canonical facts. The old `image_reviews`
@@ -280,6 +288,13 @@ ComfyUI capability cache. The Settings HTTP and browser layers do not read or
 write `.env`, open SQLite or call ComfyUI directly. Connection checks are
 explicit provider calls; ordinary Settings reads return cached capability state
 without blocking on the external service.
+
+Content levels are cumulative user choices beginning with mandatory
+`standard`. The policy recognizes explicit `nsfw_level_*` tags and the authored
+catalog tags `suggestive`, `seductive`, `sensual`, `lingerie` and `lewd`.
+Unknown and malformed legacy tags remain Standard rather than being guessed.
+Generation profiles also own a validated canvas width and height; Blueprint v3
+maps those values through explicit compiler roles.
 
 ### 10.2 Structured prompt boundary
 
