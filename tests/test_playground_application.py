@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -24,6 +26,10 @@ from comfyreview.application import (
     WorkspacePreferences,
 )
 from comfyreview.domain import prompt_atom_usages_from_text
+from comfyreview.repositories.sqlite import (
+    CanonicalSchemaManager,
+    SqlitePromptCatalogRepository,
+)
 
 
 def _component(
@@ -114,6 +120,393 @@ def test_prompt_selection_policy_selects_reproducible_compatible_revisions() -> 
         "modifier",
     )
     assert first.components[-1].component_uid == "modifier-a"
+
+
+def test_playground_fixed_revision_uses_exact_revision_projection() -> None:
+    latest_component = _component(
+        "character-a", "character", positive="latest character prompt"
+    )
+    exact_revision = PromptRevision(
+        revision_uid="revision-character-a-old",
+        revision_number=1,
+        positive_text="historical character prompt",
+        negative_text="historical negative",
+        content_hash="historical-hash",
+        positive_atoms=prompt_atom_usages_from_text(
+            "historical character prompt"
+        ),
+        negative_atoms=prompt_atom_usages_from_text("historical negative"),
+    )
+    exact_projection = replace(
+        latest_component,
+        latest_revision=exact_revision,
+    )
+    catalog = _CatalogService(
+        (latest_component,),
+        exact_revisions=(exact_projection,),
+    )
+
+    draft = _service(catalog).prepare_draft(
+        PromptSelectionCommand(
+            "character-a",
+            disabled_kinds=(
+                "scene",
+                "outfit",
+                "pose",
+                "expression",
+                "lighting",
+                "modifier",
+            ),
+            character_revision_uid="revision-character-a-old",
+        )
+    )
+
+    assert draft.prompt.revision_uids == ("revision-character-a-old",)
+    assert draft.prompt.positive_text == "historical character prompt"
+    assert draft.prompt.negative_text == "historical negative"
+    assert draft.prompt.positive_atoms == exact_revision.positive_atoms
+    assert catalog.components[0].latest_revision.revision_uid == (
+        "revision-character-a"
+    )
+
+
+def test_playground_fixed_manual_selection_uses_exact_revision() -> None:
+    character = _component("character-a", "character")
+    latest_scene = _component("scene-a", "scene", positive="latest scene")
+    exact_scene = replace(
+        latest_scene,
+        latest_revision=replace(
+            latest_scene.latest_revision,
+            revision_uid="revision-scene-old",
+            positive_text="historical scene",
+            positive_atoms=prompt_atom_usages_from_text("historical scene"),
+        ),
+    )
+    catalog = _CatalogService(
+        (character, latest_scene),
+        exact_revisions=(exact_scene,),
+    )
+
+    draft = _service(catalog).prepare_draft(
+        PromptSelectionCommand(
+            "character-a",
+            manual_selections=(
+                ManualPromptSelection(
+                    "scene",
+                    "scene-a",
+                    "revision-scene-old",
+                ),
+            ),
+            disabled_kinds=(
+                "outfit",
+                "pose",
+                "expression",
+                "lighting",
+                "modifier",
+            ),
+        )
+    )
+
+    assert draft.prompt.revision_uids == (
+        "revision-character-a",
+        "revision-scene-old",
+    )
+    assert draft.prompt.positive_text == "historical scene"
+
+
+def test_playground_fixed_revision_rejects_revision_kind_mismatch() -> None:
+    character = _component("character-a", "character")
+    scene = _component("scene-a", "scene")
+    scene_projection = replace(
+        scene,
+        latest_revision=replace(
+            scene.latest_revision,
+            revision_uid="revision-scene",
+        ),
+    )
+    catalog = _CatalogService(
+        (character, scene),
+        exact_revisions=(scene_projection,),
+    )
+
+    with pytest.raises(
+        PromptSelectionError, match="revision component is not"
+    ):
+        _service(catalog).prepare_draft(
+            PromptSelectionCommand(
+                "scene-a",
+                disabled_kinds=(
+                    "scene",
+                    "outfit",
+                    "pose",
+                    "expression",
+                    "lighting",
+                    "modifier",
+                ),
+                character_revision_uid="revision-scene",
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("component_uid", "revision_uid", "message"),
+    (
+        ("", "revision-character-a", "requires component_uid"),
+        ("character-a", " ", "requires revision_uid"),
+    ),
+)
+def test_playground_fixed_revision_rejects_missing_identity_parts(
+    component_uid: str,
+    revision_uid: str,
+    message: str,
+) -> None:
+    with pytest.raises(PromptSelectionError, match=message):
+        _service(_CatalogService(_catalog())).prepare_draft(
+            PromptSelectionCommand(
+                component_uid,
+                character_revision_uid=revision_uid,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("component_uid", "revision_uid", "component_archived", "message"),
+    (
+        (
+            "character-a",
+            "revision-scene",
+            False,
+            "does not belong to component",
+        ),
+        ("character-a", "missing-revision", False, "unknown prompt revision"),
+        (
+            "character-a",
+            "revision-character-archived",
+            True,
+            "unknown active prompt component",
+        ),
+    ),
+)
+def test_playground_fixed_revision_rejects_invalid_revision_binding(
+    component_uid: str,
+    revision_uid: str,
+    component_archived: bool,
+    message: str,
+) -> None:
+    character = _component(
+        "character-a", "character", archived=component_archived
+    )
+    scene = _component("scene-a", "scene")
+    archived_projection = replace(
+        character,
+        latest_revision=replace(
+            character.latest_revision,
+            revision_uid="revision-character-archived",
+        ),
+    )
+    catalog = _CatalogService(
+        (character, scene),
+        exact_revisions=(
+            replace(
+                scene,
+                latest_revision=replace(
+                    scene.latest_revision,
+                    revision_uid="revision-scene",
+                ),
+            ),
+            archived_projection,
+        ),
+    )
+
+    with pytest.raises(PromptSelectionError, match=message):
+        _service(catalog).prepare_draft(
+            PromptSelectionCommand(
+                component_uid,
+                disabled_kinds=(
+                    "scene",
+                    "outfit",
+                    "pose",
+                    "expression",
+                    "lighting",
+                    "modifier",
+                ),
+                character_revision_uid=revision_uid,
+            )
+        )
+
+
+def test_playground_random_character_keeps_latest_catalog_revision() -> None:
+    latest_component = _component(
+        "character-a", "character", positive="latest prompt"
+    )
+    old_projection = replace(
+        latest_component,
+        latest_revision=replace(
+            latest_component.latest_revision,
+            revision_uid="revision-character-a-old",
+            positive_text="historical prompt",
+            positive_atoms=prompt_atom_usages_from_text("historical prompt"),
+        ),
+    )
+    catalog = _CatalogService(
+        (latest_component,),
+        exact_revisions=(old_projection,),
+    )
+
+    draft = _service(catalog).prepare_draft(
+        PromptSelectionCommand(
+            "",
+            disabled_kinds=(
+                "scene",
+                "outfit",
+                "pose",
+                "expression",
+                "lighting",
+                "modifier",
+            ),
+            seed=17,
+        )
+    )
+
+    assert draft.prompt.revision_uids == ("revision-character-a",)
+    assert draft.prompt.positive_text == "latest prompt"
+
+
+def test_playground_exact_revision_does_not_bypass_content_policy() -> None:
+    restricted_component = _component(
+        "character-a",
+        "character",
+        positive="restricted prompt",
+        content_level=ContentLevel.SEXY,
+    )
+    catalog = _CatalogService(
+        (restricted_component,),
+        exact_revisions=(restricted_component,),
+    )
+
+    with pytest.raises(
+        PromptSelectionError,
+        match="unknown active prompt component",
+    ):
+        _service(catalog).prepare_draft(
+            PromptSelectionCommand(
+                "character-a",
+                disabled_kinds=(
+                    "scene",
+                    "outfit",
+                    "pose",
+                    "expression",
+                    "lighting",
+                    "modifier",
+                ),
+                character_revision_uid="revision-character-a",
+            )
+        )
+
+
+def test_playground_sqlite_fixed_revision_is_exact_without_changing_latest(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    with sqlite3.connect(database_path) as connection:
+        component_id = int(
+            connection.execute(
+                """
+                INSERT INTO prompt_components(
+                    component_uid, kind, component_key, name, tags, notes
+                ) VALUES ('character-a', 'character', 'character_a',
+                          'Character A', '[]', '')
+                RETURNING id
+                """
+            ).fetchone()[0]
+        )
+        revision_ids: dict[str, int] = {}
+        for uid, number, text in (
+            ("revision-character-a-v1", 1, "older atoms"),
+            ("revision-character-a-v2", 2, "latest atoms"),
+        ):
+            revision_ids[uid] = int(
+                connection.execute(
+                    """
+                    INSERT INTO prompt_revisions(
+                        revision_uid, component_id, revision_number,
+                        positive_text, negative_text, content_hash
+                    ) VALUES (?, ?, ?, ?, '', ?)
+                    RETURNING id
+                    """,
+                    (uid, component_id, number, text, f"hash-{number}"),
+                ).fetchone()[0]
+            )
+            connection.execute(
+                "INSERT INTO prompt_atoms(canonical_text) VALUES (?)",
+                (text,),
+            )
+            atom_id = int(
+                connection.execute(
+                    "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                    (text,),
+                ).fetchone()[0]
+            )
+            connection.execute(
+                """
+                INSERT INTO prompt_revision_atom_usages(
+                    revision_id, atom_id, scope, position, weight_milli
+                ) VALUES (?, ?, 'pos', 0, 1000)
+                """,
+                (revision_ids[uid], atom_id),
+            )
+
+    catalog = SqlitePromptCatalogRepository(database_path)
+    playground = PlaygroundService(
+        catalog=catalog,
+        selection_policy=PromptSelectionPolicy(),
+        renderer=PromptRenderer(),
+        preferences=_Preferences(),
+        content_policy=PromptContentPolicy(),
+    )
+    disabled_kinds = (
+        "scene",
+        "outfit",
+        "pose",
+        "expression",
+        "lighting",
+        "modifier",
+    )
+
+    fixed_old = playground.prepare_draft(
+        PromptSelectionCommand(
+            "character-a",
+            disabled_kinds=disabled_kinds,
+            character_revision_uid="revision-character-a-v1",
+        )
+    )
+    fixed_latest = playground.prepare_draft(
+        PromptSelectionCommand(
+            "character-a",
+            disabled_kinds=disabled_kinds,
+        )
+    )
+    random_character = playground.prepare_draft(
+        PromptSelectionCommand(
+            "",
+            disabled_kinds=disabled_kinds,
+            seed=17,
+        )
+    )
+
+    assert fixed_old.prompt.revision_uids == ("revision-character-a-v1",)
+    assert fixed_old.prompt.positive_text == "older atoms"
+    assert fixed_old.prompt.positive_atoms == prompt_atom_usages_from_text(
+        "older atoms"
+    )
+    assert fixed_latest.prompt.revision_uids == ("revision-character-a-v2",)
+    assert fixed_latest.prompt.positive_text == "latest atoms"
+    assert random_character.prompt.revision_uids == (
+        "revision-character-a-v2",
+    )
+    [current] = catalog.list_components(include_archived=False)
+    assert current.latest_revision.revision_uid == "revision-character-a-v2"
 
 
 def test_prompt_selection_policy_supports_random_character_and_disabled_kinds() -> (
@@ -470,8 +863,13 @@ def test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate() -
 
 
 class _CatalogService:
-    def __init__(self, components: tuple[PromptComponent, ...]) -> None:
+    def __init__(
+        self,
+        components: tuple[PromptComponent, ...],
+        exact_revisions: tuple[PromptComponent, ...] = (),
+    ) -> None:
         self.components = components
+        self.exact_revisions = exact_revisions
         self.calls: list[bool] = []
 
     def list_components(
@@ -490,6 +888,12 @@ class _CatalogService:
             component.latest_revision.revision_uid: component
             for component in self.components
         }
+        by_revision.update(
+            {
+                component.latest_revision.revision_uid: component
+                for component in self.exact_revisions
+            }
+        )
         return tuple(
             by_revision[uid] for uid in revision_uids if uid in by_revision
         )

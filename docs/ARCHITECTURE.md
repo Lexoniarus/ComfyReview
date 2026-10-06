@@ -340,10 +340,13 @@ generation row or ComfyUI submission. It requires one ordered loader per
 selection, exact provider filenames/weights, an unbroken Model route to the
 sampler and an unbroken CLIP route to both encoders. The provider still sees
 only the finished graph. `ImageGeneratorHandoffService` independently exposes
-authoritative prompt and render packages for visible image UIDs. Prompt
-handoffs expose stable component IDs so every image-originated transfer fills
-the visible Playground selection controls; historical prompt snapshots remain
-provenance and are not used as a hidden generator input.
+prompt and render packages for visible image UIDs. Prompt handoffs project the
+ordered canonical scopes as typed selections containing kind, stable component
+ID, exact immutable revision ID and composition position; duplicate kinds are
+reported as inconsistent canonical data rather than normalized. Existing
+parallel component/revision ID lists remain compatibility fields. Revision IDs
+resolve the immutable prompt atom usages; historical generation prompt
+snapshots remain separate provenance and are not used as a substitute.
 
 The older multi-file schema lifecycle remains centralized in
 `comfyreview.repositories.sqlite.legacy_schema`. Its explicit
@@ -364,6 +367,9 @@ The canonical cutover is intentionally not the end of the wider refactor.
   `/api/v2/playground/generator-state`. The injected settings service preserves
   the existing server-owned UI-state file, migrates legacy render values on
   first read and keeps explicit cross-surface handoffs as the final override.
+  Fixed prompt selections may also carry an immutable revision UID; when absent
+  the current component revision remains the selection default, while random
+  choices continue to use the active catalog.
 - `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or

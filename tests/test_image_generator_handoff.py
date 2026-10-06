@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 from typing import Any, cast
 
 import pytest
@@ -13,9 +13,11 @@ from comfyreview.application import (
     ComfyUiConnectionError,
     ContentLevel,
     GenerationStageSummary,
+    GeneratorPromptSelection,
     ImageClassification,
     ImageContentClassification,
     ImageGeneratorHandoffService,
+    ImageGeneratorHandoffValidationError,
     ImageGeometryProjection,
     ImageLoraSnapshot,
     ImageScope,
@@ -305,6 +307,111 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
     ).get("image-1")
     assert offline.prompt_setup.issues == ("capabilities_unavailable",)
     assert offline.render_setup.applicable is False
+
+
+def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
+    image = replace(
+        _image_context(),
+        scopes=(
+            ImageScope(
+                ScopeKind.CHARACTER,
+                "character-a",
+                "character-revision-4",
+                "Not a kind hint",
+                0,
+            ),
+            ImageScope(
+                ScopeKind.SCENE,
+                "scene-a",
+                "scene-revision-2",
+                "Scene",
+                1,
+            ),
+            ImageScope(
+                ScopeKind.OUTFIT,
+                "outfit-a",
+                "outfit-revision-3",
+                "Outfit",
+                2,
+            ),
+            ImageScope(
+                ScopeKind.MODIFIER,
+                "modifier-a",
+                "modifier-revision-1",
+                "Modifier",
+                3,
+            ),
+        ),
+    )
+    stage = GenerationStageSummary(
+        "base_sampler", "sampler", 0, 42, 24, 6.5, "euler", "normal", 0.8
+    )
+
+    handoff = ImageGeneratorHandoffService(
+        images=cast(Any, _Images(image)),
+        repository=_Facts(ImageGenerationFacts((stage,), (), {})),
+        capabilities=_Capabilities(),
+    ).get("image-1")
+
+    assert handoff.prompt_setup.selections == (
+        GeneratorPromptSelection(
+            ScopeKind.CHARACTER,
+            "character-a",
+            "character-revision-4",
+            0,
+        ),
+        GeneratorPromptSelection(
+            ScopeKind.SCENE, "scene-a", "scene-revision-2", 1
+        ),
+        GeneratorPromptSelection(
+            ScopeKind.OUTFIT, "outfit-a", "outfit-revision-3", 2
+        ),
+        GeneratorPromptSelection(
+            ScopeKind.MODIFIER, "modifier-a", "modifier-revision-1", 3
+        ),
+    )
+    assert handoff.prompt_setup.component_uids == (
+        "character-a",
+        "scene-a",
+        "outfit-a",
+        "modifier-a",
+    )
+    assert handoff.prompt_setup.revision_uids == (
+        "character-revision-4",
+        "scene-revision-2",
+        "outfit-revision-3",
+        "modifier-revision-1",
+    )
+    with pytest.raises(FrozenInstanceError):
+        handoff.prompt_setup.selections[0].__setattr__("position", 99)
+
+
+def test_image_handoff_rejects_duplicate_prompt_kinds() -> None:
+    image = replace(
+        _image_context(),
+        scopes=(
+            ImageScope(
+                ScopeKind.CHARACTER, "character-a", "revision-a", "Aiko", 0
+            ),
+            ImageScope(ScopeKind.SCENE, "scene-a", "scene-a-1", "Scene", 1),
+            ImageScope(
+                ScopeKind.SCENE, "scene-b", "scene-b-1", "Other scene", 2
+            ),
+        ),
+    )
+    stage = GenerationStageSummary(
+        "base_sampler", "sampler", 0, 42, 24, 6.5, "euler", "normal", 0.8
+    )
+
+    with pytest.raises(
+        ImageGeneratorHandoffValidationError,
+        match="duplicate prompt scope kind: scene",
+    ):
+        ImageGeneratorHandoffService(
+            images=cast(Any, _Images(image)),
+            repository=_Facts(ImageGenerationFacts((stage,), (), {})),
+            capabilities=_Capabilities(),
+        ).get("image-1")
 
 
 def _image_context() -> ImageContext:

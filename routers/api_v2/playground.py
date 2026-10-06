@@ -42,6 +42,7 @@ class PlaygroundSelectionIntent(BaseModel):
     kind: PromptKind
     mode: Literal["fixed", "random", "off"]
     component_uid: str | None = None
+    revision_uid: str | None = None
 
 
 class PlaygroundDraftRequest(BaseModel):
@@ -546,9 +547,19 @@ def selection_command(
     manual: list[ManualPromptSelection] = []
     disabled: list[str] = []
     character_uid = ""
+    character_revision_uid: str | None = None
     for kind in expected:
         selection = by_kind[kind]
         component_uid = str(selection.component_uid or "").strip()
+        revision_uid = (
+            str(selection.revision_uid).strip()
+            if selection.revision_uid is not None
+            else None
+        )
+        if selection.mode != "fixed" and revision_uid is not None:
+            raise PromptSelectionError(
+                f"{selection.mode} {kind} selection cannot include revision_uid"
+            )
         if selection.mode == "off":
             if kind == "character":
                 raise PromptSelectionError(
@@ -562,14 +573,22 @@ def selection_command(
                 )
             if kind == "character":
                 character_uid = component_uid
+                character_revision_uid = revision_uid
             else:
-                manual.append(ManualPromptSelection(kind, component_uid))
+                manual.append(
+                    ManualPromptSelection(
+                        kind,
+                        component_uid,
+                        revision_uid,
+                    )
+                )
     return PromptSelectionCommand(
         character_component_uid=character_uid,
         manual_selections=tuple(manual),
         disabled_kinds=tuple(disabled),
         seed=concrete_seed,
         max_attempts=payload.max_attempts,
+        character_revision_uid=character_revision_uid,
     )
 
 

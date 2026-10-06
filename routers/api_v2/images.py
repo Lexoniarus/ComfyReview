@@ -11,6 +11,7 @@ from comfyreview.application import (
     ContentClassificationError,
     ContentLevel,
     ImageContextNotFoundError,
+    ImageGeneratorHandoffValidationError,
     ImageLoraSnapshot,
     ImageOrder,
     ImageQuery,
@@ -103,6 +104,10 @@ def image_generator_handoff(request: Request, image_uid: str) -> JSONResponse:
         ).image_generator_handoffs.get(image_uid)
     except ImageQueryValidationError as error:
         return error_response(400, "invalid_image_uid", str(error))
+    except ImageGeneratorHandoffValidationError as error:
+        return error_response(
+            409, "inconsistent_generator_handoff", str(error)
+        )
     except (ImageContextNotFoundError, LookupError) as error:
         return error_response(404, "image_handoff_not_found", str(error))
     prompt = handoff.prompt_setup
@@ -114,6 +119,15 @@ def image_generator_handoff(request: Request, image_uid: str) -> JSONResponse:
             "prompt_setup": {
                 "source_image_uid": prompt.source_image_uid,
                 "availability": prompt.availability,
+                "selections": [
+                    {
+                        "kind": selection.kind.value,
+                        "component_uid": selection.component_uid,
+                        "revision_uid": selection.revision_uid,
+                        "position": selection.position,
+                    }
+                    for selection in prompt.selections
+                ],
                 "component_uids": prompt.component_uids,
                 "revision_uids": prompt.revision_uids,
                 "positive_atoms": [

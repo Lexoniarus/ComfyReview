@@ -21,6 +21,7 @@ from comfyreview.application import (
     EvidenceScore,
     GenerationSettings,
     GenerationSubmission,
+    GeneratorPromptSelection,
     GuidanceBasis,
     GuidanceConfidence,
     GuidanceParameter,
@@ -29,9 +30,11 @@ from comfyreview.application import (
     ImageContentClassification,
     ImageContext,
     ImageContextNotFoundError,
+    ImageGeneratorHandoffValidationError,
     ImagePage,
     ImageScope,
     LoraDefinition,
+    ManualPromptSelection,
     PlaygroundDraft,
     PlaygroundEvidence,
     PlaygroundEvidenceMatch,
@@ -166,14 +169,42 @@ class _ImageGeneratorHandoffs:
     def get(self, image_uid):
         if image_uid == "missing":
             raise ImageContextNotFoundError("missing")
+        if image_uid == "inconsistent":
+            raise ImageGeneratorHandoffValidationError(
+                "duplicate prompt scope kind: scene"
+            )
         return SimpleNamespace(
             image_uid=image_uid,
             generation_uid="generation-1",
             prompt_setup=SimpleNamespace(
                 source_image_uid=image_uid,
                 availability="grouped",
-                component_uids=("character-a", "scene-a"),
-                revision_uids=("revision-character-a", "revision-scene-a"),
+                selections=(
+                    GeneratorPromptSelection(
+                        ScopeKind.CHARACTER, "character-a", "revision-a", 0
+                    ),
+                    GeneratorPromptSelection(
+                        ScopeKind.SCENE, "scene-a", "revision-b", 1
+                    ),
+                    GeneratorPromptSelection(
+                        ScopeKind.OUTFIT, "outfit-a", "revision-c", 2
+                    ),
+                    GeneratorPromptSelection(
+                        ScopeKind.MODIFIER, "modifier-a", "revision-d", 3
+                    ),
+                ),
+                component_uids=(
+                    "character-a",
+                    "scene-a",
+                    "outfit-a",
+                    "modifier-a",
+                ),
+                revision_uids=(
+                    "revision-a",
+                    "revision-b",
+                    "revision-c",
+                    "revision-d",
+                ),
                 positive_atoms=prompt_atom_usages_from_text("hero"),
                 negative_atoms=prompt_atom_usages_from_text("blur"),
                 draft_overridden=False,
@@ -809,11 +840,52 @@ def test_v2_image_generator_handoff_exposes_visible_prompt_components() -> (
     assert response.json()["prompt_setup"]["component_uids"] == [
         "character-a",
         "scene-a",
+        "outfit-a",
+        "modifier-a",
     ]
     assert response.json()["prompt_setup"]["revision_uids"] == [
-        "revision-character-a",
-        "revision-scene-a",
+        "revision-a",
+        "revision-b",
+        "revision-c",
+        "revision-d",
     ]
+    assert response.json()["prompt_setup"]["selections"] == [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "revision_uid": "revision-a",
+            "position": 0,
+        },
+        {
+            "kind": "scene",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-b",
+            "position": 1,
+        },
+        {
+            "kind": "outfit",
+            "component_uid": "outfit-a",
+            "revision_uid": "revision-c",
+            "position": 2,
+        },
+        {
+            "kind": "modifier",
+            "component_uid": "modifier-a",
+            "revision_uid": "revision-d",
+            "position": 3,
+        },
+    ]
+
+
+def test_v2_image_generator_handoff_reports_inconsistent_scopes() -> None:
+    client, _container = _client()
+
+    response = client.get("/api/v2/images/inconsistent/generator-handoff")
+
+    assert response.status_code == 409
+    error = response.json()["error"]
+    assert error["code"] == "inconsistent_generator_handoff"
+    assert error["message"] == "duplicate prompt scope kind: scene"
 
 
 def test_v2_image_content_level_supports_override_and_inherit() -> None:
@@ -1130,8 +1202,18 @@ def test_v2_catalog_rejects_missing_components_and_kind_changes() -> None:
 def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
     client, container = _client()
     selections = [
-        {"kind": "character", "mode": "fixed", "component_uid": "character-a"},
-        {"kind": "scene", "mode": "fixed", "component_uid": "scene-a"},
+        {
+            "kind": "character",
+            "mode": "fixed",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-old",
+        },
+        {
+            "kind": "scene",
+            "mode": "fixed",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-old",
+        },
         {"kind": "outfit", "mode": "random"},
         {"kind": "pose", "mode": "off"},
         {"kind": "expression", "mode": "random"},
@@ -1159,10 +1241,34 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
     assert container.playground_service.command.character_component_uid == (
         "character-a"
     )
+    assert (
+        container.playground_service.command.character_revision_uid
+        == "revision-character-old"
+    )
+    assert container.playground_service.command.manual_selections[0] == (
+        ManualPromptSelection("scene", "scene-a", "revision-scene-old")
+    )
     assert container.playground_service.command.disabled_kinds == (
         "pose",
         "lighting",
     )
+    for selection_index in (2, 3):
+        invalid_revision_mode = [dict(selection) for selection in selections]
+        invalid_revision_mode[selection_index]["revision_uid"] = (
+            "revision-not-fixed"
+        )
+        rejected = client.post(
+            "/api/v2/playground/drafts",
+            json={
+                "selections": invalid_revision_mode,
+                "generation": _draft_generation(seed=17),
+            },
+        )
+        assert rejected.status_code == 400
+        assert rejected.json()["error"]["code"] == (
+            "invalid_playground_selection"
+        )
+
     preview = client.post(
         "/api/v2/playground/render-preview",
         json={

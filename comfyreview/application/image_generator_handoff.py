@@ -7,7 +7,11 @@ from typing import Any, Protocol
 
 from comfyreview.application.comfyui import ComfyUiCapabilities, ComfyUiError
 from comfyreview.application.generation_queries import GenerationStageSummary
-from comfyreview.application.image_queries import ImageContextQueryService
+from comfyreview.application.image_queries import (
+    ImageContextQueryService,
+    ImageScope,
+    ScopeKind,
+)
 from comfyreview.application.lora_effects import LoraGraphEffectPolicy
 from comfyreview.domain import PromptAtomUsage, prompt_atom_usages_from_text
 
@@ -37,11 +41,26 @@ class ImageGenerationFacts:
 
 
 @dataclass(frozen=True, slots=True)
+class GeneratorPromptSelection:
+    """Identify one exact prompt component revision in a generator handoff."""
+
+    kind: ScopeKind
+    component_uid: str
+    revision_uid: str
+    position: int
+
+
+class ImageGeneratorHandoffValidationError(ValueError):
+    """Report inconsistent canonical prompt scopes for a generator handoff."""
+
+
+@dataclass(frozen=True, slots=True)
 class PromptSetupHandoff:
     """Carry exact prompt provenance independently of render controls."""
 
     source_image_uid: str
     availability: str
+    selections: tuple[GeneratorPromptSelection, ...]
     component_uids: tuple[str, ...]
     revision_uids: tuple[str, ...]
     positive_atoms: tuple[PromptAtomUsage, ...]
@@ -115,6 +134,7 @@ class ImageGeneratorHandoffService:
         facts = self._repository.get_generation_facts(image.generation_uid)
         if facts is None:
             raise LookupError("generation facts are unavailable")
+        selections = self._prompt_selections(image.scopes)
         loras = self._effective_loras(facts)
         capability_issues, available_loras, checkpoints = self._availability()
         prompt_issues = list(capability_issues)
@@ -134,6 +154,7 @@ class ImageGeneratorHandoffService:
         prompt = PromptSetupHandoff(
             source_image_uid=image.image_uid,
             availability=availability,
+            selections=selections,
             component_uids=tuple(
                 scope.component_uid for scope in image.scopes
             ),
@@ -193,6 +214,28 @@ class ImageGeneratorHandoffService:
             prompt_setup=prompt,
             render_setup=render,
         )
+
+    @staticmethod
+    def _prompt_selections(
+        scopes: tuple[ImageScope, ...],
+    ) -> tuple[GeneratorPromptSelection, ...]:
+        selections: list[GeneratorPromptSelection] = []
+        seen_kinds: set[ScopeKind] = set()
+        for scope in scopes:
+            if scope.kind in seen_kinds:
+                raise ImageGeneratorHandoffValidationError(
+                    f"duplicate prompt scope kind: {scope.kind.value}"
+                )
+            seen_kinds.add(scope.kind)
+            selections.append(
+                GeneratorPromptSelection(
+                    kind=scope.kind,
+                    component_uid=scope.component_uid,
+                    revision_uid=scope.revision_uid,
+                    position=scope.position,
+                )
+            )
+        return tuple(selections)
 
     def _effective_loras(
         self, facts: ImageGenerationFacts

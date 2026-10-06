@@ -15,7 +15,7 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     ),
     "comfyreview.application.image_generator_handoff:ImageGeneratorHandoffService.get": (
         "tests/test_image_generator_handoff.py::"
-        "test_image_handoff_separates_prompt_render_and_graph_effective_loras"
+        "test_image_handoff_preserves_ordered_typed_prompt_selections"
     ),
     "comfyreview.application.render_guidance:RenderSettings.value": (
         "tests/test_render_guidance.py::"
@@ -255,7 +255,7 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     ),
     "comfyreview.application.playground:PlaygroundService.prepare_draft": (
         "tests/test_playground_application.py::"
-        "test_playground_service_prepares_draft_without_generation_submission"
+        "test_playground_sqlite_fixed_revision_is_exact_without_changing_latest"
     ),
     "comfyreview.application.playground:PlaygroundService.prepare_image_snapshot": (
         "tests/test_playground_application.py::"

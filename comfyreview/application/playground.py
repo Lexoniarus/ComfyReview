@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from comfyreview.application.image_queries import ImageContext
@@ -110,7 +110,7 @@ class PromptCatalogReader(Protocol):
     def list_components(
         self,
         *,
-        include_archived: bool = False,
+        include_archived: bool,
     ) -> tuple[PromptComponent, ...]:
         """Return catalog components available to the caller."""
         ...
@@ -132,10 +132,11 @@ class PromptCatalogReader(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ManualPromptSelection:
-    """Select one exact component for a prompt role."""
+    """Select one component and optionally one immutable revision."""
 
     kind: str
     component_uid: str
+    revision_uid: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +150,7 @@ class PromptSelectionCommand:
     include_modifier: bool = True
     seed: int | None = None
     max_attempts: int = 200
+    character_revision_uid: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,10 +582,91 @@ class PlaygroundService:
     ) -> PlaygroundDraft:
         """Select concrete revisions and render a non-persisting draft."""
         components = self.list_available_components()
+        components = self._bind_exact_fixed_revisions(components, command)
         selection = self._selection_policy.select(components, command)
         return PlaygroundDraft(
             selection=selection,
             prompt=self._renderer.render(selection, overrides),
+        )
+
+    def _bind_exact_fixed_revisions(
+        self,
+        components: tuple[PromptComponent, ...],
+        command: PromptSelectionCommand,
+    ) -> tuple[PromptComponent, ...]:
+        requests = [
+            (
+                "character",
+                command.character_component_uid,
+                command.character_revision_uid,
+            )
+        ]
+        requests.extend(
+            (item.kind, item.component_uid, item.revision_uid)
+            for item in command.manual_selections
+        )
+        exact_requests = tuple(
+            (
+                kind,
+                str(component_uid or "").strip(),
+                str(revision_uid or "").strip(),
+            )
+            for kind, component_uid, revision_uid in requests
+            if revision_uid is not None
+        )
+        if not exact_requests:
+            return components
+        for kind, component_uid, revision_uid in exact_requests:
+            if not component_uid:
+                raise PromptSelectionError(
+                    f"fixed {kind} revision requires component_uid"
+                )
+            if not revision_uid:
+                raise PromptSelectionError(
+                    f"fixed {kind} revision requires revision_uid"
+                )
+        revisions = self._catalog.list_components_for_revisions(
+            tuple(revision_uid for _, _, revision_uid in exact_requests)
+        )
+        revisions_by_uid = {
+            component.latest_revision.revision_uid: component
+            for component in revisions
+        }
+        components_by_uid = {
+            component.component_uid: component for component in components
+        }
+        bound_components = dict(components_by_uid)
+        for kind, component_uid, revision_uid in exact_requests:
+            exact_component = revisions_by_uid.get(revision_uid)
+            if exact_component is None:
+                raise PromptSelectionError(
+                    f"unknown prompt revision: {revision_uid}"
+                )
+            active_component = components_by_uid.get(component_uid)
+            if active_component is None:
+                raise PromptSelectionError(
+                    f"unknown active prompt component: {component_uid}"
+                )
+            if exact_component.component_uid != active_component.component_uid:
+                raise PromptSelectionError(
+                    "prompt revision does not belong to component "
+                    f"{active_component.component_uid}"
+                )
+            if exact_component.kind != kind:
+                raise PromptSelectionError(
+                    f"prompt revision component is not {kind}"
+                )
+            if exact_component.archived:
+                raise PromptSelectionError(
+                    f"unknown active prompt component: {component_uid}"
+                )
+            bound_components[active_component.component_uid] = replace(
+                active_component,
+                latest_revision=exact_component.latest_revision,
+            )
+        return tuple(
+            bound_components[component.component_uid]
+            for component in components
         )
 
     def prepare_revision_draft(

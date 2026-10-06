@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
+from comfyreview.application import (
+    ComfyUiCapabilities,
+    ImageGeneratorHandoffService,
+)
+from comfyreview.application.image_generator_handoff import (
+    ImageGenerationFacts,
+)
 from comfyreview.application.image_queries import (
     DraftOverridePolicy,
     ImageClassification,
@@ -109,6 +117,138 @@ def test_sqlite_image_context_exposes_exact_scopes_and_prompt_evidence(
         is True
     )
     assert repository.get_image("missing") is None
+
+
+def test_image_handoff_uses_composition_revision_not_component_latest(
+    tmp_path: Path,
+) -> None:
+    database_path = _seed_scope_database(tmp_path)
+    connection = sqlite3.connect(database_path)
+    try:
+        component_id = int(
+            connection.execute(
+                "SELECT id FROM prompt_components "
+                "WHERE component_uid = 'character-a'"
+            ).fetchone()[0]
+        )
+        old_revision_id = int(
+            connection.execute(
+                "SELECT id FROM prompt_revisions "
+                "WHERE revision_uid = 'revision-character-a'"
+            ).fetchone()[0]
+        )
+        latest_revision_id = int(
+            connection.execute(
+                """
+                INSERT INTO prompt_revisions(
+                    revision_uid, component_id, revision_number,
+                    positive_text, negative_text, content_hash
+                ) VALUES (
+                    'revision-character-a-new', ?, 2, 'Aiko newest', '',
+                    'hash-character-a-new'
+                )
+                RETURNING id
+                """,
+                (component_id,),
+            ).fetchone()[0]
+        )
+        latest_revision_uid = connection.execute(
+            """
+            SELECT revision_uid
+            FROM prompt_revisions
+            WHERE component_id = ?
+            ORDER BY revision_number DESC
+            LIMIT 1
+            """,
+            (component_id,),
+        ).fetchone()[0]
+        assert latest_revision_uid == "revision-character-a-new"
+        for revision_id, text in (
+            (old_revision_id, "Aiko"),
+            (latest_revision_id, "Aiko newest"),
+        ):
+            connection.execute(
+                "INSERT OR IGNORE INTO prompt_atoms(canonical_text) VALUES (?)",
+                (text,),
+            )
+            atom_id = int(
+                connection.execute(
+                    "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                    (text,),
+                ).fetchone()[0]
+            )
+            connection.execute(
+                """
+                INSERT INTO prompt_revision_atom_usages(
+                    revision_id, atom_id, scope, position, weight_milli
+                ) VALUES (?, ?, 'pos', 0, 1000)
+                """,
+                (revision_id, atom_id),
+            )
+        old_revision_atoms = connection.execute(
+            """
+            SELECT atom.canonical_text
+            FROM prompt_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            WHERE usage.revision_id = ? AND usage.scope = 'pos'
+            ORDER BY usage.position
+            """,
+            (old_revision_id,),
+        ).fetchall()
+        latest_revision_atoms = connection.execute(
+            """
+            SELECT atom.canonical_text
+            FROM prompt_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            WHERE usage.revision_id = ? AND usage.scope = 'pos'
+            ORDER BY usage.position
+            """,
+            (latest_revision_id,),
+        ).fetchall()
+        assert tuple(row[0] for row in old_revision_atoms) == ("Aiko",)
+        assert tuple(row[0] for row in latest_revision_atoms) == (
+            "Aiko newest",
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    image = SqliteImageContextRepository(database_path).get_image("image-1")
+    assert image is not None
+    canonical_image = image
+    character_scope = next(
+        scope
+        for scope in canonical_image.scopes
+        if scope.kind is ScopeKind.CHARACTER
+    )
+    assert character_scope.revision_uid == "revision-character-a"
+    assert canonical_image.prompt_snapshot.positive == "Aiko, dress"
+
+    class _Images:
+        def get_image(self, image_uid: str):
+            assert image_uid == "image-1"
+            return canonical_image
+
+    class _Facts:
+        def get_generation_facts(self, generation_uid: str):
+            assert generation_uid == canonical_image.generation_uid
+            return ImageGenerationFacts((), (), {})
+
+    class _Capabilities:
+        def discover_capabilities(self) -> ComfyUiCapabilities:
+            return ComfyUiCapabilities((), (), (), (), ())
+
+    handoff = ImageGeneratorHandoffService(
+        images=cast(Any, _Images()),
+        repository=cast(Any, _Facts()),
+        capabilities=_Capabilities(),
+    ).get("image-1")
+
+    assert handoff.prompt_setup.selections[0].revision_uid == (
+        "revision-character-a"
+    )
+    assert handoff.prompt_setup.selections[0].component_uid == "character-a"
+    assert handoff.prompt_setup.selections[0].position == 0
 
 
 def test_sqlite_scope_facets_exclude_their_own_kind_filter(

@@ -151,10 +151,12 @@ from comfyreview.application.generation_reconciliation import (
     GenerationReconciliationService,
 )
 from comfyreview.application.image_generator_handoff import (
+    GeneratorPromptSelection,
     ImageGenerationFacts,
     ImageGeneratorHandoff,
     ImageGeneratorHandoffRepository,
     ImageGeneratorHandoffService,
+    ImageGeneratorHandoffValidationError,
     ImageLoraSnapshot,
     PromptSetupHandoff,
     RenderSetupHandoff,
@@ -446,7 +448,9 @@ __all__ = [
     "ImageGeneratorHandoff",
     "ImageGeneratorHandoffRepository",
     "ImageGeneratorHandoffService",
+    "ImageGeneratorHandoffValidationError",
     "ImageLoraSnapshot",
+    "GeneratorPromptSelection",
     "GenerationSettings",
     "OutputTier",
     "GenerationDefaults",
