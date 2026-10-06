@@ -50,8 +50,14 @@ describe("Playground browser components", () => {
             kind: "character",
             mode: "fixed",
             component_uid: "character-a",
+            revision_uid: "revision-character-a-latest",
           },
-          { kind: "scene", mode: "off", component_uid: null },
+          {
+            kind: "scene",
+            mode: "off",
+            component_uid: null,
+            revision_uid: null,
+          },
         ],
         loras: [
           {
@@ -114,8 +120,14 @@ describe("Playground browser components", () => {
             kind: "character",
             mode: "fixed",
             component_uid: "character-a",
+            revision_uid: "revision-character-a-latest",
           },
-          { kind: "scene", mode: "off", component_uid: null },
+          {
+            kind: "scene",
+            mode: "off",
+            component_uid: null,
+            revision_uid: null,
+          },
         ]),
       }),
     );
@@ -141,6 +153,136 @@ describe("Playground browser components", () => {
       .dispatchEvent(new Event("change"));
     defaultEditor.onChange();
     defaultEditor.dispose();
+  });
+
+  it("keeps a restored historical fixed revision without catalog history", () => {
+    const root = document.createElement("div");
+    const editor = new PromptModeEditor(root);
+    const character = {
+      ...component("character-a", "character", "Aiko"),
+      latest_revision: { revision_uid: "character-rev-2", revision_number: 2 },
+    };
+
+    editor.render([character]);
+    expect(
+      editor.applyState({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-a",
+            revision_uid: "character-rev-1",
+          },
+        ],
+      }),
+    ).toEqual([]);
+
+    expect(
+      root.querySelector(".prompt-mode-row select:nth-of-type(2)").value,
+    ).toBe("character-a");
+    expect(editor.value().selections[0]).toEqual({
+      kind: "character",
+      mode: "fixed",
+      component_uid: "character-a",
+      revision_uid: "character-rev-1",
+    });
+
+    editor.dispose();
+  });
+
+  it("uses latest after a manual component change or leaving fixed mode", () => {
+    const root = document.createElement("div");
+    const editor = new PromptModeEditor(root);
+    const catalog = [
+      {
+        ...component("character-a", "character", "Aiko"),
+        latest_revision: {
+          revision_uid: "character-rev-2",
+          revision_number: 2,
+        },
+      },
+      {
+        ...component("character-b", "character", "Hina"),
+        latest_revision: {
+          revision_uid: "character-b-rev-3",
+          revision_number: 3,
+        },
+      },
+      {
+        ...component("scene-a", "scene", "Rooftop"),
+        latest_revision: { revision_uid: "scene-rev-2", revision_number: 2 },
+      },
+    ];
+    editor.render(catalog);
+    editor.applyState({
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-a",
+          revision_uid: "character-rev-1",
+        },
+        {
+          kind: "scene",
+          mode: "fixed",
+          component_uid: "scene-a",
+          revision_uid: "scene-rev-1",
+        },
+      ],
+    });
+
+    const characterRow = root.querySelector(
+      '.prompt-mode-row[data-kind="character"]',
+    );
+    const characterComponent = characterRow.querySelectorAll("select")[1];
+    characterComponent.value = "character-b";
+    characterComponent.dispatchEvent(new Event("change"));
+    expect(editor.value().selections[0]).toEqual({
+      kind: "character",
+      mode: "fixed",
+      component_uid: "character-b",
+      revision_uid: "character-b-rev-3",
+    });
+
+    const sceneRow = root.querySelector('.prompt-mode-row[data-kind="scene"]');
+    const sceneMode = sceneRow.querySelector("select");
+    sceneMode.value = "random";
+    sceneMode.dispatchEvent(new Event("change"));
+    expect(editor.value().selections[1]).toEqual({
+      kind: "scene",
+      mode: "random",
+      component_uid: null,
+      revision_uid: null,
+    });
+    sceneMode.value = "fixed";
+    sceneMode.dispatchEvent(new Event("change"));
+    expect(editor.value().selections[1]).toEqual({
+      kind: "scene",
+      mode: "fixed",
+      component_uid: "scene-a",
+      revision_uid: "scene-rev-2",
+    });
+
+    editor.applyState({
+      selections: [
+        {
+          kind: "scene",
+          mode: "fixed",
+          component_uid: "scene-a",
+          revision_uid: "scene-rev-1",
+        },
+      ],
+    });
+    sceneMode.value = "off";
+    sceneMode.dispatchEvent(new Event("change"));
+    expect(editor.value().selections[1]).toEqual({
+      kind: "scene",
+      mode: "off",
+      component_uid: null,
+      revision_uid: null,
+    });
+
+    editor.dispose();
   });
 
   it("loads, caches and resolves prompt reference evidence", async () => {
@@ -1100,7 +1242,10 @@ function component(componentUid, kind, name) {
     component_uid: componentUid,
     kind,
     name,
-    latest_revision: { revision_number: 1 },
+    latest_revision: {
+      revision_uid: `revision-${componentUid}-latest`,
+      revision_number: 1,
+    },
   };
 }
 

@@ -1132,11 +1132,25 @@ def test_v2_playground_generator_state_round_trips_strict_payload() -> None:
     client, container = _client()
 
     current = client.get("/api/v2/playground/generator-state")
-    changed = {**current.json(), "steps_min": 28, "steps_max": 32}
+    selections = [
+        {
+            "kind": "character",
+            "mode": "fixed",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-old",
+        }
+    ]
+    changed = {
+        **current.json(),
+        "selections": selections,
+        "steps_min": 28,
+        "steps_max": 32,
+    }
     saved = client.put(
         "/api/v2/playground/generator-state",
         json=changed,
     )
+    restored = client.get("/api/v2/playground/generator-state")
     invalid = client.put(
         "/api/v2/playground/generator-state",
         json={**changed, "unknown": True},
@@ -1145,6 +1159,8 @@ def test_v2_playground_generator_state_round_trips_strict_payload() -> None:
     assert current.status_code == 200
     assert saved.status_code == 200
     assert saved.json()["steps_min"] == 28
+    assert saved.json()["selections"] == selections
+    assert restored.json()["selections"] == selections
     assert container.playground_generator_settings.settings == changed
     assert invalid.status_code == 422
 

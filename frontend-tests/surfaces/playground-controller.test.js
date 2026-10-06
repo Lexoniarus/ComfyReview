@@ -347,6 +347,50 @@ describe("PlaygroundController", () => {
     }
   });
 
+  it("carries an exact fixed revision through state save and draft preparation", async () => {
+    vi.useFakeTimers();
+    try {
+      const selection = {
+        kind: "character",
+        mode: "fixed",
+        component_uid: "character-a",
+        revision_uid: "character-rev-1",
+      };
+      const savedState = { selections: [selection] };
+      const fixture = createFixture({
+        savedState,
+        selectionValue: { selections: [selection] },
+      });
+
+      await fixture.controller.start();
+      expect(fixture.modes.applyState).toHaveBeenCalledWith(savedState);
+      await fixture.controller.prepare();
+      expect(fixture.api.post).toHaveBeenCalledWith(
+        "playground/drafts",
+        {
+          selections: [selection],
+          generation: expect.any(Object),
+        },
+        expect.any(Object),
+      );
+
+      fixture.controller.settingsChanged();
+      await vi.advanceTimersByTimeAsync(180);
+      await settle();
+      expect(fixture.api.put).toHaveBeenCalledWith(
+        "playground/generator-state",
+        {
+          selections: [selection],
+          checkpoint: "model",
+          seed_mode: "fixed",
+        },
+        expect.any(Object),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps the generator usable when state loading or saving fails", async () => {
     vi.useFakeTimers();
     try {
@@ -381,7 +425,7 @@ function createFixture(options = {}) {
     applyState: vi.fn(() => options.stateRejected || []),
     applyIntent: vi.fn(() => options.intentRejected || []),
     showResolvedComponents: vi.fn(),
-    value: vi.fn(() => ({ selections: [] })),
+    value: vi.fn(() => options.selectionValue || { selections: [] }),
   });
   const controls = disposable({
     render: vi.fn(),

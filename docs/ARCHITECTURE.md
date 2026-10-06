@@ -373,9 +373,15 @@ The canonical cutover is intentionally not the end of the wider refactor.
   `/api/v2/playground/generator-state`. The injected settings service preserves
   the existing server-owned UI-state file, migrates legacy render values on
   first read and keeps explicit cross-surface handoffs as the final override.
-  Fixed prompt selections may also carry an immutable revision UID; when absent
-  the current component revision remains the selection default, while random
-  choices continue to use the active catalog.
+  `PromptModeEditor` owns each prompt kind's mode, component UID and optional
+  immutable revision UID. Fixed selections persist and submit that exact UID;
+  old states without one and deliberate component changes use the catalog's
+  current latest revision. The browser treats restored revision UIDs as opaque
+  bindings because its catalog contains only latest revisions; authoritative
+  existence and component ownership validation remains in the Application
+  layer. Random/off choices carry no revision binding. Explicit cross-surface
+  `draftReference` precedence remains a separate legacy path until its
+  handoffs are migrated.
 - `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or
