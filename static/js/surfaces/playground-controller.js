@@ -31,6 +31,7 @@ export class PlaygroundController {
     this.status = dependencies.status;
     this.result = dependencies.result;
     this.intent = dependencies.intent || {};
+    this.typedPromptSource = null;
     this.intentStore = dependencies.intentStore || null;
     this.draftReference = null;
     this.abortController = new AbortController();
@@ -73,6 +74,14 @@ export class PlaygroundController {
 
   /** Load canonical catalog data and bind user actions. */
   async start() {
+    try {
+      this.typedPromptSource = resolveTypedPromptSource(this.intent);
+    } catch (error) {
+      this.status.textContent = `Prompt-Handoff abgewiesen: ${errorMessage(error)}`;
+      this.prepareButton.disabled = true;
+      this.submitButton.disabled = true;
+      return;
+    }
     this.prepareButton.addEventListener("click", () => void this.prepare(), {
       signal: this.abortController.signal,
     });
@@ -304,7 +313,7 @@ export class PlaygroundController {
 
   async #applyIntent() {
     let intent = this.intent;
-    const typedSource = typedPromptSourceOf(intent);
+    const typedSource = this.typedPromptSource;
     const legacyImageUid = String(intent.imageUid || "");
     const renderImageUid = String(intent.renderImageUid || legacyImageUid);
     let promptHandoff = null;
@@ -444,29 +453,38 @@ export class PlaygroundController {
   }
 }
 
+class AmbiguousTypedPromptSourceError extends Error {}
+
 /** @param {Record<string, any>} intent @returns {TypedPromptSource | null} */
-function typedPromptSourceOf(intent) {
+function resolveTypedPromptSource(intent) {
+  /** @type {TypedPromptSource[]} */
+  const sources = [];
   const imageUid = String(intent.promptImageUid || "").trim();
-  if (imageUid) return { type: "image", imageUid };
+  if (imageUid) sources.push({ type: "image", imageUid });
   const compositionUid = String(intent.promptCompositionUid || "").trim();
-  if (compositionUid) return { type: "composition", compositionUid };
+  if (compositionUid) sources.push({ type: "composition", compositionUid });
   const scope = intent.promptScope;
   if (scope && typeof scope === "object") {
-    return {
+    sources.push({
       type: "scope",
       scope: {
         kind: String(scope.kind).trim(),
         component_uid: String(scope.component_uid).trim(),
         revision_uid: String(scope.revision_uid || "").trim() || null,
       },
-    };
+    });
   }
-  return null;
+  if (sources.length > 1) {
+    throw new AmbiguousTypedPromptSourceError(
+      "Mehrdeutiger Prompt-Handoff: Bitte nur eine Quelle (Bild, Composition oder Scope) auswählen.",
+    );
+  }
+  return sources[0] || null;
 }
 
 /** @param {Record<string, any>} intent */
 function hasTypedPromptSource(intent) {
-  return typedPromptSourceOf(intent) !== null;
+  return resolveTypedPromptSource(intent) !== null;
 }
 
 /** @param {string} type */

@@ -390,11 +390,17 @@ The canonical cutover is intentionally not the end of the wider refactor.
   by prompt cleanup, and applying this handoff does not create a draft.
   Analytics Scope actions stage only a typed component/revision source and
   patch that prompt kind; Analytics Composition actions stage only the
-  composition UID, resolve its exact ordered revisions through the
-  Application layer, and replace the complete prompt selection. Both apply
-  through the same rollback/persist operation and clear only their typed
-  source after the normal generator state is saved. Top Combinations remains
-  on its existing legacy handoff path.
+  composition UID, resolve its exact ordered revisions through one
+  Application `PromptSelection` operation, and replace the complete prompt
+  selection. The Composition draft renderer and API handoff project this same
+  validated selection, including active-component, content-level, historical
+  revision, Character and unique-kind rules. Multiple typed prompt sources in
+  one intent are rejected visibly at the beginning of controller startup,
+  before editor rendering, saved-state restore, handoff, persistence or
+  cleanup. Both single-source Scope and Composition actions apply through the
+  shared rollback/persist operation and clear only their typed source after the
+  normal generator state is saved. Top Combinations remains on its existing
+  legacy handoff path.
 - `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or

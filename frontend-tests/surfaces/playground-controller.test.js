@@ -57,6 +57,84 @@ describe("PlaygroundController", () => {
     expect(fixture.draft.dispose).toHaveBeenCalledOnce();
   });
 
+  it("rejects multiple typed prompt sources before changing generator state", async () => {
+    const cases = [
+      {
+        prompt: {
+          promptImageUid: "image-a",
+          promptCompositionUid: "composition-a",
+        },
+      },
+      {
+        prompt: {
+          promptCompositionUid: "composition-a",
+          promptScope: {
+            kind: "scene",
+            component_uid: "scene-a",
+            revision_uid: "scene-revision-a",
+          },
+        },
+      },
+    ];
+
+    for (const { prompt } of cases) {
+      const storage = new MemoryStorage();
+      const storedIntent = JSON.stringify({
+        version: 2,
+        prompt,
+        render: { renderImageUid: "render-image" },
+        prompt_kinds: {},
+      });
+      storage.setItem("comfyreview.playground-intent.v2", storedIntent);
+      const intentStore = new PlaygroundIntentStore(storage);
+      const existingPromptState = {
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-existing",
+            revision_uid: "character-existing-revision",
+          },
+        ],
+        loras: [],
+      };
+      const fixture = createFixture({
+        intent: intentStore.read(),
+        intentStore,
+        selectionValue: existingPromptState,
+        savedState: {
+          selections: [
+            {
+              kind: "character",
+              mode: "fixed",
+              component_uid: "character-persisted",
+              revision_uid: "character-persisted-revision",
+            },
+          ],
+        },
+      });
+
+      await fixture.controller.start();
+
+      expect(fixture.status.textContent).toContain(
+        "Mehrdeutiger Prompt-Handoff",
+      );
+      expect(fixture.modes.render).not.toHaveBeenCalled();
+      expect(fixture.modes.applyState).not.toHaveBeenCalled();
+      expect(fixture.controls.render).not.toHaveBeenCalled();
+      expect(fixture.controls.applyState).not.toHaveBeenCalled();
+      expect(fixture.api.get).not.toHaveBeenCalled();
+      expect(fixture.api.put).not.toHaveBeenCalled();
+      expect(fixture.api.post).not.toHaveBeenCalled();
+      expect(fixture.modes.value()).toEqual(existingPromptState);
+      expect(storage.getItem("comfyreview.playground-intent.v2")).toBe(
+        storedIntent,
+      );
+      expect(fixture.prepareButton.disabled).toBe(true);
+      expect(fixture.submitButton.disabled).toBe(true);
+    }
+  });
+
   it("surfaces load, draft and generation failures without stale submits", async () => {
     const loading = createFixture({ loadError: "unknown" });
     await loading.controller.start();

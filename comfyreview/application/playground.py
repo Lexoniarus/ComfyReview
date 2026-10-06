@@ -776,12 +776,25 @@ class PlaygroundService:
         composition_uid: str,
     ) -> PlaygroundDraft:
         """Render one persisted canonical composition for a handoff."""
+        selection = self.resolve_composition_selection(composition_uid)
+        return PlaygroundDraft(
+            selection=selection,
+            prompt=self._renderer.render(selection),
+        )
+
+    def resolve_composition_selection(
+        self,
+        composition_uid: str,
+    ) -> PromptSelection:
+        """Resolve one composition into its validated exact prompt selection."""
         normalized_uid = str(composition_uid or "").strip()
         if not normalized_uid:
             raise PromptSelectionError("composition_uid is required")
         revision_projections = self._catalog.list_composition_components(
             normalized_uid
         )
+        if not revision_projections:
+            raise PromptSelectionError("character revision is required")
         self._require_allowed(revision_projections)
         revision_uids = tuple(
             component.latest_revision.revision_uid
@@ -790,34 +803,11 @@ class PlaygroundService:
         components = self._with_current_component_metadata(
             revision_projections
         )
-        selection = self._exact_selection(components, revision_uids)
-        return PlaygroundDraft(
-            selection=selection,
-            prompt=self._renderer.render(selection),
-        )
-
-    def resolve_composition_prompt_selections(
-        self,
-        composition_uid: str,
-    ) -> tuple[SelectedPromptComponent, ...]:
-        """Resolve a composition into its canonical ordered, exact selections."""
-        normalized_uid = str(composition_uid or "").strip()
-        if not normalized_uid:
-            raise PromptSelectionError("composition_uid is required")
-        projections = self._catalog.list_composition_components(normalized_uid)
-        revision_uids = tuple(
-            projection.latest_revision.revision_uid
-            for projection in projections
-        )
-        if not projections:
-            raise PromptSelectionError("character revision is required")
-        self._require_allowed(projections)
-        selected = self._with_current_component_metadata(projections)
-        if any(item.component.archived for item in selected):
+        if any(selected.component.archived for selected in components):
             raise PromptSelectionError(
                 "composition contains an inactive prompt component"
             )
-        return self._exact_selection(selected, revision_uids).components
+        return self._exact_selection(components, revision_uids)
 
     def prepare_image_snapshot(
         self,

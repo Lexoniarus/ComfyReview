@@ -45,6 +45,7 @@ from comfyreview.application import (
     PromptRenderer,
     PromptRevision,
     PromptSelection,
+    PromptSelectionError,
     PromptSnapshot,
     RenderedPrompt,
     RenderGuidance,
@@ -449,18 +450,30 @@ class _Playground:
         self.composition_uid = composition_uid
         return self.prepare_draft(SimpleNamespace(), overrides=None)
 
-    def resolve_composition_prompt_selections(self, composition_uid):
+    def resolve_composition_selection(self, composition_uid):
         self.composition_uid = composition_uid
-        return (
-            SelectedPromptComponent(
-                _prompt_component(),
-                _prompt_component().latest_revision,
-            ),
-            SelectedPromptComponent(
-                _prompt_component("scene-a", "scene"),
-                _prompt_component("scene-a", "scene").latest_revision,
+        character = _prompt_component()
+        scene = _prompt_component("scene-a", "scene")
+        selection = PromptSelection(
+            (
+                SelectedPromptComponent(
+                    character,
+                    replace(
+                        character.latest_revision,
+                        revision_uid="character-historical",
+                    ),
+                ),
+                SelectedPromptComponent(
+                    scene,
+                    replace(
+                        scene.latest_revision,
+                        revision_uid="scene-historical",
+                    ),
+                ),
             ),
         )
+        self.composition_selection = selection
+        return selection
 
     def confirm_draft(self, command):
         self.confirm_command = command
@@ -1154,16 +1167,48 @@ def test_v2_playground_projects_exact_composition_prompt_selections() -> None:
             {
                 "kind": "character",
                 "component_uid": "character-a",
-                "revision_uid": "revision-character-a",
+                "revision_uid": "character-historical",
             },
             {
                 "kind": "scene",
                 "component_uid": "scene-a",
-                "revision_uid": "revision-scene-a",
+                "revision_uid": "scene-historical",
             },
         ]
     }
     assert container.playground_service.composition_uid == "composition-a"
+    assert tuple(
+        selected.revision.revision_uid
+        for selected in container.playground_service.composition_selection.components
+    ) == ("character-historical", "scene-historical")
+
+
+def test_v2_playground_composition_handoff_surfaces_selection_rejection() -> (
+    None
+):
+    client, container = _client()
+
+    for message in (
+        "composition contains an inactive prompt component",
+        "prompt selection contains a disabled content level",
+    ):
+
+        def reject_composition(
+            composition_uid: str,
+            expected_message: str = message,
+        ) -> PromptSelection:
+            assert composition_uid == "composition-rejected"
+            raise PromptSelectionError(expected_message)
+
+        container.playground_service.resolve_composition_selection = (
+            reject_composition
+        )
+        response = client.get(
+            "/api/v2/playground/compositions/composition-rejected/prompt-selections"
+        )
+
+        assert response.status_code == 400
+        assert response.json()["error"]["message"] == message
 
 
 def test_v2_playground_generator_state_round_trips_strict_payload() -> None:

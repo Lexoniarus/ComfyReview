@@ -20,6 +20,7 @@ from comfyreview.application import (
     PromptDraftOverrides,
     PromptRenderer,
     PromptRevision,
+    PromptSelection,
     PromptSelectionCommand,
     PromptSelectionError,
     PromptSelectionPolicy,
@@ -1191,6 +1192,28 @@ def test_playground_service_restores_exact_revisions_and_compositions() -> (
     )
 
 
+def test_composition_draft_uses_the_shared_selection_resolver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service(_CatalogService(_catalog()))
+    resolve = service.resolve_composition_selection
+    resolved_selections: list[PromptSelection] = []
+
+    def resolve_and_capture(composition_uid: str) -> PromptSelection:
+        selection = resolve(composition_uid)
+        resolved_selections.append(selection)
+        return selection
+
+    monkeypatch.setattr(
+        service, "resolve_composition_selection", resolve_and_capture
+    )
+
+    draft = service.prepare_composition_draft("composition-a")
+
+    assert len(resolved_selections) == 1
+    assert draft.selection is resolved_selections[0]
+
+
 def test_playground_service_resolves_ordered_exact_composition_selections() -> (
     None
 ):
@@ -1234,27 +1257,39 @@ def test_playground_service_resolves_ordered_exact_composition_selections() -> (
             assert composition_uid == "composition-historical"
             return historical_projections
 
-    selected = _service(
-        _HistoricalCompositionCatalog(components)
-    ).resolve_composition_prompt_selections("composition-historical")
+    service = _service(_HistoricalCompositionCatalog(components))
+    selected = service.resolve_composition_selection("composition-historical")
+    draft = service.prepare_composition_draft("composition-historical")
 
-    assert tuple(item.component.kind for item in selected) == (
+    assert tuple(item.component.kind for item in selected.components) == (
         "character",
         "scene",
         "outfit",
         "modifier",
     )
-    assert tuple(item.component.component_uid for item in selected) == (
+    assert tuple(
+        item.component.component_uid for item in selected.components
+    ) == (
         "character-a",
         "scene-night",
         "outfit-red",
         "modifier-a",
     )
-    assert tuple(item.revision.revision_uid for item in selected) == (
+    expected_revisions = (
         "character-historical",
         "scene-historical",
         "outfit-historical",
         "modifier-historical",
+    )
+    assert (
+        tuple(item.revision.revision_uid for item in selected.components)
+        == expected_revisions
+    )
+    assert (
+        tuple(
+            item.revision.revision_uid for item in draft.selection.components
+        )
+        == expected_revisions
     )
 
 
@@ -1266,10 +1301,16 @@ def test_playground_service_rejects_compositions_without_character() -> None:
         ) -> tuple[PromptComponent, ...]:
             return self.components[1:2]
 
-    with pytest.raises(PromptSelectionError, match="character revision"):
-        _service(
-            _NoCharacterCompositionCatalog(_catalog())
-        ).resolve_composition_prompt_selections("composition-no-character")
+    for prepare in (
+        lambda service: service.resolve_composition_selection(
+            "composition-no-character"
+        ),
+        lambda service: service.prepare_composition_draft(
+            "composition-no-character"
+        ),
+    ):
+        with pytest.raises(PromptSelectionError, match="character revision"):
+            prepare(_service(_NoCharacterCompositionCatalog(_catalog())))
 
 
 def test_playground_service_rejects_duplicate_composition_kinds() -> None:
@@ -1300,10 +1341,16 @@ def test_playground_service_rejects_duplicate_composition_kinds() -> None:
         ) -> tuple[PromptComponent, ...]:
             return components[0], self._duplicate()
 
-    with pytest.raises(PromptSelectionError, match="duplicate prompt"):
-        _service(
-            _DuplicateCompositionCatalog(components)
-        ).resolve_composition_prompt_selections("composition-duplicate")
+    for prepare in (
+        lambda service: service.resolve_composition_selection(
+            "composition-duplicate"
+        ),
+        lambda service: service.prepare_composition_draft(
+            "composition-duplicate"
+        ),
+    ):
+        with pytest.raises(PromptSelectionError, match="duplicate prompt"):
+            prepare(_service(_DuplicateCompositionCatalog(components)))
 
 
 def test_playground_service_rejects_archived_composition_components() -> None:
@@ -1314,19 +1361,61 @@ def test_playground_service_rejects_archived_composition_components() -> None:
         ) -> tuple[PromptComponent, ...]:
             return self.components[0], self.components[8]
 
-    with pytest.raises(
-        PromptSelectionError, match="inactive prompt component"
+    for prepare in (
+        lambda service: service.resolve_composition_selection(
+            "composition-archived"
+        ),
+        lambda service: service.prepare_composition_draft(
+            "composition-archived"
+        ),
     ):
-        _service(
-            _ArchivedCompositionCatalog(_catalog())
-        ).resolve_composition_prompt_selections("composition-archived")
+        with pytest.raises(
+            PromptSelectionError, match="inactive prompt component"
+        ):
+            prepare(_service(_ArchivedCompositionCatalog(_catalog())))
+
+
+def test_playground_service_rejects_policy_disallowed_compositions() -> None:
+    components = _catalog()
+    lewd = _component(
+        "pose-lewd",
+        "pose",
+        content_level=ContentLevel.LEWD,
+    )
+
+    class _PolicyDisallowedCompositionCatalog(_CatalogService):
+        def list_composition_components(
+            self,
+            composition_uid: str,
+        ) -> tuple[PromptComponent, ...]:
+            return self.components[0], lewd
+
+        def list_components(
+            self,
+            *,
+            include_archived: bool = False,
+        ) -> tuple[PromptComponent, ...]:
+            return (*self.components, lewd)
+
+    for prepare in (
+        lambda service: service.resolve_composition_selection(
+            "composition-policy-disallowed"
+        ),
+        lambda service: service.prepare_composition_draft(
+            "composition-policy-disallowed"
+        ),
+    ):
+        with pytest.raises(
+            PromptSelectionError, match="disabled content level"
+        ):
+            prepare(_service(_PolicyDisallowedCompositionCatalog(components)))
 
 
 def test_playground_service_requires_a_composition_identity() -> None:
     with pytest.raises(PromptSelectionError, match="composition_uid"):
-        _service(
-            _CatalogService(_catalog())
-        ).resolve_composition_prompt_selections(" ")
+        _service(_CatalogService(_catalog())).resolve_composition_selection(
+            " "
+        )
 
 
 def test_playground_service_uses_authoritative_image_snapshot() -> None:

@@ -217,7 +217,7 @@ def playground_composition_prompt_selections(
     container = get_application_container(request)
     try:
         selections = (
-            container.playground_service.resolve_composition_prompt_selections(
+            container.playground_service.resolve_composition_selection(
                 composition_uid
             )
         )
@@ -235,7 +235,7 @@ def playground_composition_prompt_selections(
                     "component_uid": selected.component.component_uid,
                     "revision_uid": selected.revision.revision_uid,
                 }
-                for selected in selections
+                for selected in selections.components
             ]
         }
     )
