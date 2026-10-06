@@ -755,6 +755,270 @@ describe("PlaygroundController", () => {
     );
   });
 
+  it("applies a complete composition as the normal exact generator state", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptComposition("composition-exact");
+    intentStore.stageRenderSetup("render-image");
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      savedState: {
+        selections: [
+          {
+            kind: "modifier",
+            mode: "fixed",
+            component_uid: "modifier-old",
+            revision_uid: "modifier-old-revision",
+          },
+        ],
+        loras: [{ lora_uid: "stale-lora" }],
+      },
+      compositionHandoff: {
+        selections: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "character-revision-historical",
+          },
+          {
+            kind: "scene",
+            component_uid: "scene-a",
+            revision_uid: "scene-revision-historical",
+          },
+        ],
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.api.get).toHaveBeenCalledWith(
+      "playground/compositions/composition-exact/prompt-selections",
+      expect.any(Object),
+    );
+    expect(fixture.modes.value().selections).toEqual(
+      expect.arrayContaining([
+        {
+          kind: "character",
+          component_uid: "character-a",
+          revision_uid: "character-revision-historical",
+          mode: "fixed",
+        },
+        {
+          kind: "scene",
+          component_uid: "scene-a",
+          revision_uid: "scene-revision-historical",
+          mode: "fixed",
+        },
+        {
+          kind: "modifier",
+          component_uid: null,
+          revision_uid: null,
+          mode: "off",
+        },
+      ]),
+    );
+    expect(fixture.modes.value().loras).toEqual([]);
+    expect(fixture.api.put).toHaveBeenCalledWith(
+      "playground/generator-state",
+      expect.objectContaining({
+        selections: expect.any(Array),
+        loras: [],
+      }),
+      expect.any(Object),
+    );
+    expect(
+      fixture.controls.applyIntent.mock.invocationCallOrder[0],
+    ).toBeLessThan(fixture.api.put.mock.invocationCallOrder[0]);
+    expect(intentStore.read()).toEqual({ renderImageUid: "render-image" });
+    expect(
+      fixture.api.post.mock.calls.some(
+        ([path]) => path === "playground/drafts",
+      ),
+    ).toBe(false);
+
+    await fixture.controller.prepare();
+    const draftCall = fixture.api.post.mock.calls.find(
+      ([path]) => path === "playground/drafts",
+    );
+    expect(draftCall[1]).toEqual(
+      expect.objectContaining({
+        selections: expect.arrayContaining([
+          expect.objectContaining({
+            kind: "character",
+            revision_uid: "character-revision-historical",
+          }),
+          expect.objectContaining({
+            kind: "scene",
+            revision_uid: "scene-revision-historical",
+          }),
+        ]),
+      }),
+    );
+    expect(draftCall[1]).not.toHaveProperty("composition_uid");
+    expect(draftCall[1]).not.toHaveProperty("revision_uids");
+  });
+
+  it("applies one exact scope selection as a partial prompt patch", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptScope({
+      kind: "scene",
+      component_uid: "scene-a",
+      revision_uid: "scene-revision-historical",
+    });
+    intentStore.stageRenderSetup("render-image");
+    const savedState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-a",
+          revision_uid: "character-revision-a",
+        },
+        {
+          kind: "scene",
+          mode: "fixed",
+          component_uid: "scene-old",
+          revision_uid: "scene-revision-old",
+        },
+        {
+          kind: "modifier",
+          mode: "fixed",
+          component_uid: "modifier-a",
+          revision_uid: "modifier-revision-a",
+        },
+      ],
+      loras: [],
+    };
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      savedState,
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.modes.applyState).toHaveBeenLastCalledWith({
+      selections: [
+        {
+          kind: "scene",
+          mode: "fixed",
+          component_uid: "scene-a",
+          revision_uid: "scene-revision-historical",
+        },
+      ],
+    });
+    const byKind = new Map(
+      fixture.modes
+        .value()
+        .selections.map((selection) => [selection.kind, selection]),
+    );
+    expect(byKind.get("scene")).toEqual({
+      kind: "scene",
+      mode: "fixed",
+      component_uid: "scene-a",
+      revision_uid: "scene-revision-historical",
+    });
+    expect(byKind.get("character")).toEqual(savedState.selections[0]);
+    expect(byKind.get("modifier")).toEqual(savedState.selections[2]);
+    expect(intentStore.read()).toEqual({ renderImageUid: "render-image" });
+
+    await fixture.controller.prepare();
+    const draftCall = fixture.api.post.mock.calls.find(
+      ([path]) => path === "playground/drafts",
+    );
+    expect(draftCall[1].selections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "scene",
+          revision_uid: "scene-revision-historical",
+        }),
+      ]),
+    );
+    expect(draftCall[1]).not.toHaveProperty("composition_uid");
+  });
+
+  it("retains a typed composition source and restores state after persistence fails", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptComposition("composition-failed");
+    const savedState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-before",
+          revision_uid: "character-before-revision",
+        },
+      ],
+      loras: [],
+    };
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      savedState,
+      stateSaveError: new Error("persist failed"),
+      compositionHandoff: {
+        selections: [
+          {
+            kind: "character",
+            component_uid: "character-after",
+            revision_uid: "character-after-revision",
+          },
+        ],
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.status.textContent).toContain(
+      "Composition-Prompt konnte nicht übernommen werden",
+    );
+    expect(intentStore.read()).toEqual({
+      promptCompositionUid: "composition-failed",
+    });
+    expect(fixture.modes.value().selections).toEqual(savedState.selections);
+  });
+
+  it("rejects an incomplete composition without changing or clearing the prompt", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptComposition("composition-no-character");
+    const savedState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-before",
+          revision_uid: "character-before-revision",
+        },
+      ],
+      loras: [],
+    };
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      savedState,
+      compositionHandoff: {
+        selections: [
+          {
+            kind: "scene",
+            component_uid: "scene-a",
+            revision_uid: "scene-revision-a",
+          },
+        ],
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.status.textContent).toContain(
+      "Character-Prompt-Auswahl fehlt",
+    );
+    expect(fixture.modes.value().selections).toEqual(savedState.selections);
+    expect(fixture.api.put).not.toHaveBeenCalled();
+    expect(intentStore.read()).toEqual({
+      promptCompositionUid: "composition-no-character",
+    });
+  });
+
   it("keeps rejected image staging and resolves independent packages", async () => {
     const intentStore = { clear: vi.fn() };
     const fixture = createFixture({
@@ -969,23 +1233,46 @@ function createFixture(options = {}) {
   const status = document.createElement("span");
   const result = document.createElement("div");
   let activeSelectionValue = options.selectionValue || { selections: [] };
+  const selectionSnapshots = new WeakSet();
   const modes = disposable({
     render: vi.fn(),
     applyState: vi.fn((state) => {
+      const error = options.modeStateError?.(state);
+      if (error) throw error;
+      if (selectionSnapshots.has(state)) {
+        activeSelectionValue = state;
+        return [];
+      }
+      const incomingSelections = Array.isArray(state.selections)
+        ? state.selections
+        : [];
+      const currentByKind = new Map(
+        (activeSelectionValue.selections || []).map((selection) => [
+          selection.kind,
+          selection,
+        ]),
+      );
+      if (incomingSelections.length === 7) {
+        currentByKind.clear();
+      }
+      for (const selection of incomingSelections) {
+        currentByKind.set(selection.kind, selection);
+      }
       activeSelectionValue = {
-        selections: state.selections || activeSelectionValue.selections || [],
+        selections: Array.from(currentByKind.values()),
         ...(state.loras !== undefined ||
         activeSelectionValue.loras !== undefined
           ? { loras: state.loras || activeSelectionValue.loras || [] }
           : {}),
       };
-      const error = options.modeStateError?.(state);
-      if (error) throw error;
       return options.modeStateRejection?.(state) || options.stateRejected || [];
     }),
     applyIntent: vi.fn(() => options.intentRejected || []),
     showResolvedComponents: vi.fn(),
-    value: vi.fn(() => activeSelectionValue),
+    value: vi.fn(() => {
+      selectionSnapshots.add(activeSelectionValue);
+      return activeSelectionValue;
+    }),
   });
   const controls = disposable({
     render: vi.fn(),
@@ -1042,6 +1329,11 @@ function createFixture(options = {}) {
         return options.stateLoadError
           ? Promise.reject(options.stateLoadError)
           : Promise.resolve(options.savedState || {});
+      if (path.startsWith("playground/compositions/")) {
+        return options.compositionLoadError
+          ? Promise.reject(options.compositionLoadError)
+          : Promise.resolve(options.compositionHandoff || { selections: [] });
+      }
       if (path.startsWith("images/")) {
         const imageUid = decodeURIComponent(
           path.slice("images/".length, -"/generator-handoff".length),

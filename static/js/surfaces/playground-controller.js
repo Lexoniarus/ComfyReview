@@ -1,4 +1,8 @@
-import { promptKinds } from "../playground/prompt-mode-editor.js";
+import {
+  compositionPromptState,
+  imagePromptState,
+  scopePromptPatch,
+} from "../playground/generator-prompt-projector.js";
 
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>, put: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
 /** @typedef {{render: (components: any[], loras?: any[]) => void, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void, showResolvedComponents: (components: any[]) => void, value: () => {selections: any[], loras?: any[]}, dispose: () => void}} ModesBoundary */
@@ -6,7 +10,8 @@ import { promptKinds } from "../playground/prompt-mode-editor.js";
 /** @typedef {{render: (draft: any, draftUid: string) => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (payload: any) => void, renderLoading: (message?: string) => void, dispose: () => void}} GuidanceBoundary */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, stateRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>, intentStore?: {clear?: () => void, clearPromptImage?: (imageUid: string) => void}}} PlaygroundDependencies */
+/** @typedef {{type: "image", imageUid: string} | {type: "composition", compositionUid: string} | {type: "scope", scope: {kind: string, component_uid: string, revision_uid: string | null}}} TypedPromptSource */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, stateRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>, intentStore?: {clear?: () => void, clearPromptImage?: (imageUid: string) => void, clearPromptComposition?: (compositionUid: string) => void, clearPromptScope?: (scope: {kind: string, component_uid: string, revision_uid?: string | null}) => void}}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -104,7 +109,7 @@ export class PlaygroundController {
       if (
         hasPrefill(this.intent) &&
         !rejected.length &&
-        !this.intent.promptImageUid
+        !hasTypedPromptSource(this.intent)
       )
         this.intentStore?.clear?.();
     } catch (error) {
@@ -299,89 +304,118 @@ export class PlaygroundController {
 
   async #applyIntent() {
     let intent = this.intent;
-    const promptImageUid = String(intent.promptImageUid || "");
+    const typedSource = typedPromptSourceOf(intent);
     const legacyImageUid = String(intent.imageUid || "");
     const renderImageUid = String(intent.renderImageUid || legacyImageUid);
     let promptHandoff = null;
-    if (promptImageUid) {
-      promptHandoff = await this.#loadHandoff(promptImageUid);
+    if (typedSource?.type === "image") {
+      promptHandoff = await this.#loadHandoff(typedSource.imageUid);
     } else if (legacyImageUid) {
       promptHandoff = await this.#loadHandoff(legacyImageUid);
     }
     let renderHandoff = null;
     if (renderImageUid) {
       renderHandoff =
-        promptHandoff && renderImageUid === (promptImageUid || legacyImageUid)
+        promptHandoff &&
+        renderImageUid ===
+          (typedSource?.type === "image"
+            ? typedSource.imageUid
+            : legacyImageUid)
           ? promptHandoff
           : await this.#loadHandoff(renderImageUid);
     }
 
     /** @type {string[]} */
     const rejected = [];
-    /** @type {Record<string, any> | null} */
-    let priorPromptState = null;
-    if (promptImageUid) {
-      this.draftReference = null;
-      try {
-        const promptState = imagePromptState(promptHandoff?.prompt_setup || {});
-        priorPromptState = this.modes.value();
-        const promptRejections = this.modes.applyState(promptState) || [];
-        if (promptRejections.length) {
-          rejected.push(
-            `Image-Prompt abgewiesen: ${promptRejections.join(", ")}`,
-          );
-          rejected.push(...this.#restorePromptState(priorPromptState));
-          priorPromptState = null;
-        }
-      } catch (error) {
-        rejected.push(`Image-Prompt abgewiesen: ${errorMessage(error)}`);
-        if (priorPromptState) {
-          rejected.push(...this.#restorePromptState(priorPromptState));
-          priorPromptState = null;
-        }
+    if (typedSource) {
+      if (renderHandoff) {
+        intent = { ...intent, ...renderIntent(renderHandoff) };
       }
-    } else if (legacyImageUid) {
-      intent = { ...intent, ...promptIntent(promptHandoff || {}) };
+      this.intent = intent;
+      rejected.push(...(this.controls.applyIntent(intent) || []));
+      this.draftReference = null;
+      rejected.push(
+        ...(await this.#applyTypedPromptSource(typedSource, promptHandoff)),
+      );
+      return rejected;
     }
+    if (legacyImageUid)
+      intent = { ...intent, ...promptIntent(promptHandoff || {}) };
     if (renderHandoff) {
       intent = { ...intent, ...renderIntent(renderHandoff) };
     }
 
     this.intent = intent;
-    if (!promptImageUid)
-      rejected.push(...(this.modes.applyIntent(intent) || []));
+    rejected.push(...(this.modes.applyIntent(intent) || []));
     rejected.push(...(this.controls.applyIntent(intent) || []));
-    if (
-      !promptImageUid &&
-      Array.isArray(intent.revisionUids) &&
-      intent.revisionUids.length
-    ) {
+    if (Array.isArray(intent.revisionUids) && intent.revisionUids.length) {
       this.draftReference = { revision_uids: intent.revisionUids };
-    } else if (!promptImageUid && intent.compositionUid) {
+    } else if (intent.compositionUid) {
       this.draftReference = { composition_uid: intent.compositionUid };
     }
+    return rejected;
+  }
 
-    if (promptImageUid && priorPromptState) {
+  /** @param {TypedPromptSource} source @param {any} imageHandoff @returns {Promise<string[]>} */
+  async #applyTypedPromptSource(source, imageHandoff) {
+    const priorPromptState = this.modes.value();
+    let applyAttempted = false;
+    const label = promptSourceLabel(source.type);
+    try {
+      const promptState = await this.#typedPromptState(source, imageHandoff);
+      applyAttempted = true;
+      const promptRejections = this.modes.applyState(promptState) || [];
+      if (promptRejections.length) {
+        return [
+          `${label} abgewiesen: ${promptRejections.join(", ")}`,
+          ...this.#restorePromptState(priorPromptState),
+        ];
+      }
       this.stateRequests.cancel(this.stateTimer);
       this.stateTimer = null;
-      try {
-        await this.#persistState();
-      } catch (error) {
-        rejected.push(
-          `Image-Prompt konnte nicht gespeichert werden: ${errorMessage(error)}`,
-        );
-        rejected.push(...this.#restorePromptState(priorPromptState));
-        return rejected;
-      }
-      try {
-        this.intentStore?.clearPromptImage?.(promptImageUid);
-      } catch (error) {
-        rejected.push(
-          `Image-Prompt übernommen, Quelle konnte nicht entfernt werden: ${errorMessage(error)}`,
-        );
-      }
+      await this.#persistState();
+    } catch (error) {
+      return [
+        `${label} konnte nicht übernommen werden: ${errorMessage(error)}`,
+        ...(applyAttempted ? this.#restorePromptState(priorPromptState) : []),
+      ];
     }
-    return rejected;
+    try {
+      this.#clearTypedPromptSource(source);
+    } catch (error) {
+      return [
+        `${label} übernommen, Quelle konnte nicht entfernt werden: ${errorMessage(error)}`,
+      ];
+    }
+    return [];
+  }
+
+  /** @param {TypedPromptSource} source @param {any} imageHandoff */
+  async #typedPromptState(source, imageHandoff) {
+    if (source.type === "image") {
+      return imagePromptState(imageHandoff?.prompt_setup || {});
+    }
+    if (source.type === "composition") {
+      const handoff = await this.requests.run((signal) =>
+        this.api.get(
+          `playground/compositions/${encodeURIComponent(source.compositionUid)}/prompt-selections`,
+          { signal },
+        ),
+      );
+      return compositionPromptState(handoff.selections);
+    }
+    return scopePromptPatch(source.scope);
+  }
+
+  /** @param {TypedPromptSource} source */
+  #clearTypedPromptSource(source) {
+    if (source.type === "image") {
+      this.intentStore?.clearPromptImage?.(source.imageUid);
+    } else if (source.type === "composition") {
+      this.intentStore?.clearPromptComposition?.(source.compositionUid);
+    } else {
+      this.intentStore?.clearPromptScope?.(source.scope);
+    }
   }
 
   /** @param {Record<string, any>} state @returns {string[]} */
@@ -410,6 +444,38 @@ export class PlaygroundController {
   }
 }
 
+/** @param {Record<string, any>} intent @returns {TypedPromptSource | null} */
+function typedPromptSourceOf(intent) {
+  const imageUid = String(intent.promptImageUid || "").trim();
+  if (imageUid) return { type: "image", imageUid };
+  const compositionUid = String(intent.promptCompositionUid || "").trim();
+  if (compositionUid) return { type: "composition", compositionUid };
+  const scope = intent.promptScope;
+  if (scope && typeof scope === "object") {
+    return {
+      type: "scope",
+      scope: {
+        kind: String(scope.kind).trim(),
+        component_uid: String(scope.component_uid).trim(),
+        revision_uid: String(scope.revision_uid || "").trim() || null,
+      },
+    };
+  }
+  return null;
+}
+
+/** @param {Record<string, any>} intent */
+function hasTypedPromptSource(intent) {
+  return typedPromptSourceOf(intent) !== null;
+}
+
+/** @param {string} type */
+function promptSourceLabel(type) {
+  if (type === "image") return "Image-Prompt";
+  if (type === "composition") return "Composition-Prompt";
+  return "Scope-Prompt";
+}
+
 /** @param {Record<string, any>} handoff */
 function promptIntent(handoff) {
   const prompt = handoff.prompt_setup || {};
@@ -419,99 +485,6 @@ function promptIntent(handoff) {
       : [],
     loras: Array.isArray(prompt.loras) ? prompt.loras : [],
   };
-}
-
-const generatorPromptKinds = promptKinds.map(([kind]) => kind);
-
-/** @param {Record<string, any>} promptSetup */
-function imagePromptState(promptSetup) {
-  if (!Array.isArray(promptSetup.selections)) {
-    throw new Error("Typed Prompt-Selections fehlen.");
-  }
-  const selectedByKind = new Map();
-  const positionedSelections = promptSetup.selections
-    .map((selection, index) => ({ selection, index }))
-    .sort((left, right) => {
-      const positionDifference =
-        Number(left.selection?.position) - Number(right.selection?.position);
-      return Number.isFinite(positionDifference) && positionDifference !== 0
-        ? positionDifference
-        : left.index - right.index;
-    });
-  for (const { selection } of positionedSelections) {
-    const position = selection?.position;
-    if (!Number.isInteger(position) || position < 0) {
-      throw new Error("Prompt-Reihenfolge ist ungültig.");
-    }
-    const kind = String(selection?.kind || "");
-    if (!generatorPromptKinds.includes(kind)) {
-      throw new Error(`Unbekannte Prompt-Rolle: ${kind || "ohne Kind"}`);
-    }
-    if (selectedByKind.has(kind)) {
-      throw new Error(`Prompt-Rolle mehrfach vorhanden: ${kind}`);
-    }
-    const componentUid = String(selection?.component_uid || "").trim();
-    const revisionUid = String(selection?.revision_uid || "").trim();
-    if (!componentUid || !revisionUid) {
-      throw new Error(`Prompt-Rolle unvollständig: ${kind}`);
-    }
-    selectedByKind.set(kind, {
-      kind,
-      mode: "fixed",
-      component_uid: componentUid,
-      revision_uid: revisionUid,
-    });
-  }
-  if (!selectedByKind.has("character")) {
-    throw new Error("Character-Prompt-Auswahl fehlt.");
-  }
-  return {
-    selections: generatorPromptKinds.map(
-      (kind) =>
-        selectedByKind.get(kind) || {
-          kind,
-          mode: "off",
-          component_uid: null,
-          revision_uid: null,
-        },
-    ),
-    loras: imagePromptLoras(promptSetup.loras),
-  };
-}
-
-/** @param {unknown} loras */
-function imagePromptLoras(loras) {
-  if (loras === undefined || loras === null) return [];
-  if (!Array.isArray(loras)) {
-    throw new Error("LoRA-Setup des Bildes ist ungültig.");
-  }
-  return loras.flatMap((lora) => {
-    if (
-      !lora ||
-      typeof lora !== "object" ||
-      typeof lora.model_effective !== "boolean" ||
-      typeof lora.clip_effective !== "boolean"
-    ) {
-      throw new Error("LoRA-Wirksamkeit des Bildes ist nicht verfügbar.");
-    }
-    if (!lora.model_effective && !lora.clip_effective) return [];
-    const modelStrength = lora.model_effective
-      ? Number(lora.model_strength)
-      : 0;
-    const clipStrength = lora.clip_effective ? Number(lora.clip_strength) : 0;
-    if (!Number.isFinite(modelStrength) || !Number.isFinite(clipStrength)) {
-      throw new Error("LoRA-Stärken des Bildes sind ungültig.");
-    }
-    return [
-      {
-        lora_uid: lora.lora_uid,
-        revision_uid: lora.revision_uid,
-        provider_name: lora.provider_name,
-        model_strength: modelStrength,
-        clip_strength: clipStrength,
-      },
-    ];
-  });
 }
 
 /** @param {Record<string, any>} handoff */

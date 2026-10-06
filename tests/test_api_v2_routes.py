@@ -449,6 +449,19 @@ class _Playground:
         self.composition_uid = composition_uid
         return self.prepare_draft(SimpleNamespace(), overrides=None)
 
+    def resolve_composition_prompt_selections(self, composition_uid):
+        self.composition_uid = composition_uid
+        return (
+            SelectedPromptComponent(
+                _prompt_component(),
+                _prompt_component().latest_revision,
+            ),
+            SelectedPromptComponent(
+                _prompt_component("scene-a", "scene"),
+                _prompt_component("scene-a", "scene").latest_revision,
+            ),
+        )
+
     def confirm_draft(self, command):
         self.confirm_command = command
         if "missing" in command.component_uids:
@@ -1126,6 +1139,31 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "character-a",
         "scene-a",
     ]
+
+
+def test_v2_playground_projects_exact_composition_prompt_selections() -> None:
+    client, container = _client()
+
+    response = client.get(
+        "/api/v2/playground/compositions/composition-a/prompt-selections"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "selections": [
+            {
+                "kind": "character",
+                "component_uid": "character-a",
+                "revision_uid": "revision-character-a",
+            },
+            {
+                "kind": "scene",
+                "component_uid": "scene-a",
+                "revision_uid": "revision-scene-a",
+            },
+        ]
+    }
+    assert container.playground_service.composition_uid == "composition-a"
 
 
 def test_v2_playground_generator_state_round_trips_strict_payload() -> None:

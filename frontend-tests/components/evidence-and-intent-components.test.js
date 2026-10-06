@@ -126,7 +126,7 @@ describe("Shared evidence and Playground intent components", () => {
         promptKind: "character",
       }),
     );
-    expect(root.textContent).toContain("1 Prompt-Baustein(e)");
+    expect(root.textContent).toContain("Prompt-Baustein");
     expect(toast.textContent).toContain("Prompt");
     tray.stage(action("parameter", { parameter: "cfg", value: "6.5" }));
     expect(root.textContent).toContain("CFG 6.5");
@@ -151,6 +151,11 @@ describe("Shared evidence and Playground intent components", () => {
         componentUids: "[]",
       }),
     );
+    expect(root.textContent).toContain("Prompt-Komposition");
+    tray.stage(action("scope", { componentUids: '["character-a","scene-a"]' }));
+    expect(root.textContent).toContain("2 Prompt-Baustein(e)");
+    store.merge({ compositionUid: "legacy-composition" });
+    tray.render();
     expect(root.textContent).toContain("Prompt-Komposition");
     tray.stage(action("image", { imageUid: "image-a" }));
     expect(toast.textContent).toContain("Auswahl");

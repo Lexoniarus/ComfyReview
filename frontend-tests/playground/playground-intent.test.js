@@ -17,6 +17,12 @@ describe("Playground intent codec", () => {
       imageUid: "image-a",
       promptImageUid: "image-prompt",
       renderImageUid: "image-render",
+      promptCompositionUid: "prompt-composition-a",
+      promptScope: {
+        kind: "scene",
+        component_uid: "scene-a",
+        revision_uid: "scene-revision-old",
+      },
       checkpoint: "model.safetensors",
       sampler: "euler",
       scheduler: "normal",
@@ -36,11 +42,29 @@ describe("Playground intent codec", () => {
     expect(
       readPlaygroundIntent("?steps_min=invalid").steps_min,
     ).toBeUndefined();
+    expect(readPlaygroundIntent("?prompt_scope=invalid").promptScope).toEqual({
+      kind: "",
+      component_uid: "",
+      revision_uid: null,
+    });
     expect(readPlaygroundIntent("").componentUids).toEqual([]);
     expect(playgroundIntentUrl({})).toBe("/playground/generator");
   });
 
   it("maps every analytics action without accepting prompt strings", () => {
+    expect(
+      action("scope", {
+        componentUid: "scene-a",
+        promptKind: "scene",
+        revisionUid: "scene-revision-old",
+      }),
+    ).toEqual({
+      promptScope: {
+        kind: "scene",
+        component_uid: "scene-a",
+        revision_uid: "scene-revision-old",
+      },
+    });
     expect(action("scope", { componentUid: "character-a" })).toEqual({
       componentUids: ["character-a"],
     });
@@ -48,8 +72,7 @@ describe("Playground intent codec", () => {
       action("scope", { componentUids: '["character-a","scene-a"]' }),
     ).toEqual({ componentUids: ["character-a", "scene-a"] });
     expect(action("composition", { compositionUid: "composition-a" })).toEqual({
-      compositionUid: "composition-a",
-      componentUids: [],
+      promptCompositionUid: "composition-a",
     });
     expect(action("image", { imageUid: "image-a" })).toEqual({
       imageUid: "image-a",
@@ -109,11 +132,19 @@ describe("Playground intent codec", () => {
   it("stages prompt and render intents per tab with deterministic merging", () => {
     const storage = new MemoryStorage();
     const store = new PlaygroundIntentStore(storage);
-    store.mergePromptComponent("character-a", "character");
-    store.mergePromptComponent("character-b", "character");
-    store.mergePromptComponent("scene-a", "scene");
+    store.merge({ componentUids: ["character-a"] });
+    store.merge({ componentUids: ["character-b"] });
+    store.merge({ componentUids: ["scene-a"] });
     store.merge({ sampler: "euler", steps_min: 24, steps_max: 24 });
     store.merge({ sampler: "dpmpp_2m", cfg_min: 6.5, cfg_max: 6.5 });
+    const previousState = JSON.parse(
+      storage.getItem("comfyreview.playground-intent.v2"),
+    );
+    previousState.prompt_kinds.character = "character-b";
+    storage.setItem(
+      "comfyreview.playground-intent.v2",
+      JSON.stringify(previousState),
+    );
     store.merge({
       compositionUid: "composition-a",
       componentUids: ["character-c"],
@@ -197,6 +228,56 @@ describe("Playground intent codec", () => {
 
     store.clearPromptImage("image-prompt");
     expect(store.read()).toEqual({ renderImageUid: "image-render" });
+  });
+
+  it("stages one typed prompt source without modifying legacy prompt or render data", () => {
+    const storage = new MemoryStorage();
+    const store = new PlaygroundIntentStore(storage);
+    store.merge({
+      componentUids: ["legacy-character"],
+      revisionUids: ["legacy-revision"],
+      compositionUid: "legacy-composition",
+    });
+    store.stageRenderSetup("image-render");
+    store.mergePromptComponent("scene-a", "scene");
+    store.clearPromptScope({
+      kind: "scene",
+      component_uid: "other-scene",
+    });
+    expect(store.read()).toHaveProperty("promptScope");
+    store.clearPromptScope({
+      kind: "scene",
+      component_uid: "scene-a",
+      revision_uid: null,
+    });
+    store.stagePromptScope({
+      kind: "scene",
+      component_uid: "scene-a",
+      revision_uid: "scene-revision-1",
+    });
+    store.stagePromptComposition("composition-a");
+    store.clearPromptComposition("another-composition");
+    store.clearPromptScope({
+      kind: "scene",
+      component_uid: "scene-a",
+      revision_uid: "scene-revision-1",
+    });
+
+    expect(store.read()).toEqual({
+      componentUids: ["legacy-character"],
+      revisionUids: ["legacy-revision"],
+      compositionUid: "legacy-composition",
+      promptCompositionUid: "composition-a",
+      renderImageUid: "image-render",
+    });
+
+    store.clearPromptComposition("composition-a");
+    expect(store.read()).toEqual({
+      componentUids: ["legacy-character"],
+      revisionUids: ["legacy-revision"],
+      compositionUid: "legacy-composition",
+      renderImageUid: "image-render",
+    });
   });
 
   it("keeps the legacy source-identity merge contract", () => {

@@ -271,6 +271,22 @@ describe("Playground browser components", () => {
 
     const sceneRow = root.querySelector('.prompt-mode-row[data-kind="scene"]');
     const sceneMode = sceneRow.querySelector("select");
+    editor.applyState({
+      selections: [
+        {
+          kind: "scene",
+          mode: "fixed",
+          component_uid: "scene-a",
+          revision_uid: null,
+        },
+      ],
+    });
+    expect(editor.value().selections[1]).toEqual({
+      kind: "scene",
+      mode: "fixed",
+      component_uid: "scene-a",
+      revision_uid: "scene-rev-2",
+    });
     sceneMode.value = "random";
     sceneMode.dispatchEvent(new Event("change"));
     expect(editor.value().selections[1]).toEqual({

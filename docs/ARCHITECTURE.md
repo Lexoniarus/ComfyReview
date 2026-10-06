@@ -388,6 +388,13 @@ The canonical cutover is intentionally not the end of the wider refactor.
   source. Rejected or unpersisted applications restore the prior prompt state
   and retain the staged source. A separately staged render image is not cleared
   by prompt cleanup, and applying this handoff does not create a draft.
+  Analytics Scope actions stage only a typed component/revision source and
+  patch that prompt kind; Analytics Composition actions stage only the
+  composition UID, resolve its exact ordered revisions through the
+  Application layer, and replace the complete prompt selection. Both apply
+  through the same rollback/persist operation and clear only their typed
+  source after the normal generator state is saved. Top Combinations remains
+  on its existing legacy handoff path.
 - `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or

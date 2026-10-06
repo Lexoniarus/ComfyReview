@@ -91,7 +91,6 @@ export class CompositionEvidenceView {
     use.type = "button";
     use.dataset.playgroundIntent = "composition";
     use.dataset.compositionUid = String(row.composition_uid || "");
-    use.dataset.componentUids = JSON.stringify(arrayValue(row.component_uids));
     use.textContent = "Prompt vormerken";
     const details = document.createElement("button");
     details.type = "button";

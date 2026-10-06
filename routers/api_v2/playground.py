@@ -208,6 +208,39 @@ def playground_components(request: Request) -> JSONResponse:
     )
 
 
+@router.get("/playground/compositions/{composition_uid}/prompt-selections")
+def playground_composition_prompt_selections(
+    composition_uid: str,
+    request: Request,
+) -> JSONResponse:
+    """Return the exact prompt selections in a persisted composition."""
+    container = get_application_container(request)
+    try:
+        selections = (
+            container.playground_service.resolve_composition_prompt_selections(
+                composition_uid
+            )
+        )
+    except (
+        ContentClassificationError,
+        PromptSelectionError,
+        PromptCatalogValidationError,
+    ) as error:
+        return error_response(400, "invalid_playground_selection", str(error))
+    return JSONResponse(
+        {
+            "selections": [
+                {
+                    "kind": selected.component.kind,
+                    "component_uid": selected.component.component_uid,
+                    "revision_uid": selected.revision.revision_uid,
+                }
+                for selected in selections
+            ]
+        }
+    )
+
+
 @router.get("/playground/top-combinations")
 def playground_top_combinations(request: Request) -> JSONResponse:
     """Return top canonical two- and three-component examples."""

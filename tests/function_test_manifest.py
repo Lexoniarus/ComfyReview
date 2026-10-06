@@ -277,6 +277,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_application.py::"
         "test_playground_service_restores_exact_revisions_and_compositions"
     ),
+    "comfyreview.application.playground:PlaygroundService.resolve_composition_prompt_selections": (
+        "tests/test_playground_application.py::"
+        "test_playground_service_resolves_ordered_exact_composition_selections"
+    ),
     "comfyreview.application.playground:PlaygroundService.confirm_draft": (
         "tests/test_playground_application.py::"
         "test_playground_service_revalidates_confirmed_draft_and_derives_revisions"

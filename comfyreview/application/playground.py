@@ -796,6 +796,29 @@ class PlaygroundService:
             prompt=self._renderer.render(selection),
         )
 
+    def resolve_composition_prompt_selections(
+        self,
+        composition_uid: str,
+    ) -> tuple[SelectedPromptComponent, ...]:
+        """Resolve a composition into its canonical ordered, exact selections."""
+        normalized_uid = str(composition_uid or "").strip()
+        if not normalized_uid:
+            raise PromptSelectionError("composition_uid is required")
+        projections = self._catalog.list_composition_components(normalized_uid)
+        revision_uids = tuple(
+            projection.latest_revision.revision_uid
+            for projection in projections
+        )
+        if not projections:
+            raise PromptSelectionError("character revision is required")
+        self._require_allowed(projections)
+        selected = self._with_current_component_metadata(projections)
+        if any(item.component.archived for item in selected):
+            raise PromptSelectionError(
+                "composition contains an inactive prompt component"
+            )
+        return self._exact_selection(selected, revision_uids).components
+
     def prepare_image_snapshot(
         self,
         image: ImageContext,

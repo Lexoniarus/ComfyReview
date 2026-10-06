@@ -1191,6 +1191,144 @@ def test_playground_service_restores_exact_revisions_and_compositions() -> (
     )
 
 
+def test_playground_service_resolves_ordered_exact_composition_selections() -> (
+    None
+):
+    components = _catalog()
+    historical_projections = (
+        replace(
+            components[0],
+            latest_revision=replace(
+                components[0].latest_revision,
+                revision_uid="character-historical",
+            ),
+        ),
+        replace(
+            components[1],
+            latest_revision=replace(
+                components[1].latest_revision,
+                revision_uid="scene-historical",
+            ),
+        ),
+        replace(
+            components[2],
+            latest_revision=replace(
+                components[2].latest_revision,
+                revision_uid="outfit-historical",
+            ),
+        ),
+        replace(
+            components[6],
+            latest_revision=replace(
+                components[6].latest_revision,
+                revision_uid="modifier-historical",
+            ),
+        ),
+    )
+
+    class _HistoricalCompositionCatalog(_CatalogService):
+        def list_composition_components(
+            self,
+            composition_uid: str,
+        ) -> tuple[PromptComponent, ...]:
+            assert composition_uid == "composition-historical"
+            return historical_projections
+
+    selected = _service(
+        _HistoricalCompositionCatalog(components)
+    ).resolve_composition_prompt_selections("composition-historical")
+
+    assert tuple(item.component.kind for item in selected) == (
+        "character",
+        "scene",
+        "outfit",
+        "modifier",
+    )
+    assert tuple(item.component.component_uid for item in selected) == (
+        "character-a",
+        "scene-night",
+        "outfit-red",
+        "modifier-a",
+    )
+    assert tuple(item.revision.revision_uid for item in selected) == (
+        "character-historical",
+        "scene-historical",
+        "outfit-historical",
+        "modifier-historical",
+    )
+
+
+def test_playground_service_rejects_compositions_without_character() -> None:
+    class _NoCharacterCompositionCatalog(_CatalogService):
+        def list_composition_components(
+            self,
+            composition_uid: str,
+        ) -> tuple[PromptComponent, ...]:
+            return self.components[1:2]
+
+    with pytest.raises(PromptSelectionError, match="character revision"):
+        _service(
+            _NoCharacterCompositionCatalog(_catalog())
+        ).resolve_composition_prompt_selections("composition-no-character")
+
+
+def test_playground_service_rejects_duplicate_composition_kinds() -> None:
+    components = _catalog()
+
+    class _DuplicateCompositionCatalog(_CatalogService):
+        def _duplicate(self) -> PromptComponent:
+            return replace(
+                components[0],
+                component_uid="character-b",
+                component_key="character_b_key",
+                latest_revision=replace(
+                    components[0].latest_revision,
+                    revision_uid="character-b-revision",
+                ),
+            )
+
+        def list_components(
+            self,
+            *,
+            include_archived: bool = False,
+        ) -> tuple[PromptComponent, ...]:
+            return (*self.components, self._duplicate())
+
+        def list_composition_components(
+            self,
+            composition_uid: str,
+        ) -> tuple[PromptComponent, ...]:
+            return components[0], self._duplicate()
+
+    with pytest.raises(PromptSelectionError, match="duplicate prompt"):
+        _service(
+            _DuplicateCompositionCatalog(components)
+        ).resolve_composition_prompt_selections("composition-duplicate")
+
+
+def test_playground_service_rejects_archived_composition_components() -> None:
+    class _ArchivedCompositionCatalog(_CatalogService):
+        def list_composition_components(
+            self,
+            composition_uid: str,
+        ) -> tuple[PromptComponent, ...]:
+            return self.components[0], self.components[8]
+
+    with pytest.raises(
+        PromptSelectionError, match="inactive prompt component"
+    ):
+        _service(
+            _ArchivedCompositionCatalog(_catalog())
+        ).resolve_composition_prompt_selections("composition-archived")
+
+
+def test_playground_service_requires_a_composition_identity() -> None:
+    with pytest.raises(PromptSelectionError, match="composition_uid"):
+        _service(
+            _CatalogService(_catalog())
+        ).resolve_composition_prompt_selections(" ")
+
+
 def test_playground_service_uses_authoritative_image_snapshot() -> None:
     service = _service(_CatalogService(_catalog()))
     image = SimpleNamespace(

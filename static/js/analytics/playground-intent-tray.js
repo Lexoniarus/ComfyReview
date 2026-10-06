@@ -2,7 +2,7 @@ import { intentFromAnalyticsAction } from "../playground/playground-intent.js";
 
 /** Present tab-local Playground staging without owning domain state. */
 export class PlaygroundIntentTray {
-  /** @param {HTMLElement} root @param {HTMLElement} toast @param {{read: () => Record<string, any>, merge: (intent: Record<string, any>) => Record<string, any>, mergePromptComponent: (uid: string, kind: string) => Record<string, any>, clear: () => void, consumeUrl: () => string}} store @param {{assign: (url: string) => void}} locationRef */
+  /** @param {HTMLElement} root @param {HTMLElement} toast @param {{read: () => Record<string, any>, merge: (intent: Record<string, any>) => Record<string, any>, stagePromptScope: (scope: {kind: string, component_uid: string, revision_uid?: string | null}) => Record<string, any>, stagePromptComposition: (uid: string) => Record<string, any>, clear: () => void, consumeUrl: () => string}} store @param {{assign: (url: string) => void}} locationRef */
   constructor(root, toast, store, locationRef) {
     this.root = root;
     this.toast = toast;
@@ -33,15 +33,10 @@ export class PlaygroundIntentTray {
   /** @param {HTMLElement} source */
   stage(source) {
     const intent = intentFromAnalyticsAction(source);
-    if (
-      source.dataset.playgroundIntent === "scope" &&
-      source.dataset.componentUid &&
-      source.dataset.promptKind
-    ) {
-      this.store.mergePromptComponent(
-        source.dataset.componentUid,
-        source.dataset.promptKind,
-      );
+    if (intent.promptScope) {
+      this.store.stagePromptScope(intent.promptScope);
+    } else if (intent.promptCompositionUid) {
+      this.store.stagePromptComposition(intent.promptCompositionUid);
     } else {
       this.store.merge(intent);
     }
@@ -101,6 +96,8 @@ function summary(intent) {
   if (intent.promptImageUid) fields.push("Prompt-Setup eines Bildes");
   if (intent.renderImageUid)
     fields.push("Generierungseinstellungen eines Bildes");
+  if (intent.promptCompositionUid) fields.push("Prompt-Komposition");
+  if (intent.promptScope) fields.push("Prompt-Baustein");
   if (intent.compositionUid) fields.push("Prompt-Komposition");
   else if (intent.componentUids?.length)
     fields.push(`${intent.componentUids.length} Prompt-Baustein(e)`);

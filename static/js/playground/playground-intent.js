@@ -7,12 +7,22 @@ const numericFields = [
   "denoise",
 ];
 
-/** @typedef {{componentUids?: string[], revisionUids?: string[], compositionUid?: string, imageUid?: string, promptImageUid?: string, renderImageUid?: string, loras?: any[], checkpoint?: string, sampler?: string, scheduler?: string, aspectFormat?: string, resolutionClass?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
+/** @typedef {{kind: string, component_uid: string, revision_uid?: string | null}} PromptScopeSource */
+/** @typedef {{componentUids?: string[], revisionUids?: string[], compositionUid?: string, promptCompositionUid?: string, promptScope?: PromptScopeSource, imageUid?: string, promptImageUid?: string, renderImageUid?: string, loras?: any[], checkpoint?: string, sampler?: string, scheduler?: string, aspectFormat?: string, resolutionClass?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
 
 /** @param {HTMLElement} element @returns {PlaygroundIntent} */
 export function intentFromAnalyticsAction(element) {
   const kind = String(element.dataset.playgroundIntent || "");
   if (kind === "scope") {
+    if (element.dataset.promptKind && element.dataset.componentUid) {
+      return {
+        promptScope: {
+          kind: text(element.dataset.promptKind),
+          component_uid: text(element.dataset.componentUid),
+          revision_uid: text(element.dataset.revisionUid) || null,
+        },
+      };
+    }
     return {
       componentUids: [
         ...values(element.dataset.componentUid),
@@ -22,8 +32,7 @@ export function intentFromAnalyticsAction(element) {
   }
   if (kind === "composition") {
     return {
-      compositionUid: text(element.dataset.compositionUid),
-      componentUids: jsonValues(element.dataset.componentUids),
+      promptCompositionUid: text(element.dataset.compositionUid),
     };
   }
   if (kind === "image") {
@@ -52,6 +61,9 @@ export function playgroundIntentUrl(intent) {
   for (const uid of intent.componentUids || []) query.append("component", uid);
   for (const uid of intent.revisionUids || []) query.append("revision", uid);
   set(query, "composition", intent.compositionUid);
+  set(query, "prompt_composition", intent.promptCompositionUid);
+  if (intent.promptScope)
+    set(query, "prompt_scope", JSON.stringify(intent.promptScope));
   set(query, "image", intent.imageUid);
   set(query, "prompt_image", intent.promptImageUid);
   set(query, "render_image", intent.renderImageUid);
@@ -82,6 +94,16 @@ export function readPlaygroundIntent(search) {
     resolutionClass: text(query.get("resolution_class")),
     seedMode: text(query.get("seed_mode")),
   };
+  if (query.has("prompt_composition"))
+    intent.promptCompositionUid = text(query.get("prompt_composition"));
+  if (query.has("prompt_scope")) {
+    const scope = record(json(query.get("prompt_scope")));
+    intent.promptScope = {
+      kind: text(scope.kind),
+      component_uid: text(scope.component_uid),
+      revision_uid: text(scope.revision_uid) || null,
+    };
+  }
   if (query.has("prompt_image"))
     intent.promptImageUid = text(query.get("prompt_image"));
   if (query.has("render_image"))
@@ -128,19 +150,10 @@ export class PlaygroundIntentStore {
 
   /** @param {string} componentUid @param {string} kind */
   mergePromptComponent(componentUid, kind) {
-    const stored = this.#state();
-    const current = stored.prompt;
-    const kinds = stored.promptKinds;
-    const previous = text(kinds[kind]);
-    const values = (current.componentUids || []).filter(
-      (/** @type {string} */ uid) => uid !== previous && uid !== componentUid,
-    );
-    values.push(componentUid);
-    current.componentUids = values;
-    delete current.compositionUid;
-    kinds[kind] = componentUid;
-    this.#write(current, stored.render, kinds);
-    return this.read();
+    return this.stagePromptScope({
+      kind,
+      component_uid: componentUid,
+    });
   }
 
   /** @param {PlaygroundIntent} incoming */
@@ -170,7 +183,11 @@ export class PlaygroundIntentStore {
     if (incoming.revisionUids?.length)
       prompt.revisionUids = incoming.revisionUids;
     if (incoming.promptImageUid || incoming.imageUid) {
-      prompt.promptImageUid = incoming.promptImageUid || incoming.imageUid;
+      this.#setTypedPromptSource(
+        prompt,
+        "promptImageUid",
+        incoming.promptImageUid || incoming.imageUid,
+      );
       delete prompt.componentUids;
       delete prompt.revisionUids;
       delete prompt.compositionUid;
@@ -223,7 +240,35 @@ export class PlaygroundIntentStore {
   /** @param {string} imageUid */
   stagePromptImage(imageUid) {
     const stored = this.#state();
-    this.#write({ promptImageUid: text(imageUid) }, stored.render, {});
+    const prompt = { ...stored.prompt };
+    this.#setTypedPromptSource(prompt, "promptImageUid", text(imageUid));
+    this.#write(prompt, stored.render, stored.promptKinds);
+    return this.read();
+  }
+
+  /** @param {string} compositionUid */
+  stagePromptComposition(compositionUid) {
+    const stored = this.#state();
+    const prompt = { ...stored.prompt };
+    this.#setTypedPromptSource(
+      prompt,
+      "promptCompositionUid",
+      text(compositionUid),
+    );
+    this.#write(prompt, stored.render, stored.promptKinds);
+    return this.read();
+  }
+
+  /** @param {PromptScopeSource} scope */
+  stagePromptScope(scope) {
+    const stored = this.#state();
+    const prompt = { ...stored.prompt };
+    this.#setTypedPromptSource(prompt, "promptScope", {
+      kind: text(scope.kind),
+      component_uid: text(scope.component_uid),
+      revision_uid: text(scope.revision_uid) || null,
+    });
+    this.#write(prompt, stored.render, stored.promptKinds);
     return this.read();
   }
 
@@ -249,6 +294,34 @@ export class PlaygroundIntentStore {
     if (text(stored.prompt.promptImageUid) !== text(imageUid)) return;
     const prompt = { ...stored.prompt };
     delete prompt.promptImageUid;
+    this.#write(prompt, stored.render, stored.promptKinds);
+  }
+
+  /** @param {string} compositionUid */
+  clearPromptComposition(compositionUid) {
+    const stored = this.#state();
+    if (text(stored.prompt.promptCompositionUid) !== text(compositionUid)) {
+      return;
+    }
+    const prompt = { ...stored.prompt };
+    delete prompt.promptCompositionUid;
+    this.#write(prompt, stored.render, stored.promptKinds);
+  }
+
+  /** @param {PromptScopeSource} scope */
+  clearPromptScope(scope) {
+    const stored = this.#state();
+    const current = record(stored.prompt.promptScope);
+    if (
+      text(current.kind) !== text(scope.kind) ||
+      text(current.component_uid) !== text(scope.component_uid) ||
+      (text(current.revision_uid) || null) !==
+        (text(scope.revision_uid) || null)
+    ) {
+      return;
+    }
+    const prompt = { ...stored.prompt };
+    delete prompt.promptScope;
     this.#write(prompt, stored.render, stored.promptKinds);
   }
 
@@ -303,6 +376,14 @@ export class PlaygroundIntentStore {
         prompt_kinds: promptKinds,
       }),
     );
+  }
+
+  /** @param {Record<string, any>} prompt @param {"promptImageUid" | "promptCompositionUid" | "promptScope"} key @param {unknown} value */
+  #setTypedPromptSource(prompt, key, value) {
+    delete prompt.promptImageUid;
+    delete prompt.promptCompositionUid;
+    delete prompt.promptScope;
+    prompt[key] = value;
   }
 }
 
