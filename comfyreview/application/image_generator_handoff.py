@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 from comfyreview.application.comfyui import ComfyUiCapabilities, ComfyUiError
 from comfyreview.application.generation_queries import GenerationStageSummary
@@ -12,13 +12,12 @@ from comfyreview.application.image_queries import (
     ImageScope,
     ScopeKind,
 )
-from comfyreview.application.lora_effects import LoraGraphEffectPolicy
 from comfyreview.domain import PromptAtomUsage, prompt_atom_usages_from_text
 
 
 @dataclass(frozen=True, slots=True)
 class ImageLoraSnapshot:
-    """Describe one ordered LoRA proven to affect a stored workflow graph."""
+    """Describe one ordered LoRA from canonical generation usage."""
 
     lora_uid: str | None
     revision_uid: str | None
@@ -37,7 +36,6 @@ class ImageGenerationFacts:
 
     sampler_stages: tuple[GenerationStageSummary, ...]
     loras: tuple[ImageLoraSnapshot, ...]
-    workflow_graph: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,12 +119,10 @@ class ImageGeneratorHandoffService:
         images: ImageContextQueryService,
         repository: ImageGeneratorHandoffRepository,
         capabilities: CapabilityDiscovery,
-        effects: LoraGraphEffectPolicy | None = None,
     ) -> None:
         self._images = images
         self._repository = repository
         self._capabilities = capabilities
-        self._effects = effects or LoraGraphEffectPolicy()
 
     def get(self, image_uid: str) -> ImageGeneratorHandoff:
         """Return prompt/render packages for one currently visible image."""
@@ -135,7 +131,7 @@ class ImageGeneratorHandoffService:
         if facts is None:
             raise LookupError("generation facts are unavailable")
         selections = self._prompt_selections(image.scopes)
-        loras = self._effective_loras(facts)
+        loras = self._canonical_loras(facts.loras)
         capability_issues, available_loras, checkpoints = self._availability()
         prompt_issues = list(capability_issues)
         for lora in loras:
@@ -237,18 +233,23 @@ class ImageGeneratorHandoffService:
             )
         return tuple(selections)
 
-    def _effective_loras(
-        self, facts: ImageGenerationFacts
+    @staticmethod
+    def _canonical_loras(
+        loras: tuple[ImageLoraSnapshot, ...],
     ) -> tuple[ImageLoraSnapshot, ...]:
-        effects = {
-            item.node_id: item
-            for item in self._effects.effects(facts.workflow_graph)
-        }
         result: list[ImageLoraSnapshot] = []
-        for lora in facts.loras:
-            effect = effects.get(f"cr:lora:{lora.position:03d}")
-            if effect is None:
-                continue
+        positions: set[int] = set()
+        for lora in sorted(loras, key=lambda item: item.position):
+            if not lora.lora_uid or not lora.revision_uid:
+                raise ImageGeneratorHandoffValidationError(
+                    "canonical LoRA identity is incomplete: "
+                    f"{lora.provider_name}"
+                )
+            if lora.position in positions:
+                raise ImageGeneratorHandoffValidationError(
+                    f"duplicate canonical LoRA position: {lora.position}"
+                )
+            positions.add(lora.position)
             result.append(
                 ImageLoraSnapshot(
                     lora_uid=lora.lora_uid,
@@ -258,8 +259,8 @@ class ImageGeneratorHandoffService:
                     model_strength_milli=lora.model_strength_milli,
                     clip_strength_milli=lora.clip_strength_milli,
                     content_level=lora.content_level,
-                    model_effective=effect.model_active,
-                    clip_effective=effect.clip_active,
+                    model_effective=lora.model_strength_milli != 0,
+                    clip_effective=lora.clip_strength_milli != 0,
                 )
             )
         return tuple(result)

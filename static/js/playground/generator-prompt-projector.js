@@ -150,31 +150,26 @@ function imagePromptLoras(loras) {
   if (!Array.isArray(loras)) {
     throw new Error("LoRA-Setup des Bildes ist ungültig.");
   }
-  return loras.flatMap((lora) => {
-    if (
-      !lora ||
-      typeof lora !== "object" ||
-      typeof lora.model_effective !== "boolean" ||
-      typeof lora.clip_effective !== "boolean"
-    ) {
-      throw new Error("LoRA-Wirksamkeit des Bildes ist nicht verfügbar.");
+  return loras.map((lora) => {
+    if (!lora || typeof lora !== "object") {
+      throw new Error("LoRA-Setup des Bildes ist ungültig.");
     }
-    if (!lora.model_effective && !lora.clip_effective) return [];
-    const modelStrength = lora.model_effective
-      ? Number(lora.model_strength)
-      : 0;
-    const clipStrength = lora.clip_effective ? Number(lora.clip_strength) : 0;
+    const loraUid = String(lora.lora_uid || "").trim();
+    const revisionUid = String(lora.revision_uid || "").trim();
+    if (!loraUid || !revisionUid) {
+      throw new Error("LoRA-Identität des Bildes ist unvollständig.");
+    }
+    const modelStrength = Number(lora.model_strength);
+    const clipStrength = Number(lora.clip_strength);
     if (!Number.isFinite(modelStrength) || !Number.isFinite(clipStrength)) {
       throw new Error("LoRA-Stärken des Bildes sind ungültig.");
     }
-    return [
-      {
-        lora_uid: lora.lora_uid,
-        revision_uid: lora.revision_uid,
-        provider_name: lora.provider_name,
-        model_strength: modelStrength,
-        clip_strength: clipStrength,
-      },
-    ];
+    return {
+      lora_uid: loraUid,
+      revision_uid: revisionUid,
+      provider_name: lora.provider_name,
+      model_strength: modelStrength,
+      clip_strength: clipStrength,
+    };
   });
 }

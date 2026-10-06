@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from comfyreview.application.generation_queries import GenerationStageSummary
@@ -14,7 +13,7 @@ from comfyreview.repositories.sqlite.connection import connect_read_only
 
 
 class SqliteImageGeneratorHandoffRepository:
-    """Load normalized sampler, LoRA and workflow provenance facts."""
+    """Load normalized sampler and LoRA facts for generator handoff."""
 
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path)
@@ -25,8 +24,7 @@ class SqliteImageGeneratorHandoffRepository:
         """Return exact stored generation facts without policy decisions."""
         with connect_read_only(self._database_path, rows=True) as connection:
             generation = connection.execute(
-                "SELECT id, workflow_json FROM generations "
-                "WHERE generation_uid = ?",
+                "SELECT id FROM generations WHERE generation_uid = ?",
                 (generation_uid,),
             ).fetchone()
             if generation is None:
@@ -57,7 +55,6 @@ class SqliteImageGeneratorHandoffRepository:
                 """,
                 (generation_id,),
             ).fetchall()
-        workflow = self._workflow(generation["workflow_json"])
         return ImageGenerationFacts(
             sampler_stages=tuple(
                 GenerationStageSummary(
@@ -82,21 +79,12 @@ class SqliteImageGeneratorHandoffRepository:
                     model_strength_milli=int(row["model_strength_milli"]),
                     clip_strength_milli=int(row["clip_strength_milli"]),
                     content_level=self._text(row["content_level_snapshot"]),
-                    model_effective=False,
-                    clip_effective=False,
+                    model_effective=int(row["model_strength_milli"]) != 0,
+                    clip_effective=int(row["clip_strength_milli"]) != 0,
                 )
                 for row in loras
             ),
-            workflow_graph=workflow,
         )
-
-    @staticmethod
-    def _workflow(value: object) -> dict[str, object]:
-        try:
-            decoded = json.loads(str(value or "{}"))
-        except json.JSONDecodeError:
-            return {}
-        return decoded if isinstance(decoded, dict) else {}
 
     @staticmethod
     def _text(value: object) -> str | None:

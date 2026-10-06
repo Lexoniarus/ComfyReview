@@ -232,7 +232,7 @@ def test_image_handoff_uses_composition_revision_not_component_latest(
     class _Facts:
         def get_generation_facts(self, generation_uid: str):
             assert generation_uid == canonical_image.generation_uid
-            return ImageGenerationFacts((), (), {})
+            return ImageGenerationFacts((), ())
 
     class _Capabilities:
         def discover_capabilities(self) -> ComfyUiCapabilities:

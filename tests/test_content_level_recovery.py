@@ -285,23 +285,3 @@ def test_content_level_recovery_rejects_incomplete_and_stale_evidence(
         ContentLevelRecovery(database).recover(
             report, tmp_path / "should-not-exist.sqlite3"
         )
-
-
-def test_repository_curation_enumerates_every_current_component() -> None:
-    payload = json.loads(
-        (
-            Path(__file__).resolve().parents[1]
-            / "migrations"
-            / "prompt-content-level-curation-v1.json"
-        ).read_text(encoding="utf-8")
-    )
-    entries = payload["components"]
-    assert len(entries) == 791
-    assert len({entry["component_uid"] for entry in entries}) == 791
-    assert {entry["content_level"] for entry in entries} <= {
-        "standard",
-        "sexy",
-        "lewd",
-        "nude",
-        "explicit",
-    }

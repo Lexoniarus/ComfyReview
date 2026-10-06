@@ -89,7 +89,7 @@ class _MissingFacts:
         return None
 
 
-def test_image_handoff_separates_prompt_render_and_graph_effective_loras() -> (
+def test_image_handoff_uses_ordered_canonical_loras_without_graph_node_ids() -> (
     None
 ):
     image = ImageContext(
@@ -124,46 +124,14 @@ def test_image_handoff_separates_prompt_render_and_graph_effective_loras() -> (
     stage = GenerationStageSummary(
         "base_sampler", "sampler", 0, 42, 24, 6.5, "euler", "normal", 0.8
     )
-    graph = {
-        "checkpoint": {"class_type": "CheckpointLoaderSimple", "inputs": {}},
-        "cr:lora:000": {
-            "class_type": "LoraLoader",
-            "inputs": {
-                "model": ["checkpoint", 0],
-                "clip": ["checkpoint", 1],
-                "strength_model": 0.8,
-                "strength_clip": 0.6,
-            },
-        },
-        "positive": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["cr:lora:000", 1]},
-        },
-        "negative": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["cr:lora:000", 1]},
-        },
-        "sampler": {
-            "class_type": "KSampler",
-            "inputs": {
-                "model": ["cr:lora:000", 0],
-                "positive": ["positive", 0],
-                "negative": ["negative", 0],
-            },
-        },
-        "cr:lora:001": {
-            "class_type": "LoraLoader",
-            "inputs": {"strength_model": 1.0, "strength_clip": 1.0},
-        },
-    }
     facts = ImageGenerationFacts(
         (stage,),
         (
             ImageLoraSnapshot(
                 "lora-1",
-                None,
+                "revision-1",
                 "style.safetensors",
-                0,
+                1,
                 800,
                 600,
                 "sexy",
@@ -172,9 +140,9 @@ def test_image_handoff_separates_prompt_render_and_graph_effective_loras() -> (
             ),
             ImageLoraSnapshot(
                 "lora-2",
-                None,
+                "revision-2",
                 "unused.safetensors",
-                1,
+                0,
                 1000,
                 1000,
                 "standard",
@@ -182,7 +150,6 @@ def test_image_handoff_separates_prompt_render_and_graph_effective_loras() -> (
                 False,
             ),
         ),
-        graph,
     )
 
     handoff = ImageGeneratorHandoffService(
@@ -196,8 +163,13 @@ def test_image_handoff_separates_prompt_render_and_graph_effective_loras() -> (
     assert handoff.prompt_setup.positive_atoms[1].text == "style"
     assert tuple(
         item.provider_name for item in handoff.prompt_setup.loras
-    ) == ("style.safetensors",)
-    assert handoff.prompt_setup.loras[0].revision_uid is None
+    ) == (
+        "unused.safetensors",
+        "style.safetensors",
+    )
+    assert handoff.prompt_setup.loras[1].revision_uid == "revision-1"
+    assert handoff.prompt_setup.loras[1].model_strength_milli == 800
+    assert handoff.prompt_setup.loras[1].clip_strength_milli == 600
     assert handoff.render_setup.applicable is True
     assert handoff.render_setup.seed == 42
     assert handoff.render_setup.geometry_match == "approximate"
@@ -228,38 +200,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
         True,
         True,
     )
-    graph = {
-        "checkpoint": {
-            "class_type": "CheckpointLoaderSimple",
-            "inputs": {},
-        },
-        "cr:lora:000": {
-            "class_type": "LoraLoader",
-            "inputs": {
-                "model": ["checkpoint", 0],
-                "clip": ["checkpoint", 1],
-                "strength_model": 0.8,
-                "strength_clip": 0.6,
-            },
-        },
-        "positive": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["cr:lora:000", 1]},
-        },
-        "negative": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["cr:lora:000", 1]},
-        },
-        "sampler": {
-            "class_type": "KSampler",
-            "inputs": {
-                "model": ["cr:lora:000", 0],
-                "positive": ["positive", 0],
-                "negative": ["negative", 0],
-            },
-        },
-    }
-    facts = ImageGenerationFacts((stage, stage), (lora,), graph)
+    facts = ImageGenerationFacts((stage, stage), (lora,))
     no_geometry = replace(
         image,
         scopes=(
@@ -302,7 +243,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
         images=cast(
             Any, _Images(replace(no_geometry, geometry=image.geometry))
         ),
-        repository=_Facts(ImageGenerationFacts((stage,), (), {})),
+        repository=_Facts(ImageGenerationFacts((stage,), ())),
         capabilities=_UnavailableCapabilities(),
     ).get("image-1")
     assert offline.prompt_setup.issues == ("capabilities_unavailable",)
@@ -349,7 +290,7 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
 
     handoff = ImageGeneratorHandoffService(
         images=cast(Any, _Images(image)),
-        repository=_Facts(ImageGenerationFacts((stage,), (), {})),
+        repository=_Facts(ImageGenerationFacts((stage,), ())),
         capabilities=_Capabilities(),
     ).get("image-1")
 
@@ -409,7 +350,34 @@ def test_image_handoff_rejects_duplicate_prompt_kinds() -> None:
     ):
         ImageGeneratorHandoffService(
             images=cast(Any, _Images(image)),
-            repository=_Facts(ImageGenerationFacts((stage,), (), {})),
+            repository=_Facts(ImageGenerationFacts((stage,), ())),
+            capabilities=_Capabilities(),
+        ).get("image-1")
+
+
+def test_image_handoff_rejects_incomplete_canonical_lora_identity() -> None:
+    stage = GenerationStageSummary(
+        "base_sampler", "sampler", 0, 42, 24, 6.5, "euler", "normal", 0.8
+    )
+    incomplete = ImageLoraSnapshot(
+        "lora-1",
+        None,
+        "style.safetensors",
+        0,
+        800,
+        600,
+        "sexy",
+        True,
+        True,
+    )
+
+    with pytest.raises(
+        ImageGeneratorHandoffValidationError,
+        match="canonical LoRA identity is incomplete",
+    ):
+        ImageGeneratorHandoffService(
+            images=cast(Any, _Images(_image_context())),
+            repository=_Facts(ImageGenerationFacts((stage,), (incomplete,))),
             capabilities=_Capabilities(),
         ).get("image-1")
 
