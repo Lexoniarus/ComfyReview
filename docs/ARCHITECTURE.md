@@ -239,6 +239,12 @@ not remove unused catalog content.
 Playground preview preparation reads this catalog through `PlaygroundService`,
 applies `PromptSelectionPolicy` and renders concrete revision snapshots through
 `PromptRenderer`. Draft prompt overrides do not mutate catalog revisions.
+Each selection pairs the unchanged current `PromptComponent` metadata with an
+explicit `SelectedPromptComponent.revision`; a historical fixed selection
+therefore remains exact without redefining `latest_revision`. Compatibility
+checks and draft response groups use the selected revision's immutable content,
+while random and revision-unspecified fixed selections use the current latest
+revision.
 Submission uses the native `GenerationService`; there is no interim generation
 facade or dual-write.
 

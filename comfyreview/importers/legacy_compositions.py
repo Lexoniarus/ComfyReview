@@ -19,6 +19,7 @@ from comfyreview.application import (
     PromptRenderer,
     PromptRevision,
     PromptSelection,
+    SelectedPromptComponent,
     prompt_composition_identity,
 )
 from comfyreview.domain import parse_prompt_atoms
@@ -152,7 +153,17 @@ class HistoricalCompositionReconstructor:
         negative_text: str,
     ) -> bool:
         """Return whether snapshots contain content beyond the memberships."""
-        rendered = self._renderer.render(PromptSelection(components))
+        rendered = self._renderer.render(
+            PromptSelection(
+                tuple(
+                    SelectedPromptComponent(
+                        component,
+                        component.latest_revision,
+                    )
+                    for component in components
+                )
+            )
+        )
         return (
             rendered.positive_text != positive_text
             or rendered.negative_text != negative_text

@@ -110,7 +110,7 @@ def test_prompt_selection_policy_selects_reproducible_compatible_revisions() -> 
     second = policy.select(_catalog(), command)
 
     assert first == second
-    assert tuple(component.kind for component in first.components) == (
+    assert tuple(selected.component.kind for selected in first.components) == (
         "character",
         "scene",
         "outfit",
@@ -119,7 +119,7 @@ def test_prompt_selection_policy_selects_reproducible_compatible_revisions() -> 
         "lighting",
         "modifier",
     )
-    assert first.components[-1].component_uid == "modifier-a"
+    assert first.components[-1].component.component_uid == "modifier-a"
 
 
 def test_playground_fixed_revision_uses_exact_revision_projection() -> None:
@@ -170,6 +170,47 @@ def test_playground_fixed_revision_uses_exact_revision_projection() -> None:
     )
 
 
+def test_historical_revision_content_drives_selection_compatibility() -> None:
+    character = _component(
+        "character-a",
+        "character",
+        positive="school character",
+        tags=("school",),
+    )
+    latest_outfit = _component("outfit-a", "outfit", positive="red coat")
+    historical_outfit = replace(
+        latest_outfit,
+        latest_revision=replace(
+            latest_outfit.latest_revision,
+            revision_uid="revision-outfit-old",
+            positive_text="lewd outfit",
+            positive_atoms=prompt_atom_usages_from_text("lewd outfit"),
+        ),
+    )
+    catalog = _CatalogService(
+        (character, latest_outfit),
+        exact_revisions=(historical_outfit,),
+    )
+
+    with pytest.raises(PromptSelectionError, match="no compatible"):
+        _service(catalog).prepare_draft(
+            PromptSelectionCommand(
+                "character-a",
+                manual_selections=(
+                    ManualPromptSelection(
+                        "outfit",
+                        "outfit-a",
+                        "revision-outfit-old",
+                    ),
+                ),
+                disabled_kinds=("scene", "pose", "expression"),
+                include_lighting=False,
+                include_modifier=False,
+                max_attempts=1,
+            )
+        )
+
+
 def test_playground_fixed_manual_selection_uses_exact_revision() -> None:
     character = _component("character-a", "character")
     latest_scene = _component("scene-a", "scene", positive="latest scene")
@@ -212,6 +253,16 @@ def test_playground_fixed_manual_selection_uses_exact_revision() -> None:
         "revision-scene-old",
     )
     assert draft.prompt.positive_text == "historical scene"
+    selected_scene = draft.selection.components[1]
+    assert (
+        selected_scene.component.latest_revision.revision_uid
+        == "revision-scene-a"
+    )
+    assert selected_scene.revision.revision_uid == "revision-scene-old"
+    assert (
+        selected_scene.revision.positive_atoms
+        == prompt_atom_usages_from_text("historical scene")
+    )
 
 
 def test_playground_fixed_revision_rejects_revision_kind_mismatch() -> None:
@@ -500,10 +551,27 @@ def test_playground_sqlite_fixed_revision_is_exact_without_changing_latest(
     assert fixed_old.prompt.positive_atoms == prompt_atom_usages_from_text(
         "older atoms"
     )
+    fixed_old_selection = fixed_old.selection.components[0]
+    assert (
+        fixed_old_selection.component.latest_revision.revision_uid
+        == "revision-character-a-v2"
+    )
+    assert (
+        fixed_old_selection.revision.revision_uid == "revision-character-a-v1"
+    )
     assert fixed_latest.prompt.revision_uids == ("revision-character-a-v2",)
     assert fixed_latest.prompt.positive_text == "latest atoms"
+    fixed_latest_selection = fixed_latest.selection.components[0]
+    assert (
+        fixed_latest_selection.component.latest_revision
+        == fixed_latest_selection.revision
+    )
     assert random_character.prompt.revision_uids == (
         "revision-character-a-v2",
+    )
+    random_selection = random_character.selection.components[0]
+    assert (
+        random_selection.revision == random_selection.component.latest_revision
     )
     [current] = catalog.list_components(include_archived=False)
     assert current.latest_revision.revision_uid == "revision-character-a-v2"
@@ -520,13 +588,30 @@ def test_prompt_selection_policy_supports_random_character_and_disabled_kinds() 
 
     selection = PromptSelectionPolicy().select(_catalog(), command)
 
-    assert tuple(component.kind for component in selection.components) == (
+    assert tuple(
+        selected.component.kind for selected in selection.components
+    ) == (
         "character",
         "scene",
         "pose",
         "expression",
     )
-    assert selection.components[0].component_uid == "character-a"
+    assert selection.components[0].component.component_uid == "character-a"
+    assert all(
+        selected.component.latest_revision == selected.revision
+        for selected in selection.components
+    )
+    with pytest.raises(
+        PromptSelectionError,
+        match="fixed character revision was not resolved",
+    ):
+        PromptSelectionPolicy().select(
+            _catalog(),
+            PromptSelectionCommand(
+                "character-a",
+                character_revision_uid="revision-character-old",
+            ),
+        )
 
 
 def test_prompt_selection_policy_confirms_exact_components_in_domain_order() -> (
@@ -538,7 +623,7 @@ def test_prompt_selection_policy_confirms_exact_components_in_domain_order() -> 
     )
 
     assert tuple(
-        component.component_uid for component in selection.components
+        selected.component.component_uid for selected in selection.components
     ) == (
         "character-a",
         "scene-night",
@@ -822,7 +907,7 @@ def test_prompt_selection_policy_derives_catalog_compatibility_tags() -> None:
         ),
     )
 
-    assert selection.components[2].component_uid == "outfit-red"
+    assert selection.components[2].component.component_uid == "outfit-red"
 
 
 def test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate() -> (
@@ -929,6 +1014,49 @@ def _service(catalog: _CatalogService) -> PlaygroundService:
     )
 
 
+def test_revision_draft_rejects_mismatched_repository_revision() -> None:
+    character = _component("character-a", "character")
+    mismatched_projection = replace(
+        character,
+        latest_revision=replace(
+            character.latest_revision,
+            revision_uid="revision-returned",
+        ),
+    )
+
+    class _MismatchedRevisionCatalog(_CatalogService):
+        def list_components_for_revisions(
+            self,
+            revision_uids: tuple[str, ...],
+        ) -> tuple[PromptComponent, ...]:
+            return (mismatched_projection,)
+
+    with pytest.raises(PromptSelectionError, match="do not match"):
+        _service(
+            _MismatchedRevisionCatalog((character,))
+        ).prepare_revision_draft(("revision-requested",))
+
+
+def test_revision_draft_rejects_missing_current_component_metadata() -> None:
+    character = _component("character-a", "character")
+    missing_component_projection = _component(
+        "missing-character",
+        "character",
+    )
+
+    class _MissingCurrentComponentCatalog(_CatalogService):
+        def list_components_for_revisions(
+            self,
+            revision_uids: tuple[str, ...],
+        ) -> tuple[PromptComponent, ...]:
+            return (missing_component_projection,)
+
+    with pytest.raises(PromptSelectionError, match="unknown prompt component"):
+        _service(
+            _MissingCurrentComponentCatalog((character,))
+        ).prepare_revision_draft(("revision-missing-character",))
+
+
 def test_playground_content_policy_filters_explicit_levels() -> None:
     components = (
         _component("character-a", "character", tags=("adult",)),
@@ -1005,7 +1133,7 @@ def test_playground_service_prepares_draft_without_generation_submission() -> (
         "person, city, red skirt, standing, smile"
     )
     assert tuple(
-        component.kind for component in draft.selection.components
+        selected.component.kind for selected in draft.selection.components
     ) == (
         "character",
         "scene",
@@ -1097,7 +1225,10 @@ def test_playground_service_uses_authoritative_image_snapshot() -> None:
             negative_atoms=prompt_atom_usages_from_text("manual negative"),
         ),
     )
-    assert overridden.selection.components[0].component_uid == "character-a"
+    assert (
+        overridden.selection.components[0].component.component_uid
+        == "character-a"
+    )
     assert overridden.prompt.positive_text == "manual positive"
     assert overridden.prompt.negative_text == "manual negative"
 

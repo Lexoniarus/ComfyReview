@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import random
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Protocol
 
 from comfyreview.application.image_queries import ImageContext
 from comfyreview.application.prompt_catalog import (
     PromptComponent,
+    PromptRevision,
 )
 from comfyreview.application.workspace_settings import (
     ContentLevel,
@@ -163,10 +164,18 @@ class ConfirmPlaygroundDraftCommand:
 
 
 @dataclass(frozen=True, slots=True)
-class PromptSelection:
-    """Keep the ordered concrete catalog revisions selected for a draft."""
+class SelectedPromptComponent:
+    """Pair current component metadata with one concrete immutable revision."""
 
-    components: tuple[PromptComponent, ...]
+    component: PromptComponent
+    revision: PromptRevision
+
+
+@dataclass(frozen=True, slots=True)
+class PromptSelection:
+    """Keep the ordered component and revision choices selected for a draft."""
+
+    components: tuple[SelectedPromptComponent, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +214,7 @@ class PromptSelectionPolicy:
         self,
         components: tuple[PromptComponent, ...],
         command: PromptSelectionCommand,
+        fixed_revisions: tuple[SelectedPromptComponent, ...] = (),
     ) -> PromptSelection:
         """Return a deterministic compatible selection or fail visibly."""
         if command.max_attempts < 1:
@@ -212,7 +222,19 @@ class PromptSelectionPolicy:
         catalog = {
             component.component_uid: component for component in components
         }
-        manual = self._manual_components(catalog, command.manual_selections)
+        revisions_by_component = {
+            selected.component.component_uid: selected
+            for selected in fixed_revisions
+        }
+        self._validate_fixed_revision_bindings(
+            command,
+            revisions_by_component,
+        )
+        manual = self._manual_components(
+            catalog,
+            command.manual_selections,
+            revisions_by_component,
+        )
         disabled = self._disabled_kinds(command)
         if any(kind in disabled for kind in manual):
             raise PromptSelectionError(
@@ -226,6 +248,7 @@ class PromptSelectionPolicy:
                 candidates,
                 command.character_component_uid,
                 rng,
+                revisions_by_component,
             )
             selected = [character]
             active_tags = self._effective_tags(character)
@@ -236,9 +259,12 @@ class PromptSelectionPolicy:
                 component = manual.get(kind)
                 if component is None:
                     allowed = tuple(
-                        candidate
+                        self._latest_selection(candidate)
                         for candidate in candidates.get(kind, ())
-                        if self._candidate_allowed(candidate, active_tags)
+                        if self._candidate_allowed(
+                            self._latest_selection(candidate),
+                            active_tags,
+                        )
                     )
                     if not allowed:
                         complete = False
@@ -274,7 +300,7 @@ class PromptSelectionPolicy:
             raise PromptSelectionError(
                 f"unknown active prompt component: {unknown[0]}"
             )
-        selected_by_kind: dict[str, PromptComponent] = {}
+        selected_by_kind: dict[str, SelectedPromptComponent] = {}
         for uid in normalized_uids:
             component = catalog[uid]
             if component.kind not in _SELECTION_ORDER:
@@ -285,7 +311,9 @@ class PromptSelectionPolicy:
                 raise PromptSelectionError(
                     f"duplicate prompt component kind: {component.kind}"
                 )
-            selected_by_kind[component.kind] = component
+            selected_by_kind[component.kind] = self._latest_selection(
+                component
+            )
         if "character" not in selected_by_kind:
             raise PromptSelectionError("character component is required")
         ordered = tuple(
@@ -294,15 +322,16 @@ class PromptSelectionPolicy:
             if kind in selected_by_kind
         )
         active_tags: set[str] = set()
-        for component in ordered:
-            if component.kind != "character" and not self._candidate_allowed(
-                component,
-                active_tags,
+        for selected in ordered:
+            if (
+                selected.component.kind != "character"
+                and not self._candidate_allowed(selected, active_tags)
             ):
                 raise PromptSelectionError(
-                    f"incompatible prompt component: {component.component_uid}"
+                    "incompatible prompt component: "
+                    f"{selected.component.component_uid}"
                 )
-            active_tags |= self._effective_tags(component)
+            active_tags |= self._effective_tags(selected)
         if not self._selection_allowed(active_tags):
             raise PromptSelectionError("incompatible prompt selection")
         return PromptSelection(ordered)
@@ -331,24 +360,30 @@ class PromptSelectionPolicy:
         candidates: dict[str, tuple[PromptComponent, ...]],
         component_uid: str,
         rng: random.Random,
-    ) -> PromptComponent:
+        revisions_by_component: dict[str, SelectedPromptComponent],
+    ) -> SelectedPromptComponent:
         if str(component_uid or "").strip():
-            return self._required_component(
+            component = self._required_component(
                 catalog,
                 component_uid,
                 "character",
             )
+            return revisions_by_component.get(
+                component.component_uid,
+                self._latest_selection(component),
+            )
         available = candidates.get("character", ())
         if not available:
             raise PromptSelectionError("no active character components")
-        return rng.choice(available)
+        return self._latest_selection(rng.choice(available))
 
     def _manual_components(
         self,
         catalog: dict[str, PromptComponent],
         selections: tuple[ManualPromptSelection, ...],
-    ) -> dict[str, PromptComponent]:
-        manual: dict[str, PromptComponent] = {}
+        revisions_by_component: dict[str, SelectedPromptComponent],
+    ) -> dict[str, SelectedPromptComponent]:
+        manual: dict[str, SelectedPromptComponent] = {}
         for selection in selections:
             if (
                 selection.kind == "character"
@@ -361,12 +396,47 @@ class PromptSelectionPolicy:
                 raise PromptSelectionError(
                     f"duplicate manual selection kind: {selection.kind}"
                 )
-            manual[selection.kind] = self._required_component(
+            component = self._required_component(
                 catalog,
                 selection.component_uid,
                 selection.kind,
             )
+            manual[selection.kind] = revisions_by_component.get(
+                component.component_uid,
+                self._latest_selection(component),
+            )
         return manual
+
+    @staticmethod
+    def _validate_fixed_revision_bindings(
+        command: PromptSelectionCommand,
+        revisions_by_component: dict[str, SelectedPromptComponent],
+    ) -> None:
+        requests = (
+            (
+                "character",
+                command.character_component_uid,
+                command.character_revision_uid,
+            ),
+            *(
+                (item.kind, item.component_uid, item.revision_uid)
+                for item in command.manual_selections
+            ),
+        )
+        for kind, component_uid, revision_uid in requests:
+            if revision_uid is None:
+                continue
+            component_key = str(component_uid or "").strip()
+            selected = revisions_by_component.get(component_key)
+            if (
+                selected is None
+                or selected.component.kind != kind
+                or selected.revision.revision_uid
+                != str(revision_uid or "").strip()
+            ):
+                raise PromptSelectionError(
+                    f"fixed {kind} revision was not resolved"
+                )
 
     @staticmethod
     def _required_component(
@@ -398,11 +468,13 @@ class PromptSelectionPolicy:
 
     def _candidate_allowed(
         self,
-        component: PromptComponent,
+        selection: SelectedPromptComponent,
         active_tags: set[str],
     ) -> bool:
-        candidate_tags = self._effective_tags(component)
-        for trigger, required in _GATES.get(component.kind, {}).items():
+        candidate_tags = self._effective_tags(selection)
+        for trigger, required in _GATES.get(
+            selection.component.kind, {}
+        ).items():
             if trigger in candidate_tags and not required <= active_tags:
                 return False
         return not any(
@@ -430,13 +502,14 @@ class PromptSelectionPolicy:
         )
 
     @staticmethod
-    def _effective_tags(component: PromptComponent) -> set[str]:
+    def _effective_tags(selection: SelectedPromptComponent) -> set[str]:
+        component = selection.component
         tags = {tag.strip().lower() for tag in component.tags if tag.strip()}
         searchable = " ".join(
             (
                 component.component_key,
                 component.name,
-                component.latest_revision.positive_text,
+                selection.revision.positive_text,
                 component.notes,
             )
         ).lower()
@@ -452,6 +525,12 @@ class PromptSelectionPolicy:
             tags.add("water_proxy")
         return tags
 
+    @staticmethod
+    def _latest_selection(
+        component: PromptComponent,
+    ) -> SelectedPromptComponent:
+        return SelectedPromptComponent(component, component.latest_revision)
+
 
 class PromptRenderer:
     """Render concrete catalog revisions plus optional draft overrides."""
@@ -464,18 +543,18 @@ class PromptRenderer:
         """Return exact positive/negative snapshots without catalog writes."""
         positive_atoms = tuple(
             atom
-            for component in selection.components
-            for atom in self._revision_atoms(component, positive=True)
+            for selected in selection.components
+            for atom in self._revision_atoms(selected.revision, positive=True)
         )
         negative_atoms = tuple(
             atom
-            for component in selection.components
-            for atom in self._revision_atoms(component, positive=False)
+            for selected in selection.components
+            for atom in self._revision_atoms(selected.revision, positive=False)
         )
         notes = " | ".join(
-            component.notes.strip()
-            for component in selection.components
-            if component.notes.strip()
+            selected.component.notes.strip()
+            for selected in selection.components
+            if selected.component.notes.strip()
         )
         if overrides is not None:
             if overrides.positive_atoms is not None:
@@ -488,8 +567,8 @@ class PromptRenderer:
             negative_text=negative,
             notes=notes,
             revision_uids=tuple(
-                component.latest_revision.revision_uid
-                for component in selection.components
+                selected.revision.revision_uid
+                for selected in selection.components
             ),
             draft_overridden=overrides is not None
             and (
@@ -532,11 +611,10 @@ class PromptRenderer:
 
     @staticmethod
     def _revision_atoms(
-        component: PromptComponent,
+        revision: PromptRevision,
         *,
         positive: bool,
     ) -> tuple[PromptAtomUsage, ...]:
-        revision = component.latest_revision
         atoms = (
             revision.positive_atoms if positive else revision.negative_atoms
         )
@@ -582,18 +660,25 @@ class PlaygroundService:
     ) -> PlaygroundDraft:
         """Select concrete revisions and render a non-persisting draft."""
         components = self.list_available_components()
-        components = self._bind_exact_fixed_revisions(components, command)
-        selection = self._selection_policy.select(components, command)
+        fixed_revisions = self._resolve_exact_fixed_revisions(
+            components,
+            command,
+        )
+        selection = self._selection_policy.select(
+            components,
+            command,
+            fixed_revisions,
+        )
         return PlaygroundDraft(
             selection=selection,
             prompt=self._renderer.render(selection, overrides),
         )
 
-    def _bind_exact_fixed_revisions(
+    def _resolve_exact_fixed_revisions(
         self,
         components: tuple[PromptComponent, ...],
         command: PromptSelectionCommand,
-    ) -> tuple[PromptComponent, ...]:
+    ) -> tuple[SelectedPromptComponent, ...]:
         requests = [
             (
                 "character",
@@ -615,7 +700,7 @@ class PlaygroundService:
             if revision_uid is not None
         )
         if not exact_requests:
-            return components
+            return ()
         for kind, component_uid, revision_uid in exact_requests:
             if not component_uid:
                 raise PromptSelectionError(
@@ -635,7 +720,7 @@ class PlaygroundService:
         components_by_uid = {
             component.component_uid: component for component in components
         }
-        bound_components = dict(components_by_uid)
+        selected_revisions: list[SelectedPromptComponent] = []
         for kind, component_uid, revision_uid in exact_requests:
             exact_component = revisions_by_uid.get(revision_uid)
             if exact_component is None:
@@ -660,22 +745,26 @@ class PlaygroundService:
                 raise PromptSelectionError(
                     f"unknown active prompt component: {component_uid}"
                 )
-            bound_components[active_component.component_uid] = replace(
-                active_component,
-                latest_revision=exact_component.latest_revision,
+            selected_revisions.append(
+                SelectedPromptComponent(
+                    active_component,
+                    exact_component.latest_revision,
+                )
             )
-        return tuple(
-            bound_components[component.component_uid]
-            for component in components
-        )
+        return tuple(selected_revisions)
 
     def prepare_revision_draft(
         self,
         revision_uids: tuple[str, ...],
     ) -> PlaygroundDraft:
         """Render one exact immutable revision selection for a handoff."""
-        components = self._catalog.list_components_for_revisions(revision_uids)
-        self._require_allowed(components)
+        revision_projections = self._catalog.list_components_for_revisions(
+            revision_uids
+        )
+        self._require_allowed(revision_projections)
+        components = self._with_current_component_metadata(
+            revision_projections
+        )
         selection = self._exact_selection(components, revision_uids)
         return PlaygroundDraft(
             selection=selection,
@@ -690,10 +779,16 @@ class PlaygroundService:
         normalized_uid = str(composition_uid or "").strip()
         if not normalized_uid:
             raise PromptSelectionError("composition_uid is required")
-        components = self._catalog.list_composition_components(normalized_uid)
-        self._require_allowed(components)
+        revision_projections = self._catalog.list_composition_components(
+            normalized_uid
+        )
+        self._require_allowed(revision_projections)
         revision_uids = tuple(
-            component.latest_revision.revision_uid for component in components
+            component.latest_revision.revision_uid
+            for component in revision_projections
+        )
+        components = self._with_current_component_metadata(
+            revision_projections
         )
         selection = self._exact_selection(components, revision_uids)
         return PlaygroundDraft(
@@ -709,13 +804,16 @@ class PlaygroundService:
     ) -> PlaygroundDraft:
         """Load an authoritative visible image prompt without inventing revisions."""
         revision_uids = tuple(scope.revision_uid for scope in image.scopes)
-        components = (
+        revision_projections = (
             self._catalog.list_components_for_revisions(revision_uids)
             if revision_uids
             else ()
         )
-        if components:
-            self._require_allowed(components)
+        if revision_projections:
+            self._require_allowed(revision_projections)
+        components = self._with_current_component_metadata(
+            revision_projections
+        )
         positive = prompt_atom_usages_from_text(image.prompt_snapshot.positive)
         negative = prompt_atom_usages_from_text(image.prompt_snapshot.negative)
         if overrides is not None:
@@ -786,7 +884,7 @@ class PlaygroundService:
 
     @staticmethod
     def _exact_selection(
-        components: tuple[PromptComponent, ...],
+        components: tuple[SelectedPromptComponent, ...],
         revision_uids: tuple[str, ...],
     ) -> PromptSelection:
         normalized = tuple(str(uid or "").strip() for uid in revision_uids)
@@ -796,9 +894,44 @@ class PlaygroundService:
             raise PromptSelectionError("duplicate prompt revision")
         if len(components) != len(normalized):
             raise PromptSelectionError("unknown prompt revision")
-        kinds = tuple(component.kind for component in components)
+        actual_revision_uids = tuple(
+            component.revision.revision_uid for component in components
+        )
+        if actual_revision_uids != normalized:
+            raise PromptSelectionError("prompt revisions do not match")
+        kinds = tuple(component.component.kind for component in components)
         if "character" not in kinds:
             raise PromptSelectionError("character revision is required")
         if len(set(kinds)) != len(kinds):
             raise PromptSelectionError("duplicate prompt component kind")
         return PromptSelection(components)
+
+    def _with_current_component_metadata(
+        self,
+        revision_projections: tuple[PromptComponent, ...],
+    ) -> tuple[SelectedPromptComponent, ...]:
+        """Pair exact revisions with their unmodified current component metadata."""
+        if not revision_projections:
+            return ()
+        current_components = self._catalog.list_components(
+            include_archived=True
+        )
+        current_by_uid = {
+            component.component_uid: component
+            for component in current_components
+        }
+        selected: list[SelectedPromptComponent] = []
+        for projection in revision_projections:
+            component = current_by_uid.get(projection.component_uid)
+            if component is None:
+                raise PromptSelectionError(
+                    "unknown prompt component for revision "
+                    f"{projection.latest_revision.revision_uid}"
+                )
+            selected.append(
+                SelectedPromptComponent(
+                    component,
+                    projection.latest_revision,
+                )
+            )
+        return tuple(selected)

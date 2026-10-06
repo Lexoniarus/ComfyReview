@@ -364,8 +364,8 @@ def prepare_playground_draft(
             ),
             "seed": concrete_seed,
             "components": [
-                component_response(component)
-                for component in draft.selection.components
+                component_response(selected.component)
+                for selected in draft.selection.components
             ],
             "positive_prompt": positive_prompt,
             "negative_prompt": negative_prompt,
@@ -387,18 +387,18 @@ def prepare_playground_draft(
                 if source_mode == "image_snapshot"
                 else [
                     {
-                        "component_uid": component.component_uid,
-                        "revision_uid": component.latest_revision.revision_uid,
-                        "kind": component.kind,
-                        "name": component.name,
+                        "component_uid": selected.component.component_uid,
+                        "revision_uid": selected.revision.revision_uid,
+                        "kind": selected.component.kind,
+                        "name": selected.component.name,
                         "positive_atoms": atom_response(
-                            component.latest_revision.positive_atoms
+                            selected.revision.positive_atoms
                         ),
                         "negative_atoms": atom_response(
-                            component.latest_revision.negative_atoms
+                            selected.revision.negative_atoms
                         ),
                     }
-                    for component in draft.selection.components
+                    for selected in draft.selection.components
                 ]
                 + [
                     {

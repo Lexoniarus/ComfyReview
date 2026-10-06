@@ -204,13 +204,17 @@ def submit_generation(
             (
                 component
                 for component in confirmed.selection.components
-                if component.kind == "character"
+                if component.component.kind == "character"
             ),
             None,
         )
-        character_name = character.name if character else "historical"
+        character_name = (
+            character.component.name if character else "historical"
+        )
         character_key = (
-            character.component_key if character else "historical-snapshot"
+            character.component.component_key
+            if character
+            else "historical-snapshot"
         )
         draft = PlaygroundGenerationDraft(
             draft_uid=payload.draft_uid,

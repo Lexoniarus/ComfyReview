@@ -56,6 +56,7 @@ from comfyreview.application import (
     ReviewSummary,
     ScopeFacet,
     ScopeKind,
+    SelectedPromptComponent,
     WorkflowProvenance,
 )
 from comfyreview.domain import (
@@ -397,17 +398,41 @@ class _Playground:
     def prepare_draft(self, command, *, overrides=None):
         self.command = command
         self.overrides = overrides
+        character = _prompt_component()
+        scene = _prompt_component("scene-a", "scene")
+        character_revision = character.latest_revision
+        character_revision_uid = getattr(
+            command,
+            "character_revision_uid",
+            None,
+        )
+        if character_revision_uid is not None:
+            character_revision = replace(
+                character_revision,
+                revision_uid=character_revision_uid,
+            )
+        scene_revision = scene.latest_revision
+        manual_selections = getattr(command, "manual_selections", ())
+        if manual_selections:
+            requested_revision_uid = manual_selections[0].revision_uid
+            if requested_revision_uid is not None:
+                scene_revision = replace(
+                    scene_revision,
+                    revision_uid=requested_revision_uid,
+                )
+        selected = (
+            SelectedPromptComponent(character, character_revision),
+            SelectedPromptComponent(scene, scene_revision),
+        )
         return PlaygroundDraft(
-            PromptSelection(
-                (_prompt_component(), _prompt_component("scene-a", "scene"))
-            ),
+            PromptSelection(selected),
             RenderedPrompt(
                 render_prompt_atom_usages(overrides.positive_atoms)
                 if overrides and overrides.positive_atoms is not None
                 else "rendered positive",
                 "rendered negative",
                 "notes",
-                ("revision-character-a", "revision-scene-a"),
+                tuple(item.revision.revision_uid for item in selected),
                 overrides is not None,
                 overrides.positive_atoms
                 if overrides and overrides.positive_atoms is not None
@@ -428,9 +453,19 @@ class _Playground:
         self.confirm_command = command
         if "missing" in command.component_uids:
             raise KeyError("missing")
+        components = (
+            _prompt_component(),
+            _prompt_component("scene-a", "scene"),
+        )
         return PlaygroundDraft(
             PromptSelection(
-                (_prompt_component(), _prompt_component("scene-a", "scene"))
+                tuple(
+                    SelectedPromptComponent(
+                        component,
+                        component.latest_revision,
+                    )
+                    for component in components
+                )
             ),
             RenderedPrompt(
                 render_prompt_atom_usages(command.positive_atoms),
@@ -1235,8 +1270,21 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
     assert response.json()["seed"] == 17
     assert response.json()["positive_prompt"] == "draft positive"
     assert response.json()["revision_uids"] == [
-        "revision-character-a",
-        "revision-scene-a",
+        "revision-character-old",
+        "revision-scene-old",
+    ]
+    assert (
+        response.json()["components"][0]["latest_revision"]["revision_uid"]
+        == "revision-character-a"
+    )
+    assert response.json()["groups"][0]["revision_uid"] == (
+        "revision-character-old"
+    )
+    assert response.json()["groups"][1]["revision_uid"] == (
+        "revision-scene-old"
+    )
+    assert response.json()["groups"][1]["positive_atoms"] == [
+        {"text": "positive scene-a", "weight": 1.0}
     ]
     assert container.playground_service.command.character_component_uid == (
         "character-a"

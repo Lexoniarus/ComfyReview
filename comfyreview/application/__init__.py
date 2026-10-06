@@ -229,6 +229,7 @@ from comfyreview.application.playground import (
     PromptSelectionError,
     PromptSelectionPolicy,
     RenderedPrompt,
+    SelectedPromptComponent,
 )
 from comfyreview.application.playground_evidence import (
     PlaygroundEvidence,
@@ -560,6 +561,7 @@ __all__ = [
     "PromptSelectionCommand",
     "PromptSelectionError",
     "PromptSelectionPolicy",
+    "SelectedPromptComponent",
     "PromptTokenStatistic",
     "PreferencesRepository",
     "CalculatedRenderRecommendation",

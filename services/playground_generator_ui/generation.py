@@ -516,18 +516,18 @@ def _generate_prompt_selection(
 
 def _selection_view(draft: PlaygroundDraft) -> dict[str, Any]:
     return {
-        component.kind: {
-            "component_uid": component.component_uid,
-            "revision_uid": component.latest_revision.revision_uid,
-            "kind": component.kind,
-            "key": component.component_key,
-            "name": component.name,
-            "tags": list(component.tags),
-            "pos": component.latest_revision.positive_text,
-            "neg": component.latest_revision.negative_text,
-            "notes": component.notes,
+        selected.component.kind: {
+            "component_uid": selected.component.component_uid,
+            "revision_uid": selected.revision.revision_uid,
+            "kind": selected.component.kind,
+            "key": selected.component.component_key,
+            "name": selected.component.name,
+            "tags": list(selected.component.tags),
+            "pos": selected.revision.positive_text,
+            "neg": selected.revision.negative_text,
+            "notes": selected.component.notes,
         }
-        for component in draft.selection.components
+        for selected in draft.selection.components
     }
 
 
