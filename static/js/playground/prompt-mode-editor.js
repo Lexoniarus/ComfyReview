@@ -153,23 +153,6 @@ export class PromptModeEditor {
     return rejected;
   }
 
-  /** @param {{componentUids?: string[], loras?: Array<Record<string, any>>}} intent */
-  applyIntent(intent) {
-    const requested = new Set(intent.componentUids || []);
-    for (const [kind, row] of this.rows) {
-      const selected = Array.from(row.component.options).find((candidate) =>
-        requested.has(candidate.value),
-      );
-      if (!selected) continue;
-      this.#transition(
-        kind,
-        { mode: "fixed", componentUid: selected.value },
-        { refresh: true, resetRevisionToLatest: true },
-      );
-    }
-    return this.#applyLoras(intent.loras) ? ["loras"] : [];
-  }
-
   /** @param {unknown} loras */
   #applyLoras(loras) {
     if (!Array.isArray(loras)) return false;

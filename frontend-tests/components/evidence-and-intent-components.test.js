@@ -148,16 +148,18 @@ describe("Shared evidence and Playground intent components", () => {
     tray.stage(
       action("composition", {
         compositionUid: "composition-a",
-        componentUids: "[]",
       }),
     );
     expect(root.textContent).toContain("Prompt-Komposition");
-    tray.stage(action("scope", { componentUids: '["character-a","scene-a"]' }));
-    expect(root.textContent).toContain("2 Prompt-Baustein(e)");
-    store.merge({ compositionUid: "legacy-composition" });
+    store.stagePromptImage("image-prompt");
     tray.render();
-    expect(root.textContent).toContain("Prompt-Komposition");
-    tray.stage(action("image", { imageUid: "image-a" }));
+    expect(root.textContent).toContain("Prompt-Setup eines Bildes");
+    store.stageRenderSetup("image-render");
+    tray.render();
+    expect(root.textContent).toContain(
+      "Generierungseinstellungen eines Bildes",
+    );
+    tray.stage(action("unknown", {}));
     expect(toast.textContent).toContain("Auswahl");
 
     root.querySelector("[data-intent-open]").click();

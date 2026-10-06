@@ -55,7 +55,7 @@ if (root instanceof HTMLElement) {
     );
     const modes = new PromptModeEditor(
       modesRoot,
-      () => controller?.clearDraftReference(),
+      () => controller?.promptSettingsChanged(),
       {
         loadComponent: (uid, signal) =>
           api.get(`catalog/components/${encodeURIComponent(uid)}`, { signal }),

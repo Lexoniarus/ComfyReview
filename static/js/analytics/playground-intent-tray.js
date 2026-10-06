@@ -98,9 +98,6 @@ function summary(intent) {
     fields.push("Generierungseinstellungen eines Bildes");
   if (intent.promptCompositionUid) fields.push("Prompt-Komposition");
   if (intent.promptScope) fields.push("Prompt-Baustein");
-  if (intent.compositionUid) fields.push("Prompt-Komposition");
-  else if (intent.componentUids?.length)
-    fields.push(`${intent.componentUids.length} Prompt-Baustein(e)`);
   for (const [key, label] of [
     ["checkpoint", "Checkpoint"],
     ["sampler", "Sampler"],

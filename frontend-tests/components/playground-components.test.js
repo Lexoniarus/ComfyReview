@@ -87,19 +87,20 @@ describe("Playground browser components", () => {
         loras: [{ lora_uid: "missing" }],
       }),
     ).toEqual(["character", "scene", "loras"]);
-    editor.applyIntent({ componentUids: ["scene-a"] });
-    expect(rows[1].querySelector("select")?.value).toBe("fixed");
-    editor.applyIntent({
-      loras: [
-        {
-          lora_uid: "lora-style",
-          revision_uid: "lora-revision-1",
-          provider_name: "style.safetensors",
-          model_strength: 0.7,
-          clip_strength: 0.5,
-        },
-      ],
-    });
+    expect(
+      editor.applyState({
+        selections: [],
+        loras: [
+          {
+            lora_uid: "lora-style",
+            revision_uid: "lora-revision-1",
+            provider_name: "style.safetensors",
+            model_strength: 0.7,
+            clip_strength: 0.5,
+          },
+        ],
+      }),
+    ).toEqual([]);
     expect(editor.value().loras).toEqual([
       expect.objectContaining({
         lora_uid: "lora-style",

@@ -12,10 +12,6 @@ import {
 describe("Playground intent codec", () => {
   it("round-trips canonical identities and render settings", () => {
     const intent = {
-      componentUids: ["character-a", "scene-a"],
-      revisionUids: ["revision-a"],
-      compositionUid: "composition-a",
-      imageUid: "image-a",
       promptImageUid: "image-prompt",
       renderImageUid: "image-render",
       promptCompositionUid: "prompt-composition-a",
@@ -52,7 +48,13 @@ describe("Playground intent codec", () => {
       component_uid: "",
       revision_uid: null,
     });
-    expect(readPlaygroundIntent("").componentUids).toEqual([]);
+    const legacy = readPlaygroundIntent(
+      "?component=character-a&revision=revision-a&composition=composition-a&image=image-a",
+    );
+    expect(legacy).not.toHaveProperty("componentUids");
+    expect(legacy).not.toHaveProperty("revisionUids");
+    expect(legacy).not.toHaveProperty("compositionUid");
+    expect(legacy).not.toHaveProperty("imageUid");
     expect(playgroundIntentUrl({})).toBe("/playground/generator");
   });
 
@@ -70,18 +72,14 @@ describe("Playground intent codec", () => {
         revision_uid: "scene-revision-old",
       },
     });
-    expect(action("scope", { componentUid: "character-a" })).toEqual({
-      componentUids: ["character-a"],
-    });
+    expect(action("scope", { componentUid: "character-a" })).toEqual({});
     expect(
       action("scope", { componentUids: '["character-a","scene-a"]' }),
-    ).toEqual({ componentUids: ["character-a", "scene-a"] });
+    ).toEqual({});
     expect(action("composition", { compositionUid: "composition-a" })).toEqual({
       promptCompositionUid: "composition-a",
     });
-    expect(action("image", { imageUid: "image-a" })).toEqual({
-      imageUid: "image-a",
-    });
+    expect(action("image", { imageUid: "image-a" })).toEqual({});
     expect(action("parameter", { parameter: "steps", value: "24" })).toEqual({
       steps_min: 24,
       steps_max: 24,
@@ -94,6 +92,9 @@ describe("Playground intent codec", () => {
     expect(action("parameter", { parameter: "denoise", value: "1" })).toEqual({
       denoise: 1,
     });
+    expect(action("parameter", { parameter: "unknown", value: "1" })).toEqual(
+      {},
+    );
     expect(
       action("parameter", { parameter: "aspect_format", value: "9:16" }),
     ).toEqual({ aspectFormat: "9:16" });
@@ -121,17 +122,23 @@ describe("Playground intent codec", () => {
     expect(action("unknown", {})).toEqual({});
   });
 
-  it("navigates through the encoded URL", () => {
+  it("navigates typed analytics actions through the encoded URL", () => {
     const locationRef = { assign: vi.fn() };
     const element = document.createElement("button");
-    element.dataset.playgroundIntent = "image";
-    element.dataset.imageUid = "image-a";
+    element.dataset.playgroundIntent = "scope";
+    element.dataset.promptKind = "scene";
+    element.dataset.componentUid = "scene-a";
 
     new PlaygroundIntentNavigator(locationRef).open(element);
 
-    expect(locationRef.assign).toHaveBeenCalledWith(
-      "/playground/generator?image=image-a",
+    const navigated = readPlaygroundIntent(
+      locationRef.assign.mock.calls[0][0].split("?")[1],
     );
+    expect(navigated.promptScope).toEqual({
+      kind: "scene",
+      component_uid: "scene-a",
+      revision_uid: null,
+    });
   });
 
   it("stages only typed combination selections and encodes them in navigation", () => {
@@ -165,7 +172,7 @@ describe("Playground intent codec", () => {
     const locationRef = {
       href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
         JSON.stringify(selections),
-      )}&render_image=render-image&component=legacy-scene#generator`,
+      )}&render_image=render-image&view=cards#generator`,
     };
     const historyRef = {
       state: { navigation: 1 },
@@ -181,7 +188,7 @@ describe("Playground intent codec", () => {
     const currentUrl = new URL(locationRef.href);
     expect(currentUrl.searchParams.has("prompt_combination")).toBe(false);
     expect(currentUrl.searchParams.get("render_image")).toBe("render-image");
-    expect(currentUrl.searchParams.get("component")).toBe("legacy-scene");
+    expect(currentUrl.searchParams.get("view")).toBe("cards");
     expect(currentUrl.hash).toBe("#generator");
     expect(
       readPlaygroundIntent(currentUrl.search).promptCombination,
@@ -262,45 +269,35 @@ describe("Playground intent codec", () => {
     }
   });
 
-  it("stages prompt and render intents per tab with deterministic merging", () => {
+  it("merges render intents without replacing a typed prompt source", () => {
     const storage = new MemoryStorage();
     const store = new PlaygroundIntentStore(storage);
-    store.merge({ componentUids: ["character-a"] });
-    store.merge({ componentUids: ["character-b"] });
-    store.merge({ componentUids: ["scene-a"] });
+    store.stagePromptScope({
+      kind: "scene",
+      component_uid: "scene-a",
+      revision_uid: null,
+    });
     store.merge({ sampler: "euler", steps_min: 24, steps_max: 24 });
     store.merge({ sampler: "dpmpp_2m", cfg_min: 6.5, cfg_max: 6.5 });
-    store.merge({
-      compositionUid: "composition-a",
-      componentUids: ["character-c"],
-      revisionUids: ["revision-old"],
-    });
-    store.merge({
-      componentUids: ["scene-b"],
-      revisionUids: ["revision-new"],
-    });
 
     expect(store.read()).toEqual(
       expect.objectContaining({
-        componentUids: ["character-c", "scene-b"],
+        promptScope: {
+          kind: "scene",
+          component_uid: "scene-a",
+          revision_uid: null,
+        },
         sampler: "dpmpp_2m",
         steps_min: 24,
         cfg_min: 6.5,
-        revisionUids: ["revision-new"],
       }),
     );
     expect(store.consumeUrl()).toContain("sampler=dpmpp_2m");
-    expect(store.read()).toEqual(
-      expect.objectContaining({ sampler: "dpmpp_2m" }),
-    );
     store.clear();
     expect(store.read()).toEqual({});
-    expect(action("parameter", { parameter: "unknown", value: "1" })).toEqual(
-      {},
-    );
   });
 
-  it("keeps version 1 staged intent compatibility", () => {
+  it("ignores obsolete version 1 staged intents", () => {
     const storage = new MemoryStorage();
     const store = new PlaygroundIntentStore(storage);
 
@@ -308,11 +305,9 @@ describe("Playground intent codec", () => {
       "comfyreview.playground-intent.v2",
       JSON.stringify({ version: 1, intent: { imageUid: "legacy" } }),
     );
-    expect(store.read()).toEqual({ imageUid: "legacy" });
+    expect(store.read()).toEqual({});
     store.merge({ sampler: "euler" });
-    expect(store.read()).toEqual(
-      expect.objectContaining({ imageUid: "legacy", sampler: "euler" }),
-    );
+    expect(store.read()).toEqual({ sampler: "euler" });
   });
 
   it("stages only the prompt image identity and clears only that source", () => {
@@ -336,14 +331,9 @@ describe("Playground intent codec", () => {
     expect(store.read()).toEqual({ renderImageUid: "image-render" });
   });
 
-  it("stages one typed prompt source without modifying legacy prompt or render data", () => {
+  it("replaces only the typed prompt source while preserving render data", () => {
     const storage = new MemoryStorage();
     const store = new PlaygroundIntentStore(storage);
-    store.merge({
-      componentUids: ["legacy-character"],
-      revisionUids: ["legacy-revision"],
-      compositionUid: "legacy-composition",
-    });
     store.stageRenderSetup("image-render");
     store.stagePromptScope({
       kind: "scene",
@@ -366,27 +356,14 @@ describe("Playground intent codec", () => {
     });
     store.stagePromptComposition("composition-a");
     store.clearPromptComposition("another-composition");
-    store.clearPromptScope({
-      kind: "scene",
-      component_uid: "scene-a",
-      revision_uid: "scene-revision-1",
-    });
 
     expect(store.read()).toEqual({
-      componentUids: ["legacy-character"],
-      revisionUids: ["legacy-revision"],
-      compositionUid: "legacy-composition",
       promptCompositionUid: "composition-a",
       renderImageUid: "image-render",
     });
 
     store.clearPromptComposition("composition-a");
-    expect(store.read()).toEqual({
-      componentUids: ["legacy-character"],
-      revisionUids: ["legacy-revision"],
-      compositionUid: "legacy-composition",
-      renderImageUid: "image-render",
-    });
+    expect(store.read()).toEqual({ renderImageUid: "image-render" });
   });
 
   it("clears only a matching staged combination and preserves independent sources", () => {
@@ -411,20 +388,6 @@ describe("Playground intent codec", () => {
 
     store.clearPromptCombination(selections);
     expect(store.read()).toEqual({ renderImageUid: "render-image" });
-  });
-
-  it("keeps the legacy source-identity merge contract", () => {
-    const store = new PlaygroundIntentStore(new MemoryStorage());
-    store.merge({
-      componentUids: ["character-a"],
-      promptImageUid: "image-prompt",
-      loras: [],
-    });
-
-    expect(store.read()).toEqual({
-      promptImageUid: "image-prompt",
-      loras: [],
-    });
   });
 });
 

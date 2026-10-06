@@ -6,7 +6,7 @@ import {
 } from "../playground/generator-prompt-projector.js";
 
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>, put: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
-/** @typedef {{render: (components: any[], loras?: any[]) => void, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void, showResolvedComponents: (components: any[]) => void, value: () => {selections: any[], loras?: any[]}, dispose: () => void}} ModesBoundary */
+/** @typedef {{render: (components: any[], loras?: any[]) => void, applyState: (state: Record<string, any>) => string[] | void, showResolvedComponents: (components: any[]) => void, value: () => {selections: any[], loras?: any[]}, dispose: () => void}} ModesBoundary */
 /** @typedef {{render: (capabilities: any) => void, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void, stateValue: () => Record<string, any>, draftValue: () => any, renderSettings: () => any, renderGuidance: (payload: any, basis: "observed" | "predicted") => void, applyRenderSettings: (settings: Record<string, any>) => string[], applyParameter: (parameter: string, value: unknown) => boolean, value: () => any, useConcreteSeed: (seed: number) => void, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
 /** @typedef {{render: (draft: any, draftUid: string) => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
@@ -35,7 +35,6 @@ export class PlaygroundController {
     this.typedPromptSource = null;
     this.intentStore = dependencies.intentStore || null;
     this.intentUrlCleaner = dependencies.intentUrlCleaner || null;
-    this.draftReference = null;
     this.abortController = new AbortController();
     this.hasDraft = false;
     this.guidanceTimer = null;
@@ -194,7 +193,7 @@ export class PlaygroundController {
         this.api.post(
           "playground/drafts",
           {
-            ...(this.draftReference || this.modes.value()),
+            ...this.modes.value(),
             generation: this.controls.draftValue(),
           },
           { signal },
@@ -261,9 +260,8 @@ export class PlaygroundController {
     this.guidance.dispose();
   }
 
-  /** Use current mode controls after the user changes a prompt prefill. */
-  clearDraftReference() {
-    this.draftReference = null;
+  /** Persist prompt controls after the user changes them. */
+  promptSettingsChanged() {
     this.invalidateDraft();
     this.#scheduleStateSave();
   }
@@ -316,53 +314,32 @@ export class PlaygroundController {
   async #applyIntent() {
     let intent = this.intent;
     const typedSource = this.typedPromptSource;
-    const legacyImageUid = String(intent.imageUid || "");
-    const renderImageUid = String(intent.renderImageUid || legacyImageUid);
+    const renderImageUid = String(intent.renderImageUid || "");
+
     let promptHandoff = null;
     if (typedSource?.type === "image") {
       promptHandoff = await this.#loadHandoff(typedSource.imageUid);
-    } else if (legacyImageUid) {
-      promptHandoff = await this.#loadHandoff(legacyImageUid);
     }
+
     let renderHandoff = null;
     if (renderImageUid) {
       renderHandoff =
         promptHandoff &&
-        renderImageUid ===
-          (typedSource?.type === "image"
-            ? typedSource.imageUid
-            : legacyImageUid)
+        typedSource?.type === "image" &&
+        renderImageUid === typedSource.imageUid
           ? promptHandoff
           : await this.#loadHandoff(renderImageUid);
     }
-
-    /** @type {string[]} */
-    const rejected = [];
-    if (typedSource) {
-      if (renderHandoff) {
-        intent = { ...intent, ...renderIntent(renderHandoff) };
-      }
-      this.intent = intent;
-      rejected.push(...(this.controls.applyIntent(intent) || []));
-      this.draftReference = null;
-      rejected.push(
-        ...(await this.#applyTypedPromptSource(typedSource, promptHandoff)),
-      );
-      return rejected;
-    }
-    if (legacyImageUid)
-      intent = { ...intent, ...promptIntent(promptHandoff || {}) };
     if (renderHandoff) {
       intent = { ...intent, ...renderIntent(renderHandoff) };
     }
 
     this.intent = intent;
-    rejected.push(...(this.modes.applyIntent(intent) || []));
-    rejected.push(...(this.controls.applyIntent(intent) || []));
-    if (Array.isArray(intent.revisionUids) && intent.revisionUids.length) {
-      this.draftReference = { revision_uids: intent.revisionUids };
-    } else if (intent.compositionUid) {
-      this.draftReference = { composition_uid: intent.compositionUid };
+    const rejected = [...(this.controls.applyIntent(intent) || [])];
+    if (typedSource) {
+      rejected.push(
+        ...(await this.#applyTypedPromptSource(typedSource, promptHandoff)),
+      );
     }
     return rejected;
   }
@@ -510,17 +487,6 @@ function promptSourceLabel(type) {
   if (type === "composition") return "Composition-Prompt";
   if (type === "combination") return "Combination-Prompt";
   return "Scope-Prompt";
-}
-
-/** @param {Record<string, any>} handoff */
-function promptIntent(handoff) {
-  const prompt = handoff.prompt_setup || {};
-  return {
-    componentUids: Array.isArray(prompt.component_uids)
-      ? prompt.component_uids
-      : [],
-    loras: Array.isArray(prompt.loras) ? prompt.loras : [],
-  };
 }
 
 /** @param {Record<string, any>} handoff */

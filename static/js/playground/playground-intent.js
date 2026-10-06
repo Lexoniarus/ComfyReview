@@ -9,35 +9,25 @@ const numericFields = [
 
 /** @typedef {{kind: string, component_uid: string, revision_uid?: string | null}} PromptScopeSource */
 /** @typedef {{kind: string, component_uid: string, revision_uid?: string | null}} PromptCombinationSelection */
-/** @typedef {{componentUids?: string[], revisionUids?: string[], compositionUid?: string, promptCompositionUid?: string, promptScope?: PromptScopeSource, promptCombination?: PromptCombinationSelection[], imageUid?: string, promptImageUid?: string, renderImageUid?: string, loras?: any[], checkpoint?: string, sampler?: string, scheduler?: string, aspectFormat?: string, resolutionClass?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
+/** @typedef {{promptCompositionUid?: string, promptScope?: PromptScopeSource, promptCombination?: PromptCombinationSelection[], promptImageUid?: string, renderImageUid?: string, checkpoint?: string, sampler?: string, scheduler?: string, aspectFormat?: string, resolutionClass?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
 
 /** @param {HTMLElement} element @returns {PlaygroundIntent} */
 export function intentFromAnalyticsAction(element) {
   const kind = String(element.dataset.playgroundIntent || "");
   if (kind === "scope") {
-    if (element.dataset.promptKind && element.dataset.componentUid) {
-      return {
-        promptScope: {
-          kind: text(element.dataset.promptKind),
-          component_uid: text(element.dataset.componentUid),
-          revision_uid: text(element.dataset.revisionUid) || null,
-        },
-      };
-    }
+    if (!element.dataset.promptKind || !element.dataset.componentUid) return {};
     return {
-      componentUids: [
-        ...values(element.dataset.componentUid),
-        ...jsonValues(element.dataset.componentUids),
-      ],
+      promptScope: {
+        kind: text(element.dataset.promptKind),
+        component_uid: text(element.dataset.componentUid),
+        revision_uid: text(element.dataset.revisionUid) || null,
+      },
     };
   }
   if (kind === "composition") {
     return {
       promptCompositionUid: text(element.dataset.compositionUid),
     };
-  }
-  if (kind === "image") {
-    return { imageUid: text(element.dataset.imageUid) };
   }
   if (kind === "parameter") {
     return parameterIntent(
@@ -59,15 +49,11 @@ export function playgroundIntentUrl(intent) {
   const query = new URLSearchParams();
   /** @type {Record<string, unknown>} */
   const intentValues = intent;
-  for (const uid of intent.componentUids || []) query.append("component", uid);
-  for (const uid of intent.revisionUids || []) query.append("revision", uid);
-  set(query, "composition", intent.compositionUid);
   set(query, "prompt_composition", intent.promptCompositionUid);
   if (intent.promptScope)
     set(query, "prompt_scope", JSON.stringify(intent.promptScope));
   if (intent.promptCombination)
     set(query, "prompt_combination", JSON.stringify(intent.promptCombination));
-  set(query, "image", intent.imageUid);
   set(query, "prompt_image", intent.promptImageUid);
   set(query, "render_image", intent.renderImageUid);
   set(query, "checkpoint", intent.checkpoint);
@@ -86,10 +72,6 @@ export function readPlaygroundIntent(search) {
   const query = new URLSearchParams(search);
   /** @type {Record<string, any>} */
   const intent = {
-    componentUids: cleanValues(query.getAll("component")),
-    revisionUids: cleanValues(query.getAll("revision")),
-    compositionUid: text(query.get("composition")),
-    imageUid: text(query.get("image")),
     checkpoint: text(query.get("checkpoint")),
     sampler: text(query.get("sampler")),
     scheduler: text(query.get("scheduler")),
@@ -203,44 +185,16 @@ export class PlaygroundIntentStore {
     if (stored.version === 2) {
       return { ...record(stored.prompt), ...record(stored.render) };
     }
-    return stored.version === 1 ? record(stored.intent) : {};
+    return {};
   }
 
   /** @param {PlaygroundIntent} incoming */
   merge(incoming) {
     const stored = this.#state();
-    /** @type {PlaygroundIntent} */
-    const prompt = { ...stored.prompt };
-    /** @type {PlaygroundIntent} */
+    /** @type {Record<string, any>} */
     const render = { ...stored.render };
     /** @type {Record<string, any>} */
     const incomingValues = incoming;
-    /** @type {Record<string, any>} */
-    const mergedValues = render;
-    if (incoming.compositionUid) {
-      prompt.compositionUid = incoming.compositionUid;
-      prompt.componentUids = incoming.componentUids || [];
-      delete prompt.revisionUids;
-    } else if (incoming.componentUids?.length) {
-      prompt.componentUids = cleanValues([
-        ...(prompt.componentUids || []),
-        ...incoming.componentUids,
-      ]);
-      delete prompt.compositionUid;
-    }
-    if (incoming.revisionUids?.length)
-      prompt.revisionUids = incoming.revisionUids;
-    if (incoming.promptImageUid || incoming.imageUid) {
-      this.#setTypedPromptSource(
-        prompt,
-        "promptImageUid",
-        incoming.promptImageUid || incoming.imageUid,
-      );
-      delete prompt.componentUids;
-      delete prompt.revisionUids;
-      delete prompt.compositionUid;
-    }
-    if (Array.isArray(incoming.loras)) prompt.loras = incoming.loras;
     for (const field of [
       "checkpoint",
       "sampler",
@@ -260,11 +214,9 @@ export class PlaygroundIntentStore {
         incomingValues[field] !== null &&
         incomingValues[field] !== ""
       )
-        mergedValues[field] = incomingValues[field];
+        render[field] = incomingValues[field];
     }
-    if (incoming.renderImageUid || incoming.imageUid)
-      render.renderImageUid = incoming.renderImageUid || incoming.imageUid;
-    this.#write(prompt, render);
+    this.#write(stored.prompt, render);
     return this.read();
   }
 
@@ -325,11 +277,6 @@ export class PlaygroundIntentStore {
     return this.read();
   }
 
-  clearPrompt() {
-    const stored = this.#state();
-    this.#write({}, stored.render);
-  }
-
   /** @param {string} imageUid */
   clearPromptImage(imageUid) {
     const stored = this.#state();
@@ -380,11 +327,6 @@ export class PlaygroundIntentStore {
     this.#write(prompt, stored.render);
   }
 
-  clearRender() {
-    const stored = this.#state();
-    this.#write(stored.prompt, {});
-  }
-
   clear() {
     this.storage.removeItem(this.key);
   }
@@ -401,18 +343,6 @@ export class PlaygroundIntentStore {
       return {
         prompt: record(stored.prompt),
         render: record(stored.render),
-      };
-    }
-    if (stored.version === 1) {
-      const legacy = record(stored.intent);
-      return {
-        prompt: {
-          componentUids: legacy.componentUids,
-          revisionUids: legacy.revisionUids,
-          compositionUid: legacy.compositionUid,
-          imageUid: legacy.imageUid,
-        },
-        render: legacy,
       };
     }
     return { prompt: {}, render: {} };
@@ -529,23 +459,6 @@ function finite(value) {
 /** @param {unknown} value */
 function text(value) {
   return String(value || "").trim();
-}
-
-/** @param {unknown} value */
-function values(value) {
-  const normalized = text(value);
-  return normalized ? [normalized] : [];
-}
-
-/** @param {unknown[]} value */
-function cleanValues(value) {
-  return value.map(text).filter(Boolean);
-}
-
-/** @param {unknown} value */
-function jsonValues(value) {
-  const parsed = json(value);
-  return Array.isArray(parsed) ? cleanValues(parsed) : [];
 }
 
 /** @param {unknown} value @returns {Record<string, any>} */

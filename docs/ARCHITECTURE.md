@@ -379,9 +379,11 @@ The canonical cutover is intentionally not the end of the wider refactor.
   current latest revision. The browser treats restored revision UIDs as opaque
   bindings because its catalog contains only latest revisions; authoritative
   existence and component ownership validation remains in the Application
-  layer. Random/off choices carry no revision binding. Explicit cross-surface
-  `draftReference` precedence remains a separate legacy path until its
-  handoffs are migrated. Image prompt actions stage only the source image UID;
+  layer. Random/off choices carry no revision binding. Browser prompt
+  handoffs no longer have a direct draft-reference path: every supported Image,
+  Scope, Composition and Top Combination source is applied to the ordinary
+  Generator state before explicit draft creation. Image prompt actions stage
+  only the source image UID;
   the controller reloads typed prompt selections and effective LoRAs from the
   image handoff, applies them as a complete editor-state replacement, and
   persists the ordinary generator snapshot before clearing only that prompt
@@ -407,9 +409,11 @@ The canonical cutover is intentionally not the end of the wider refactor.
   a partial patch, leaving all other selections and LoRAs unchanged. After
   successful apply and generator-state persistence, only that typed source is
   removed from tab-local staging and the current URL. The injected URL cleanup
-  preserves independent render and legacy query parameters, and failed or
+  preserves independent render and unrelated query parameters, and failed or
   ambiguous handoffs leave both source transports untouched. Legacy
-  `componentUids` remains available to producers not yet migrated.
+  component/revision/composition/image browser intent fields and Store-v1
+  prompt handoffs are no longer consumed; direct draft-source compatibility
+  remains isolated at the HTTP API boundary.
 - `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or

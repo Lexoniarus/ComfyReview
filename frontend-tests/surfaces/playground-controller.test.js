@@ -22,7 +22,6 @@ describe("PlaygroundController", () => {
     expect(fixture.controls.render).toHaveBeenCalledWith({ defaults: {} });
     expect(fixture.modes.applyState).toHaveBeenCalledWith({});
     expect(fixture.controls.applyState).toHaveBeenCalledWith({});
-    expect(fixture.modes.applyIntent).toHaveBeenCalledWith({});
     expect(fixture.controls.applyIntent).toHaveBeenCalledWith({});
 
     await fixture.controller.prepare();
@@ -59,6 +58,21 @@ describe("PlaygroundController", () => {
     expect(fixture.modes.dispose).toHaveBeenCalledOnce();
     expect(fixture.controls.dispose).toHaveBeenCalledOnce();
     expect(fixture.draft.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("consumes a successful non-prompt render prefill", async () => {
+    const intentStore = { clear: vi.fn() };
+    const fixture = createFixture({
+      intent: { sampler: "euler" },
+      intentStore,
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.controls.applyIntent).toHaveBeenCalledWith(
+      expect.objectContaining({ sampler: "euler" }),
+    );
+    expect(intentStore.clear).toHaveBeenCalledOnce();
   });
 
   it("rejects multiple typed prompt sources before changing generator state", async () => {
@@ -218,68 +232,6 @@ describe("PlaygroundController", () => {
     expect(fixture.result.textContent).toContain("generation-2 · submitted");
     expect(fixture.status.textContent).toBe(
       "2 Generierungen an ComfyUI übergeben",
-    );
-  });
-
-  it("prefills visible component selections from an image handoff", async () => {
-    const fixture = createFixture({
-      intent: { imageUid: "image-1" },
-      image: {
-        image_uid: "image-1",
-        prompt_setup: {
-          source_image_uid: "image-1",
-          component_uids: ["character-a"],
-          revision_uids: ["revision-character-a"],
-          loras: [],
-        },
-        render_setup: {
-          checkpoint: "model.safetensors",
-          seed: 42,
-          aspect_format: "1:1",
-          resolution_class: "1080",
-          sampler_stages: [
-            {
-              sampler: "euler",
-              scheduler: "normal",
-              steps: 24,
-              cfg: 6.5,
-              denoise: 1,
-            },
-          ],
-        },
-      },
-    });
-
-    await fixture.controller.start();
-    expect(fixture.api.get).toHaveBeenCalledWith(
-      "images/image-1/generator-handoff",
-      expect.any(Object),
-    );
-    expect(fixture.modes.applyIntent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        componentUids: ["character-a"],
-      }),
-    );
-    expect(
-      fixture.api.post.mock.calls.some(
-        ([path]) => path === "playground/drafts",
-      ),
-    ).toBe(false);
-    await fixture.controller.prepare();
-    expect(fixture.api.post).toHaveBeenCalledWith(
-      "playground/drafts",
-      {
-        selections: [],
-        generation: expect.any(Object),
-      },
-      expect.any(Object),
-    );
-    fixture.controller.clearDraftReference();
-    await fixture.controller.prepare();
-    expect(fixture.api.post).toHaveBeenCalledWith(
-      "playground/drafts",
-      { selections: [], generation: expect.any(Object) },
-      expect.any(Object),
     );
   });
 
@@ -830,31 +782,6 @@ describe("PlaygroundController", () => {
     expect(intentStore.read()).toEqual({});
   });
 
-  it("keeps a composition handoff as an explicit draft action", async () => {
-    const fixture = createFixture({
-      intent: {
-        compositionUid: "composition-a",
-        componentUids: ["character-a", "scene-a"],
-      },
-    });
-
-    await fixture.controller.start();
-    expect(
-      fixture.api.post.mock.calls.some(
-        ([path]) => path === "playground/drafts",
-      ),
-    ).toBe(false);
-    await fixture.controller.prepare();
-    expect(fixture.api.post).toHaveBeenCalledWith(
-      "playground/drafts",
-      {
-        composition_uid: "composition-a",
-        generation: expect.any(Object),
-      },
-      expect.any(Object),
-    );
-  });
-
   it("applies a complete composition as the normal exact generator state", async () => {
     const intentStore = new PlaygroundIntentStore(new MemoryStorage());
     intentStore.stagePromptComposition("composition-exact");
@@ -1048,7 +975,7 @@ describe("PlaygroundController", () => {
     const locationRef = {
       href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
         JSON.stringify(selections),
-      )}&render_image=render-image&sampler=euler&component=legacy-scene`,
+      )}&render_image=render-image&sampler=euler&view=cards`,
     };
     const historyRef = {
       state: null,
@@ -1126,7 +1053,7 @@ describe("PlaygroundController", () => {
     expect(currentUrl.searchParams.has("prompt_combination")).toBe(false);
     expect(currentUrl.searchParams.get("render_image")).toBe("render-image");
     expect(currentUrl.searchParams.get("sampler")).toBe("euler");
-    expect(currentUrl.searchParams.get("component")).toBe("legacy-scene");
+    expect(currentUrl.searchParams.get("view")).toBe("cards");
     expect(historyRef.replaceState).toHaveBeenCalledOnce();
     const reloadedIntent = {
       ...intentStore.read(),
@@ -1394,22 +1321,6 @@ describe("PlaygroundController", () => {
     expect(intentStore.clear).not.toHaveBeenCalled();
   });
 
-  it("keeps revision-only prompt provenance for explicit draft creation", async () => {
-    const fixture = createFixture({
-      intent: { revisionUids: ["revision-character-a"] },
-    });
-    await fixture.controller.start();
-    await fixture.controller.prepare();
-    expect(fixture.api.post).toHaveBeenCalledWith(
-      "playground/drafts",
-      {
-        revision_uids: ["revision-character-a"],
-        generation: expect.any(Object),
-      },
-      expect.any(Object),
-    );
-  });
-
   it("owns guidance modes, explicit application, invalidation and refresh errors", async () => {
     vi.useFakeTimers();
     try {
@@ -1545,7 +1456,7 @@ describe("PlaygroundController", () => {
 
       await fixture.controller.start();
       expect(fixture.prepareButton.disabled).toBe(false);
-      fixture.controller.clearDraftReference();
+      fixture.controller.promptSettingsChanged();
       await vi.advanceTimersByTimeAsync(180);
       await settle();
 
@@ -1599,7 +1510,6 @@ function createFixture(options = {}) {
       };
       return options.modeStateRejection?.(state) || options.stateRejected || [];
     }),
-    applyIntent: vi.fn(() => options.intentRejected || []),
     showResolvedComponents: vi.fn(),
     value: vi.fn(() => {
       selectionSnapshots.add(activeSelectionValue);
