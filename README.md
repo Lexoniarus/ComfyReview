@@ -75,7 +75,7 @@ ComfyReview exists to make that part easier:
 - Compare images in pairwise Arena views
 - Filter by character and set
 - Track prompts, sampler settings, checkpoint, seed, steps, cfg, scheduler and denoise values
-- Analyze local results with SQLite-backed stats pages
+- Analyze local results with shared observed/predicted render guidance
 - Reuse selected generation values in the Playground Generator
 - Maintain persistent UI state for generator inputs
 - Load heavier generator-side data lazily to keep the page responsive
@@ -85,9 +85,11 @@ ComfyReview exists to make that part easier:
 
 ## ComfyUI integration
 
-New Playground generations use a versioned, role-mapped workflow blueprint,
-standard `SaveImage`, the native ComfyUI HTTP API and canonical output
-collection. No repository-specific ComfyUI custom node is required at runtime.
+New Playground generations use Blueprint v4 and the fixed
+`VAEDecode -> 4x-AnimeSharp -> ImageSharpen -> Lanczos -> SaveImage` path.
+The browser selects one of five format/orientation values and one of the
+720/1080/2160 output classes; the server resolves both latent and exact target
+dimensions. No repository-specific ComfyUI custom node is required at runtime.
 
 Matching JSON sidecars remain supported as historical import evidence. They
 are not required for newly generated canonical images or for already-canonical
@@ -112,11 +114,11 @@ that prompt in ComfyUI and attach it explicitly with `--prompt-id PROMPT_ID`.
 | **Review** | Fast rating and delete workflow for image batches |
 | **Top** | Aggregated best-image views |
 | **Arena** | Pairwise comparison flow |
-| **Analytics** | Canonical Scope, parameter, combination and render evidence |
-| **Playground** | Prompt and value handoff back into ComfyUI |
-| **Catalog** | Prompt components, immutable revisions and archive state |
+| **Analytics** | Coverage, canonical Scopes, prompt combinations and four-mode render guidance |
+| **Playground** | Top-combination overview plus explicit generator workflow |
+| **Catalog** | Prompt components plus the separate revisioned LoRA catalog |
 | **Generations** | Lifecycle, reconciliation, provenance and all outputs |
-| **Settings** | Workspace preferences, content levels, generation profiles, canvas sizes, LoRA stacks and diagnostics |
+| **Settings** | Workspace preferences, content levels, LoRA status, ComfyUI/upscaler status and diagnostics |
 
 ---
 
@@ -127,6 +129,8 @@ that prompt in ComfyUI and attach it explicitly with `--prompt-id PROMPT_ID`.
 - Python 3.11+
 - historical PNG/JSON pairs only when importing legacy output
 - a running ComfyUI instance for Playground Generator features
+- ComfyUI's standard upscale/sharpen/scale nodes and
+  `models/upscale_models/example-upscaler.pth` for Blueprint v4 generation
 
 ### Installation
 
@@ -212,8 +216,16 @@ Validate or explicitly upgrade the canonical database:
 
 ```bash
 python -m comfyreview canonical-db validate
-python -m comfyreview canonical-db upgrade --backup-dir data/backups/canonical
+python -m comfyreview canonical-db upgrade \
+  --output data/comfyreview-v12.sqlite3 \
+  --backup-dir data/backups/canonical
+python -m comfyreview canonical-db rebuild-image-geometry
 ```
+
+The v11 geometry rebuild reads PNG headers outside a write transaction and
+then atomically replaces the rebuildable projection. Missing or malformed
+files are reported as diagnostics; source images and stored paths are never
+rewritten.
 
 Historical ComfyUI output provenance is imported through a read-only audit
 followed by a separate write command:
@@ -246,16 +258,90 @@ remains in the unchanged generation snapshot; it is not invented as a new
 catalog revision. Ambiguous or incomplete evidence remains unlinked and is
 reported rather than guessed.
 
-The active schema is v9. Prompt Catalog revisions and Playground drafts expose
+For retained generations that contain richer embedded recipes or have been
+manually reviewed against their exact prompt snapshots, provenance recovery is
+an explicit new-database operation:
+
+```bash
+python -m comfyreview legacy-provenance audit \
+  --curation migrations/legacy-provenance-curation-v1.json
+python -m comfyreview legacy-provenance recover \
+  --output data/rehearsals/comfyreview-legacy-provenance-v1.sqlite3
+```
+
+The audit distinguishes embedded recipe evidence, exact catalog matches and
+curated prompt reconstruction. Recovery refuses to overwrite its source,
+validates the completed output database and leaves existing current catalog
+revisions unchanged as the latest revisions. Recovered one-off components are
+archived rather than added to the active catalog.
+
+The active application schema is v12. Prompt Catalog revisions and Playground drafts expose
 ordered positive/negative atom rows with separate numeric weights. Rendered
 whole prompts remain exact provenance snapshots produced by the server; they
 are not a second editable source of truth. Schema v8 stores typed workspace
 preferences, generation profiles and ordered LoRA stacks. Schema v9 adds
 ordered workspace content levels plus explicit generation canvas dimensions.
-Standard content visibility is enforced by canonical repository queries across
+Schema v10 adds resolved target geometry, stable LoRA catalog
+identities and generation snapshots, inferred generation content levels, and
+append-only image-classification events with a rebuildable current override.
+Schema v11 adds the rebuildable `image_geometry_projection`; the explicit
+rebuild command reads actual PNG header dimensions outside a transaction and
+atomically replaces the projection. Schema v12 turns stable LoRA definitions
+into a first-class catalog with immutable default/trigger revisions and stores
+the selected LoRA revision on new generation usage; historical usages remain
+nullable rather than being assigned invented current triggers. Standard content visibility is enforced by canonical repository queries across
 Top/Worst, Review, Arena, Scopes, Analytics, Catalog evidence and Playground;
 the browser does not reimplement that policy. Existing older databases require
 the explicit backed-up `canonical-db upgrade` command before startup.
+
+Generation profiles are no longer an active runtime or HTTP concept; their
+tables remain dormant only for migration compatibility. The Generator owns
+checkpoint, sampler, ranges, batch, classified LoRAs, format and output class
+directly. Blueprint v4 executes `VAEDecode -> 4x-AnimeSharp -> ImageSharpen ->
+Lanczos ImageScale -> SaveImage`; missing required nodes or the fixed upscale
+model block submission before a generation is persisted. Settings lists LoRA
+status and links to the single editor in Catalog. Detected LoRAs remain
+separate from their canonical classification. A LoRA is
+selectable only after receiving one workspace-wide content level; detected but
+unclassified files are shown as `Nicht eingestuft`, never as an implied
+Standard selection. Only loader branches connected to a consumed sampler model
+or CLIP input with a non-zero branch strength become normalized generation
+usage. Disconnected historical nodes remain raw provenance but do not affect
+content classification. Top/Worst includes every live image with at least one
+rating, can override an image to any of the five content levels, return it to
+automatic inference, or invoke the existing UID-based delete workflow.
+
+Every image surface uses one shared handoff action. Prompt handoff and render
+handoff are staged independently: the former carries authoritative prompt
+snapshots, component provenance and graph-effective LoRAs; the latter carries
+checkpoint, ordered sampler facts, seed and geometry. Unavailable provider
+values remain visible and rejected instead of being silently substituted. In
+Blueprint v4, the compiler validates every selected LoRA as an ordered,
+continuous Model and CLIP loader chain before persistence or submission.
+
+Prompt components expose a separate five-value content level in the catalog;
+free tags are descriptive only. Existing installations can curate and repair
+historical snapshots without a schema change:
+
+```bash
+python -m comfyreview content-levels audit \
+  --curation migrations/prompt-content-level-curation-v1.json \
+  --report data/reports/content-level-audit.json
+python -m comfyreview content-levels recover \
+  --report data/reports/content-level-audit.json \
+  --output data/comfyreview-content-levels-v1.sqlite3
+```
+
+Recovery always creates and validates a new database; it also removes
+graph-inactive historical LoRAs from the normalized usage relation while
+preserving the original workflow JSON. Promotion and backup of the canonical
+runtime database are explicit operational steps. Top/Worst,
+Analytics and Playground card collections use three equal columns on iPad-sized
+viewports, while every card keeps the full natural image ratio without crop.
+Playground ranks Top-2 and Top-3 combinations independently for every canonical
+character. Analytics Overview, Scopes and Render Analysis share the same cyclic
+three-card tablet language; horizontal touch gestures and arrows wrap in both
+directions.
 
 Audit reports bind source files and databases by hash. Import commands
 revalidate that evidence, create a backup before writing, and commit all writes
@@ -386,6 +472,27 @@ views expose old query shapes but cannot be written.
 
 The Playground Generator is designed to carry values back into ComfyUI in a reproducible way instead of relying on memory and manual copy-paste.
 
+`/playground` is the evidence overview for Top-2/Top-3 combinations;
+`/playground/generator` creates a server-identified draft with one concrete
+shared seed, grouped editable prompt atoms and separate prompt/sampler image
+evidence. Fixed Prompt selections show their best visible catalog reference.
+The Render/Sampler controls offer four explicit evidence modes: observed or
+predicted, each for a complete setup or individual values. Applying one changes
+only Checkpoint, Sampler, Scheduler, Steps, CFG and Denoise; LoRAs and output
+geometry remain manual. Generation history is available at `/generations`.
+
+The application lifespan owns one generation observer, so submitted Playground
+jobs continue from `submitted` through output collection and `completed`
+without a browser-owned queue. Transport interruptions are retried; ambiguous
+submissions are never automatically sent twice. If ComfyUI history has expired,
+the explicit reconcile action can accept only an exact, unambiguous output from
+the generation's persisted directory and filename prefix.
+
+Analytics uses the same `render-guidance-v1` calculation. Actions stage prompt
+and render values in a tab-local tray; they navigate only after “Generator
+öffnen”. Scores and discovery candidates are derived from canonical facts and
+are not persisted, so schema v11 is unchanged.
+
 </details>
 
 <details>
@@ -394,6 +501,12 @@ The Playground Generator is designed to carry values back into ComfyUI in a repr
 Top/Worst, Arena and analytics use canonical review facts and image UIDs. The
 legacy projection worker is no longer part of runtime startup; legacy database
 files are accepted only by explicit offline maintenance commands.
+
+Review places newly captured unrated images first and then returns to the image
+with the oldest rating sequence. Arena derives its cooldown from canonical
+match history: unchanged reloads keep the current pair, while a saved decision
+rotates both images behind older eligible candidates before offering a reverse
+direction.
 
 </details>
 

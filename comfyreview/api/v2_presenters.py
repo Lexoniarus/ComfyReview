@@ -63,6 +63,7 @@ class ImageResponseMapper:
             },
             "output_role": image.output_role,
             "output_index": image.output_index,
+            "geometry": self.geometry(image),
         }
 
     def image_url(self, image_uid: str) -> str:
@@ -90,6 +91,33 @@ class ImageResponseMapper:
                 if image.curation is not None
                 else None
             ),
+            "content_classification": {
+                "inferred_level": image.content.inferred_level.value,
+                "effective_level": image.content.effective_level.value,
+                "override_level": (
+                    image.content.override_level.value
+                    if image.content.override_level is not None
+                    else None
+                ),
+            },
+            "geometry": self.geometry(image),
+        }
+
+    @staticmethod
+    def geometry(image: ImageContext) -> dict[str, object] | None:
+        """Map one optional rebuildable geometry projection."""
+        geometry = image.geometry
+        if geometry is None:
+            return None
+        return {
+            "actual_width": geometry.actual_width,
+            "actual_height": geometry.actual_height,
+            "aspect_format": geometry.aspect_format.value,
+            "resolution_class": geometry.resolution_class.value,
+            "target_width": geometry.target_width,
+            "target_height": geometry.target_height,
+            "match": "exact" if geometry.exact else "approximate",
+            "classifier_version": geometry.classifier_version,
         }
 
     @staticmethod

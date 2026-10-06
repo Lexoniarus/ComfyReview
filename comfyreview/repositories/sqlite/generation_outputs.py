@@ -5,7 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from comfyreview.application import CompiledOutputBinding, GenerationOutput
+from comfyreview.application import (
+    CompiledOutputBinding,
+    GenerationOutput,
+    GenerationOutputRecoveryPlan,
+)
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
     connect_read_only,
@@ -131,5 +135,33 @@ class SqliteGenerationOutputRepository:
                 for row in rows
             }
             return expected <= persisted
+        finally:
+            connection.close()
+
+    def recovery_plan(
+        self,
+        generation_uid: str,
+    ) -> GenerationOutputRecoveryPlan:
+        """Load the exact output policy persisted before submission."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            row = connection.execute(
+                "SELECT raw_metadata_json FROM generations "
+                "WHERE generation_uid = ?",
+                (generation_uid,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown generation: {generation_uid}")
+            metadata = json.loads(str(row["raw_metadata_json"] or "{}"))
+            policy = metadata.get("output_policy")
+            if not isinstance(policy, dict):
+                raise RuntimeError("Generation output policy is invalid")
+            return GenerationOutputRecoveryPlan(
+                output_subdirectory=str(
+                    policy.get("output_subdirectory") or ""
+                ),
+                filename_prefix=str(policy.get("filename_prefix") or ""),
+                bindings=self.expected_bindings(generation_uid),
+            )
         finally:
             connection.close()

@@ -13,6 +13,7 @@ from comfyreview.application.image_queries import (
     ImageFilter,
     ImageOrder,
     ImageQuery,
+    ReviewCandidateOrder,
     ScopeKind,
     ScopeSelection,
 )
@@ -140,15 +141,46 @@ def test_sqlite_review_candidate_uses_canonical_filters(
     repository = SqliteReviewCandidateRepository(database_path)
 
     candidate = repository.next_candidate(
-        ImageFilter(scopes=ScopeSelection(("character-a",)))
+        ImageFilter(scopes=ScopeSelection(("character-a",))),
+        ReviewCandidateOrder.PRIORITIZE_UNRATED,
     )
     missing = repository.next_candidate(
-        ImageFilter(scopes=ScopeSelection(("character-b",)), set_key="missing")
+        ImageFilter(
+            scopes=ScopeSelection(("character-b",)), set_key="missing"
+        ),
+        ReviewCandidateOrder.PRIORITIZE_UNRATED,
     )
 
     assert candidate is not None
     assert candidate.image_uid == "image-3"
     assert missing is None
+
+
+def test_sqlite_review_candidate_prioritizes_new_unrated_then_oldest_rated(
+    tmp_path: Path,
+) -> None:
+    database_path = _seed_scope_database(tmp_path)
+    repository = SqliteReviewCandidateRepository(database_path)
+
+    newest_unrated = repository.next_candidate(
+        ImageFilter(),
+        ReviewCandidateOrder.PRIORITIZE_UNRATED,
+    )
+    oldest_rated = repository.next_candidate(
+        ImageFilter(scopes=ScopeSelection(("outfit-x",))),
+        ReviewCandidateOrder.PRIORITIZE_UNRATED,
+    )
+    fair_without_priority = repository.next_candidate(
+        ImageFilter(scopes=ScopeSelection(("outfit-x",))),
+        ReviewCandidateOrder.LEAST_RECENT,
+    )
+
+    assert newest_unrated is not None
+    assert newest_unrated.image_uid == "image-unclassified"
+    assert oldest_rated is not None
+    assert oldest_rated.image_uid == "image-1"
+    assert fair_without_priority is not None
+    assert fair_without_priority.image_uid == "image-1"
 
 
 def test_sqlite_image_filters_cover_model_checkpoint_rating_and_sets(
@@ -215,17 +247,13 @@ def test_sqlite_image_queries_apply_canonical_content_visibility(
     connection = sqlite3.connect(database_path)
     try:
         connection.execute(
-            "UPDATE prompt_components SET tags = ? "
-            "WHERE component_uid = 'scene-old'",
-            ('["nsfw_level_nude"]',),
+            "UPDATE generations SET inferred_content_level = 'lewd' "
+            "WHERE generation_uid IN "
+            "('generation-image-1', 'generation-image-2')"
         )
         connection.execute(
-            "UPDATE prompt_components SET tags = 'legacy-tag' "
-            "WHERE component_uid = 'character-a'"
-        )
-        connection.execute(
-            "UPDATE prompt_components SET tags = '[\"lewd\"]' "
-            "WHERE component_uid = 'outfit-x'"
+            "UPDATE generations SET inferred_content_level = 'nude' "
+            "WHERE generation_uid = 'generation-image-3'"
         )
         connection.commit()
     finally:

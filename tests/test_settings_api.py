@@ -9,9 +9,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from comfyreview.application import (
+    ContentClassificationError,
     ContentLevel,
     GenerationLoraSelection,
     GenerationProfile,
+    LoraDefinition,
+    LoraReclassificationImpact,
     RuntimeConfigurationSnapshot,
     RuntimeDiagnostics,
     WorkspacePreferences,
@@ -103,8 +106,42 @@ class _Diagnostics:
             samplers=("euler",),
             schedulers=("normal",),
             loras=("style.safetensors",),
+            upscale_models=("example-upscaler.pth",),
             message="connected",
         )
+
+
+class _LoraCatalog:
+    def __init__(self) -> None:
+        self.definition = LoraDefinition(
+            "lora-style", "style.safetensors", ContentLevel.SEXY, 2
+        )
+        self.error: Exception | None = None
+
+    def list_definitions(self) -> tuple[LoraDefinition, ...]:
+        return (self.definition,)
+
+    def classify(
+        self, provider_name: str, content_level: ContentLevel
+    ) -> LoraDefinition:
+        if self.error is not None:
+            raise self.error
+        self.definition = LoraDefinition(
+            "lora-style", provider_name, content_level, 3
+        )
+        return self.definition
+
+    def preview(self, lora_uid: str) -> LoraReclassificationImpact:
+        if self.error is not None:
+            raise self.error
+        return LoraReclassificationImpact(lora_uid, 3, 4, 5, 1)
+
+    def reclassify(
+        self, lora_uid: str, expected_revision: int
+    ) -> LoraReclassificationImpact:
+        if self.error is not None:
+            raise self.error
+        return LoraReclassificationImpact(lora_uid, expected_revision, 4, 5, 1)
 
 
 def test_settings_api_reads_and_updates_canonical_preferences() -> None:
@@ -117,9 +154,7 @@ def test_settings_api_reads_and_updates_canonical_preferences() -> None:
             "density": "compact",
             "motion": "reduced",
             "analytics_page_size": 48,
-            "default_generation_profile_uid": "profile-a",
-            "review_unrated_only": False,
-            "review_max_attempts": 25,
+            "review_prioritize_unrated": False,
             "default_curation_set_key": "favorites",
             "curation_set_order": ["favorites", "archive"],
             "enabled_content_levels": ["standard", "sexy"],
@@ -129,24 +164,24 @@ def test_settings_api_reads_and_updates_canonical_preferences() -> None:
     assert response.status_code == 200
     assert response.json()["runtime"]["configuration"]["schema_version"] == 9
     assert response.json()["runtime"]["message"] == "not_checked"
-    assert response.json()["generation_profiles"][0]["loras"] == [
-        {
-            "name": "style.safetensors",
-            "model_strength": 0.8,
-            "clip_strength": 0.6,
-            "position": 0,
-        }
-    ]
+    assert response.json()["lora_definitions"][0]["lora_uid"] == ("lora-style")
+    assert "generation_profiles" not in response.json()
+    assert (
+        "default_generation_profile_uid" not in response.json()["preferences"]
+    )
     assert updated.status_code == 200
     assert updated.json()["density"] == "compact"
-    assert container.workspace_preferences.value.review_max_attempts == 25
+    assert (
+        container.workspace_preferences.value.review_prioritize_unrated
+        is False
+    )
     assert container.workspace_preferences.value.enabled_content_levels == (
         ContentLevel.STANDARD,
         ContentLevel.SEXY,
     )
 
 
-def test_settings_api_manages_profiles_and_capabilities() -> None:
+def test_settings_api_removes_profiles_and_reports_capabilities() -> None:
     client, _ = _client()
     payload = _profile_payload()
 
@@ -166,19 +201,62 @@ def test_settings_api_manages_profiles_and_capabilities() -> None:
     checked = client.post("/settings/comfyui/check")
     capabilities = client.get("/generation-capabilities")
 
-    assert listed.json()["items"][0]["profile_uid"] == "profile-a"
-    assert created.status_code == 201
-    assert created.json()["profile_uid"] == "created-profile"
-    assert updated.json()["name"] == "Updated"
-    assert archived.json()["archived"] is True
-    assert selected.json()["default_generation_profile_uid"] == (
-        "created-profile"
-    )
+    assert listed.status_code == 404
+    assert created.status_code == 404
+    assert updated.status_code == 404
+    assert archived.status_code == 404
+    assert selected.status_code == 404
     assert checked.json()["connected"] is True
     assert capabilities.json()["loras"] == ["style.safetensors"]
+    assert capabilities.json()["upscale_models"] == ["example-upscaler.pth"]
 
 
-def test_settings_api_maps_validation_and_missing_profile_errors() -> None:
+def test_settings_api_classifies_loras_and_reclassifies_history() -> None:
+    client, _container = _client()
+
+    classified = client.post(
+        "/settings/loras/classify",
+        json={
+            "provider_name": "style.safetensors",
+            "content_level": "nude",
+        },
+    )
+    preview = client.get("/settings/loras/lora-style/reclassification-impact")
+    applied = client.post(
+        "/settings/loras/lora-style/reclassify",
+        json={"expected_revision": 3},
+    )
+
+    assert classified.status_code == 200
+    assert classified.json()["content_level"] == "nude"
+    assert preview.json()["image_count"] == 5
+    assert preview.json()["manual_override_count"] == 1
+    assert applied.json()["revision"] == 3
+
+
+def test_settings_api_maps_lora_policy_errors() -> None:
+    client, container = _client()
+    container.lora_catalog.error = ContentClassificationError("invalid")
+
+    classified = client.post(
+        "/settings/loras/classify",
+        json={
+            "provider_name": "style.safetensors",
+            "content_level": "nude",
+        },
+    )
+    preview = client.get("/settings/loras/missing/reclassification-impact")
+    applied = client.post(
+        "/settings/loras/lora-style/reclassify",
+        json={"expected_revision": 2},
+    )
+
+    assert classified.status_code == 400
+    assert preview.status_code == 404
+    assert applied.status_code == 409
+
+
+def test_settings_api_maps_preference_validation() -> None:
     client, container = _client()
     container.workspace_preferences.error = WorkspaceSettingsValidationError(
         "invalid settings"
@@ -189,8 +267,7 @@ def test_settings_api_maps_validation_and_missing_profile_errors() -> None:
             "density": "compact",
             "motion": "system",
             "analytics_page_size": 24,
-            "review_unrated_only": True,
-            "review_max_attempts": 1,
+            "review_prioritize_unrated": True,
             "curation_set_order": [],
         },
     )
@@ -199,31 +276,6 @@ def test_settings_api_maps_validation_and_missing_profile_errors() -> None:
         "invalid_preferences"
     )
 
-    container.generation_profiles.error = WorkspaceSettingsValidationError(
-        "invalid profile"
-    )
-    invalid_profile = client.post(
-        "/settings/generation-profiles", json=_profile_payload()
-    )
-    assert invalid_profile.status_code == 400
-
-    container.generation_profiles.error = KeyError("missing")
-    missing_update = client.put(
-        "/settings/generation-profiles/missing", json=_profile_payload()
-    )
-    missing_archive = client.patch(
-        "/settings/generation-profiles/missing/archive",
-        json={"archived": True},
-    )
-    assert missing_update.status_code == 404
-    assert missing_archive.status_code == 404
-
-    container.workspace_preferences.error = KeyError("missing")
-    missing_default = client.put(
-        "/settings/generation-profiles/missing/default"
-    )
-    assert missing_default.status_code == 404
-
 
 def _client() -> tuple[TestClient, SimpleNamespace]:
     container = SimpleNamespace(
@@ -231,6 +283,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         workspace_preferences=_Preferences(WorkspacePreferences()),
         generation_profiles=_Profiles(_profile()),
         runtime_diagnostics=_Diagnostics(),
+        lora_catalog=_LoraCatalog(),
     )
     application = FastAPI()
     application.state.container = container
@@ -286,6 +339,7 @@ def _profile_payload() -> dict[str, object]:
         "batch_size": 1,
         "image_width": 768,
         "image_height": 1152,
+        "output_tier": "full_hd_1080",
         "loras": [
             {
                 "name": "style.safetensors",

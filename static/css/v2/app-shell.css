@@ -2,6 +2,63 @@
   box-sizing: border-box;
 }
 
+.global-intent-tray {
+  position: fixed;
+  z-index: 90;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: min(44rem, calc(100vw - 2rem));
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-strong, #435169);
+  border-radius: 0.8rem;
+  background: var(--surface-raised, #151c28);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+}
+
+.global-intent-tray[hidden],
+.global-intent-toast[hidden] {
+  display: none;
+}
+
+.global-intent-toast {
+  position: fixed;
+  z-index: 100;
+  left: 50%;
+  bottom: 6rem;
+  transform: translateX(-50%);
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  color: var(--text-primary, #f7f9fc);
+  background: var(--accent-strong, #3f6fb8);
+}
+
+.image-generator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.image-generator-actions-compact {
+  position: relative;
+  justify-content: flex-end;
+}
+
+.image-generator-actions-menu {
+  position: absolute;
+  z-index: 12;
+  right: 0;
+  bottom: calc(100% + 0.35rem);
+  min-width: 16rem;
+  padding: 0.45rem;
+  border: 1px solid var(--border-strong, #435169);
+  border-radius: 0.6rem;
+  background: var(--surface-raised, #151c28);
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 30%);
+}
+
 html {
   min-width: 20rem;
   background: var(--color-canvas);
@@ -31,6 +88,11 @@ button,
 a,
 select {
   -webkit-tap-highlight-color: transparent;
+}
+
+.image-generator-actions-menu > button {
+  width: 100%;
+  margin-block: 0.15rem;
 }
 
 button:focus-visible,
@@ -201,9 +263,23 @@ input:focus-visible {
 
 .prompt-atom-row {
   display: grid;
-  grid-template-columns: minmax(10rem, 1fr) 6rem repeat(3, auto);
+  grid-template-columns: minmax(10rem, 1fr) 6rem repeat(6, auto);
   gap: var(--space-1);
   align-items: center;
+}
+
+.prompt-atom-row.is-dragging {
+  opacity: 0.58;
+  outline: 0.125rem solid var(--color-accent-border);
+}
+
+.prompt-atom-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.prompt-atom-drag-handle:active {
+  cursor: grabbing;
 }
 
 .prompt-atom-row button,

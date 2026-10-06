@@ -7,32 +7,24 @@ import {
   textValue,
 } from "./analytics-formatters.js";
 
-/** Render prompt-composition evidence or observed render setups. */
+/** Render actually used prompt-composition evidence. */
 export class CompositionEvidenceView {
   /** @param {{images: import("./evidence-image-strip.js").EvidenceImageStrip, setups: import("./render-setup-view.js").RenderSetupView}} dependencies */
   constructor(dependencies) {
     this.images = dependencies.images;
     this.setups = dependencies.setups;
     this.collection = document.createElement("div");
-    this.view = "prompt";
   }
 
   /** @param {HTMLElement} root @param {Record<string, any>} payload */
   render(root, payload) {
     this.collection.replaceChildren();
-    this.view = String(payload.view || "prompt");
-    this.collection.className =
-      this.view === "render"
-        ? "analytics-tested-list"
-        : "analytics-composition-grid";
+    this.collection.className = "analytics-composition-grid media-card-grid";
     root.append(
       reportIntro(
-        this.view === "render"
-          ? "Beobachtete Render-Setups"
-          : "Prompt-Kombinationen",
+        "Prompt-Kombinationen",
         "Nur tatsächlich verwendete kanonische Fakten werden gezeigt; mögliche Kreuzprodukte entstehen nicht.",
       ),
-      combinationNavigation(this.view),
       this.collection,
     );
     this.append(payload.items);
@@ -46,11 +38,7 @@ export class CompositionEvidenceView {
   /** @param {unknown} values */
   append(values) {
     for (const value of arrayValue(values)) {
-      this.collection.append(
-        this.view === "render"
-          ? this.setups.render(value)
-          : this.#compositionCard(value),
-      );
+      this.collection.append(this.#compositionCard(value));
     }
   }
 
@@ -78,7 +66,7 @@ export class CompositionEvidenceView {
   #compositionCard(value) {
     const row = recordValue(value);
     const card = document.createElement("article");
-    card.className = "analytics-composition-card";
+    card.className = "analytics-composition-card media-card";
     card.dataset.compositionUid = String(row.composition_uid || "");
     card.dataset.itemKey = String(row.composition_uid || "");
     card.append(this.images.render(row.best_images, "Prompt-Kombination"));
@@ -104,7 +92,7 @@ export class CompositionEvidenceView {
     use.dataset.playgroundIntent = "composition";
     use.dataset.compositionUid = String(row.composition_uid || "");
     use.dataset.componentUids = JSON.stringify(arrayValue(row.component_uids));
-    use.textContent = "Im Generator verwenden";
+    use.textContent = "Prompt vormerken";
     const details = document.createElement("button");
     details.type = "button";
     details.dataset.compositionDetails = String(row.composition_uid || "");
@@ -113,23 +101,4 @@ export class CompositionEvidenceView {
     card.append(scopes, evidence, actions);
     return card;
   }
-}
-
-/** @param {string} selectedView */
-function combinationNavigation(selectedView) {
-  const navigation = document.createElement("nav");
-  navigation.className = "analytics-subtabs";
-  navigation.setAttribute("aria-label", "Kombinationsansicht");
-  for (const [view, label] of [
-    ["prompt", "Prompt-Kombinationen"],
-    ["render", "Render-Setups"],
-  ]) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = label;
-    button.dataset.analyticsView = view;
-    button.setAttribute("aria-pressed", String(view === selectedView));
-    navigation.append(button);
-  }
-  return navigation;
 }

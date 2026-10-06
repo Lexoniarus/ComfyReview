@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import base64
 import hashlib
+import json
 import shutil
 import sqlite3
 import sys
@@ -86,6 +87,14 @@ class BrowserTestRuntime:
                 component_uid="component-character-aiko",
                 name="Aiko",
                 positive_text="aiko",
+            )
+            self._insert_component(
+                connection,
+                kind="outfit",
+                component_uid="component-outfit-underwear",
+                name="Basic Underwear Set",
+                positive_text="underwear",
+                content_level="sexy",
             )
             sequence = 0
             for index in range(30):
@@ -237,15 +246,23 @@ class BrowserTestRuntime:
         component_uid: str,
         name: str,
         positive_text: str,
+        content_level: str = "standard",
     ) -> int:
+        negative_text = "bad anatomy" if kind == "character" else ""
         component_id = BrowserTestRuntime._last_row_id(
             connection.execute(
                 """
                 INSERT INTO prompt_components(
-                    kind, component_key, name, component_uid
-                ) VALUES (?, ?, ?, ?)
+                    kind, component_key, name, component_uid, tags
+                ) VALUES (?, ?, ?, ?, ?)
                 """,
-                (kind, component_uid, name, component_uid),
+                (
+                    kind,
+                    component_uid,
+                    name,
+                    component_uid,
+                    json.dumps([f"content_level_{content_level}"]),
+                ),
             )
         )
         content_hash = BrowserTestRuntime._digest(positive_text)
@@ -255,12 +272,13 @@ class BrowserTestRuntime:
                 INSERT INTO prompt_revisions(
                     revision_uid, component_id, revision_number,
                     positive_text, negative_text, content_hash
-                ) VALUES (?, ?, 1, ?, '', ?)
+                ) VALUES (?, ?, 1, ?, ?, ?)
                 """,
                 (
                     f"revision-{component_uid}",
                     component_id,
                     positive_text,
+                    negative_text,
                     content_hash,
                 ),
             )
@@ -274,6 +292,18 @@ class BrowserTestRuntime:
             """,
             (revision_id, atom_id),
         )
+        if negative_text:
+            negative_atom_id = BrowserTestRuntime._insert_atom(
+                connection, negative_text
+            )
+            connection.execute(
+                """
+                INSERT INTO prompt_revision_atom_usages(
+                    revision_id, atom_id, scope, position, weight_milli
+                ) VALUES (?, ?, 'neg', 0, 1000)
+                """,
+                (revision_id, negative_atom_id),
+            )
         return revision_id
 
     @staticmethod
@@ -361,6 +391,14 @@ class BrowserTestRuntime:
                         }
                     }
                 },
+                "UpscaleModelLoader": {
+                    "input": {
+                        "required": {"model_name": [["example-upscaler.pth"]]}
+                    }
+                },
+                "ImageUpscaleWithModel": {},
+                "ImageSharpen": {},
+                "ImageScale": {},
                 "SaveImage": {},
                 "PrimitiveString": {},
                 "PrimitiveStringMultiline": {},
@@ -380,4 +418,4 @@ atexit.register(runtime.cleanup)
 app = runtime.create_application()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning")

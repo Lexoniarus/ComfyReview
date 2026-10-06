@@ -8,6 +8,9 @@ export const parameterLabels = new Map([
   ["cfg", "CFG"],
   ["sampler", "Sampler"],
   ["scheduler", "Scheduler"],
+  ["denoise", "Denoise"],
+  ["aspect_format", "Format / Ausrichtung"],
+  ["resolution_class", "Auflösungsklasse"],
 ]);
 
 export const scopeKindLabels = new Map([

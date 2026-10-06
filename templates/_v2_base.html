@@ -8,8 +8,15 @@
     <link rel="icon" href="/static/icons/favicon.ico" />
     <link rel="manifest" href="/static/manifest.json" />
     <link rel="stylesheet" href="/static/css/v2/tokens.css?v=20261002" />
-    <link rel="stylesheet" href="/static/css/v2/app-shell.css?v=20261002" />
+    <link
+      rel="stylesheet"
+      href="/static/css/v2/app-shell.css?v=20261005-playground1"
+    />
     {% block styles %}{% endblock %}
+    <link
+      rel="stylesheet"
+      href="/static/css/v2/media-cards.css?v=20261006-content1"
+    />
   </head>
   <body>
     <header class="v2-app-bar">
@@ -28,17 +35,17 @@
         {% else %}
         <a href="/arena">Arena</a>
         {% endif %} {% if active_nav == "playground" %}
-        <a href="/playground/generator" aria-current="page">Playground</a>
+        <a href="/playground" aria-current="page">Playground</a>
         {% else %}
-        <a href="/playground/generator">Playground</a>
+        <a href="/playground">Playground</a>
         {% endif %} {% if active_nav == "catalog" %}
         <a href="/playground/browse" aria-current="page">Katalog</a>
         {% else %}
         <a href="/playground/browse">Katalog</a>
         {% endif %} {% if active_nav == "generations" %}
-        <a href="/playground" aria-current="page">Generierungen</a>
+        <a href="/generations" aria-current="page">Generierungen</a>
         {% else %}
-        <a href="/playground">Generierungen</a>
+        <a href="/generations">Generierungen</a>
         {% endif %} {% if active_nav == "analytics" %}
         <a href="/stats" aria-current="page">Analysen</a>
         {% else %}
@@ -67,6 +74,9 @@
       {% endif %}
     </header>
     <main class="v2-page">{% block content %}{% endblock %}</main>
+    <aside class="playground-intent-tray global-intent-tray" data-global-intent-tray hidden></aside>
+    <div class="playground-intent-toast global-intent-toast" data-global-intent-toast role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/static/js/entries/app-shell.js?v=20261006-lora1"></script>
     {% block scripts %}{% endblock %}
   </body>
 </html>

@@ -8,13 +8,21 @@ import sqlite3
 from pathlib import Path
 
 from comfyreview.application import (
+    ContentLevel,
     GenerationRecord,
     PreparedGeneration,
     PromptCompositionMembership,
+    infer_content_level,
     prompt_composition_identity,
 )
+from comfyreview.application.content_classification import (
+    PromptContentLevelPolicy,
+)
 from comfyreview.domain import parse_prompt_atoms
-from comfyreview.repositories.sqlite.connection import connect_existing
+from comfyreview.repositories.sqlite.connection import (
+    connect_existing,
+    connect_read_only,
+)
 
 
 class SqliteGenerationRepository:
@@ -64,6 +72,15 @@ class SqliteGenerationRepository:
                         if generation.request.canvas is not None
                         else None
                     ),
+                    "geometry": (
+                        {
+                            "output_tier": generation.request.geometry.output_tier.value,
+                            "output_width": generation.request.geometry.output_width,
+                            "output_height": generation.request.geometry.output_height,
+                        }
+                        if generation.request.geometry is not None
+                        else None
+                    ),
                 },
                 ensure_ascii=False,
                 sort_keys=True,
@@ -74,12 +91,13 @@ class SqliteGenerationRepository:
                 INSERT INTO generations(
                     generation_uid, model_branch, checkpoint, combo_key,
                     seed, steps, cfg, sampler, scheduler, denoise,
-                    loras_json, image_width, image_height,
+                    loras_json, image_width, image_height, output_tier,
+                    output_width, output_height,
                     positive_prompt_id, negative_prompt_id,
                     source, raw_metadata_json, workflow_json, workflow_hash,
                     status, prompt_composition_id
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     'native_comfyui', ?, ?, ?, 'prepared', ?
                 )
                 """,
@@ -103,6 +121,21 @@ class SqliteGenerationRepository:
                     (
                         generation.request.canvas.height
                         if generation.request.canvas is not None
+                        else None
+                    ),
+                    (
+                        generation.request.geometry.output_tier.value
+                        if generation.request.geometry is not None
+                        else None
+                    ),
+                    (
+                        generation.request.geometry.output_width
+                        if generation.request.geometry is not None
+                        else None
+                    ),
+                    (
+                        generation.request.geometry.output_height
+                        if generation.request.geometry is not None
                         else None
                     ),
                     positive_id,
@@ -145,20 +178,31 @@ class SqliteGenerationRepository:
             connection.executemany(
                 """
                 INSERT INTO generation_loras(
-                    generation_id, position, lora_name,
+                    generation_id, position, lora_name, lora_uid,
+                    lora_revision_id, content_level_snapshot,
                     model_strength_milli, clip_strength_milli
-                ) VALUES (?, ?, ?, ?, ?)
+                ) VALUES (
+                    ?, ?, ?, ?,
+                    (SELECT id FROM lora_revisions WHERE revision_uid = ?),
+                    ?, ?, ?
+                )
                 """,
                 tuple(
                     (
                         generation_id,
                         lora.position,
                         lora.name,
+                        lora.lora_uid,
+                        lora.revision_uid,
+                        lora.content_level,
                         lora.model_strength_milli,
                         lora.clip_strength_milli,
                     )
                     for lora in generation.request.loras
                 ),
+            )
+            self._update_inferred_content_level(
+                connection, generation_id, generation
             )
             connection.commit()
             return GenerationRecord(
@@ -185,11 +229,88 @@ class SqliteGenerationRepository:
             separators=(",", ":"),
         )
 
+    @staticmethod
+    def _update_inferred_content_level(
+        connection: sqlite3.Connection,
+        generation_id: int,
+        generation: PreparedGeneration,
+    ) -> None:
+        if not generation.request.prompt.revision_uids:
+            component_levels: tuple[ContentLevel, ...] = ()
+        else:
+            placeholders = ", ".join(
+                "?" for _uid in generation.request.prompt.revision_uids
+            )
+            rows = connection.execute(
+                f"""
+                SELECT component.tags
+                FROM prompt_revisions AS revision
+                JOIN prompt_components AS component
+                  ON component.id = revision.component_id
+                WHERE revision.revision_uid IN ({placeholders})
+                """,
+                generation.request.prompt.revision_uids,
+            ).fetchall()
+            levels: list[ContentLevel] = []
+            policy = PromptContentLevelPolicy()
+            for (payload,) in rows:
+                try:
+                    decoded = json.loads(str(payload or "[]"))
+                except json.JSONDecodeError:
+                    decoded = []
+                if isinstance(decoded, list):
+                    levels.append(
+                        policy.read(
+                            tuple(str(item) for item in decoded)
+                        ).content_level
+                    )
+            component_levels = tuple(levels)
+        lora_levels = tuple(
+            ContentLevel(item.content_level)
+            for item in generation.request.loras
+            if item.content_level is not None
+        )
+        level = infer_content_level(component_levels, lora_levels)
+        connection.execute(
+            "UPDATE generations SET inferred_content_level = ? WHERE id = ?",
+            (level.value, generation_id),
+        )
+
     def get(self, generation_uid: str) -> GenerationRecord:
         """Return one current lifecycle record."""
-        connection = connect_existing(self._database_path, rows=True)
+        connection = connect_read_only(self._database_path, rows=True)
         try:
             return self._get(connection, generation_uid)
+        finally:
+            connection.close()
+
+    def list_active(self, limit: int) -> tuple[GenerationRecord, ...]:
+        """Return bounded non-terminal native generations oldest first."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                """
+                SELECT generation_uid, status, comfy_prompt_id
+                FROM generations
+                WHERE source = 'native_comfyui'
+                  AND status IN ('prepared', 'submitting', 'submitted', 'running')
+                ORDER BY id
+                LIMIT ?
+                """,
+                (max(1, int(limit)),),
+            ).fetchall()
+            return tuple(
+                GenerationRecord(
+                    generation_uid=str(row["generation_uid"]),
+                    status=str(row["status"]),
+                    prompt_id=(
+                        str(row["comfy_prompt_id"])
+                        if row["comfy_prompt_id"]
+                        else None
+                    ),
+                )
+                for row in rows
+            )
         finally:
             connection.close()
 
@@ -296,6 +417,11 @@ class SqliteGenerationRepository:
                     "raw_metadata_json = json_set(COALESCE(raw_metadata_json, '{}'), '$.last_error', ?)"
                 )
                 values.append(reason)
+            elif target in {"submitted", "running", "completed"}:
+                assignments.append(
+                    "raw_metadata_json = json_remove("
+                    "COALESCE(raw_metadata_json, '{}'), '$.last_error')"
+                )
             if timestamp_column is not None:
                 assignments.append(f"{timestamp_column} = datetime('now')")
             values.append(generation_uid)

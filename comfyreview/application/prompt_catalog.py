@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
+from comfyreview.application.workspace_settings import ContentLevel
 from comfyreview.domain import PromptAtomUsage, render_prompt_atom_usages
 
 
@@ -50,6 +51,7 @@ class PromptComponent:
     notes: str
     archived: bool
     latest_revision: PromptRevision
+    content_level: ContentLevel = ContentLevel.STANDARD
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +65,7 @@ class CreatePromptComponentCommand:
     notes: str = ""
     positive_atoms: tuple[PromptAtomUsage, ...] = ()
     negative_atoms: tuple[PromptAtomUsage, ...] = ()
+    content_level: ContentLevel = ContentLevel.STANDARD
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +85,7 @@ class UpdatePromptComponentMetadataCommand:
     name: str
     tags: tuple[str, ...]
     notes: str
+    content_level: ContentLevel = ContentLevel.STANDARD
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +98,7 @@ class UpdatePromptComponentCommand:
     notes: str
     positive_atoms: tuple[PromptAtomUsage, ...]
     negative_atoms: tuple[PromptAtomUsage, ...]
+    content_level: ContentLevel = ContentLevel.STANDARD
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +124,7 @@ class NewPromptComponent:
     tags: tuple[str, ...]
     notes: str
     revision: PromptRevisionDraft
+    content_level: ContentLevel = ContentLevel.STANDARD
 
 
 class PromptIdentitySource(Protocol):
@@ -322,6 +328,7 @@ class PromptCatalogService:
                 tags=self._tags(command.tags),
                 notes=str(command.notes or "").strip(),
                 revision=revision,
+                content_level=command.content_level,
             )
         )
 
@@ -351,6 +358,7 @@ class PromptCatalogService:
             name=self._required(command.name, "name"),
             tags=self._tags(command.tags),
             notes=str(command.notes or "").strip(),
+            content_level=command.content_level,
         )
         return self._repository.update_metadata(normalized)
 
@@ -368,6 +376,7 @@ class PromptCatalogService:
             name=self._required(command.name, "name"),
             tags=self._tags(command.tags),
             notes=str(command.notes or "").strip(),
+            content_level=command.content_level,
         )
         revision = self._revision(
             component_uid,

@@ -11,6 +11,8 @@ from comfyreview.application.comfyui import (
     ComfyUiOutputDescriptor,
     ComfyUiProvider,
 )
+from comfyreview.application.generation_geometry import ImageGeometryProjection
+from comfyreview.application.image_geometry import ImageGeometrySource
 from comfyreview.application.workflow_compilation import CompiledOutputBinding
 
 
@@ -50,6 +52,15 @@ class GenerationOutput:
     content_hash: str
 
 
+@dataclass(frozen=True, slots=True)
+class GenerationOutputRecoveryPlan:
+    """Describe the exact persisted output location allowed for recovery."""
+
+    output_subdirectory: str
+    filename_prefix: str
+    bindings: tuple[CompiledOutputBinding, ...]
+
+
 class GenerationOutputSource(Protocol):
     """Resolve and hash one raw ComfyUI output descriptor."""
 
@@ -57,6 +68,17 @@ class GenerationOutputSource(Protocol):
         self, descriptor: ComfyUiOutputDescriptor
     ) -> CollectedOutputFile:
         """Return one validated local output file."""
+        ...
+
+
+class GenerationOutputRecoverySource(Protocol):
+    """Discover strictly bounded files for an explicit recovery action."""
+
+    def discover(
+        self,
+        plan: GenerationOutputRecoveryPlan,
+    ) -> tuple[ComfyUiOutputDescriptor, ...]:
+        """Return unambiguous descriptors or raise a typed output error."""
         ...
 
 
@@ -82,6 +104,21 @@ class GenerationOutputRepository(Protocol):
         """Return whether all expected role/node bindings have outputs."""
         ...
 
+    def recovery_plan(
+        self,
+        generation_uid: str,
+    ) -> GenerationOutputRecoveryPlan:
+        """Return the exact persisted policy used for output recovery."""
+        ...
+
+
+class CapturedImageProjection(Protocol):
+    """Project one captured image after canonical persistence succeeds."""
+
+    def project(
+        self, source: ImageGeometrySource
+    ) -> ImageGeometryProjection: ...
+
 
 def generation_output_identity(
     generation_uid: str,
@@ -105,10 +142,12 @@ class GenerationOutputCollector:
         comfyui: ComfyUiProvider,
         source: GenerationOutputSource,
         repository: GenerationOutputRepository,
+        image_geometry: CapturedImageProjection | None = None,
     ) -> None:
         self._comfyui = comfyui
         self._source = source
         self._repository = repository
+        self._image_geometry = image_geometry
 
     def collect(
         self,
@@ -116,9 +155,17 @@ class GenerationOutputCollector:
         prompt_id: str,
     ) -> tuple[GenerationOutput, ...]:
         """Collect all expected outputs and reject missing or unexpected nodes."""
+        descriptors = self._comfyui.fetch_outputs(prompt_id)
+        return self.collect_descriptors(generation_uid, descriptors)
+
+    def collect_descriptors(
+        self,
+        generation_uid: str,
+        descriptors: tuple[ComfyUiOutputDescriptor, ...],
+    ) -> tuple[GenerationOutput, ...]:
+        """Persist already-discovered descriptors through canonical mapping."""
         bindings = self._repository.expected_bindings(generation_uid)
         roles_by_node = self._roles_by_node(bindings)
-        descriptors = self._comfyui.fetch_outputs(prompt_id)
         self._validate_descriptors(roles_by_node, descriptors)
         outputs: list[GenerationOutput] = []
         for descriptor in descriptors:
@@ -138,7 +185,15 @@ class GenerationOutputCollector:
                     content_hash=collected.content_hash,
                 )
             )
-        return self._repository.save_outputs(generation_uid, tuple(outputs))
+        persisted = self._repository.save_outputs(
+            generation_uid, tuple(outputs)
+        )
+        if self._image_geometry is not None:
+            for output in persisted:
+                self._image_geometry.project(
+                    ImageGeometrySource(output.image_uid, output.path)
+                )
+        return persisted
 
     def outputs_complete(self, generation_uid: str) -> bool:
         """Return whether a prior atomic collection stored every binding."""
@@ -185,3 +240,27 @@ class GenerationOutputCollector:
             raise MissingGenerationOutputError(
                 "missing output nodes: " + ", ".join(sorted(missing))
             )
+
+
+class GenerationOutputRecoveryService:
+    """Recover outputs only from one exact persisted output policy."""
+
+    def __init__(
+        self,
+        *,
+        source: GenerationOutputRecoverySource,
+        repository: GenerationOutputRepository,
+        collector: GenerationOutputCollector,
+    ) -> None:
+        self._source = source
+        self._repository = repository
+        self._collector = collector
+
+    def recover(self, generation_uid: str) -> tuple[GenerationOutput, ...]:
+        """Discover and persist one unambiguous historical output set."""
+        plan = self._repository.recovery_plan(generation_uid)
+        descriptors = self._source.discover(plan)
+        return self._collector.collect_descriptors(
+            generation_uid,
+            descriptors,
+        )

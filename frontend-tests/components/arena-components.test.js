@@ -13,7 +13,13 @@ describe("arena components", () => {
     const onDecision = vi.fn();
     const onInspect = vi.fn();
     const onExpand = vi.fn();
-    const board = new ArenaBoard(root, { onDecision, onInspect, onExpand });
+    const createGeneratorActions = vi.fn(() => document.createElement("menu"));
+    const board = new ArenaBoard(root, {
+      onDecision,
+      onInspect,
+      onExpand,
+      createGeneratorActions,
+    });
     const pair = {
       left: { image_uid: "left", image_url: "/left.png" },
       right: { image_uid: "right", image_url: "/right.png" },
@@ -26,6 +32,7 @@ describe("arena components", () => {
     board.error("");
     expect(root.textContent).toContain("konnte nicht");
     board.render(pair);
+    expect(createGeneratorActions).toHaveBeenCalledTimes(2);
     root
       .querySelector("[data-arena-action='decide'][data-side='left']")
       ?.click();

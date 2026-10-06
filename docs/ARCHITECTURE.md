@@ -1,9 +1,9 @@
 # ComfyReview Architecture
 
 Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, live schema-v9 data and Frontend V2 including
-Settings are implemented on the active refactor branch, 2026-10-03. Final user
-acceptance and integration review remain open.
+analytics, native Generation, schema-v12 application support and Frontend V2
+including Settings are implemented on the active feature branch, 2026-10-06.
+Final user acceptance and integration review remain open.
 
 ## 1. Product boundary
 
@@ -41,14 +41,29 @@ only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v9 is the active
+The canonical database has an explicit schema version. Schema v12 is the active
 shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
 catalog, records v6 native output roles/content hashes, normalizes ordered
 prompt-revision atom usages in v7 and adds workspace preferences, generation
 profiles and normalized LoRA relations in v8. Schema v9 adds ordered workspace
-content levels and explicit generation canvas dimensions. Stable `image_uid`
+content levels and explicit generation canvas dimensions. Schema v10 adds
+output tiers and target geometry, stable LoRA catalog identities and immutable
+generation snapshots, inferred generation content levels, plus append-only
+manual image-classification events and their rebuildable projection. Stable `image_uid`
 and `generation_uid` values are identity; PNG and optional sidecar paths are
 mutable attributes.
+
+Schema v11 adds only `image_geometry_projection`. It records actual PNG
+dimensions, classified format/orientation, nearest 720/1080/2160 short-edge
+class, the matched target dimensions, exact/approximate state and classifier
+version. It is derived, rebuildable and never replaces image UID identity.
+
+Schema v12 extends the existing stable LoRA identity into one canonical
+catalog. `lora_revisions` is immutable and owns default Model/CLIP strengths
+plus normalized positive/negative trigger atom usages. New
+`generation_loras` rows reference the exact selected revision; legacy rows
+stay `NULL` when no historic revision can be proven. Mutable display metadata
+does not create a revision.
 
 Canonical v4 facts include:
 
@@ -64,11 +79,14 @@ Schema v7 makes ordered positive/negative atom usages with separate numeric
 weights the authored revision truth. Rendered whole-prompt columns remain
 derived immutable snapshots, not writable API inputs.
 
-Schema v8 makes workspace preferences and generation profiles canonical.
-Profiles own sampler defaults, range policies, seed policy, batch size and an
-ordered LoRA stack with separate Model and CLIP strengths. Generations record
-the exact LoRAs they actually used. Historical `loras_json` remains provenance,
-not a second writable runtime contract.
+Schema v8 introduced workspace preferences and generation profiles. The
+profile tables and generation profile columns remain dormant migration
+compatibility in v12, but no active container service, V2 endpoint, Settings
+surface or Playground flow reads them. Generations still record the exact
+LoRAs they actually used. A loader is normalized only when a non-zero model or
+CLIP branch reaches a consumed sampler input. Historical `loras_json` and raw
+workflow graphs retain disconnected loader nodes as provenance, not as a
+second writable runtime contract.
 
 Schema v9 stores the enabled content-level sequence and the width/height owned
 by generation profiles and concrete generation requests. One focused SQLite
@@ -76,6 +94,14 @@ predicate applies the same authored catalog-tag policy to every image-bearing
 read model. Services and browser surfaces do not duplicate OR/AND or content
 visibility semantics, and no path, prompt substring or image inspection is
 used to infer a missing level at runtime.
+
+Schema v10 separates automatic and manual classification. Automatic generation
+classification is the strictest level from authored prompt-component tags and
+the content-level snapshots of all graph-effective selected LoRAs. A current image override,
+when present, wins in either direction. One shared SQLite visibility predicate
+uses the effective level for Ranking, Review, Arena, Scope, Analytics and
+evidence queries. Historical LoRA snapshots change only through an explicit,
+revision-checked reclassification command; manual overrides are never rewritten.
 
 `images.deleted_at`, `current_image_reviews`, `image_review_summary` and ranking
 results are projections derived from canonical facts. The old `image_reviews`
@@ -122,16 +148,30 @@ review can neither create nor rewrite generation or image provenance. Prompt
 normalization belongs to catalog/generation persistence, not to the review
 transaction. Legacy token repair is isolated from the Review application port.
 
+`ReviewCandidateService` reads the workspace preference named
+`review_prioritize_unrated`. When enabled, its repository returns visible
+unrated images by descending canonical image ID before falling back to rated
+images with the oldest rating sequence. When disabled, the same repository
+uses the oldest review sequence directly. The legacy SQLite column
+`review_unrated_only` stores this renamed preference for compatibility; it is
+not interpreted as an exclusion filter.
+
 ## 5. Ranking and Arena
 
 `RankingService.list_images()` reads canonical images, review aggregates and
-curation state. It implements the existing model, character, set, minimum-count
-and Top/Worst filters while excluding deleted images.
+curation state. Top/Worst includes every live image with at least one rating;
+larger evidence thresholds remain Analytics/Arena policy and cannot silently
+remove low-count images from the gallery. Model, character, set and scope
+filters still apply while deleted images remain excluded.
 
-`ArenaService.next_pair()` selects an unplayed directed pair from this canonical
-pool. `record_decision()` accepts image UIDs; its repository stores the match
-and both resulting rating events in one SQLite transaction. Existing URLs,
-redirects and visible pairwise behavior remain compatible.
+`ArenaService.next_pair()` delegates to `FairArenaPairingPolicy`. The repository
+returns played directions plus the latest canonical match containing every
+candidate. Never-used and longest-waiting images sort first; stable pool rank
+and image UID resolve ties. A reverse direction remains eligible, but both
+images move to the newest rotation position after a decision, preventing an
+immediate rematch. Repeated reads without a decision return the same pair.
+`record_decision()` accepts image UIDs; its repository stores the match and both
+resulting rating events in one SQLite transaction.
 
 ## 6. Curation and filesystem ownership
 
@@ -211,6 +251,15 @@ generation lifecycle or output provenance. Extra historical text remains a
 draft override in the immutable snapshot; ambiguous and insufficient evidence
 stays unlinked and is available only as a migration diagnostic.
 
+`legacy-provenance audit/recover` is the bounded follow-up for retained
+generation evidence that became available after that import. It is an offline
+migration adapter, never a runtime fallback. Embedded recipe snapshots and
+unique exact matches are accepted mechanically; semantic reconstruction is
+accepted only from the versioned reviewed manifest. Evidence classes remain
+visible in the audit report. Recovery creates and validates a different output
+database, keeps recovered one-off components archived and inserts historical
+revisions below the unchanged current revision.
+
 ## 8.1 Generation boundaries
 
 Generation is deliberately split into semantic and technical boundaries:
@@ -232,17 +281,66 @@ jobs, discovers capabilities and returns raw output descriptors.
 Expected output bindings contain a role and node ID. Concrete batch/output
 indices are assigned only when ComfyUI outputs are collected.
 
+FastAPI owns one `GenerationLifecycleWorker` in its application lifespan. It
+starts only after successful schema validation, polls a bounded active set
+every two seconds and stops through an owned stop signal. Its coordinator never
+resubmits work: interrupted local `prepared` records fail locally, ambiguous
+`submitting` records require reconciliation, and confirmed `submitted` or
+`running` records are observed through `GenerationService`. Provider timeouts
+and connection errors preserve the current status for a later pass; definitive
+failure, completion and unknown prompt identity become canonical transitions.
+No SQLite transaction remains open during provider or filesystem access.
+
+Explicit reconciliation is the only filesystem-recovery path. If a retained
+ComfyUI prompt is unknown, a bounded provider searches only the persisted
+output subdirectory and exact filename prefix. It accepts one unambiguous PNG
+for the expected output binding and then reuses the normal hash, output,
+metadata and geometry collector. Missing, additional or path-escaping matches
+remain `reconciliation_required`; automatic resubmission and fuzzy filename
+matching do not exist.
+
+Blueprint v4 maps `output_width` and `output_height` roles into a fixed
+AnimeSharp path: `VAEDecode -> 4x-AnimeSharp -> ImageSharpen -> Lanczos
+ImageScale -> SaveImage`. `GenerationGeometryPolicy` derives those target
+dimensions from a 720p, 1080p or 2160p short edge without cropping. Required
+nodes and `example-upscaler.pth` are discovered at the provider boundary and are
+validated before persistence or submission.
+
 ## 9. Schema lifecycle
 
 Runtime startup validates only the supported canonical schema; it never
-upgrades an unsupported database silently. Canonical v3 through v7
+upgrades an unsupported database silently. Canonical v3 through v12
 changes are available only through `python -m comfyreview canonical-db
-upgrade` and are backed up. The v3-to-v4 step migrates writable legacy review
+upgrade --output PATH` and are backed up. The v3-to-v4 step migrates writable legacy review
 state into events, projects delete tombstones and replaces old tables with
 read-only views; v5 adds the prompt catalog and v6 stores native output role
 and content-hash provenance. Schema v7 adds normalized revision atom usages;
 the v6-to-v7 upgrade parses only the supported grammar and validates the
 structured roundtrip before commit.
+
+The v9-to-v10 step is likewise explicit: it creates and validates a separate
+output database first, retains the original as a backup, and only then replaces
+the configured runtime database. Existing default-character profiles move to
+Blueprint v4 and receive the 1080p output tier; historical image visibility is
+preserved until an operator explicitly applies a LoRA reclassification.
+
+The v10-to-v11 step uses the same backup/new-file/validate/install lifecycle
+and creates an empty projection. `python -m comfyreview canonical-db
+rebuild-image-geometry` then scans PNG headers outside SQLite write
+transactions and replaces the projection atomically; missing or damaged files
+are returned as diagnostics.
+
+The v11-to-v12 step copies the source to a separate output database, creates
+base revision 1 for every existing definition, preserves historical usage with
+a nullable revision link, validates integrity and verifies that the source hash
+did not change. Promotion of that output remains an explicit operator action.
+
+`CompiledLoraGraphPolicy` runs after semantic v4 compilation and before any
+generation row or ComfyUI submission. It requires one ordered loader per
+selection, exact provider filenames/weights, an unbroken Model route to the
+sampler and an unbroken CLIP route to both encoders. The provider still sees
+only the finished graph. `ImageGeneratorHandoffService` independently exposes
+authoritative prompt and render packages for visible image UIDs.
 
 The older multi-file schema lifecycle remains centralized in
 `comfyreview.repositories.sqlite.legacy_schema`. Its explicit
@@ -259,6 +357,10 @@ The canonical cutover is intentionally not the end of the wider refactor.
 - Frontend V2 uses native ES modules, one shared API client, lifecycle-owned
   requests and focused view/controller classes. Playwright verifies bounded
   rendering and all required desktop/tablet viewports.
+- `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
+  navigation. Playground character rows and Analytics Overview/Scope/Render
+  collections configure that component instead of duplicating wheel, touch or
+  wrap-around listeners; each card retains its independent evidence carousel.
 - Live canonical data completion is validated. ImageContext and scope queries
   can now use exact composition memberships for 363 generations; the sixteen
   unresolved cases remain explicit diagnostics rather than guessed relations.
@@ -281,8 +383,9 @@ second writable truth for an already cut-over feature.
 
 ### 10.1 Settings and runtime diagnostics
 
-`WorkspacePreferencesService` and `GenerationProfileService` own mutable
-canonical settings through focused repository ports. `RuntimeDiagnosticsService`
+`WorkspacePreferencesService` owns active mutable canonical preferences.
+Historical profile services remain offline compatibility code only and are not
+composed into the runtime. `RuntimeDiagnosticsService`
 combines an injected, read-only configuration snapshot with the shared
 ComfyUI capability cache. The Settings HTTP and browser layers do not read or
 write `.env`, open SQLite or call ComfyUI directly. Connection checks are
@@ -290,11 +393,16 @@ explicit provider calls; ordinary Settings reads return cached capability state
 without blocking on the external service.
 
 Content levels are cumulative user choices beginning with mandatory
-`standard`. The policy recognizes explicit `nsfw_level_*` tags and the authored
-catalog tags `suggestive`, `seductive`, `sensual`, `lingerie` and `lewd`.
-Unknown and malformed legacy tags remain Standard rather than being guessed.
-Generation profiles also own a validated canvas width and height; Blueprint v3
-maps those values through explicit compiler roles.
+`standard`. `PromptContentLevelPolicy` maps exactly one canonical
+`content_level_*` metadata marker to the typed `ContentLevel` on every catalog
+component. `nsfw_level_*` and the older authored aliases remain import
+fallbacks only; a canonical marker always wins. Descriptive tags no longer
+carry content-policy meaning. New generation snapshots derive their level from
+typed component levels and LoRA snapshots, while all historical image readers
+use only the stored generation level or a manual image override.
+The Generator owns direct sampler and LoRA choices plus semantic format and
+resolution-class values. `GenerationGeometryPolicy` maps those choices to the
+fixed matrix before Blueprint v4 compilation.
 
 ### 10.2 Structured prompt boundary
 
@@ -314,21 +422,33 @@ whole-string application contract.
 
 ### 10.3 Canonical analytics boundaries
 
-Render analytics no longer treat a serialized `combo_key` as a technical
-configuration. `RenderAnalyticsService` separates marginal recommendations
-from actually observed complete render setups. The SQLite repository builds
-the latter from canonical generation columns plus ordered
-`generation_sampler_stages`; seed is intentionally excluded from grouping.
-`CompositionAnalyticsService` independently exposes canonical prompt
-compositions and the render setups observed for one composition.
+`RenderGuidanceService` is the single active calculation boundary used by the
+Generator and Render Analytics. Its repository reads stable image identity,
+normalized generation/stage values and immutable review/delete events. The
+service returns observed setups, observed parameter values, modeled parameter
+effects, modeled discovery setups, current-selection assessment and coverage.
+Independent image counts define support; repeated review events affect evidence
+weight but never inflate the five-image stability threshold.
 
-The HTTP boundary exposes summary, one selected parameter dimension, prompt
-combinations and render setups as distinct queries. Parameter tabs therefore
-load only their requested dimension, while prompt-combination details obtain
-their technical setups through a focused endpoint. The browser neither parses
-`combo_key` nor calculates statistics. Image URLs remain response-mapping
-concerns. Application-owned static assets require cache revalidation so a new
-ES-module entry point cannot leave its dependency graph silently stale.
+The `render-guidance-v1` policy uses beta-smoothed evidence, conservative
+observed ordering, shrunk main effects and only sufficiently supported pair
+interactions. Candidate enumeration is bounded to known provider values and is
+streamed into a fixed result heap; it is not persisted and does not materialize
+the full prompt/render Cartesian product. Provider capability discovery is
+applied by `PlaygroundRenderGuidanceService`, outside the scoring policy.
+
+`GET /api/v2/analytics/render` and
+`POST /api/v2/playground/render-guidance` share these types and presenters.
+The former exposes the observed/predicted × setup/parameter matrix; the latter
+adds capability filtering for the current Generator. LoRAs, seed and output
+geometry are deliberately absent from this optimizer contract. Prompt
+combinations remain a separate canonical composition query. Image URLs are
+added only at the HTTP presentation boundary from stable image IDs.
+
+`AnalyticsService.observed_combinations_by_character` groups those observed
+composition facts by stable character UID and applies the result limit inside
+each group. The Playground presenter therefore receives independently ranked
+Top-2 and Top-3 rows without deriving character identity in the browser.
 
 ## 11. Observability and quality
 

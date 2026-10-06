@@ -9,21 +9,19 @@ describe("PlaygroundController", () => {
   it("loads canonical inputs, prepares a draft, submits it, and disposes", async () => {
     const fixture = createFixture();
     await fixture.controller.start();
-    expect(fixture.modes.render).toHaveBeenCalledWith([{ component_uid: "a" }]);
-    expect(fixture.controls.render).toHaveBeenCalled();
-    expect(fixture.controls.render).toHaveBeenCalledWith(
-      expect.objectContaining({ profiles: [] }),
+    expect(fixture.modes.render).toHaveBeenCalledWith(
+      [{ component_uid: "a" }],
+      [],
     );
+    expect(fixture.controls.render).toHaveBeenCalled();
+    expect(fixture.controls.render).toHaveBeenCalledWith({ defaults: {} });
     expect(fixture.modes.applyIntent).toHaveBeenCalledWith({});
     expect(fixture.controls.applyIntent).toHaveBeenCalledWith({});
-    expect(fixture.combinations.render).toHaveBeenCalledWith({
-      two_component: [],
-    });
 
     await fixture.controller.prepare();
     expect(fixture.api.post).toHaveBeenCalledWith(
       "playground/drafts",
-      { selections: [], seed: 17 },
+      { selections: [], generation: expect.any(Object) },
       expect.any(Object),
     );
     expect(fixture.draft.render).toHaveBeenCalledWith(
@@ -54,7 +52,6 @@ describe("PlaygroundController", () => {
     expect(fixture.modes.dispose).toHaveBeenCalledOnce();
     expect(fixture.controls.dispose).toHaveBeenCalledOnce();
     expect(fixture.draft.dispose).toHaveBeenCalledOnce();
-    expect(fixture.combinations.dispose).toHaveBeenCalledOnce();
   });
 
   it("surfaces load, draft and generation failures without stale submits", async () => {
@@ -82,7 +79,9 @@ describe("PlaygroundController", () => {
     const empty = createFixture({ emptyPayload: true });
     await empty.controller.start();
     await empty.controller.submit();
-    expect(empty.api.post).not.toHaveBeenCalled();
+    expect(
+      empty.api.post.mock.calls.some(([path]) => path === "generations"),
+    ).toBe(false);
 
     const previewFailure = createFixture({
       previewError: new Error("preview kaputt"),
@@ -92,6 +91,7 @@ describe("PlaygroundController", () => {
 
     const noPreview = createFixture({ emptyPromptPayload: true });
     await noPreview.controller.refreshPreview();
+    await noPreview.controller.refreshEvidence();
     expect(noPreview.api.post).not.toHaveBeenCalled();
   });
 
@@ -123,47 +123,59 @@ describe("PlaygroundController", () => {
       intent: { imageUid: "image-1" },
       image: {
         image_uid: "image-1",
-        scopes: [
-          {
-            component_uid: "character-a",
-            revision_uid: "revision-character-a",
-          },
-        ],
-        generation_settings: {
+        prompt_setup: {
+          source_image_uid: "image-1",
+          revision_uids: ["revision-character-a"],
+          loras: [],
+        },
+        render_setup: {
           checkpoint: "model.safetensors",
-          sampler: "euler",
-          scheduler: "normal",
           seed: 42,
-          steps: 24,
-          cfg: 6.5,
-          denoise: 1,
+          aspect_format: "1:1",
+          resolution_class: "1080",
+          sampler_stages: [
+            {
+              sampler: "euler",
+              scheduler: "normal",
+              steps: 24,
+              cfg: 6.5,
+              denoise: 1,
+            },
+          ],
         },
       },
     });
 
     await fixture.controller.start();
     expect(fixture.api.get).toHaveBeenCalledWith(
-      "images/image-1",
+      "images/image-1/generator-handoff",
       expect.any(Object),
     );
     expect(fixture.modes.applyIntent).toHaveBeenCalledWith(
       expect.objectContaining({
-        componentUids: ["character-a"],
+        sourceImageUid: "image-1",
         revisionUids: ["revision-character-a"],
       }),
     );
-    expect(fixture.api.post).not.toHaveBeenCalled();
+    expect(
+      fixture.api.post.mock.calls.some(
+        ([path]) => path === "playground/drafts",
+      ),
+    ).toBe(false);
     await fixture.controller.prepare();
     expect(fixture.api.post).toHaveBeenCalledWith(
       "playground/drafts",
-      { revision_uids: ["revision-character-a"] },
+      {
+        prompt_source: { mode: "image_snapshot", image_uid: "image-1" },
+        generation: expect.any(Object),
+      },
       expect.any(Object),
     );
     fixture.controller.clearDraftReference();
     await fixture.controller.prepare();
-    expect(fixture.api.post).toHaveBeenLastCalledWith(
+    expect(fixture.api.post).toHaveBeenCalledWith(
       "playground/drafts",
-      { selections: [], seed: 17 },
+      { selections: [], generation: expect.any(Object) },
       expect.any(Object),
     );
   });
@@ -177,13 +189,129 @@ describe("PlaygroundController", () => {
     });
 
     await fixture.controller.start();
-    expect(fixture.api.post).not.toHaveBeenCalled();
+    expect(
+      fixture.api.post.mock.calls.some(
+        ([path]) => path === "playground/drafts",
+      ),
+    ).toBe(false);
     await fixture.controller.prepare();
     expect(fixture.api.post).toHaveBeenCalledWith(
       "playground/drafts",
-      { composition_uid: "composition-a" },
+      {
+        composition_uid: "composition-a",
+        generation: expect.any(Object),
+      },
       expect.any(Object),
     );
+  });
+
+  it("keeps rejected image staging and resolves independent packages", async () => {
+    const intentStore = { clear: vi.fn() };
+    const fixture = createFixture({
+      intent: {
+        promptImageUid: "image-prompt",
+        renderImageUid: "image-render",
+      },
+      intentRejected: ["checkpoint"],
+      intentStore,
+      image: {
+        prompt_setup: {
+          source_image_uid: "image-prompt",
+          revision_uids: ["revision-character-a"],
+          loras: [],
+        },
+        render_setup: {
+          checkpoint: "missing.safetensors",
+          seed: 42,
+          aspect_format: "1:1",
+          resolution_class: "1080",
+          sampler_stages: [
+            {
+              sampler: "euler",
+              scheduler: "normal",
+              steps: 24,
+              cfg: 6.5,
+              denoise: 1,
+            },
+          ],
+        },
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(
+      fixture.api.get.mock.calls.filter(([path]) => path.startsWith("images/")),
+    ).toHaveLength(2);
+    expect(fixture.status.textContent).toContain("checkpoint");
+    expect(intentStore.clear).not.toHaveBeenCalled();
+  });
+
+  it("keeps revision-only prompt provenance for explicit draft creation", async () => {
+    const fixture = createFixture({
+      intent: { revisionUids: ["revision-character-a"] },
+    });
+    await fixture.controller.start();
+    await fixture.controller.prepare();
+    expect(fixture.api.post).toHaveBeenCalledWith(
+      "playground/drafts",
+      {
+        revision_uids: ["revision-character-a"],
+        generation: expect.any(Object),
+      },
+      expect.any(Object),
+    );
+  });
+
+  it("owns guidance modes, explicit application, invalidation and refresh errors", async () => {
+    vi.useFakeTimers();
+    try {
+      const fixture = createFixture({ rejected: ["checkpoint"] });
+      fixture.controller.guidanceModeChanged("predicted");
+      await fixture.controller.start();
+      fixture.controller.guidanceModeChanged("predicted");
+      expect(fixture.controls.renderGuidance).toHaveBeenLastCalledWith(
+        expect.any(Object),
+        "predicted",
+      );
+      fixture.submitButton.disabled = false;
+      fixture.controller.settingsChanged();
+      expect(fixture.submitButton.disabled).toBe(true);
+      await vi.advanceTimersByTimeAsync(180);
+      expect(fixture.api.post).toHaveBeenCalledWith(
+        "playground/render-guidance",
+        expect.any(Object),
+        expect.any(Object),
+      );
+      fixture.controller.applyGuidanceSetup({ checkpoint: "missing" });
+      expect(fixture.status.textContent).toContain("checkpoint");
+      fixture.controller.applyGuidanceParameter("custom", "x");
+      expect(fixture.status.textContent).toContain("custom übernommen");
+      fixture.controller.dispose();
+
+      const unavailable = createFixture({ parameterAvailable: false });
+      unavailable.controller.applyGuidanceSetup({ sampler: "euler" });
+      expect(unavailable.status.textContent).toContain(
+        "Gesamtsetup übernommen",
+      );
+      unavailable.controller.applyGuidanceParameter("sampler", "missing");
+      expect(unavailable.status.textContent).toContain("nicht verfügbar");
+
+      const failed = createFixture({
+        guidanceError: new Error("guidance kaputt"),
+      });
+      await failed.controller.refreshGuidance();
+      expect(failed.guidance.renderLoading).toHaveBeenLastCalledWith(
+        "guidance kaputt",
+      );
+      const aborted = createFixture({
+        guidanceError: new DOMException("aborted", "AbortError"),
+      });
+      await aborted.controller.refreshGuidance();
+      expect(aborted.guidance.renderLoading).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -195,13 +323,38 @@ function createFixture(options = {}) {
   const result = document.createElement("div");
   const modes = disposable({
     render: vi.fn(),
-    applyIntent: vi.fn(),
-    value: vi.fn(() => ({ selections: [], seed: 17 })),
+    applyIntent: vi.fn(() => options.intentRejected || []),
+    showResolvedComponents: vi.fn(),
+    value: vi.fn(() => ({ selections: [] })),
   });
   const controls = disposable({
     render: vi.fn(),
-    applyIntent: vi.fn(),
+    applyIntent: vi.fn(() => options.intentRejected || []),
+    renderSettings: vi.fn(() => ({
+      checkpoint: "model",
+      sampler: "euler",
+      scheduler: "normal",
+      steps: 24,
+      cfg: 6.5,
+      denoise: 1,
+    })),
+    renderGuidance: vi.fn(),
+    applyRenderSettings: vi.fn(() => options.rejected || []),
+    applyParameter: vi.fn(() => options.parameterAvailable !== false),
+    draftValue: vi.fn(() => ({
+      checkpoint: "model",
+      sampler: "euler",
+      scheduler: "normal",
+      seed: 17,
+      randomize_seed: false,
+      steps: 24,
+      cfg: 6.5,
+      denoise: 1,
+      aspect_format: "1:1",
+      resolution_class: "1080",
+    })),
     value: vi.fn(() => ({ checkpoint: "model", sampler: {} })),
+    useConcreteSeed: vi.fn(),
     setBusy: vi.fn(),
   });
   const draft = disposable({
@@ -212,11 +365,11 @@ function createFixture(options = {}) {
         : { positive_atoms: [], negative_atoms: [] },
     ),
     renderSnapshots: vi.fn(),
+    renderEvidence: vi.fn(),
     generationPayload: vi.fn(() =>
       options.emptyPayload ? null : { draft_uid: "draft-1" },
     ),
   });
-  const combinations = disposable({ render: vi.fn() });
   const api = {
     get: vi.fn((path) => {
       if (options.loadError) return Promise.reject(options.loadError);
@@ -225,18 +378,23 @@ function createFixture(options = {}) {
           ? options.image
           : path === "playground/components"
             ? { components: [{ component_uid: "a" }] }
-            : path === "playground/top-combinations"
-              ? { two_component: [] }
-              : path === "settings/generation-profiles"
-                ? { items: [] }
-                : { defaults: {} },
+            : { defaults: {} },
       );
     }),
     post: vi.fn((path) => {
+      if (path === "playground/render-guidance") {
+        return options.guidanceError
+          ? Promise.reject(options.guidanceError)
+          : Promise.resolve({ recommendations: {}, parameter_values: [] });
+      }
       if (path === "playground/drafts") {
         return options.draftError
           ? Promise.reject(options.draftError)
-          : Promise.resolve({ positive_prompt: "positive" });
+          : Promise.resolve({
+              draft_uid: "draft-1",
+              seed: 17,
+              positive_prompt: "positive",
+            });
       }
       if (path === "playground/render-preview") {
         return options.previewError
@@ -245,6 +403,9 @@ function createFixture(options = {}) {
               positive_prompt: "preview positive",
               negative_prompt: "preview negative",
             });
+      }
+      if (path === "playground/evidence") {
+        return Promise.resolve({ prompt_match: null, sampler_match: null });
       }
       return options.generationError
         ? Promise.reject(options.generationError)
@@ -260,20 +421,25 @@ function createFixture(options = {}) {
           });
     }),
   };
+  const guidance = disposable({
+    render: vi.fn(),
+    renderLoading: vi.fn(),
+  });
   const controller = new PlaygroundController({
     api,
     modes,
     controls,
     draft,
-    combinations,
+    guidance,
     requests: new RequestLifecycle(),
     previewRequests: new RequestLifecycle(),
+    guidanceRequests: new RequestLifecycle(),
     prepareButton,
     submitButton,
     status,
     result,
-    newDraftUid: () => "draft-1",
     intent: options.intent,
+    intentStore: options.intentStore,
   });
   return {
     controller,
@@ -281,11 +447,11 @@ function createFixture(options = {}) {
     modes,
     controls,
     draft,
-    combinations,
     prepareButton,
     submitButton,
     status,
     result,
+    guidance,
   };
 }
 

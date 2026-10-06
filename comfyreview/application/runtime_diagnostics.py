@@ -54,6 +54,7 @@ class RuntimeDiagnostics:
     schedulers: tuple[str, ...]
     loras: tuple[str, ...]
     message: str
+    upscale_models: tuple[str, ...] = ()
 
 
 class RuntimeDiagnosticsService:
@@ -84,6 +85,7 @@ class RuntimeDiagnosticsService:
             samplers=capabilities.samplers,
             schedulers=capabilities.schedulers,
             loras=capabilities.loras,
+            upscale_models=capabilities.upscale_models,
             message="connected",
         )
 
@@ -102,6 +104,7 @@ class RuntimeDiagnosticsService:
             samplers=self._strings(raw.get("samplers")),
             schedulers=self._strings(raw.get("schedulers")),
             loras=self._strings(raw.get("loras")),
+            upscale_models=self._strings(raw.get("upscale_models")),
             message="cached"
             if cached and message == "not_checked"
             else message,
@@ -128,6 +131,7 @@ class RuntimeDiagnosticsService:
             "samplers",
             "schedulers",
             "loras",
+            "upscale_models",
         )
 
     @staticmethod

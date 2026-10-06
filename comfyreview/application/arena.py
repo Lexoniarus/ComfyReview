@@ -36,6 +36,22 @@ class ArenaPair:
 
 
 @dataclass(frozen=True, slots=True)
+class ArenaImageRotation:
+    """Describe the latest canonical Arena match containing one image."""
+
+    image_uid: str
+    last_match_order: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ArenaPairingHistory:
+    """Carry directed match history and per-image rotation positions."""
+
+    played_directions: frozenset[tuple[str, str]]
+    rotations: tuple[ArenaImageRotation, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RecordArenaDecisionCommand:
     """Record the winning side for a stable canonical image pair."""
 
@@ -74,11 +90,11 @@ class ArenaResult:
 class ArenaRepository(Protocol):
     """Read pair history and atomically persist Arena facts."""
 
-    def list_played_directions(
+    def pairing_history(
         self,
         image_uids: tuple[str, ...],
-    ) -> frozenset[tuple[str, str]]:
-        """Return directed pairings already present in canonical storage."""
+    ) -> ArenaPairingHistory:
+        """Return canonical pairing and rotation history for one pool."""
         ...
 
     def get_competitors(
@@ -94,6 +110,46 @@ class ArenaRepository(Protocol):
         ...
 
 
+class FairArenaPairingPolicy:
+    """Select the longest-waiting eligible directed Arena pair."""
+
+    def select(
+        self,
+        images: tuple[ImageContext, ...],
+        history: ArenaPairingHistory,
+    ) -> ArenaPair | None:
+        """Return a stable fair pair without mutating rotation state."""
+        pool_rank = {
+            image.image_uid: index for index, image in enumerate(images)
+        }
+        last_match = {
+            item.image_uid: item.last_match_order for item in history.rotations
+        }
+        ordered = tuple(
+            sorted(
+                images,
+                key=lambda image: (
+                    self._rotation_order(last_match.get(image.image_uid)),
+                    pool_rank[image.image_uid],
+                    image.image_uid,
+                ),
+            )
+        )
+        for left_index, left in enumerate(ordered):
+            for right in ordered[left_index + 1 :]:
+                forward = (left.image_uid, right.image_uid)
+                reverse = (right.image_uid, left.image_uid)
+                if forward not in history.played_directions:
+                    return ArenaPair(left=left, right=right)
+                if reverse not in history.played_directions:
+                    return ArenaPair(left=right, right=left)
+        return None
+
+    @staticmethod
+    def _rotation_order(last_match_order: int | None) -> int:
+        return -1 if last_match_order is None else last_match_order
+
+
 class ArenaService:
     """Select pairs and coordinate canonical Arena decisions."""
 
@@ -102,23 +158,19 @@ class ArenaService:
         *,
         images: ImageContextQueryService,
         repository: ArenaRepository,
+        pairing: FairArenaPairingPolicy | None = None,
     ) -> None:
         self._images = images
         self._repository = repository
+        self._pairing = pairing or FairArenaPairingPolicy()
 
     def next_pair(self, query: ArenaQuery) -> ArenaPair | None:
         """Return the next unplayed directed pair from the ranked pool."""
         images = self._images.list_images(query.images).entries
-        directions = self._repository.list_played_directions(
+        history = self._repository.pairing_history(
             tuple(image.image_uid for image in images)
         )
-        for left_index, left in enumerate(images):
-            for right in images[left_index + 1 :]:
-                if (left.image_uid, right.image_uid) not in directions:
-                    return ArenaPair(left=left, right=right)
-                if (right.image_uid, left.image_uid) not in directions:
-                    return ArenaPair(left=right, right=left)
-        return None
+        return self._pairing.select(images, history)
 
     def record_decision(
         self,

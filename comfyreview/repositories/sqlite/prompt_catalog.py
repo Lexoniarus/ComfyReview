@@ -6,6 +6,9 @@ import json
 import sqlite3
 from pathlib import Path
 
+from comfyreview.application.content_classification import (
+    PromptContentLevelPolicy,
+)
 from comfyreview.application.prompt_catalog import (
     NewPromptComponent,
     PromptComponent,
@@ -83,6 +86,7 @@ class SqlitePromptCatalogRepository:
 
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path)
+        self._content_levels = PromptContentLevelPolicy()
 
     def create(self, component: NewPromptComponent) -> PromptComponent:
         """Insert a component and revision one atomically."""
@@ -100,7 +104,11 @@ class SqlitePromptCatalogRepository:
                     component.kind,
                     component.component_key,
                     component.name,
-                    self._tags_json(component.tags),
+                    self._tags_json(
+                        self._content_levels.write(
+                            component.tags, component.content_level
+                        )
+                    ),
                     component.notes,
                 ),
             )
@@ -202,7 +210,11 @@ class SqlitePromptCatalogRepository:
                 """,
                 (
                     command.name,
-                    self._tags_json(command.tags),
+                    self._tags_json(
+                        self._content_levels.write(
+                            command.tags, command.content_level
+                        )
+                    ),
                     command.notes,
                     command.component_uid,
                 ),
@@ -274,7 +286,11 @@ class SqlitePromptCatalogRepository:
                 """,
                 (
                     metadata.name,
-                    self._tags_json(metadata.tags),
+                    self._tags_json(
+                        self._content_levels.write(
+                            metadata.tags, metadata.content_level
+                        )
+                    ),
                     metadata.notes,
                     component_id,
                 ),
@@ -534,15 +550,17 @@ class SqlitePromptCatalogRepository:
             if isinstance(raw_tags, list)
             else ()
         )
+        metadata = PromptContentLevelPolicy().read(tags)
         return PromptComponent(
             component_uid=str(row["component_uid"]),
             kind=str(row["kind"]),
             component_key=str(row["component_key"]),
             name=str(row["name"]),
-            tags=tags,
+            tags=metadata.descriptive_tags,
             notes=str(row["notes"] or ""),
             archived=row["archived_at"] is not None,
             latest_revision=SqlitePromptCatalogRepository._revision(row),
+            content_level=metadata.content_level,
         )
 
     @staticmethod

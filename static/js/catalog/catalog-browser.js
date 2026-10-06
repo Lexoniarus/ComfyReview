@@ -7,11 +7,12 @@ const catalogKinds = [
   ["expression", "Ausdrücke"],
   ["lighting", "Licht"],
   ["modifier", "Modifier"],
+  ["lora", "LoRAs"],
 ];
 
 /** Own catalog navigation, search and current list selection. */
 export class CatalogBrowser {
-  /** @param {HTMLElement} kindsRoot @param {HTMLElement} listRoot @param {HTMLInputElement} search @param {{onSelect: (uid: string) => void}} actions */
+  /** @param {HTMLElement} kindsRoot @param {HTMLElement} listRoot @param {HTMLInputElement} search @param {{onSelect: (uid: string, catalogKind: string) => void}} actions */
   constructor(kindsRoot, listRoot, search, actions) {
     this.kindsRoot = kindsRoot;
     this.listRoot = listRoot;
@@ -38,6 +39,10 @@ export class CatalogBrowser {
   select(componentUid) {
     this.selectedUid = componentUid;
     this.#renderList();
+  }
+
+  selectedCatalogKind() {
+    return this.kind === "lora" ? "lora" : "component";
   }
 
   /** Release owned navigation and search listeners. */
@@ -106,7 +111,11 @@ export class CatalogBrowser {
       button.append(name, meta);
       button.addEventListener(
         "click",
-        () => this.actions.onSelect(String(component.component_uid)),
+        () =>
+          this.actions.onSelect(
+            String(component.component_uid),
+            String(component.catalog_kind || "component"),
+          ),
         { signal: this.abortController.signal },
       );
       this.listRoot.append(button);

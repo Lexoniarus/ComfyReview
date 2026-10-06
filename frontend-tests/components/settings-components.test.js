@@ -31,11 +31,15 @@ describe("Settings components", () => {
         name: "style.safetensors",
         model_strength: 1,
         clip_strength: 1,
+        lora_uid: null,
+        revision_uid: null,
       },
       {
         name: "light.safetensors",
         model_strength: 0.55,
         clip_strength: 0.65,
+        lora_uid: null,
+        revision_uid: null,
       },
     ]);
     buttonWithText(root, "LoRA hinzufügen").click();
@@ -59,6 +63,11 @@ describe("Settings components", () => {
     );
     buttonWithText(root, "LoRA hinzufügen").click();
     expect(editor.value()).toHaveLength(3);
+    editor.render([{ name: "missing.safetensors" }], ["detail.safetensors"]);
+    expect(root.textContent).toContain("Provider-Datei nicht verfügbar");
+    expect(root.querySelector(".settings-lora-row").dataset.availability).toBe(
+      "missing",
+    );
     editor.dispose();
     expect(root.childElementCount).toBe(0);
   });
@@ -81,11 +90,12 @@ describe("Settings components", () => {
     expect(actions.onSave).toHaveBeenCalledWith(
       null,
       expect.objectContaining({
-        blueprint_version: 3,
+        blueprint_version: 4,
         checkpoint: "model-a.safetensors",
         fixed_seed: null,
         image_width: 768,
         image_height: 1152,
+        output_tier: "full_hd_1080",
       }),
     );
 
@@ -116,7 +126,7 @@ describe("Settings components", () => {
     view.render("general", data);
     expect(root.textContent).toContain("Komfortabel");
     expect(root.textContent).toContain("Systemvorgabe");
-    expect(root.textContent).toContain("Standardprofil");
+    expect(root.textContent).not.toContain("Standardprofil");
     root.querySelectorAll("select")[0].value = "compact";
     root
       .querySelector("form")
@@ -131,12 +141,16 @@ describe("Settings components", () => {
       .querySelector("form")
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     expect(actions.onPreferencesSave).toHaveBeenLastCalledWith(
-      expect.objectContaining({ review_unrated_only: false }),
+      expect.objectContaining({ review_prioritize_unrated: false }),
     );
 
     view.render("content", data);
     expect(root.textContent).toContain("Inhaltsstufen");
     expect(root.textContent).toContain("Explicit");
+    const loraRows = root.querySelectorAll(".settings-lora-row");
+    expect(loraRows[1].textContent).toContain("Nicht eingestuft");
+    expect(loraRows[1].dataset.classification).toBe("unclassified");
+    expect(root.querySelector("a").getAttribute("href")).toBe("/catalog");
     const contentBoxes = root.querySelectorAll("input[type='checkbox']");
     expect(contentBoxes[0].disabled).toBe(true);
     contentBoxes[1].click();
@@ -146,6 +160,8 @@ describe("Settings components", () => {
     expect(actions.onPreferencesSave).toHaveBeenLastCalledWith(
       expect.objectContaining({ enabled_content_levels: ["standard", "sexy"] }),
     );
+    expect(loraRows[0].textContent).toContain("sexy");
+    expect(root.textContent).not.toContain("Stufe speichern");
 
     view.render("curation", data);
     root.querySelectorAll("input")[0].value = "favorites, archive";
@@ -177,23 +193,13 @@ describe("Settings components", () => {
     view.dispose();
   });
 
-  it("delegates profile selection, creation, persistence and lifecycle", () => {
+  it("does not expose dormant generation profiles", () => {
     const root = document.createElement("div");
     const actions = settingsActions();
     const view = new SettingsView(root, actions);
     view.render("profiles", settingsData());
-    expect(root.textContent).toContain("Standard");
-    expect(root.textContent).toContain("Zufällig");
-
-    root.querySelectorAll(".settings-profile-list button")[0].click();
-    root.querySelectorAll(".settings-profile-list button")[1].click();
-    root
-      .querySelector("form")
-      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    expect(actions.onProfileSave).toHaveBeenCalledWith(
-      null,
-      expect.objectContaining({ name: "Neues Profil" }),
-    );
+    expect(root.textContent).not.toContain("Generierungsprofile");
+    expect(root.querySelector("[data-profile-editor]")).toBeNull();
     view.dispose();
   });
 });
@@ -205,6 +211,9 @@ function settingsActions() {
     onProfileArchive: vi.fn(),
     onProfileDefault: vi.fn(),
     onComfyUiCheck: vi.fn(),
+    onLoraClassify: vi.fn(),
+    onLoraPreview: vi.fn(),
+    onLoraApply: vi.fn(),
   };
 }
 
@@ -213,7 +222,15 @@ function capabilities() {
     checkpoints: ["model-a.safetensors"],
     samplers: ["euler"],
     schedulers: ["normal"],
-    loras: ["detail.safetensors"],
+    loras: ["detail.safetensors", "unrated.safetensors"],
+    lora_definitions: [
+      {
+        lora_uid: "lora-detail",
+        provider_name: "detail.safetensors",
+        content_level: "sexy",
+        revision: 2,
+      },
+    ],
   };
 }
 
@@ -234,6 +251,7 @@ function profile(overrides = {}) {
     batch_size: 2,
     image_width: 768,
     image_height: 1152,
+    output_tier: "full_hd_1080",
     loras: [],
     ...overrides,
   };
@@ -246,16 +264,24 @@ function settingsData() {
       motion: "system",
       analytics_page_size: 24,
       default_generation_profile_uid: "profile-a",
-      review_unrated_only: true,
-      review_max_attempts: 20,
+      review_prioritize_unrated: true,
       default_curation_set_key: "favorites",
       curation_set_order: ["favorites"],
       enabled_content_levels: ["standard"],
     },
     generation_profiles: [profile({ is_default: true, archived: false })],
+    lora_definitions: capabilities().lora_definitions,
+    lora_impacts: {
+      "lora-detail": {
+        revision: 2,
+        generation_count: 3,
+        image_count: 4,
+      },
+    },
     curation_set_keys: ["favorites", "archive"],
     runtime: {
       ...capabilities(),
+      upscale_models: ["example-upscaler.pth"],
       connected: true,
       configuration: {
         comfyui_base_url: "http://127.0.0.1:8188",

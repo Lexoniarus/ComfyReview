@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
-def remove_draft(drafts: List[Dict[str, Any]], draft_id: str) -> List[Dict[str, Any]]:
+def remove_draft(
+    drafts: list[dict[str, Any]], draft_id: str
+) -> list[dict[str, Any]]:
     did = str(draft_id or "").strip()
     if not did:
         return list(drafts or [])
@@ -11,19 +13,19 @@ def remove_draft(drafts: List[Dict[str, Any]], draft_id: str) -> List[Dict[str, 
 
 
 def update_draft(
-    drafts: List[Dict[str, Any]],
+    drafts: list[dict[str, Any]],
     *,
     draft_id: str,
-    seed: Optional[str] = None,
-    steps: Optional[str] = None,
-    cfg: Optional[str] = None,
-    sampler: Optional[str] = None,
-    scheduler: Optional[str] = None,
-    denoise: Optional[str] = None,
-    checkpoint: Optional[str] = None,
-    pos: Optional[str] = None,
-    neg: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+    seed: str | None = None,
+    steps: str | None = None,
+    cfg: str | None = None,
+    sampler: str | None = None,
+    scheduler: str | None = None,
+    denoise: str | None = None,
+    checkpoint: str | None = None,
+    pos: str | None = None,
+    neg: str | None = None,
+) -> list[dict[str, Any]]:
     """Update a single draft in memory.
 
     This only changes preview state.

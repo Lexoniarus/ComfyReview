@@ -89,55 +89,121 @@ Settings uses the same dark navy shell and compact editorial hierarchy as the
 other V2 surfaces. A narrow section navigator remains visible beside one
 focused form region; settings are not spread across modal dialogs.
 
-The surface contains General, Generation profiles, Content levels, Review,
-Curation, ComfyUI, and Storage and database sections. General preferences,
-content levels and generation profiles are live canonical data.
+The surface contains General, Content levels, LoRA status, Review, Curation,
+ComfyUI, and Storage and database sections. General preferences, content
+levels and LoRA classifications are live canonical data. Catalog is the only
+LoRA editor; Settings shows availability/unclassified diagnostics and links to
+it rather than owning a second form.
 Environment-derived infrastructure settings are read-only, name their
 controlling environment variable, and state when a restart is required. The
 browser never writes `.env`.
 
-Generation profiles own reproducible sampler defaults and an ordered LoRA
-stack with separate model and CLIP strengths plus a validated canvas preset or
-custom width/height. Content levels begin with mandatory Standard and are
-enforced server-side across all image collections; the browser only edits the
-canonical preference. Review and Curation settings are UI/session defaults only
-and do not change review-event or assignment semantics.
+Generation profiles are not an active UI or runtime concept. The Generator
+owns checkpoint, sampler, scheduler, Steps, CFG, Denoise, Batch, classified
+LoRAs, format and resolution class directly. Content levels begin with
+mandatory Standard and are enforced server-side across all image collections;
+the browser only edits the canonical preference. Review and Curation settings
+are UI/session defaults only and do not change review-event or assignment
+semantics.
+
+The Review preference is labelled “Unbewertete Bilder priorisieren”. It does
+not hide rated images: new unrated images appear first, followed by the
+longest-waiting rated image. The obsolete maximum-attempt input is not rendered
+or sent. Generation details poll only canonical server state; for
+`reconciliation_required` they show the normalized reason and one explicit
+“Auftrag / Output abgleichen” action. The browser does not own a generation
+queue or filesystem recovery policy.
 
 ## Collection and evidence contract
 
-Analytics collections render at most 24 records initially and at most three
-example images per record. Additional pages load through one owned scroll
-sentinel. Switching filters or views cancels stale work, removes the prior
-collection, and prevents late DOM updates.
+Analytics collections render at most 24 records initially. Example evidence
+uses one large cyclic carousel per card instead of shrinking several images
+beside one another. Additional pages load through one owned scroll sentinel.
+Switching filters or views cancels stale work, removes the prior collection,
+and prevents late DOM updates.
 
-Evidence images use fixed aspect-ratio frames, lazy decoding, bounded crops,
-and explicit loading and failure states. Scope, parameter, composition and
-render-setup cards share this geometry rather than inventing page-specific
-image strips. Every recommendation distinguishes calculated candidates from
-settings that were actually observed together.
+Overview metrics, Scope evidence and Render evidence use one lifecycle-owned
+cyclic card-rail component. Tablet widths from 768 through 1366 CSS pixels show
+exactly three equally wide cards. Cards preserve their own natural height,
+media is never cropped, and outer rail gestures are isolated from each card's
+inner evidence carousel. Playground applies the same rail behavior to one
+Top-2 and one Top-3 row per canonical character.
 
-The Playground keeps its compact evidence preview: one ranked group for
-Character + Scene and one for Character + Scene + Outfit, with up to three
-real example images per combination. These groups are derived from canonical
-composition memberships; the broader Analytics composition view remains a
-separate surface and does not replace them.
+`EvidenceCarousel` owns arrows, pointer swipes, horizontal wheel input,
+position display, image failures and listener disposal. Scope, parameter,
+composition, Draft and catalog evidence reuse it together with the existing
+full-size `ImageViewer`. Every recommendation distinguishes calculated
+candidates from settings that were actually observed together.
 
-Each evidence group is a cyclic, arrow-controlled carousel. Native horizontal
-scrollbars are hidden, but touch/trackpad scrolling remains available. Cards
-adapt their width to one, two or three examples, and the image region consumes
-the full bounded card height before textual evidence and the explicit handoff
-action.
+The Playground keeps one ranked group for Character + Scene and one for
+Character + Scene + Outfit. Each combination card uses one large cyclic
+`EvidenceCarousel` for up to three real examples instead of shrinking images
+beside one another. These groups are derived from canonical composition
+memberships; the broader Analytics composition view remains a separate surface
+and does not replace them.
+
+`/playground` is this evidence overview. `/playground/generator` owns the
+authoring flow, while `/generations` owns generation history. A handoff carries
+stable component or revision IDs and does not create a draft by itself.
+
+Each evidence group is a cyclic, arrow-controlled outer carousel. Inner image
+gestures are isolated so one swipe never moves both layers. Native horizontal
+scrollbars are hidden, but touch/trackpad scrolling remains available.
+
+True image-card collections share one `media-card-grid` contract: exactly three
+equal-width, top-aligned columns at 1180×820 and 820×1180, two below the tablet
+breakpoint and one on very narrow screens. Desktop grids may add columns.
+Images always retain their natural ratio (`width: 100%; height: auto`) without
+`cover` cropping, so card heights may differ. Top/Worst, Analytics and the
+Playground overview use this contract; Generator/Draft/Catalog evidence reuse
+the same uncropped media rule in their specialized one- or two-card layouts.
 
 Generation controls preserve the useful V1 experiment workflow without
-reviving its form orchestration: a submission may choose a fixed or randomized
-ComfyUI seed, a bounded batch size, a Steps range and a CFG range/step. The
-Application sweep policy expands those values into concrete sampler settings
-before `GenerationService` is called; every resulting generation therefore
-stores the exact seed, Steps and CFG values it used.
+reviving its form orchestration: a submission may choose one fixed or
+randomized seed, a bounded batch size, a Steps range and a CFG range/step. The
+server materializes a random seed before draft creation and uses that same
+value for component selection and the base sampler. The Application sweep
+policy expands those values into concrete sampler settings before
+`GenerationService` is called; every resulting generation therefore stores the
+exact seed, Steps and CFG values it used.
 
-Top/Worst is the reference surface. Its cards show only rank, rating on the
-1-10 scale, rating count and a small scope summary. Full technical metadata
-belongs in the inspector.
+The Generator divides controls into Render/Sampler, Output and Runtime groups.
+Steps and CFG use a single track with two accessible handles; their numeric
+range is read-only text, and CFG step appears only for a real sweep. A
+`RenderGuidancePanel` exposes two independent switches—Gesichtet/Rechnerisch
+and Gesamtsetup/Einzelwerte. Applying guidance changes only the six render
+fields, collapses Steps/CFG to point values, invalidates the reviewed draft and
+requests a fresh server assessment. Color is relative within a parameter/list
+and is always accompanied by score, image count, review count, provenance and
+confidence text.
+
+Analytics uses the same four-mode matrix. Its actions stage typed
+`PlaygroundIntent` values in a versioned, tab-local `sessionStorage` store.
+Specific toasts and a visible tray show the merged prompt/render intent;
+navigation occurs only through “Generator öffnen”, which consumes the staged
+intent once. Each store, tray, toast, carousel, viewer and request owner has an
+explicit disposal lifecycle.
+
+Drafts are server-identified and group positive and negative atoms by their
+canonical component order. Atom edits are draft overrides only; preview and
+submission use the same server renderer. Two evidence cards independently rank
+prompt similarity and sampler similarity, prefer matching geometry, and share
+the canonical content-visibility policy.
+
+Top/Worst is the reference surface. It includes every live image with at least
+one rating and labels its result count accordingly; Analytics/Arena evidence
+thresholds do not silently reduce this gallery. Cards show only rank, rating on
+the 1-10 scale, rating count and a small scope summary. Full technical metadata
+belongs in the inspector. Settings renders detected LoRAs without a stored
+classification as `Nicht eingestuft` instead of visually defaulting them to
+Standard.
+
+All image-bearing surfaces share `ImageGeneratorActions`. A compact card menu
+and prominent inspector buttons stage Prompt-Setup and Render-Setup separately
+in the single version-2 `PlaygroundIntentStore`. Evidence carousels therefore
+inherit the same behavior in Analytics, Catalog, Playground overview and Draft
+as Top/Worst, Review, Arena and generation details. Failed or unavailable
+values stay in the global tray with an explanation until resolved.
 
 ## Responsive contract
 
@@ -146,6 +212,10 @@ belongs in the inspector.
 - `<= 1366 px` or coarse pointer: one side drawer at a time.
 - The 1180 x 820 target is a functional iPad-landscape layout, not a separate
   mobile application.
+- Overlay inspectors close through their visible close control, a repeated tap
+  on the selected image, Escape, or a tap in the main surface outside the
+  inspector. Inspector interactions do not dismiss the drawer, whose content
+  owns viewport-bounded vertical touch scrolling.
 - The center image or gallery must remain usable at every target width.
 
 ## Motion and accessibility

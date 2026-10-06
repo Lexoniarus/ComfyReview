@@ -21,6 +21,25 @@ export class GenerationView {
     appendFact(facts, "Scheduler", settings.scheduler);
     appendFact(facts, "Denoise", settings.denoise);
     appendFact(facts, "Output", outputLabel(image));
+    const geometry = image.geometry || {};
+    appendFact(
+      facts,
+      "Originalmaß",
+      geometry.actual_width && geometry.actual_height
+        ? `${geometry.actual_width} × ${geometry.actual_height}`
+        : null,
+    );
+    appendFact(facts, "Format", geometry.aspect_format);
+    appendFact(facts, "Auflösungsklasse", geometry.resolution_class);
+    appendFact(
+      facts,
+      "Geometriezuordnung",
+      geometry.match === "exact"
+        ? "Exakt"
+        : geometry.match === "approximate"
+          ? "Annähernd"
+          : null,
+    );
     this.element.replaceChildren(heading, facts);
   }
 }

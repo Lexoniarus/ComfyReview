@@ -9,7 +9,9 @@ from uuid import uuid4
 from comfyreview.application.arena import (
     ArenaCompetitor,
     ArenaDecision,
+    ArenaImageRotation,
     ArenaMutationError,
+    ArenaPairingHistory,
     ArenaResult,
     ArenaValidationError,
 )
@@ -25,19 +27,26 @@ class SqliteArenaRepository:
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path)
 
-    def list_played_directions(
+    def pairing_history(
         self,
         image_uids: tuple[str, ...],
-    ) -> frozenset[tuple[str, str]]:
-        """Return canonical directed matches within the supplied pool."""
+    ) -> ArenaPairingHistory:
+        """Return directed matches and latest appearances for one pool."""
         if len(image_uids) < 2:
-            return frozenset()
+            return ArenaPairingHistory(
+                played_directions=frozenset(),
+                rotations=tuple(
+                    ArenaImageRotation(image_uid, None)
+                    for image_uid in image_uids
+                ),
+            )
         placeholders = ",".join("?" for _value in image_uids)
         connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
                 f"""
-                SELECT left_image.image_uid AS left_uid,
+                SELECT match.id AS match_order,
+                       left_image.image_uid AS left_uid,
                        right_image.image_uid AS right_uid
                 FROM arena_matches AS match
                 JOIN images AS left_image
@@ -45,12 +54,30 @@ class SqliteArenaRepository:
                 JOIN images AS right_image
                     ON right_image.id = match.right_image_id
                 WHERE left_image.image_uid IN ({placeholders})
-                  AND right_image.image_uid IN ({placeholders})
+                   OR right_image.image_uid IN ({placeholders})
+                ORDER BY match.id
                 """,
                 (*image_uids, *image_uids),
             ).fetchall()
-            return frozenset(
-                (str(row["left_uid"]), str(row["right_uid"])) for row in rows
+            pool = set(image_uids)
+            directions: set[tuple[str, str]] = set()
+            last_match: dict[str, int] = {}
+            for row in rows:
+                left_uid = str(row["left_uid"])
+                right_uid = str(row["right_uid"])
+                match_order = int(row["match_order"])
+                if left_uid in pool:
+                    last_match[left_uid] = match_order
+                if right_uid in pool:
+                    last_match[right_uid] = match_order
+                if left_uid in pool and right_uid in pool:
+                    directions.add((left_uid, right_uid))
+            return ArenaPairingHistory(
+                played_directions=frozenset(directions),
+                rotations=tuple(
+                    ArenaImageRotation(uid, last_match.get(uid))
+                    for uid in image_uids
+                ),
             )
         finally:
             connection.close()

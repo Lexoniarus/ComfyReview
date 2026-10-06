@@ -270,8 +270,8 @@
 .image-card-media img {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
+  height: auto;
+  object-fit: contain;
 }
 
 .image-card-body {
@@ -372,6 +372,20 @@
 .inspector-section h3 {
   margin: 0 0 var(--space-2);
   font-size: var(--font-size-body);
+}
+
+.inspector-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.inspector-close {
+  display: none;
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+  line-height: 1;
 }
 
 .inspector-detail {
@@ -558,7 +572,11 @@
     top: var(--app-bar-height);
     bottom: 0;
     width: min(21rem, 90vw);
-    max-height: none;
+    height: calc(100dvh - var(--app-bar-height));
+    max-height: calc(100dvh - var(--app-bar-height));
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     border-radius: 0;
     transition: transform var(--motion-normal);
   }
@@ -576,6 +594,10 @@
   .ranking-shell.is-scope-open .ranking-scope,
   .ranking-shell.is-inspector-open .ranking-inspector {
     transform: translateX(0);
+  }
+
+  .ranking-inspector .inspector-close {
+    display: inline-grid;
   }
 }
 
@@ -595,7 +617,6 @@
   }
 
   .image-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-2);
   }
 }

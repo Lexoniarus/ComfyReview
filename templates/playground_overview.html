@@ -1,0 +1,31 @@
+{% extends "_v2_base.html" %} {% set page_title = "Playground · ComfyReview" %}
+{% set active_nav = "playground" %} {% block styles %}
+<link rel="stylesheet" href="/static/css/v2/playground.css?v=20261006-character-rows1" />
+{% endblock %} {% block content %}
+<div class="playground-shell" data-v2-surface="playground-overview">
+  <header class="v2-panel playground-header">
+    <div>
+      <p class="playground-kicker">Beispiele aus deinem Review</p>
+      <h1>Playground</h1>
+      <p class="muted">
+        Entdecke bewährte 2er- und 3er-Kombinationen oder starte mit einer
+        eigenen Auswahl.
+      </p>
+    </div>
+    <a class="primary-button" href="/playground/generator">Generator öffnen</a>
+  </header>
+  <section
+    class="v2-panel playground-combinations"
+    aria-label="Top-Kombinationen"
+    data-top-combinations
+  >
+    <p class="muted">Top-Kombinationen werden geladen …</p>
+  </section>
+  <p class="playground-status" data-playground-status aria-live="polite"></p>
+</div>
+{% endblock %} {% block scripts %}
+<script
+  type="module"
+  src="/static/js/entries/playground-overview.js?v=20261006-character-rows1"
+></script>
+{% endblock %}

@@ -53,16 +53,16 @@ transitional compatibility and learning dimensions.
 ## Explicit canonical upgrade
 
 Runtime startup never upgrades an existing canonical database silently.
-Version 1 or 2 must be upgraded explicitly:
+Every older supported version must be upgraded into a separate output file:
 
 ```text
-python -m comfyreview canonical-db upgrade
+python -m comfyreview canonical-db upgrade --output data/comfyreview-v12.sqlite3
 python -m comfyreview canonical-db validate
 ```
 
-The upgrade creates a SQLite backup before mutation and restores it after an
-ordinary migration failure. Version 1 can upgrade directly through version 2
-to version 3 in one backed-up operation.
+The upgrade creates a SQLite backup, migrates and validates the separate
+output, and verifies that the source file did not change. Promotion of the
+validated output is a separate controlled operation.
 
 ## Current review compatibility
 

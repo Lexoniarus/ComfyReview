@@ -15,15 +15,26 @@ from comfyreview.application import (
     ArenaPair,
     ArenaResult,
     CatalogEvidenceImage,
+    ContentClassificationError,
+    ContentLevel,
     CurationResult,
+    EvidenceScore,
     GenerationSettings,
     GenerationSubmission,
+    GuidanceBasis,
+    GuidanceConfidence,
+    GuidanceParameter,
+    GuidanceScope,
     ImageClassification,
+    ImageContentClassification,
     ImageContext,
     ImageContextNotFoundError,
     ImagePage,
     ImageScope,
+    LoraDefinition,
     PlaygroundDraft,
+    PlaygroundEvidence,
+    PlaygroundEvidenceMatch,
     PlaygroundGenerationSweepPolicy,
     PlaygroundSubmissionBatch,
     PlaygroundSubmissionFailure,
@@ -33,6 +44,11 @@ from comfyreview.application import (
     PromptSelection,
     PromptSnapshot,
     RenderedPrompt,
+    RenderGuidance,
+    RenderGuidanceCoverage,
+    RenderGuidancePage,
+    RenderRecommendation,
+    RenderSettings,
     ReviewResult,
     ReviewSummary,
     ScopeFacet,
@@ -134,6 +150,30 @@ class _Curation:
         )
 
 
+class _ImageContentLevels:
+    def set_level(self, image_uid, content_level):
+        if image_uid == "missing":
+            raise ContentClassificationError("unknown image")
+        inferred = ContentLevel.SEXY
+        return ImageContentClassification(
+            inferred_level=inferred,
+            effective_level=content_level or inferred,
+            override_level=content_level,
+        )
+
+
+class _LoraCatalog:
+    def list_definitions(self):
+        return (
+            LoraDefinition(
+                "lora-style",
+                "style.safetensors",
+                ContentLevel.LEWD,
+                1,
+            ),
+        )
+
+
 class _Arena:
     command = None
 
@@ -232,6 +272,22 @@ class _CatalogEvidence:
         return (
             CatalogEvidenceImage("evidence-1", 9.25, 4),
             CatalogEvidenceImage("evidence-2", None, 0),
+        )
+
+    def list_top_lora_images(self, lora_uid, *, limit=3):
+        assert lora_uid == "lora-style"
+        assert limit == 3
+        return (CatalogEvidenceImage("evidence-1", 9.25, 4),)
+
+
+class _PlaygroundEvidence:
+    query = None
+
+    def find(self, query):
+        self.query = query
+        return PlaygroundEvidence(
+            PlaygroundEvidenceMatch("image-prompt", 9.0, 4),
+            PlaygroundEvidenceMatch("image-sampler", 8.0, 3),
         )
 
 
@@ -381,6 +437,7 @@ def _generation_summary():
         started_at=None,
         completed_at="2026-01-01 00:01:00",
         output_count=1,
+        failure_reason=None,
     )
 
 
@@ -391,12 +448,13 @@ class _PlaygroundDiscovery:
             samplers=["euler"],
             schedulers=["normal"],
             loras=["style.safetensors"],
+            upscale_models=["example-upscaler.pth"],
         )
 
 
 class _WorkflowDefaults:
     def load(self, blueprint_uid, version):
-        assert (blueprint_uid, version) == ("default-character", 3)
+        assert (blueprint_uid, version) == ("default-character", 4)
         return SimpleNamespace(
             checkpoint="model.safetensors",
             sampler=SimpleNamespace(
@@ -498,20 +556,108 @@ class _AnalyticsPages:
     def playground_combinations_context(self, **values):
         self.call = ("playground-combinations", values)
         return {
-            "two_component": [
+            "characters": [
                 {
-                    "combo_key": "character-a|scene-a",
-                    "component_uids": ["character-a", "scene-a"],
-                    "component_names": ["Aiko", "Rooftop"],
-                    "label": "Aiko + Rooftop",
-                    "average_rating": 8.5,
-                    "image_count": 2,
-                    "rating_count": 4,
-                    "best_images": [{"url": "/files/output/image-1.png"}],
+                    "character_uid": "character-a",
+                    "character_name": "Aiko",
+                    "two_component": [
+                        {
+                            "combo_key": "character-a|scene-a",
+                            "component_uids": ["character-a", "scene-a"],
+                            "component_names": ["Aiko", "Rooftop"],
+                            "label": "Aiko + Rooftop",
+                            "average_rating": 8.5,
+                            "image_count": 2,
+                            "rating_count": 4,
+                            "best_images": [
+                                {"url": "/files/output/image-1.png"}
+                            ],
+                        }
+                    ],
+                    "three_component": [],
                 }
-            ],
-            "three_component": [],
+            ]
         }
+
+
+class _AnalyticsCoverage:
+    def load(self):
+        return SimpleNamespace(
+            active_image_count=12,
+            rated_image_count=10,
+            prompt_linked_image_count=9,
+            unlinked_prompt_image_count=3,
+            legacy_image_count=2,
+            geometry_projected_count=11,
+            missing_geometry_count=1,
+            observed_setup_count=7,
+            stable_setup_count=2,
+            modeled_value_counts=(("sampler", 3),),
+            geometry_value_counts=(("aspect_format", "1:1", 12),),
+            model_version="render-guidance-v1",
+        )
+
+
+class _RenderGuidance:
+    def __init__(self) -> None:
+        settings = RenderSettings(
+            "model.safetensors", "euler", "normal", 24, 6.5, 1.0
+        )
+        score = EvidenceScore(
+            GuidanceBasis.OBSERVED,
+            0.8,
+            0.8,
+            0.6,
+            8.0,
+            6,
+            8,
+            GuidanceConfidence.LOW,
+            True,
+            True,
+            1.0,
+        )
+        self.recommendation = RenderRecommendation(settings, score, True)
+        self.coverage = RenderGuidanceCoverage(
+            6, 8, 1, 1, ((GuidanceParameter.SAMPLER, 1),)
+        )
+
+    def build(self, **_values):
+        return RenderGuidance(
+            self.recommendation,
+            None,
+            self.recommendation,
+            self.recommendation,
+            None,
+            None,
+            (),
+            (self.recommendation,),
+            (),
+            self.coverage,
+        )
+
+    def query(self, **values):
+        if values.get("parameter") == "seed":
+            raise ValueError("unsupported render parameter")
+        return RenderGuidancePage(
+            GuidanceBasis.OBSERVED,
+            GuidanceScope.SETUP,
+            None,
+            (self.recommendation,),
+            1,
+            1,
+            1,
+            0,
+            24,
+            self.coverage,
+        )
+
+
+class _PlaygroundRenderGuidance:
+    def __init__(self, guidance: _RenderGuidance) -> None:
+        self.guidance = guidance
+
+    def build(self, _settings):
+        return self.guidance.build()
 
 
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
@@ -545,7 +691,7 @@ def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
         rankings.json()["items"][0]["image_url"] == "/files/output/image-1.png"
     )
     assert "prompt_snapshot" not in rankings.json()["items"][0]
-    assert container.image_contexts.query.filters.minimum_rating_count == 2
+    assert container.image_contexts.query.filters.minimum_rating_count == 1
 
 
 def test_v2_image_context_has_url_but_never_exposes_local_path() -> None:
@@ -558,6 +704,32 @@ def test_v2_image_context_has_url_but_never_exposes_local_path() -> None:
     assert response.json()["prompt_snapshot"]["positive"] == "positive"
     assert "png_path" not in response.text
     assert "json_path" not in response.text
+
+
+def test_v2_image_content_level_supports_override_and_inherit() -> None:
+    client, _container = _client()
+
+    overridden = client.put(
+        "/api/v2/images/image-1/content-level",
+        json={"content_level": "nude"},
+    )
+    inherited = client.put(
+        "/api/v2/images/image-1/content-level",
+        json={"content_level": None},
+    )
+    missing = client.put(
+        "/api/v2/images/missing/content-level",
+        json={"content_level": "explicit"},
+    )
+
+    assert overridden.json() == {
+        "inferred_level": "sexy",
+        "effective_level": "nude",
+        "override_level": "nude",
+    }
+    assert inherited.json()["effective_level"] == "sexy"
+    assert inherited.json()["override_level"] is None
+    assert missing.status_code == 404
 
 
 def test_v2_review_history_exposes_append_only_events() -> None:
@@ -682,6 +854,7 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
     catalog = client.get("/api/v2/catalog/components")
     playground_catalog = client.get("/api/v2/playground/components")
     capabilities = client.get("/api/v2/playground/capabilities")
+    loras = client.get("/api/v2/catalog/loras")
 
     assert catalog.status_code == 200
     assert catalog.json()["components"][0]["component_uid"] == "character-a"
@@ -694,6 +867,7 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "negative_atoms": [{"text": "negative", "weight": 1.0}],
     }
     assert playground_catalog.status_code == 200
+    assert loras.json()["loras"][0]["available"] is True
     assert playground_catalog.json()["components"][0]["component_uid"] == (
         "character-a"
     )
@@ -702,6 +876,21 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "samplers": ["euler"],
         "schedulers": ["normal"],
         "loras": ["style.safetensors"],
+        "lora_definitions": [
+            {
+                "lora_uid": "lora-style",
+                "provider_name": "style.safetensors",
+                "display_name": "style.safetensors",
+                "tags": [],
+                "notes": "",
+                "content_level": "lewd",
+                "revision": 1,
+                "archived": False,
+                "latest_revision": None,
+                "available": True,
+            }
+        ],
+        "upscale_models": ["example-upscaler.pth"],
         "defaults": {
             "checkpoint": "model.safetensors",
             "seed": 1,
@@ -714,7 +903,9 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
     }
     combinations = client.get("/api/v2/playground/top-combinations")
     assert combinations.status_code == 200
-    assert combinations.json()["two_component"][0]["component_uids"] == [
+    assert combinations.json()["characters"][0]["two_component"][0][
+        "component_uids"
+    ] == [
         "character-a",
         "scene-a",
     ]
@@ -732,6 +923,7 @@ def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
         json={
             "kind": "scene",
             "name": "Rainy street",
+            "content_level": "standard",
             "tags": ["rain"],
             "notes": "note",
             "positive_atoms": [{"text": "rainy street", "weight": 1.0}],
@@ -743,6 +935,7 @@ def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
         json={
             "kind": "scene",
             "name": "Rainy street night",
+            "content_level": "standard",
             "tags": ["rain", "night"],
             "positive_atoms": [
                 {"text": "rainy street at night", "weight": 1.0}
@@ -783,6 +976,7 @@ def test_v2_catalog_rejects_missing_components_and_kind_changes() -> None:
     payload = {
         "kind": "scene",
         "name": "Scene",
+        "content_level": "standard",
         "positive_atoms": [{"text": "scene", "weight": 1.0}],
     }
 
@@ -818,12 +1012,14 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         "/api/v2/playground/drafts",
         json={
             "selections": selections,
-            "seed": 17,
+            "generation": _draft_generation(seed=17),
             "positive_atoms": [{"text": "draft positive", "weight": 1.0}],
         },
     )
 
     assert response.status_code == 200
+    assert response.json()["draft_uid"].startswith("draft-")
+    assert response.json()["seed"] == 17
     assert response.json()["positive_prompt"] == "draft positive"
     assert response.json()["revision_uids"] == [
         "revision-character-a",
@@ -851,6 +1047,32 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         "negative_prompt": "blur",
     }
 
+    randomized = client.post(
+        "/api/v2/playground/drafts",
+        json={
+            "selections": selections,
+            "generation": _draft_generation(seed=None),
+        },
+    )
+    concrete_seed = randomized.json()["seed"]
+    assert isinstance(concrete_seed, int)
+    assert container.playground_service.command.seed == concrete_seed
+
+    evidence = client.post(
+        "/api/v2/playground/evidence",
+        json={
+            **_draft_generation(),
+            "positive_atoms": [{"text": "hero", "weight": 1.01}],
+            "negative_atoms": [{"text": "blur", "weight": 1.0}],
+        },
+    )
+    assert evidence.json()["prompt_match"]["image_uid"] == "image-prompt"
+    assert evidence.json()["sampler_match"]["image_uid"] == "image-sampler"
+    assert (
+        container.playground_evidence.query.positive_atoms[0].weight_milli
+        == 1010
+    )
+
 
 def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
     None
@@ -859,7 +1081,10 @@ def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
 
     incomplete = client.post(
         "/api/v2/playground/drafts",
-        json={"selections": [{"kind": "character", "mode": "random"}]},
+        json={
+            "selections": [{"kind": "character", "mode": "random"}],
+            "generation": _draft_generation(),
+        },
     )
     selections = [
         {"kind": kind, "mode": "off"}
@@ -874,7 +1099,8 @@ def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
         )
     ]
     disabled = client.post(
-        "/api/v2/playground/drafts", json={"selections": selections}
+        "/api/v2/playground/drafts",
+        json={"selections": selections, "generation": _draft_generation()},
     )
 
     assert incomplete.status_code == 400
@@ -891,17 +1117,24 @@ def test_v2_playground_accepts_exact_revision_and_composition_handoffs() -> (
 
     revisions = client.post(
         "/api/v2/playground/drafts",
-        json={"revision_uids": ["revision-character-a", "revision-scene-a"]},
+        json={
+            "revision_uids": ["revision-character-a", "revision-scene-a"],
+            "generation": _draft_generation(),
+        },
     )
     composition = client.post(
         "/api/v2/playground/drafts",
-        json={"composition_uid": "composition-a"},
+        json={
+            "composition_uid": "composition-a",
+            "generation": _draft_generation(),
+        },
     )
     mixed = client.post(
         "/api/v2/playground/drafts",
         json={
             "composition_uid": "composition-a",
             "revision_uids": ["revision-character-a"],
+            "generation": _draft_generation(),
         },
     )
 
@@ -925,10 +1158,8 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
         "positive_atoms": [{"text": "edited positive", "weight": 1.0}],
         "negative_atoms": [{"text": "edited negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
-        "blueprint_uid": "default-character",
-        "blueprint_version": 3,
-        "image_width": 768,
-        "image_height": 1152,
+        "aspect_format": "2:3",
+        "resolution_class": "1080",
         "sampler": {
             "seed": 42,
             "steps": 24,
@@ -961,8 +1192,9 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
         "revision-scene-a",
     )
     assert draft.output_subdirectory == "playground/character-a-key"
-    assert (draft.image_width, draft.image_height) == (768, 1152)
-    assert draft.blueprint_version == 3
+    assert draft.aspect_format.value == "2:3"
+    assert draft.resolution_class.value == "1080"
+    assert draft.blueprint_version == 4
     assert container.playground_service.confirm_command.component_uids == (
         "character-a",
         "scene-a",
@@ -979,6 +1211,8 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
         "positive_atoms": [{"text": "positive", "weight": 1.0}],
         "negative_atoms": [{"text": "negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
+        "aspect_format": "2:3",
+        "resolution_class": "1080",
         "sampler": {
             "seed": 42,
             "steps": 24,
@@ -1009,6 +1243,21 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     assert failed.status_code == 500
     assert failed.json()["error"]["code"] == "generation_failed"
     assert graph.status_code == 422
+
+
+def _draft_generation(seed: int | None = 17) -> dict[str, object]:
+    return {
+        "checkpoint": "model.safetensors",
+        "sampler": "euler",
+        "scheduler": "normal",
+        "seed": seed,
+        "randomize_seed": seed is None,
+        "steps": 24,
+        "cfg": 6.5,
+        "denoise": 1.0,
+        "aspect_format": "2:3",
+        "resolution_class": "1080",
+    }
 
 
 def test_v2_generation_reads_expose_lifecycle_outputs_and_urls() -> None:
@@ -1059,37 +1308,30 @@ def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() ->
         "/api/v2/analytics/overview", params={"model": "anime"}
     )
     scopes = client.get("/api/v2/analytics/scopes")
-    parameters = client.get("/api/v2/analytics/parameters")
-    parameter_values = client.get(
-        "/api/v2/analytics/parameters",
-        params={"view": "values", "parameter": "steps"},
-    )
+    render = client.get("/api/v2/analytics/render")
     combinations = client.get(
         "/api/v2/analytics/combinations", params={"min_n": 2}
-    )
-    render_setups = client.get(
-        "/api/v2/analytics/combinations", params={"view": "render"}
     )
     composition_setups = client.get(
         "/api/v2/analytics/combinations/composition-a/render-setups"
     )
     invalid_parameter = client.get(
-        "/api/v2/analytics/parameters",
-        params={"view": "values", "parameter": "seed"},
+        "/api/v2/analytics/render",
+        params={"scope": "parameter", "parameter": "seed"},
     )
+    retired_parameters = client.get("/api/v2/analytics/parameters")
 
-    assert overview.json()["stable"] == [{"label": "stable"}]
+    assert overview.json()["observed_setup_count"] == 7
     assert scopes.json()["rows"][0]["component_uid"] == "character-a"
-    assert parameters.json()["recommendations"][0]["checkpoint"] == (
+    assert render.json()["items"][0]["settings"]["checkpoint"] == (
         "model.safetensors"
     )
-    assert parameter_values.json()["rows"][0]["value"] == "20"
     assert combinations.json()["rows"][0]["composition_uid"] == (
         "composition-a"
     )
-    assert render_setups.json()["rows"][0]["setup_key"] == "setup-a"
     assert composition_setups.json()["composition_uid"] == "composition-a"
     assert invalid_parameter.status_code == 400
+    assert retired_parameters.status_code == 404
     assert container.analytics_pages.call == (
         "composition-render-setups",
         {
@@ -1102,6 +1344,7 @@ def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() ->
 
 
 def _client() -> tuple[TestClient, SimpleNamespace]:
+    render_guidance = _RenderGuidance()
     container = SimpleNamespace(
         settings=SimpleNamespace(
             minimum_runs=2,
@@ -1115,9 +1358,11 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         review_service=_Reviews(),
         review_history=_ReviewHistory(),
         curation_service=_Curation(),
+        image_content_levels=_ImageContentLevels(),
         arena_service=_Arena(),
         prompt_catalog_service=_PromptCatalog(),
         catalog_evidence=_CatalogEvidence(),
+        playground_evidence=_PlaygroundEvidence(),
         prompt_renderer=PromptRenderer(),
         playground_service=_Playground(),
         playground_submission_service=_PlaygroundSubmission(),
@@ -1126,7 +1371,11 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         generation_reconciliation=_GenerationReconciliation(),
         playground_discovery=_PlaygroundDiscovery(),
         workflow_defaults=_WorkflowDefaults(),
+        lora_catalog=_LoraCatalog(),
         analytics_pages=_AnalyticsPages(),
+        analytics_coverage=_AnalyticsCoverage(),
+        render_guidance=render_guidance,
+        playground_render_guidance=_PlaygroundRenderGuidance(render_guidance),
     )
     application = FastAPI()
     application.state.container = container

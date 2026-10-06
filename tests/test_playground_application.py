@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -34,6 +36,7 @@ def _component(
     name: str | None = None,
     notes: str = "",
     archived: bool = False,
+    content_level: ContentLevel = ContentLevel.STANDARD,
 ) -> PromptComponent:
     return PromptComponent(
         component_uid=uid,
@@ -52,6 +55,7 @@ def _component(
             positive_atoms=prompt_atom_usages_from_text(positive),
             negative_atoms=prompt_atom_usages_from_text(negative),
         ),
+        content_level=content_level,
     )
 
 
@@ -524,11 +528,17 @@ def _service(catalog: _CatalogService) -> PlaygroundService:
 def test_playground_content_policy_filters_explicit_levels() -> None:
     components = (
         _component("character-a", "character", tags=("adult",)),
-        _component("pose-lewd", "pose", tags=("lewd",)),
+        _component(
+            "pose-lewd",
+            "pose",
+            tags=("lewd",),
+            content_level=ContentLevel.LEWD,
+        ),
         _component(
             "modifier-nude",
             "modifier",
             tags=("nsfw_level_nude",),
+            content_level=ContentLevel.NUDE,
         ),
     )
     policy = PromptContentPolicy()
@@ -556,18 +566,19 @@ def test_playground_content_policy_filters_explicit_levels() -> None:
     )
 
 
-def test_playground_content_policy_rejects_conflicting_levels() -> None:
+def test_playground_content_policy_uses_typed_level_not_descriptive_tags() -> (
+    None
+):
     component = _component(
         "modifier-conflict",
         "modifier",
         tags=("nsfw_level_suggestive", "nsfw_level_nude"),
+        content_level=ContentLevel.SEXY,
     )
 
-    with pytest.raises(PromptSelectionError, match="conflicting"):
-        PromptContentPolicy().filter(
-            (component,),
-            (ContentLevel.STANDARD, ContentLevel.SEXY, ContentLevel.NUDE),
-        )
+    assert PromptContentPolicy().filter(
+        (component,), (ContentLevel.SEXY,)
+    ) == (component,)
 
 
 def test_playground_service_prepares_draft_without_generation_submission() -> (
@@ -648,6 +659,45 @@ def test_playground_service_restores_exact_revisions_and_compositions() -> (
     )
 
 
+def test_playground_service_uses_authoritative_image_snapshot() -> None:
+    service = _service(_CatalogService(_catalog()))
+    image = SimpleNamespace(
+        scopes=(),
+        prompt_snapshot=SimpleNamespace(
+            positive="historic style, character",
+            negative="historic blur",
+            draft_overridden=True,
+        ),
+    )
+
+    draft = service.prepare_image_snapshot(cast(Any, image))
+
+    assert draft.selection.components == ()
+    assert draft.prompt.positive_text == "historic style, character"
+    assert draft.prompt.negative_text == "historic blur"
+    assert draft.prompt.revision_uids == ()
+    assert draft.prompt.draft_overridden is True
+
+    grouped_image = SimpleNamespace(
+        scopes=(SimpleNamespace(revision_uid="revision-character-a"),),
+        prompt_snapshot=SimpleNamespace(
+            positive="historic style, character",
+            negative="historic blur",
+            draft_overridden=False,
+        ),
+    )
+    overridden = service.prepare_image_snapshot(
+        cast(Any, grouped_image),
+        overrides=PromptDraftOverrides(
+            positive_atoms=prompt_atom_usages_from_text("manual positive"),
+            negative_atoms=prompt_atom_usages_from_text("manual negative"),
+        ),
+    )
+    assert overridden.selection.components[0].component_uid == "character-a"
+    assert overridden.prompt.positive_text == "manual positive"
+    assert overridden.prompt.negative_text == "manual negative"
+
+
 def test_playground_service_rejects_disabled_exact_revision_handoff() -> None:
     catalog = _CatalogService(
         (
@@ -656,6 +706,7 @@ def test_playground_service_rejects_disabled_exact_revision_handoff() -> None:
                 "modifier-nude",
                 "modifier",
                 tags=("nsfw_level_nude",),
+                content_level=ContentLevel.NUDE,
             ),
         )
     )

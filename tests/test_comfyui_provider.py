@@ -260,6 +260,22 @@ def test_native_provider_discovers_technical_capabilities() -> None:
                     }
                 }
             },
+            "UpscaleModelLoader": {
+                "input": {
+                    "required": {
+                        "model_name": [
+                            "COMBO",
+                            {
+                                "multiselect": False,
+                                "options": [
+                                    "example-upscaler.pth",
+                                    "example-upscaler-2.pth",
+                                ],
+                            },
+                        ]
+                    }
+                }
+            },
             "SaveImage": {"input": {}},
         },
     )
@@ -271,6 +287,7 @@ def test_native_provider_discovers_technical_capabilities() -> None:
         "KSampler",
         "LoraLoader",
         "SaveImage",
+        "UpscaleModelLoader",
     )
     assert capabilities.samplers == ("dpmpp", "euler")
     assert capabilities.schedulers == ("karras", "normal")
@@ -278,6 +295,10 @@ def test_native_provider_discovers_technical_capabilities() -> None:
     assert capabilities.loras == (
         "style-a.safetensors",
         "style-b.safetensors",
+    )
+    assert capabilities.upscale_models == (
+        "example-upscaler-2.pth",
+        "example-upscaler.pth",
     )
 
 

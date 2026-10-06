@@ -49,6 +49,7 @@ def _sidecar_payload() -> dict[str, object]:
                     "sampler_name": "euler",
                     "scheduler": "normal",
                     "denoise": 1.0,
+                    "model": ["lora", 0],
                 },
             },
             "sampler-b": {
@@ -68,6 +69,8 @@ def _sidecar_payload() -> dict[str, object]:
                     "lora_name": "style.safetensors",
                     "strength_model": 0.8,
                     "strength_clip": 0.6,
+                    "model": ["loader", 0],
+                    "clip": ["loader", 1],
                 },
             },
         },

@@ -3,6 +3,8 @@ import { CatalogEditor } from "../catalog/catalog-editor.js";
 import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { ImageViewer } from "../images/image-viewer.js";
+import { ImageGeneratorActions } from "../images/image-generator-actions.js";
+import { PlaygroundIntentStore } from "../playground/playground-intent.js";
 import { CatalogController } from "../surfaces/catalog-controller.js";
 
 const root = document.querySelector("[data-v2-surface='catalog']");
@@ -25,17 +27,23 @@ if (root instanceof HTMLElement) {
   ) {
     /** @type {CatalogController | null} */
     let controller = null;
+    const api = new ApiClient();
     const viewer = new ImageViewer(viewerRoot);
+    const generatorActions = new ImageGeneratorActions({
+      api,
+      store: new PlaygroundIntentStore(window.sessionStorage),
+    });
     const browser = new CatalogBrowser(kindsRoot, listRoot, search, {
-      onSelect: (uid) => void controller?.select(uid),
+      onSelect: (uid, catalogKind) => void controller?.select(uid, catalogKind),
     });
     const editor = new CatalogEditor(editorRoot, {
       onSave: (payload) => void controller?.save(payload),
       onArchive: (archived) => void controller?.setArchived(archived),
       onEvidenceOpen: (_imageUid, imageUrl) => viewer.open(imageUrl),
+      createGeneratorActions: (imageUid) => generatorActions.create(imageUid),
     });
     controller = new CatalogController({
-      api: new ApiClient(),
+      api,
       browser,
       editor,
       requests: new RequestLifecycle(),
@@ -48,6 +56,7 @@ if (root instanceof HTMLElement) {
       () => {
         controller?.dispose();
         viewer.close();
+        generatorActions.dispose();
       },
       { once: true },
     );

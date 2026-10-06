@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("settings persist preferences and an ordered LoRA generation profile", async ({
+test("settings persist preferences and expose LoRA catalog status without profiles", async ({
   page,
 }) => {
   const errors = [];
@@ -19,31 +19,32 @@ test("settings persist preferences and an ordered LoRA generation profile", asyn
   await page.getByRole("button", { name: "Verbindung testen" }).click();
   await expect(page.locator(".settings-status")).toContainText("Verbunden");
   await expect(page.getByText("character-detail.safetensors")).toBeVisible();
+  await expect(page.getByText("example-upscaler.pth")).toBeVisible();
 
-  await page.getByRole("button", { name: "Generierungsprofile" }).click();
-  await page.getByLabel("Name").fill("E2E Profil");
-  await page.getByRole("button", { name: "LoRA hinzufügen" }).click();
-  await page.getByRole("button", { name: "LoRA hinzufügen" }).click();
-  await page
-    .locator(".settings-lora-row")
-    .nth(1)
-    .getByRole("button", { name: "↑" })
-    .click();
-  await page
-    .locator(".settings-form")
-    .getByRole("button", { name: "Speichern" })
-    .click();
-  await expect(page.locator(".settings-status")).toContainText("Gespeichert");
+  await page.getByRole("button", { name: "Inhaltsstufen" }).click();
+  await expect(
+    page.getByRole("heading", { name: "LoRA-Status" }),
+  ).toBeVisible();
+  await expect(page.getByText("character-detail.safetensors")).toBeVisible();
+  await expect(page.getByText("cinematic-light.safetensors")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "LoRA-Katalog öffnen" }),
+  ).toHaveAttribute("href", "/catalog");
+  await expect(
+    page.getByRole("button", { name: "Stufe speichern" }),
+  ).toHaveCount(0);
+
+  await expect(
+    page.getByRole("button", { name: "Generierungsprofile" }),
+  ).toHaveCount(0);
 
   await page.reload();
-  await page.getByRole("button", { name: "Generierungsprofile" }).click();
-  await page.getByRole("button", { name: "E2E Profil" }).click();
-  const loraNames = await page
-    .locator(".settings-lora-row select")
-    .evaluateAll((elements) => elements.map((element) => element.value));
-  expect(loraNames).toEqual([
-    "cinematic-light.safetensors",
-    "character-detail.safetensors",
-  ]);
+  await expect(page.getByLabel("Analytics-Seitengröße")).toHaveValue("12");
+  await page.getByRole("button", { name: "Inhaltsstufen" }).click();
+  await expect(
+    page.locator(".settings-lora-row", {
+      hasText: "cinematic-light.safetensors",
+    }),
+  ).toContainText("Nicht eingestuft");
   expect(errors).toEqual([]);
 });

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from comfyreview.application import (
+    ContentLevel,
     CreatePromptComponentCommand,
     PromptCatalogService,
     PromptComponent,
@@ -76,6 +77,7 @@ class PromptCatalogViewService:
                 notes=notes,
                 positive_atoms=prompt_atom_usages_from_text(positive_text),
                 negative_atoms=prompt_atom_usages_from_text(negative_text),
+                content_level=ContentLevel.STANDARD,
             )
         )
 
@@ -98,6 +100,7 @@ class PromptCatalogViewService:
                 notes=notes,
                 positive_atoms=prompt_atom_usages_from_text(positive_text),
                 negative_atoms=prompt_atom_usages_from_text(negative_text),
+                content_level=ContentLevel.STANDARD,
             )
         )
 

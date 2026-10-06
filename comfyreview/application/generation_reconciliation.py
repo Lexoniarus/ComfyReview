@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Protocol
 
-from comfyreview.application.comfyui import ComfyUiError, ComfyUiProvider
+from comfyreview.application.comfyui import (
+    ComfyUiError,
+    ComfyUiNotFoundError,
+    ComfyUiProvider,
+)
 from comfyreview.application.generation import (
     GenerationMutationError,
     GenerationOutputCollection,
@@ -17,6 +22,14 @@ from comfyreview.application.generation import (
 )
 
 
+class GenerationOutputRecovery(Protocol):
+    """Recover canonical outputs from an explicit bounded source."""
+
+    def recover(self, generation_uid: str) -> tuple[object, ...]:
+        """Persist one unambiguous output set."""
+        ...
+
+
 class GenerationReconciliationService:
     """Resolve ambiguous generation state without resubmitting work."""
 
@@ -26,10 +39,12 @@ class GenerationReconciliationService:
         generations: GenerationRepository,
         comfyui: ComfyUiProvider,
         outputs: GenerationOutputCollection,
+        recovery: GenerationOutputRecovery | None = None,
     ) -> None:
         self._generations = generations
         self._comfyui = comfyui
         self._outputs = outputs
+        self._recovery = recovery
         self._logger = logging.getLogger("comfyreview.generation")
 
     def reconcile(
@@ -58,6 +73,8 @@ class GenerationReconciliationService:
 
         try:
             external = self._comfyui.get_status(record.prompt_id)
+        except ComfyUiNotFoundError:
+            return self._recover_from_filesystem(record)
         except ComfyUiError as error:
             self._logger.warning(
                 "generation.reconciliation_deferred",
@@ -101,6 +118,38 @@ class GenerationReconciliationService:
                 "generation_id": updated.generation_uid,
                 "prompt_id": updated.prompt_id,
                 "status": updated.status,
+            },
+        )
+        return self._submission(updated)
+
+    def _recover_from_filesystem(
+        self,
+        record: GenerationRecord,
+    ) -> GenerationSubmission:
+        if self._recovery is None:
+            return self._submission(record)
+        try:
+            self._recovery.recover(record.generation_uid)
+            updated = self._generations.mark_completed(record.generation_uid)
+        except Exception as error:
+            self._keep_reconciliation(
+                record,
+                "filesystem_output_recovery_" + type(error).__name__,
+            )
+            self._logger.warning(
+                "generation.filesystem_recovery_deferred",
+                extra={
+                    "generation_id": record.generation_uid,
+                    "prompt_id": record.prompt_id,
+                    "error_type": type(error).__name__,
+                },
+            )
+            return self._submission(record)
+        self._logger.info(
+            "generation.filesystem_recovery_completed",
+            extra={
+                "generation_id": record.generation_uid,
+                "prompt_id": record.prompt_id,
             },
         )
         return self._submission(updated)

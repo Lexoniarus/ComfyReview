@@ -1,7 +1,10 @@
 import { ApiClient } from "../core/api-client.js";
+import { ConfirmationDialog } from "../components/confirmation-dialog.js";
+import { ImageContentLevelController } from "../content/image-content-level-controller.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { ImageCurationController } from "../curation/image-curation-controller.js";
 import { ImageGrid } from "../images/image-grid.js";
+import { ImageGeneratorActions } from "../images/image-generator-actions.js";
 import { ImageViewer } from "../images/image-viewer.js";
 import { PaginationControls } from "../images/pagination-controls.js";
 import { ImageInspector } from "../inspector/image-inspector.js";
@@ -11,6 +14,7 @@ import { ActiveScopeChips } from "../scopes/active-scope-chips.js";
 import { ScopeNavigator } from "../scopes/scope-navigator.js";
 import { ScopeStateController } from "../scopes/scope-state-controller.js";
 import { TopWorstController } from "../surfaces/top-worst-controller.js";
+import { PlaygroundIntentStore } from "../playground/playground-intent.js";
 
 const root = document.querySelector("[data-v2-surface='top-worst']");
 if (root instanceof HTMLElement) {
@@ -21,21 +25,36 @@ if (root instanceof HTMLElement) {
   const viewerRoot = root.querySelector("[data-image-viewer]");
   const activeScopesRoot = root.querySelector("[data-active-scopes]");
   const paginationRoot = root.querySelector("[data-pagination]");
+  const confirmRoot = root.querySelector("[data-confirm-dialog]");
   if (
     gridRoot instanceof HTMLElement &&
     scopeRoot instanceof HTMLElement &&
     inspectorRoot instanceof HTMLElement &&
     viewerRoot instanceof HTMLDialogElement &&
     activeScopesRoot instanceof HTMLElement &&
-    paginationRoot instanceof HTMLElement
+    paginationRoot instanceof HTMLElement &&
+    confirmRoot instanceof HTMLDialogElement
   ) {
     /** @type {TopWorstController | null} */
     let controller = null;
     /** @type {ImageCurationController | null} */
     let curation = null;
+    /** @type {ImageContentLevelController | null} */
+    let contentLevels = null;
     const api = new ApiClient();
+    const generatorActions = new ImageGeneratorActions({
+      api,
+      store: new PlaygroundIntentStore(window.sessionStorage),
+    });
+    const rails = new ResponsiveRails(root);
     const inspectorView = new ImageInspector(inspectorRoot, {
       onCuration: (imageUid, setKey) => void curation?.assign(imageUid, setKey),
+      onContentLevel: (imageUid, level) =>
+        void contentLevels?.assign(imageUid, level),
+      onDelete: (imageUid) => void contentLevels?.delete(imageUid),
+      onClose: () => rails.close("inspector"),
+      createGeneratorActions: (uid) =>
+        generatorActions.create(uid, "prominent"),
     });
     const inspector = new ImageInspectorController({
       api,
@@ -46,6 +65,7 @@ if (root instanceof HTMLElement) {
     const grid = new ImageGrid(gridRoot, {
       onSelect: (uid) => controller?.selectImage(uid),
       onExpand: (_uid, url) => viewer.open(url),
+      createGeneratorActions: (uid) => generatorActions.create(uid),
     });
     const navigator = new ScopeNavigator(scopeRoot, {
       onToggle: (uid) => {
@@ -84,7 +104,7 @@ if (root instanceof HTMLElement) {
       pagination,
       inspector,
       viewer,
-      rails: new ResponsiveRails(root),
+      rails,
       facetRequests: new RequestLifecycle(),
       rankingRequests: new RequestLifecycle(),
       contextRequests: new RequestLifecycle(),
@@ -97,13 +117,27 @@ if (root instanceof HTMLElement) {
       onAssigned: (imageUid) =>
         controller?.refresh(imageUid) || Promise.resolve(),
     });
+    contentLevels = new ImageContentLevelController({
+      api,
+      inspector: inspectorView,
+      requests: new RequestLifecycle(),
+      dialog: new ConfirmationDialog(confirmRoot),
+      onChanged: async () => {
+        await controller?.reload();
+      },
+      onDeleted: async () => {
+        await controller?.reload();
+      },
+    });
     controller.start();
     void curation.start();
     window.addEventListener(
       "pagehide",
       () => {
         curation?.dispose();
+        contentLevels?.dispose();
         controller?.dispose();
+        generatorActions.dispose();
       },
       { once: true },
     );

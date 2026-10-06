@@ -58,6 +58,15 @@ class ObservedPromptCombination:
 
 
 @dataclass(frozen=True, slots=True)
+class CharacterCombinationGroup:
+    """Group the strongest observed combinations for one character."""
+
+    character_uid: str
+    character_name: str
+    combinations: tuple[ObservedPromptCombination, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ScopeStatistic:
     """Summarize review evidence for one canonical prompt component."""
 
@@ -148,6 +157,15 @@ class AnalyticsRepository(Protocol):
         limit: int,
     ) -> tuple[ObservedPromptCombination, ...]:
         """Return only combinations represented by canonical generations."""
+        ...
+
+    def list_observed_combinations_by_character(
+        self,
+        *,
+        combo_size: int,
+        limit_per_character: int,
+    ) -> tuple[CharacterCombinationGroup, ...]:
+        """Return ranked observed combinations grouped by character."""
         ...
 
     def latest_review_sequence(self) -> int:
@@ -366,6 +384,20 @@ class AnalyticsService:
         return self._repository.list_observed_combinations(
             combo_size=combo_size,
             limit=max(int(limit), 0),
+        )
+
+    def observed_combinations_by_character(
+        self,
+        *,
+        combo_size: int,
+        limit_per_character: int = 8,
+    ) -> tuple[CharacterCombinationGroup, ...]:
+        """Return one independently ranked combination row per character."""
+        if combo_size not in {2, 3}:
+            raise ValueError("combo_size must be 2 or 3")
+        return self._repository.list_observed_combinations_by_character(
+            combo_size=combo_size,
+            limit_per_character=max(int(limit_per_character), 0),
         )
 
     def latest_review_sequence(self) -> int:

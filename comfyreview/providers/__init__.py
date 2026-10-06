@@ -8,7 +8,12 @@ from comfyreview.providers.comfyui import (
 from comfyreview.providers.curation_files import LocalCurationFileManager
 from comfyreview.providers.file_urls import OutputFileUrlMapper
 from comfyreview.providers.generation_outputs import (
+    LocalGenerationOutputRecoverySource,
     LocalGenerationOutputSource,
+)
+from comfyreview.providers.image_geometry import (
+    InvalidPngError,
+    PngHeaderDimensionReader,
 )
 from comfyreview.providers.legacy_output_import import (
     LocalLegacyOutputImportSource,
@@ -24,7 +29,10 @@ __all__ = [
     "CanonicalOutputImageCatalog",
     "LocalCurationFileManager",
     "LocalGenerationOutputSource",
+    "LocalGenerationOutputRecoverySource",
     "LocalLegacyOutputImportSource",
+    "InvalidPngError",
+    "PngHeaderDimensionReader",
     "JsonHttpResponse",
     "NativeComfyUiProvider",
     "OutputFileUrlMapper",

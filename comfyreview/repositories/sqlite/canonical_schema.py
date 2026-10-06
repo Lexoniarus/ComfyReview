@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -17,7 +18,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 12
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -503,6 +504,77 @@ _REQUIRED_GENERATION_PROFILE_COLUMNS_V9 = (
     _REQUIRED_GENERATION_PROFILE_COLUMNS_V8 | {"image_width", "image_height"}
 )
 
+_REQUIRED_OBJECTS_V10 = {
+    **_REQUIRED_OBJECTS_V9,
+    "lora_definitions": "table",
+    "image_content_level_events": "table",
+    "image_content_level_state": "table",
+}
+_REQUIRED_GENERATION_PROFILE_COLUMNS_V10 = (
+    _REQUIRED_GENERATION_PROFILE_COLUMNS_V9 | {"output_tier"}
+)
+_REQUIRED_GENERATION_COLUMNS_V10 = _REQUIRED_GENERATION_COLUMNS_V2 | {
+    "image_width",
+    "image_height",
+    "output_tier",
+    "output_width",
+    "output_height",
+    "inferred_content_level",
+}
+
+_REQUIRED_OBJECTS_V11 = {
+    **_REQUIRED_OBJECTS_V10,
+    "image_geometry_projection": "table",
+}
+_REQUIRED_IMAGE_GEOMETRY_COLUMNS_V11 = {
+    "image_id",
+    "actual_width",
+    "actual_height",
+    "aspect_format",
+    "resolution_class",
+    "target_width",
+    "target_height",
+    "is_exact",
+    "classifier_version",
+    "projected_at",
+}
+
+_REQUIRED_OBJECTS_V12 = {
+    **_REQUIRED_OBJECTS_V11,
+    "lora_revisions": "table",
+    "lora_revision_atom_usages": "table",
+}
+_REQUIRED_LORA_DEFINITION_COLUMNS_V12 = {
+    "id",
+    "lora_uid",
+    "provider_name",
+    "display_name",
+    "tags",
+    "notes",
+    "content_level",
+    "revision",
+    "archived_at",
+    "created_at",
+    "updated_at",
+}
+_REQUIRED_LORA_REVISION_COLUMNS_V12 = {
+    "id",
+    "revision_uid",
+    "lora_definition_id",
+    "revision_number",
+    "default_model_strength_milli",
+    "default_clip_strength_milli",
+    "content_hash",
+    "created_at",
+}
+_REQUIRED_LORA_REVISION_ATOM_COLUMNS_V12 = {
+    "revision_id",
+    "atom_id",
+    "scope",
+    "position",
+    "weight_milli",
+}
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -550,10 +622,10 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8}:
+        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1, 2, 3, 4, 5, 6, 7, 8, or "
+                f"{current_version}; expected 1 through 11, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -571,11 +643,22 @@ class CanonicalSchemaManager:
             self._validate_version_six()
         elif current_version == 7:
             self._validate_version_seven()
-        else:
+        elif current_version == 8:
             self._validate_version_eight()
+        elif current_version == 9:
+            self._validate_version_nine()
+        elif current_version == 10:
+            self._validate_version_ten()
+        else:
+            self._validate_version_eleven()
 
         backup_path = self._create_backup(backup_directory)
-        committed = False
+        source_path = self._database_path
+        migration_path = source_path.with_name(
+            f".{source_path.name}.{uuid4().hex}.upgrade"
+        )
+        shutil.copy2(source_path, migration_path)
+        self._database_path = migration_path
         skipped_lora_items = 0
         try:
             connection = self._open_read_write(foreign_keys=False)
@@ -595,9 +678,14 @@ class CanonicalSchemaManager:
                     self._upgrade_v6_to_v7(connection)
                 if current_version <= 7:
                     skipped_lora_items = self._upgrade_v7_to_v8(connection)
-                self._upgrade_v8_to_v9(connection)
+                if current_version <= 8:
+                    self._upgrade_v8_to_v9(connection)
+                if current_version <= 9:
+                    self._upgrade_v9_to_v10(connection)
+                if current_version <= 10:
+                    self._upgrade_v10_to_v11(connection)
+                self._upgrade_v11_to_v12(connection)
                 connection.commit()
-                committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
                 connection.rollback()
@@ -605,10 +693,15 @@ class CanonicalSchemaManager:
             finally:
                 connection.close()
             self._validate_existing()
+            self._database_path = source_path
+            shutil.copy2(migration_path, source_path)
+            migration_path.unlink(missing_ok=True)
         except Exception:
-            if committed or not self._is_valid_version(current_version):
-                self._restore_backup(backup_path)
+            self._database_path = source_path
+            migration_path.unlink(missing_ok=True)
             raise
+        finally:
+            self._database_path = source_path
 
         return CanonicalSchemaReport(
             schema_version=SCHEMA_VERSION,
@@ -623,6 +716,48 @@ class CanonicalSchemaManager:
                 else ()
             ),
         )
+
+    def upgrade_to(
+        self,
+        output_path: Path,
+        backup_directory: Path | None = None,
+    ) -> CanonicalSchemaReport:
+        """Upgrade into a new validated database while preserving the source."""
+        if not self._database_path.exists():
+            raise CanonicalSchemaValidationError(
+                f"Canonical database does not exist: {self._database_path}"
+            )
+        target = Path(output_path).resolve()
+        if target == self._database_path:
+            raise CanonicalSchemaValidationError(
+                "Migration output must differ from the source database"
+            )
+        if target.exists():
+            raise CanonicalSchemaValidationError(
+                f"Migration output already exists: {target}"
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source_hash = self._file_hash(self._database_path)
+        shutil.copy2(self._database_path, target)
+        try:
+            report = CanonicalSchemaManager(target).upgrade(backup_directory)
+            CanonicalSchemaManager(target).validate()
+            if self._file_hash(self._database_path) != source_hash:
+                raise CanonicalSchemaValidationError(
+                    "Source database changed during migration"
+                )
+            return report
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+
+    @staticmethod
+    def _file_hash(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
 
     def _create_new_database(self) -> None:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -661,6 +796,15 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v8_to_v9(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v9_to_v10(connection)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v10_to_v11(connection)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v11_to_v12(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -673,7 +817,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3, 4, 5, 6, 7, 8}:
+            if version in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -827,6 +971,48 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_nine(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 9:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 9 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V9)
+            self._validate_metadata_version(connection, 9)
+            self._validate_workspace_settings_v9(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_ten(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 10:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 10 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V10)
+            self._validate_metadata_version(connection, 10)
+            self._validate_workspace_settings_v10(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_eleven(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 11:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 11 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V11)
+            self._validate_metadata_version(connection, 11)
+            self._validate_image_geometry_v11(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -835,7 +1021,7 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V9)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V12)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
@@ -843,6 +1029,9 @@ class CanonicalSchemaManager:
         self._validate_prompt_catalog_v7(connection)
         self._validate_workspace_settings_v8(connection)
         self._validate_workspace_settings_v9(connection)
+        self._validate_workspace_settings_v10(connection)
+        self._validate_image_geometry_v11(connection)
+        self._validate_lora_catalog_v12(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -1524,6 +1713,270 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 9")
 
     @staticmethod
+    def _upgrade_v9_to_v10(connection: sqlite3.Connection) -> None:
+        levels = "'standard', 'sexy', 'lewd', 'nude', 'explicit'"
+        tiers = "'hd_720', 'full_hd_1080', 'uhd_4k'"
+        connection.execute(
+            "ALTER TABLE generation_profiles ADD COLUMN output_tier TEXT "
+            "NOT NULL DEFAULT 'full_hd_1080' CHECK (output_tier IN ("
+            + tiers
+            + "))"
+        )
+        connection.execute(
+            "UPDATE generation_profiles SET blueprint_version = 4 "
+            "WHERE blueprint_uid = 'default-character' "
+            "AND blueprint_version <= 3 AND archived_at IS NULL"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN output_tier TEXT "
+            "CHECK (output_tier IS NULL OR output_tier IN (" + tiers + "))"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN output_width INTEGER"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN output_height INTEGER"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN inferred_content_level TEXT "
+            "NOT NULL DEFAULT 'standard' CHECK (inferred_content_level IN ("
+            + levels
+            + "))"
+        )
+        connection.execute(
+            """
+            CREATE TABLE lora_definitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lora_uid TEXT NOT NULL UNIQUE,
+                provider_name TEXT NOT NULL UNIQUE,
+                content_level TEXT
+                    CHECK (content_level IS NULL OR content_level IN (
+                        'standard', 'sexy', 'lewd', 'nude', 'explicit'
+                    )),
+                revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        names = connection.execute(
+            "SELECT lora_name FROM generation_profile_loras "
+            "UNION SELECT lora_name FROM generation_loras"
+        ).fetchall()
+        for (name,) in names:
+            connection.execute(
+                "INSERT INTO lora_definitions(lora_uid, provider_name) "
+                "VALUES (?, ?)",
+                (f"lora-{uuid4().hex}", str(name)),
+            )
+        connection.execute(
+            "ALTER TABLE generation_profile_loras ADD COLUMN lora_uid TEXT"
+        )
+        connection.execute(
+            "UPDATE generation_profile_loras SET lora_uid = ("
+            "SELECT definition.lora_uid FROM lora_definitions AS definition "
+            "WHERE definition.provider_name = generation_profile_loras.lora_name)"
+        )
+        connection.execute(
+            "ALTER TABLE generation_loras ADD COLUMN lora_uid TEXT"
+        )
+        connection.execute(
+            "ALTER TABLE generation_loras ADD COLUMN content_level_snapshot "
+            "TEXT CHECK (content_level_snapshot IS NULL OR "
+            "content_level_snapshot IN (" + levels + "))"
+        )
+        connection.execute(
+            "UPDATE generation_loras SET lora_uid = ("
+            "SELECT definition.lora_uid FROM lora_definitions AS definition "
+            "WHERE definition.provider_name = generation_loras.lora_name)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE image_content_level_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_uid TEXT NOT NULL UNIQUE,
+                image_id INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+                content_level TEXT CHECK (content_level IS NULL OR content_level IN (
+                    'standard', 'sexy', 'lewd', 'nude', 'explicit'
+                )),
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE image_content_level_state (
+                image_id INTEGER PRIMARY KEY
+                    REFERENCES images(id) ON DELETE CASCADE,
+                event_id INTEGER NOT NULL UNIQUE
+                    REFERENCES image_content_level_events(id) ON DELETE CASCADE,
+                override_content_level TEXT NOT NULL CHECK (
+                    override_content_level IN (
+                        'standard', 'sexy', 'lewd', 'nude', 'explicit'
+                    )
+                )
+            )
+            """
+        )
+        rank_tags = {
+            "sexy": (
+                "suggestive",
+                "seductive",
+                "sensual",
+                "lingerie",
+                "nsfw_level_suggestive",
+            ),
+            "lewd": ("lewd", "nsfw_level_partial"),
+            "nude": ("nsfw_level_nude",),
+            "explicit": (
+                "nsfw_level_explicit_exposure",
+                "nsfw_level_explicit_act",
+            ),
+        }
+        for level, tags in rank_tags.items():
+            placeholders = ", ".join("?" for _tag in tags)
+            connection.execute(
+                f"""
+                UPDATE generations
+                SET inferred_content_level = ?
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM prompt_composition_revisions AS membership
+                    JOIN prompt_revisions AS revision
+                      ON revision.id = membership.revision_id
+                    JOIN prompt_components AS component
+                      ON component.id = revision.component_id
+                    JOIN json_each(
+                        CASE WHEN json_valid(component.tags)
+                             THEN component.tags ELSE '[]' END
+                    ) AS tag
+                    WHERE membership.composition_id =
+                          generations.prompt_composition_id
+                      AND lower(CAST(tag.value AS TEXT)) IN ({placeholders})
+                )
+                """,
+                (level, *tags),
+            )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '10' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 10")
+
+    @staticmethod
+    def _upgrade_v10_to_v11(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE image_geometry_projection (
+                image_id INTEGER PRIMARY KEY
+                    REFERENCES images(id) ON DELETE CASCADE,
+                actual_width INTEGER NOT NULL CHECK (actual_width > 0),
+                actual_height INTEGER NOT NULL CHECK (actual_height > 0),
+                aspect_format TEXT NOT NULL CHECK (aspect_format IN (
+                    '2:3', '3:2', '16:9', '9:16', '1:1'
+                )),
+                resolution_class TEXT NOT NULL CHECK (resolution_class IN (
+                    '720', '1080', '2160'
+                )),
+                target_width INTEGER NOT NULL CHECK (target_width > 0),
+                target_height INTEGER NOT NULL CHECK (target_height > 0),
+                is_exact INTEGER NOT NULL CHECK (is_exact IN (0, 1)),
+                classifier_version INTEGER NOT NULL
+                    CHECK (classifier_version > 0),
+                projected_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '11' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 11")
+
+    @staticmethod
+    def _upgrade_v11_to_v12(connection: sqlite3.Connection) -> None:
+        """Add revisioned LoRA catalog facts without inventing old triggers."""
+        connection.execute(
+            "ALTER TABLE lora_definitions ADD COLUMN "
+            "display_name TEXT NOT NULL DEFAULT ''"
+        )
+        connection.execute(
+            "ALTER TABLE lora_definitions ADD COLUMN "
+            "tags TEXT NOT NULL DEFAULT '[]'"
+        )
+        connection.execute(
+            "ALTER TABLE lora_definitions ADD COLUMN "
+            "notes TEXT NOT NULL DEFAULT ''"
+        )
+        connection.execute(
+            "ALTER TABLE lora_definitions ADD COLUMN archived_at TEXT"
+        )
+        connection.execute(
+            "UPDATE lora_definitions SET display_name = provider_name "
+            "WHERE display_name = ''"
+        )
+        connection.execute(
+            """
+            CREATE TABLE lora_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                revision_uid TEXT NOT NULL UNIQUE,
+                lora_definition_id INTEGER NOT NULL
+                    REFERENCES lora_definitions(id) ON DELETE CASCADE,
+                revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+                default_model_strength_milli INTEGER NOT NULL,
+                default_clip_strength_milli INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (lora_definition_id, revision_number),
+                UNIQUE (lora_definition_id, content_hash)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE lora_revision_atom_usages (
+                revision_id INTEGER NOT NULL
+                    REFERENCES lora_revisions(id) ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                PRIMARY KEY (revision_id, scope, position)
+            )
+            """
+        )
+        definitions = connection.execute(
+            "SELECT id, lora_uid FROM lora_definitions ORDER BY id"
+        ).fetchall()
+        for definition_id, lora_uid in definitions:
+            content = f"{1000}\0{1000}\0\0"
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            revision_hash = hashlib.sha256(
+                f"{lora_uid}\0{content_hash}".encode()
+            ).hexdigest()
+            revision_uid = f"lora-revision-{revision_hash}"
+            connection.execute(
+                """
+                INSERT INTO lora_revisions(
+                    revision_uid, lora_definition_id, revision_number,
+                    default_model_strength_milli,
+                    default_clip_strength_milli, content_hash
+                ) VALUES (?, ?, 1, 1000, 1000, ?)
+                """,
+                (revision_uid, int(definition_id), content_hash),
+            )
+        connection.execute(
+            "ALTER TABLE generation_loras ADD COLUMN lora_revision_id INTEGER "
+            "REFERENCES lora_revisions(id)"
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '12' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 12")
+
+    @staticmethod
     def _legacy_lora_selections(
         payload: str,
     ) -> tuple[tuple[tuple[str, int, int], ...], int]:
@@ -2104,6 +2557,76 @@ class CanonicalSchemaManager:
                 "workspace content levels must start with standard"
             )
 
+    @classmethod
+    def _validate_workspace_settings_v10(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        profile_columns = cls._table_column_rows(
+            connection, "generation_profiles"
+        )
+        generation_columns = cls._table_column_rows(connection, "generations")
+        missing = sorted(
+            (_REQUIRED_GENERATION_PROFILE_COLUMNS_V10 - profile_columns.keys())
+            | (_REQUIRED_GENERATION_COLUMNS_V10 - generation_columns.keys())
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical content classification is missing columns: "
+                + ", ".join(missing)
+            )
+
+    @classmethod
+    def _validate_image_geometry_v11(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        columns = cls._table_column_rows(
+            connection, "image_geometry_projection"
+        )
+        missing = sorted(_REQUIRED_IMAGE_GEOMETRY_COLUMNS_V11 - columns.keys())
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Image geometry projection is missing columns: "
+                + ", ".join(missing)
+            )
+
+    @classmethod
+    def _validate_lora_catalog_v12(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        definition_columns = cls._table_column_rows(
+            connection, "lora_definitions"
+        )
+        revision_columns = cls._table_column_rows(connection, "lora_revisions")
+        atom_columns = cls._table_column_rows(
+            connection, "lora_revision_atom_usages"
+        )
+        generation_lora_columns = cls._table_column_rows(
+            connection, "generation_loras"
+        )
+        missing = sorted(
+            (_REQUIRED_LORA_DEFINITION_COLUMNS_V12 - definition_columns.keys())
+            | (_REQUIRED_LORA_REVISION_COLUMNS_V12 - revision_columns.keys())
+            | (_REQUIRED_LORA_REVISION_ATOM_COLUMNS_V12 - atom_columns.keys())
+            | ({"lora_revision_id"} - generation_lora_columns.keys())
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical LoRA catalog is missing columns: "
+                + ", ".join(missing)
+            )
+        orphaned = connection.execute(
+            "SELECT COUNT(*) FROM lora_definitions AS definition "
+            "WHERE NOT EXISTS (SELECT 1 FROM lora_revisions AS revision "
+            "WHERE revision.lora_definition_id = definition.id)"
+        ).fetchone()[0]
+        if int(orphaned):
+            raise CanonicalSchemaValidationError(
+                "Every LoRA definition requires an immutable revision"
+            )
+
     def _is_valid_version(self, version: int) -> bool:
         try:
             if version == 1:
@@ -2122,6 +2645,12 @@ class CanonicalSchemaManager:
                 self._validate_version_seven()
             elif version == 8:
                 self._validate_version_eight()
+            elif version == 9:
+                self._validate_version_nine()
+            elif version == 10:
+                self._validate_version_ten()
+            elif version == 11:
+                self._validate_version_eleven()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):

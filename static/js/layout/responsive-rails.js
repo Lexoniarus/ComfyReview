@@ -33,6 +33,21 @@ export class ResponsiveRails {
     this.#setExpanded(rail, true);
   }
 
+  /** @param {"scope" | "inspector"} rail */
+  close(rail) {
+    this.#setExpanded(rail, false);
+  }
+
+  /** @param {"scope" | "inspector"} rail */
+  isOpen(rail) {
+    return this.#isExpanded(rail);
+  }
+
+  /** Whether rails currently use overlay drawers instead of grid columns. */
+  isDrawerMode() {
+    return this.#mode() === "drawer";
+  }
+
   /** Release delegated controls and media-query listeners. */
   dispose() {
     this.events.abort();

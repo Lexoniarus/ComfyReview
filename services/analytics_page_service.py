@@ -87,19 +87,41 @@ class AnalyticsPageService:
         limit: int = 8,
     ) -> dict[str, Any]:
         """Build top canonical two- and three-component examples."""
+        two_groups = self._analytics.observed_combinations_by_character(
+            combo_size=2,
+            limit_per_character=int(limit),
+        )
+        three_groups = self._analytics.observed_combinations_by_character(
+            combo_size=3,
+            limit_per_character=int(limit),
+        )
+        group_uids = dict.fromkeys(
+            [group.character_uid for group in two_groups]
+            + [group.character_uid for group in three_groups]
+        )
+        two_by_uid = {group.character_uid: group for group in two_groups}
+        three_by_uid = {group.character_uid: group for group in three_groups}
         return {
-            "two_component": self._combination_views(
-                self._analytics.observed_combinations(
-                    combo_size=2,
-                    limit=int(limit),
-                )
-            ),
-            "three_component": self._combination_views(
-                self._analytics.observed_combinations(
-                    combo_size=3,
-                    limit=int(limit),
-                )
-            ),
+            "characters": [
+                {
+                    "character_uid": character_uid,
+                    "character_name": (
+                        two_by_uid.get(character_uid)
+                        or three_by_uid[character_uid]
+                    ).character_name,
+                    "two_component": self._combination_views(
+                        two_by_uid[character_uid].combinations
+                        if character_uid in two_by_uid
+                        else ()
+                    ),
+                    "three_component": self._combination_views(
+                        three_by_uid[character_uid].combinations
+                        if character_uid in three_by_uid
+                        else ()
+                    ),
+                }
+                for character_uid in group_uids
+            ]
         }
 
     def scope_context(

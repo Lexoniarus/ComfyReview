@@ -12,10 +12,14 @@ from comfyreview.application import (
     CanonicalSchemaReport,
     GenerationMutationError,
     GenerationValidationError,
+    ImageGeometryProjectionService,
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
 from comfyreview.importers import (
+    ContentLevelAuditor,
+    ContentLevelRecovery,
+    ContentLevelRecoveryValidationError,
     LegacyCompositionAuditor,
     LegacyCompositionImporter,
     LegacyCompositionRecoveryError,
@@ -30,13 +34,20 @@ from comfyreview.importers import (
     LegacyPromptImporter,
     LegacyPromptImportRecoveryError,
     LegacyPromptImportValidationError,
+    LegacyProvenanceAuditor,
+    LegacyProvenanceRecovery,
+    LegacyProvenanceValidationError,
     SqliteLegacyFeatureMigration,
 )
-from comfyreview.providers import LocalLegacyOutputImportSource
+from comfyreview.providers import (
+    LocalLegacyOutputImportSource,
+    PngHeaderDimensionReader,
+)
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
     LegacySchemaManager,
+    SqliteImageGeometryRepository,
 )
 from comfyreview.repositories.sqlite.legacy_output_import import (
     SqliteLegacyOutputImportRepository,
@@ -81,6 +92,8 @@ def _parser() -> argparse.ArgumentParser:
     canonical_actions.add_parser("validate")
     canonical_upgrade = canonical_actions.add_parser("upgrade")
     canonical_upgrade.add_argument("--backup-dir", type=Path)
+    canonical_upgrade.add_argument("--output", type=Path, required=True)
+    canonical_actions.add_parser("rebuild-image-geometry")
 
     legacy_output = commands.add_parser("legacy-output")
     output_actions = legacy_output.add_subparsers(
@@ -135,6 +148,33 @@ def _parser() -> argparse.ArgumentParser:
     composition_import.add_argument("--database", type=Path)
     composition_import.add_argument("--report", type=Path)
     composition_import.add_argument("--backup-dir", type=Path)
+
+    legacy_provenance = commands.add_parser("legacy-provenance")
+    provenance_actions = legacy_provenance.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    provenance_audit = provenance_actions.add_parser("audit")
+    provenance_audit.add_argument("--database", type=Path)
+    provenance_audit.add_argument("--report", type=Path)
+    provenance_audit.add_argument("--curation", type=Path)
+    provenance_recover = provenance_actions.add_parser("recover")
+    provenance_recover.add_argument("--database", type=Path)
+    provenance_recover.add_argument("--report", type=Path)
+    provenance_recover.add_argument("--output", type=Path, required=True)
+
+    content_levels = commands.add_parser("content-levels")
+    content_level_actions = content_levels.add_subparsers(
+        dest="action", required=True
+    )
+    content_level_audit = content_level_actions.add_parser("audit")
+    content_level_audit.add_argument("--database", type=Path)
+    content_level_audit.add_argument("--curation", type=Path, required=True)
+    content_level_audit.add_argument("--report", type=Path)
+    content_level_recover = content_level_actions.add_parser("recover")
+    content_level_recover.add_argument("--database", type=Path)
+    content_level_recover.add_argument("--report", type=Path, required=True)
+    content_level_recover.add_argument("--output", type=Path, required=True)
 
     generation = commands.add_parser("generation")
     generation_actions = generation.add_subparsers(
@@ -194,8 +234,31 @@ def _run_canonical(options: argparse.Namespace) -> int:
     manager = CanonicalSchemaManager(settings.canonical_database_path)
     if options.action == "validate":
         report = manager.validate()
+    elif options.action == "upgrade":
+        report = manager.upgrade_to(options.output, options.backup_dir)
     else:
-        report = manager.upgrade(options.backup_dir)
+        manager.validate()
+        result = ImageGeometryProjectionService(
+            SqliteImageGeometryRepository(settings.canonical_database_path),
+            PngHeaderDimensionReader(settings.output_root),
+        ).rebuild()
+        print(
+            json.dumps(
+                {
+                    "projected": result.projected,
+                    "diagnostics": [
+                        {
+                            "image_uid": item.image_uid,
+                            "png_path": str(item.png_path),
+                            "message": item.message,
+                        }
+                        for item in result.diagnostics
+                    ],
+                },
+                sort_keys=True,
+            )
+        )
+        return 2 if result.diagnostics else 0
     print(_render_canonical(report))
     return 0
 
@@ -268,6 +331,10 @@ def _run_legacy_output_import(options: argparse.Namespace) -> int:
         report_path,
         backup_directory=options.backup_dir,
     )
+    geometry = ImageGeometryProjectionService(
+        SqliteImageGeometryRepository(database_path),
+        PngHeaderDimensionReader(settings.output_root),
+    ).rebuild()
     payload = {
         "backup_path": str(result.backup_path),
         "new_images": result.new_images,
@@ -275,6 +342,15 @@ def _run_legacy_output_import(options: argparse.Namespace) -> int:
         "new_generations": result.new_generations,
         "sampler_stages": result.sampler_stages,
         "excluded_without_sidecar": result.excluded_without_sidecar,
+        "geometry_projected": geometry.projected,
+        "geometry_diagnostics": [
+            {
+                "image_uid": item.image_uid,
+                "png_path": str(item.png_path),
+                "message": item.message,
+            }
+            for item in geometry.diagnostics
+        ],
     }
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 0
@@ -406,6 +482,36 @@ def _run_legacy_compositions(options: argparse.Namespace) -> int:
     return 0
 
 
+def _run_legacy_provenance(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    database_path = options.database or settings.canonical_database_path
+    report_path = options.report or (
+        settings.data_directory / "reports" / "legacy-provenance-audit.json"
+    )
+    if options.action == "audit":
+        audit_result = LegacyProvenanceAuditor(
+            database_path,
+            curation_path=options.curation,
+        ).audit(report_path)
+        payload = {
+            "report_path": str(audit_result.report_path),
+            **audit_result.summary,
+        }
+    else:
+        recovery_result = LegacyProvenanceRecovery(database_path).recover(
+            report_path,
+            options.output,
+        )
+        payload = {
+            "output_path": str(recovery_result.output_path),
+            "created_revisions": recovery_result.created_revisions,
+            "relinked_generations": recovery_result.relinked_generations,
+            "corrected_prompts": recovery_result.corrected_prompts,
+        }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
 def _run_generation(options: argparse.Namespace) -> int:
     from comfyreview.bootstrap import build_application_container
 
@@ -428,6 +534,37 @@ def _run_generation(options: argparse.Namespace) -> int:
     return 2 if result.status == "reconciliation_required" else 0
 
 
+def _run_content_levels(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    database_path = options.database or settings.canonical_database_path
+    if options.action == "audit":
+        report_path = options.report or (
+            settings.data_directory / "reports" / "content-level-audit.json"
+        )
+        audit_result = ContentLevelAuditor(
+            database_path, options.curation
+        ).audit(report_path)
+        payload = {
+            "report_path": str(audit_result.report_path),
+            **audit_result.summary,
+        }
+    else:
+        recovery_result = ContentLevelRecovery(database_path).recover(
+            options.report, options.output
+        )
+        payload = {
+            "output_path": str(recovery_result.output_path),
+            "updated_components": recovery_result.updated_components,
+            "reclassified_generations": (
+                recovery_result.reclassified_generations
+            ),
+            "preserved_overrides": recovery_result.preserved_overrides,
+            "removed_inactive_loras": (recovery_result.removed_inactive_loras),
+        }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run a maintenance command and return its stable process exit code."""
     options = _parser().parse_args(arguments)
@@ -442,8 +579,12 @@ def main(arguments: list[str] | None = None) -> int:
             return _run_legacy_prompts(options)
         if options.command == "legacy-compositions":
             return _run_legacy_compositions(options)
+        if options.command == "legacy-provenance":
+            return _run_legacy_provenance(options)
         if options.command == "generation":
             return _run_generation(options)
+        if options.command == "content-levels":
+            return _run_content_levels(options)
         return _run_legacy_output(options)
     except LegacySchemaValidationError as error:
         print(_render_legacy(error.report), file=sys.stderr)
@@ -475,6 +616,12 @@ def main(arguments: list[str] | None = None) -> int:
     except LegacyCompositionRecoveryError as error:
         print(str(error), file=sys.stderr)
         return 1
+    except LegacyProvenanceValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except ContentLevelRecoveryValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
     except GenerationValidationError as error:
         print(str(error), file=sys.stderr)
         return 2

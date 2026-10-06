@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   PlaygroundIntentNavigator,
+  PlaygroundIntentStore,
   intentFromAnalyticsAction,
   playgroundIntentUrl,
   readPlaygroundIntent,
@@ -14,10 +15,13 @@ describe("Playground intent codec", () => {
       revisionUids: ["revision-a"],
       compositionUid: "composition-a",
       imageUid: "image-a",
-      generationProfileUid: "profile-a",
+      promptImageUid: "image-prompt",
+      renderImageUid: "image-render",
       checkpoint: "model.safetensors",
       sampler: "euler",
       scheduler: "normal",
+      aspectFormat: "2:3",
+      resolutionClass: "2160",
       seedMode: "fixed",
       seed: 42,
       steps_min: 20,
@@ -59,9 +63,15 @@ describe("Playground intent codec", () => {
       cfg_min: 6.5,
       cfg_max: 6.5,
     });
-    expect(action("parameter", { parameter: "denoise", value: "1" })).toEqual(
-      {},
-    );
+    expect(action("parameter", { parameter: "denoise", value: "1" })).toEqual({
+      denoise: 1,
+    });
+    expect(
+      action("parameter", { parameter: "aspect_format", value: "9:16" }),
+    ).toEqual({ aspectFormat: "9:16" });
+    expect(
+      action("parameter", { parameter: "resolution_class", value: "720" }),
+    ).toEqual({ resolutionClass: "720" });
     expect(
       action("parameter", { parameter: "checkpoint", value: "model" }),
     ).toEqual({ checkpoint: "model" });
@@ -95,7 +105,91 @@ describe("Playground intent codec", () => {
       "/playground/generator?image=image-a",
     );
   });
+
+  it("stages prompt and render intents per tab with deterministic merging", () => {
+    const storage = new MemoryStorage();
+    const store = new PlaygroundIntentStore(storage);
+    store.mergePromptComponent("character-a", "character");
+    store.mergePromptComponent("character-b", "character");
+    store.mergePromptComponent("scene-a", "scene");
+    store.merge({ sampler: "euler", steps_min: 24, steps_max: 24 });
+    store.merge({ sampler: "dpmpp_2m", cfg_min: 6.5, cfg_max: 6.5 });
+    store.merge({
+      compositionUid: "composition-a",
+      componentUids: ["character-c"],
+      revisionUids: ["revision-old"],
+    });
+    store.merge({
+      componentUids: ["scene-b"],
+      revisionUids: ["revision-new"],
+    });
+
+    expect(store.read()).toEqual(
+      expect.objectContaining({
+        componentUids: ["character-c", "scene-b"],
+        sampler: "dpmpp_2m",
+        steps_min: 24,
+        cfg_min: 6.5,
+        revisionUids: ["revision-new"],
+      }),
+    );
+    expect(store.consumeUrl()).toContain("sampler=dpmpp_2m");
+    expect(store.read()).toEqual(
+      expect.objectContaining({ sampler: "dpmpp_2m" }),
+    );
+    store.clear();
+    expect(store.read()).toEqual({});
+    expect(action("parameter", { parameter: "unknown", value: "1" })).toEqual(
+      {},
+    );
+  });
+
+  it("keeps image prompt and render packages independent until applied", () => {
+    const storage = new MemoryStorage();
+    const store = new PlaygroundIntentStore(storage);
+
+    store.stagePromptSetup("image-prompt");
+    store.merge({
+      loras: [{ lora_uid: "lora-style", revision_uid: "revision-1" }],
+    });
+    store.stageRenderSetup("image-render");
+    expect(store.read()).toEqual({
+      promptImageUid: "image-prompt",
+      loras: [{ lora_uid: "lora-style", revision_uid: "revision-1" }],
+      renderImageUid: "image-render",
+    });
+    store.clearPrompt();
+    expect(store.read()).toEqual({ renderImageUid: "image-render" });
+    store.stagePromptSetup("image-new");
+    store.clearRender();
+    expect(store.read()).toEqual({ promptImageUid: "image-new" });
+
+    storage.setItem(
+      "comfyreview.playground-intent.v2",
+      JSON.stringify({ version: 1, intent: { imageUid: "legacy" } }),
+    );
+    expect(store.read()).toEqual({ imageUid: "legacy" });
+    store.merge({ sampler: "euler" });
+    expect(store.read()).toEqual(
+      expect.objectContaining({ imageUid: "legacy", sampler: "euler" }),
+    );
+  });
 });
+
+class MemoryStorage {
+  constructor() {
+    this.values = new Map();
+  }
+  getItem(key) {
+    return this.values.get(key) ?? null;
+  }
+  setItem(key, value) {
+    this.values.set(key, String(value));
+  }
+  removeItem(key) {
+    this.values.delete(key);
+  }
+}
 
 function action(kind, values) {
   const element = document.createElement("button");

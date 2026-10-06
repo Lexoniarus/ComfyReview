@@ -181,8 +181,9 @@ Routes call services. They do not execute SQL or external provider calls.
 - Known additive legacy repair uses `python -m comfyreview legacy-db upgrade`;
   startup initializes only database files that are completely absent.
 - Canonical version changes use the explicit, backed-up
-  `python -m comfyreview canonical-db upgrade` command. Startup validates but
-  never performs a version cutover.
+  `python -m comfyreview canonical-db upgrade --output PATH` command. The
+  source is not overwritten; startup validates but never performs a version
+  cutover.
 
 ## 7. Canonical data vs derived data
 

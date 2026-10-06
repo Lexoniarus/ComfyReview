@@ -1,0 +1,227 @@
+"""Typed handoff from one visible image into the Playground generator."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Protocol
+
+from comfyreview.application.comfyui import ComfyUiCapabilities, ComfyUiError
+from comfyreview.application.generation_queries import GenerationStageSummary
+from comfyreview.application.image_queries import ImageContextQueryService
+from comfyreview.application.lora_effects import LoraGraphEffectPolicy
+from comfyreview.domain import PromptAtomUsage, prompt_atom_usages_from_text
+
+
+@dataclass(frozen=True, slots=True)
+class ImageLoraSnapshot:
+    """Describe one ordered LoRA proven to affect a stored workflow graph."""
+
+    lora_uid: str | None
+    revision_uid: str | None
+    provider_name: str
+    position: int
+    model_strength_milli: int
+    clip_strength_milli: int
+    content_level: str | None
+    model_effective: bool
+    clip_effective: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ImageGenerationFacts:
+    """Carry repository facts needed to construct a generator handoff."""
+
+    sampler_stages: tuple[GenerationStageSummary, ...]
+    loras: tuple[ImageLoraSnapshot, ...]
+    workflow_graph: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class PromptSetupHandoff:
+    """Carry exact prompt provenance independently of render controls."""
+
+    source_image_uid: str
+    availability: str
+    revision_uids: tuple[str, ...]
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
+    draft_overridden: bool
+    loras: tuple[ImageLoraSnapshot, ...]
+    issues: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RenderSetupHandoff:
+    """Carry reproducible single-stage settings and semantic geometry."""
+
+    applicable: bool
+    checkpoint: str
+    sampler_stages: tuple[GenerationStageSummary, ...]
+    seed: int | None
+    aspect_format: str | None
+    resolution_class: str | None
+    actual_width: int | None
+    actual_height: int | None
+    target_width: int | None
+    target_height: int | None
+    geometry_match: str | None
+    issues: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ImageGeneratorHandoff:
+    """Expose independently stageable prompt and render packages."""
+
+    image_uid: str
+    generation_uid: str
+    prompt_setup: PromptSetupHandoff
+    render_setup: RenderSetupHandoff
+
+
+class ImageGeneratorHandoffRepository(Protocol):
+    """Read normalized generation facts for one canonical generation."""
+
+    def get_generation_facts(
+        self, generation_uid: str
+    ) -> ImageGenerationFacts | None: ...
+
+
+class CapabilityDiscovery(Protocol):
+    """Read current provider enum availability without owning transport."""
+
+    def discover_capabilities(self) -> ComfyUiCapabilities: ...
+
+
+class ImageGeneratorHandoffService:
+    """Build safe image handoffs from visible canonical facts."""
+
+    def __init__(
+        self,
+        *,
+        images: ImageContextQueryService,
+        repository: ImageGeneratorHandoffRepository,
+        capabilities: CapabilityDiscovery,
+        effects: LoraGraphEffectPolicy | None = None,
+    ) -> None:
+        self._images = images
+        self._repository = repository
+        self._capabilities = capabilities
+        self._effects = effects or LoraGraphEffectPolicy()
+
+    def get(self, image_uid: str) -> ImageGeneratorHandoff:
+        """Return prompt/render packages for one currently visible image."""
+        image = self._images.get_image(image_uid)
+        facts = self._repository.get_generation_facts(image.generation_uid)
+        if facts is None:
+            raise LookupError("generation facts are unavailable")
+        loras = self._effective_loras(facts)
+        capability_issues, available_loras, checkpoints = self._availability()
+        prompt_issues = list(capability_issues)
+        for lora in loras:
+            if (
+                available_loras is not None
+                and lora.provider_name not in available_loras
+            ):
+                prompt_issues.append(f"lora_unavailable:{lora.provider_name}")
+        availability = (
+            "grouped"
+            if image.scopes and not image.prompt_snapshot.draft_overridden
+            else "exact"
+            if image.scopes
+            else "snapshot_only"
+        )
+        prompt = PromptSetupHandoff(
+            source_image_uid=image.image_uid,
+            availability=availability,
+            revision_uids=tuple(scope.revision_uid for scope in image.scopes),
+            positive_atoms=prompt_atom_usages_from_text(
+                image.prompt_snapshot.positive
+            ),
+            negative_atoms=prompt_atom_usages_from_text(
+                image.prompt_snapshot.negative
+            ),
+            draft_overridden=image.prompt_snapshot.draft_overridden,
+            loras=loras,
+            issues=tuple(dict.fromkeys(prompt_issues)),
+        )
+        render_issues = list(capability_issues)
+        if len(facts.sampler_stages) != 1:
+            render_issues.append("multi_stage_not_supported")
+        if (
+            checkpoints is not None
+            and image.generation_settings.checkpoint not in checkpoints
+        ):
+            render_issues.append(
+                f"checkpoint_unavailable:{image.generation_settings.checkpoint}"
+            )
+        geometry = image.geometry
+        if geometry is None:
+            render_issues.append("geometry_unavailable")
+        render = RenderSetupHandoff(
+            applicable=not render_issues,
+            checkpoint=image.generation_settings.checkpoint,
+            sampler_stages=facts.sampler_stages,
+            seed=(
+                facts.sampler_stages[0].seed
+                if len(facts.sampler_stages) == 1
+                else None
+            ),
+            aspect_format=(geometry.aspect_format.value if geometry else None),
+            resolution_class=(
+                geometry.resolution_class.value if geometry else None
+            ),
+            actual_width=(geometry.actual_width if geometry else None),
+            actual_height=(geometry.actual_height if geometry else None),
+            target_width=(geometry.target_width if geometry else None),
+            target_height=(geometry.target_height if geometry else None),
+            geometry_match=(
+                "exact"
+                if geometry and geometry.exact
+                else "approximate"
+                if geometry
+                else None
+            ),
+            issues=tuple(dict.fromkeys(render_issues)),
+        )
+        return ImageGeneratorHandoff(
+            image_uid=image.image_uid,
+            generation_uid=image.generation_uid,
+            prompt_setup=prompt,
+            render_setup=render,
+        )
+
+    def _effective_loras(
+        self, facts: ImageGenerationFacts
+    ) -> tuple[ImageLoraSnapshot, ...]:
+        effects = {
+            item.node_id: item
+            for item in self._effects.effects(facts.workflow_graph)
+        }
+        result: list[ImageLoraSnapshot] = []
+        for lora in facts.loras:
+            effect = effects.get(f"cr:lora:{lora.position:03d}")
+            if effect is None:
+                continue
+            result.append(
+                ImageLoraSnapshot(
+                    lora_uid=lora.lora_uid,
+                    revision_uid=lora.revision_uid,
+                    provider_name=lora.provider_name,
+                    position=lora.position,
+                    model_strength_milli=lora.model_strength_milli,
+                    clip_strength_milli=lora.clip_strength_milli,
+                    content_level=lora.content_level,
+                    model_effective=effect.model_active,
+                    clip_effective=effect.clip_active,
+                )
+            )
+        return tuple(result)
+
+    def _availability(
+        self,
+    ) -> tuple[tuple[str, ...], set[str] | None, set[str] | None]:
+        try:
+            capabilities = self._capabilities.discover_capabilities()
+        except ComfyUiError:
+            return ("capabilities_unavailable",), None, None
+        return (), set(capabilities.loras), set(capabilities.checkpoints)

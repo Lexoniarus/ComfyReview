@@ -4,6 +4,7 @@ import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { ImageCurationController } from "../curation/image-curation-controller.js";
 import { ImageViewer } from "../images/image-viewer.js";
+import { ImageGeneratorActions } from "../images/image-generator-actions.js";
 import { ImageInspector } from "../inspector/image-inspector.js";
 import { ImageInspectorController } from "../inspector/image-inspector-controller.js";
 import { ResponsiveRails } from "../layout/responsive-rails.js";
@@ -11,6 +12,7 @@ import { ActiveScopeChips } from "../scopes/active-scope-chips.js";
 import { ScopeNavigator } from "../scopes/scope-navigator.js";
 import { ScopeStateController } from "../scopes/scope-state-controller.js";
 import { ArenaController } from "../surfaces/arena-controller.js";
+import { PlaygroundIntentStore } from "../playground/playground-intent.js";
 
 const root = document.querySelector("[data-v2-surface='arena']");
 if (root instanceof HTMLElement) {
@@ -35,8 +37,14 @@ if (root instanceof HTMLElement) {
     /** @type {ImageCurationController | null} */
     let curation = null;
     const api = new ApiClient();
+    const generatorActions = new ImageGeneratorActions({
+      api,
+      store: new PlaygroundIntentStore(window.sessionStorage),
+    });
     const inspectorView = new ImageInspector(inspectorRoot, {
       onCuration: (imageUid, setKey) => void curation?.assign(imageUid, setKey),
+      createGeneratorActions: (uid) =>
+        generatorActions.create(uid, "prominent"),
     });
     const inspector = new ImageInspectorController({
       api,
@@ -69,6 +77,7 @@ if (root instanceof HTMLElement) {
       onDecision: (side) => void controller?.recordDecision(side),
       onInspect: (image) => controller?.inspect(image),
       onExpand: (url) => controller?.expand(url),
+      createGeneratorActions: (uid) => generatorActions.create(uid),
     });
     const keyboard = new ArenaKeyboard(document, {
       onDecision: (side) => void controller?.recordDecision(side),
@@ -101,6 +110,7 @@ if (root instanceof HTMLElement) {
       () => {
         curation?.dispose();
         controller?.dispose();
+        generatorActions.dispose();
       },
       { once: true },
     );

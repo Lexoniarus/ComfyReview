@@ -29,6 +29,12 @@ describe("ResponsiveRails", () => {
     expect(root.classList.contains("is-inspector-open")).toBe(true);
     expect(scopePanel.inert).toBe(true);
     expect(inspectorPanel.inert).toBe(false);
+    expect(rails.isDrawerMode()).toBe(true);
+    expect(rails.isOpen("inspector")).toBe(true);
+
+    rails.close("inspector");
+    expect(root.classList.contains("is-inspector-open")).toBe(false);
+    rails.open("inspector");
 
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab" }));
     root.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));

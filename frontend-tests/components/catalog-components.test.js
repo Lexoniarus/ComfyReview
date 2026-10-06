@@ -20,11 +20,12 @@ describe("Catalog browser components", () => {
     const browser = new CatalogBrowser(kinds, list, search, { onSelect });
 
     browser.render(components);
+    expect(browser.selectedCatalogKind()).toBe("component");
     expect(list.querySelectorAll(".catalog-item")).toHaveLength(2);
     kinds.querySelectorAll("button")[2].click();
     expect(list.querySelectorAll(".catalog-item")).toHaveLength(1);
     list.querySelector("button").click();
-    expect(onSelect).toHaveBeenCalledWith("scene-a");
+    expect(onSelect).toHaveBeenCalledWith("scene-a", "component");
 
     browser.select("scene-a");
     expect(list.querySelector("button").getAttribute("aria-current")).toBe(
@@ -33,6 +34,8 @@ describe("Catalog browser components", () => {
     search.value = "nicht vorhanden";
     search.dispatchEvent(new Event("input"));
     expect(list.textContent).toContain("Keine Einträge");
+    kinds.querySelectorAll("button").item(8).click();
+    expect(browser.selectedCatalogKind()).toBe("lora");
     browser.dispose();
   });
 
@@ -60,6 +63,7 @@ describe("Catalog browser components", () => {
       expect.objectContaining({
         kind: "scene",
         name: "Neue Szene",
+        content_level: "standard",
         tags: ["rain", "night"],
         positive_atoms: [{ text: "rainy street", weight: 1 }],
       }),
@@ -80,7 +84,67 @@ describe("Catalog browser components", () => {
     editor.dispose();
   });
 
-  it("shows at most three lazy evidence images and owns interactions", () => {
+  it("creates and revises LoRAs through the canonical catalog editor", () => {
+    const root = document.createElement("div");
+    const onSave = vi.fn();
+    const onArchive = vi.fn();
+    const editor = new CatalogEditor(root, {
+      onSave,
+      onArchive,
+      onEvidenceOpen: vi.fn(),
+    });
+
+    editor.create("lora");
+    const inputs = root.querySelectorAll("input");
+    inputs[0].value = "Anime Style";
+    inputs[1].value = "anime-style.safetensors";
+    inputs[2].value = "style, anime";
+    inputs[3].value = "0.8";
+    inputs[4].value = "0.65";
+    root.querySelector(".prompt-atom-editor > button").click();
+    root.querySelector("[data-atom-text]").value = "anime trigger";
+    root
+      .querySelector("form")
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        catalog_kind: "lora",
+        provider_name: "anime-style.safetensors",
+        display_name: "Anime Style",
+        tags: ["style", "anime"],
+        default_model_strength: 0.8,
+        default_clip_strength: 0.65,
+        positive_atoms: [{ text: "anime trigger", weight: 1 }],
+      }),
+    );
+
+    const lora = {
+      catalog_kind: "lora",
+      lora_uid: "lora-style",
+      provider_name: "anime-style.safetensors",
+      display_name: "Anime Style",
+      content_level: "sexy",
+      tags: ["anime"],
+      notes: "Curated",
+      revision: 2,
+      archived: false,
+      latest_revision: {
+        ...revision(2),
+        default_model_strength: 0.9,
+        default_clip_strength: 0.7,
+      },
+    };
+    editor.render(lora, [lora.latest_revision]);
+    expect(root.textContent).toContain("LoRA-Katalog");
+    expect(root.querySelectorAll(".catalog-revision")).toHaveLength(1);
+    root.querySelector(".archive-button").click();
+    expect(onArchive).toHaveBeenCalledWith(true);
+    editor.setBusy(true);
+    expect(root.querySelector("input").disabled).toBe(true);
+    editor.dispose();
+  });
+
+  it("shows all evidence through one cyclic lazy image and owns interactions", () => {
     const onOpen = vi.fn();
     const view = new CatalogEvidenceView({ onOpen });
     const images = Array.from({ length: 4 }, (_, index) => ({
@@ -91,10 +155,13 @@ describe("Catalog browser components", () => {
     }));
 
     view.render(images);
-    expect(view.element.querySelectorAll("img")).toHaveLength(3);
+    expect(view.element.querySelectorAll("img")).toHaveLength(1);
+    expect(
+      view.element.querySelector(".catalog-evidence-strip").dataset.count,
+    ).toBe("4");
     expect(view.element.querySelector("img").loading).toBe("lazy");
     expect(view.element.textContent).toContain("Ø 9,5 / 10");
-    view.element.querySelector("button").click();
+    view.element.querySelector(".evidence-carousel-image").click();
     expect(onOpen).toHaveBeenCalledWith("image-0", "/output/image-0.png");
 
     view.render([]);
@@ -111,6 +178,7 @@ function component(componentUid, kind, name, archived, tags) {
     kind,
     name,
     tags,
+    content_level: "sexy",
     notes: "notes",
     archived,
     latest_revision: revision(2),

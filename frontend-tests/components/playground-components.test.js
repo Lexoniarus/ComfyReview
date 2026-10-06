@@ -7,6 +7,7 @@ import {
 } from "../../static/js/playground/dual-range-control.js";
 import { GenerationControls } from "../../static/js/playground/generation-controls.js";
 import { PromptModeEditor } from "../../static/js/playground/prompt-mode-editor.js";
+import { RenderGuidancePanel } from "../../static/js/playground/render-guidance-panel.js";
 import { TopCombinationsView } from "../../static/js/playground/top-combinations.js";
 
 const components = [
@@ -22,18 +23,48 @@ const components = [
 describe("Playground browser components", () => {
   beforeEach(() => document.body.replaceChildren());
 
-  it("owns complete fixed, random and off prompt-role intent", () => {
+  it("owns complete fixed, random and off prompt-role intent", async () => {
     const root = document.createElement("div");
-    const seed = document.createElement("input");
-    seed.value = "23";
-    const editor = new PromptModeEditor(root, seed);
+    const editor = new PromptModeEditor(root);
 
-    editor.render(components);
+    const loraDefinitions = [
+      {
+        lora_uid: "lora-style",
+        provider_name: "style.safetensors",
+        display_name: "Style",
+        latest_revision: {
+          revision_uid: "lora-revision-1",
+          default_model_strength: 0.8,
+          default_clip_strength: 0.6,
+        },
+      },
+    ];
+    editor.render(components, loraDefinitions);
     const rows = root.querySelectorAll(".prompt-mode-row");
     expect(rows).toHaveLength(7);
     expect(rows[0].querySelector("select")?.value).toBe("fixed");
     editor.applyIntent({ componentUids: ["scene-a"] });
     expect(rows[1].querySelector("select")?.value).toBe("fixed");
+    editor.applyIntent({
+      loras: [
+        {
+          lora_uid: "lora-style",
+          revision_uid: "lora-revision-1",
+          provider_name: "style.safetensors",
+          model_strength: 0.7,
+          clip_strength: 0.5,
+        },
+      ],
+    });
+    expect(editor.value().loras).toEqual([
+      expect.objectContaining({
+        lora_uid: "lora-style",
+        revision_uid: "lora-revision-1",
+      }),
+    ]);
+    Array.from(root.querySelectorAll(".prompt-lora-layer button"))
+      .find((button) => button.textContent === "Entfernen")
+      .click();
 
     const sceneMode = rows[1].querySelector("select");
     sceneMode.value = "off";
@@ -41,7 +72,6 @@ describe("Playground browser components", () => {
     expect(rows[1].querySelectorAll("select")[1].disabled).toBe(true);
     expect(editor.value()).toEqual(
       expect.objectContaining({
-        seed: 23,
         selections: expect.arrayContaining([
           {
             kind: "character",
@@ -53,9 +83,127 @@ describe("Playground browser components", () => {
       }),
     );
     rows[1].querySelectorAll("select")[1].dispatchEvent(new Event("change"));
-    seed.value = "invalid";
-    expect(editor.value().seed).toBeNull();
     editor.dispose();
+
+    const defaultEditor = new PromptModeEditor(
+      document.createElement("div"),
+      null,
+      {
+        loadComponent: async () => ({
+          name: "Aiko",
+          kind: "character",
+          top_images: [{ image_url: "/default.png" }],
+        }),
+      },
+    );
+    defaultEditor.render(components);
+    await settle();
+    defaultEditor.root.querySelector(".prompt-reference-image").click();
+    defaultEditor.root
+      .querySelector("select")
+      .dispatchEvent(new Event("change"));
+    defaultEditor.onChange();
+    defaultEditor.dispose();
+  });
+
+  it("loads, caches and resolves prompt reference evidence", async () => {
+    const root = document.createElement("div");
+    const loadComponent = vi.fn(async (uid) => ({
+      component_uid: uid,
+      kind: "character",
+      name: "Aiko",
+      top_images: [
+        { image_url: "/aiko.png", average_rating: 9, rating_count: 4 },
+      ],
+    }));
+    const onImageSelect = vi.fn();
+    const editor = new PromptModeEditor(root, () => {}, {
+      loadComponent,
+      onImageSelect,
+    });
+    editor.render(components);
+    await settle();
+    expect(root.textContent).toContain("Aiko · character");
+    expect(root.textContent).toContain("Wird beim Entwurf ausgewählt");
+    root
+      .querySelector(".prompt-reference-image")
+      ?.dispatchEvent(new Event("click"));
+    expect(onImageSelect).toHaveBeenCalledWith("/aiko.png");
+    editor.showResolvedComponents([
+      { kind: "scene", component_uid: "scene-a" },
+    ]);
+    await settle();
+    expect(loadComponent).toHaveBeenCalledWith(
+      "scene-a",
+      expect.any(AbortSignal),
+    );
+    editor.showResolvedComponents([
+      { kind: "character", component_uid: "character-a" },
+    ]);
+    await settle();
+    expect(
+      loadComponent.mock.calls.filter(([uid]) => uid === "character-a"),
+    ).toHaveLength(1);
+    editor.dispose();
+  });
+
+  it("shows prompt-reference empty/error states and cancels pending requests", async () => {
+    const emptyRoot = document.createElement("div");
+    const empty = new PromptModeEditor(emptyRoot, () => {}, {
+      loadComponent: vi.fn(async () => ({
+        component_uid: "character-a",
+        kind: "character",
+        name: "Aiko",
+        top_images: [],
+      })),
+    });
+    empty.render(components);
+    await settle();
+    expect(emptyRoot.textContent).toContain(
+      "Noch kein sichtbares Referenzbild",
+    );
+    const characterSelect = emptyRoot.querySelectorAll(
+      ".prompt-mode-row select",
+    )[1];
+    characterSelect.dispatchEvent(new Event("change"));
+    await settle();
+    expect(emptyRoot.textContent).toContain(
+      "Noch kein sichtbares Referenzbild",
+    );
+
+    const scene = empty.rows.get("scene");
+    scene.mode.value = "random";
+    empty.showResolvedComponents([{ kind: "scene", component_uid: "" }]);
+    empty.rows.set("scene", {
+      mode: scene.mode,
+      component: scene.component,
+      evidence: undefined,
+    });
+    empty.showResolvedComponents([{ kind: "scene", component_uid: "" }]);
+    empty.rows.delete("character");
+    emptyRoot
+      .querySelector(".prompt-mode-row select")
+      .dispatchEvent(new Event("change"));
+    empty.dispose();
+
+    const failedRoot = document.createElement("div");
+    let rejectPending;
+    const failed = new PromptModeEditor(failedRoot, () => {}, {
+      loadComponent: vi.fn(
+        () =>
+          new Promise((resolve, reject) => {
+            rejectPending = reject;
+          }),
+      ),
+    });
+    failed.render(components);
+    rejectPending(new Error("kaputt"));
+    await settle();
+    expect(failedRoot.textContent).toContain(
+      "Referenz konnte nicht geladen werden",
+    );
+    failed.render(components);
+    failed.dispose();
   });
 
   it("renders blueprint defaults and returns typed generation controls", () => {
@@ -78,10 +226,8 @@ describe("Playground browser components", () => {
 
     expect(controls.value()).toEqual({
       checkpoint: "model.safetensors",
-      blueprint_uid: "default-character",
-      blueprint_version: 3,
-      image_width: 1024,
-      image_height: 1024,
+      aspect_format: "1:1",
+      resolution_class: "1080",
       sampler: {
         seed: 7,
         steps: 24,
@@ -95,8 +241,9 @@ describe("Playground browser components", () => {
         cfg_max: 6.5,
         cfg_step: 0.1,
       },
-      loras: [],
     });
+    const cfgStep = root.querySelector('[data-field="cfg_step"]');
+    expect(cfgStep.closest("label").hidden).toBe(true);
     controls.applyIntent({
       checkpoint: "model.safetensors",
       sampler: "euler",
@@ -109,6 +256,10 @@ describe("Playground browser components", () => {
       cfg_max: 7,
       denoise: 0.8,
     });
+    expect(controls.applyIntent({ checkpoint: "missing" })).toEqual([
+      "checkpoint",
+    ]);
+    expect(cfgStep.closest("label").hidden).toBe(false);
     expect(controls.value().sampler).toEqual(
       expect.objectContaining({
         seed: 99,
@@ -124,12 +275,89 @@ describe("Playground browser components", () => {
     seedMode.value = "random";
     seedMode.dispatchEvent(new Event("change"));
     expect(seed.disabled).toBe(true);
-    expect(controls.value().sampler.randomize_seed).toBe(true);
+    expect(controls.draftValue().randomize_seed).toBe(true);
+    controls.useConcreteSeed(123);
+    expect(controls.value().sampler.seed).toBe(123);
+    expect(
+      controls.applyRenderSettings({
+        checkpoint: "model.safetensors",
+        sampler: "euler",
+        scheduler: "normal",
+        steps: 32,
+        cfg: 7.5,
+        denoise: 0.9,
+      }),
+    ).toEqual([]);
+    expect(controls.steps.value()).toEqual({ lower: 32, upper: 32 });
+    expect(controls.cfg.value()).toEqual({ lower: 7.5, upper: 7.5 });
+    expect(controls.applyParameter("sampler", "missing")).toBe(false);
+    expect(controls.applyParameter("unknown", "value")).toBe(false);
+    expect(controls.applyParameter("steps", 28)).toBe(true);
+    expect(controls.applyParameter("cfg", 6.2)).toBe(true);
+    expect(controls.applyParameter("denoise", 0.75)).toBe(true);
+    controls.steps.lowerRange.dispatchEvent(new Event("input"));
+    controls.cfg.upperRange.value = "7";
+    controls.cfg.upperRange.dispatchEvent(new Event("input"));
+    controls.renderGuidance(
+      {
+        parameter_values: [
+          {
+            parameter: "sampler",
+            value: "euler",
+            observed: {
+              expected_success_rate: 0.75,
+              image_count: 6,
+              review_count: 8,
+              relative_rank: 1,
+            },
+          },
+          {
+            parameter: "steps",
+            value: "32",
+            observed: {
+              expected_success_rate: 0.7,
+              image_count: 5,
+              review_count: 5,
+              relative_rank: 1,
+            },
+          },
+          {
+            parameter: "cfg",
+            value: "7.5",
+            observed: {
+              expected_success_rate: 0.7,
+              image_count: 5,
+              review_count: 5,
+              relative_rank: 1,
+            },
+          },
+        ],
+        recommendations: {
+          observed_parameters: {
+            settings: { sampler: "euler", steps: 32, cfg: 7.5 },
+          },
+          predicted_parameters: { settings: { steps: 30, cfg: 6.5 } },
+        },
+      },
+      "observed",
+    );
+    expect(
+      root.querySelector('[data-guidance-hint="sampler"]')?.textContent,
+    ).toContain("6 Bilder");
+    expect(controls.steps.evidence.children.length).toBeGreaterThan(0);
     controls.setBusy(true);
     expect(root.querySelector("select")?.disabled).toBe(true);
     controls.setBusy(false);
-    expect(seed.disabled).toBe(true);
+    expect(seed.disabled).toBe(false);
     controls.dispose();
+
+    const unrendered = new GenerationControls(document.createElement("div"));
+    expect(unrendered.applyRenderSettings({})).toEqual([
+      "checkpoint",
+      "sampler",
+      "scheduler",
+    ]);
+    unrendered.dispose();
   });
 
   it("synchronizes accessible dual range inputs and clamps values", () => {
@@ -158,15 +386,186 @@ describe("Playground browser components", () => {
     range.lowerRange.value = "9";
     range.lowerRange.dispatchEvent(new Event("input"));
     expect(range.value()).toEqual({ lower: 8, upper: 9 });
-    range.upperNumber.value = "3";
-    range.upperNumber.dispatchEvent(new Event("input"));
+    range.upperRange.value = "3";
+    range.upperRange.dispatchEvent(new Event("input"));
     expect(range.value()).toEqual({ lower: 3, upper: 8 });
     range.setDisabled(true);
-    expect(range.lowerNumber.disabled).toBe(true);
+    expect(range.lowerRange.disabled).toBe(true);
+    expect(range.element.querySelector('input[type="number"]')).toBeNull();
+    range.setEvidence(
+      [{ value: "invalid", observed: { relative_rank: 0.5 } }, { value: 4 }],
+      "observed",
+      "invalid",
+      null,
+    );
     range.dispose();
   });
 
-  it("applies active generation profiles and preserves ordered LoRAs", () => {
+  it("renders and applies all four guidance modes explicitly", () => {
+    const root = document.createElement("section");
+    const onApplySetup = vi.fn();
+    const onApplyParameter = vi.fn();
+    const panel = new RenderGuidancePanel(root, {
+      onApplySetup,
+      onApplyParameter,
+    });
+    const recommendation = {
+      applicable: true,
+      settings: {
+        checkpoint: "model",
+        sampler: "euler",
+        scheduler: "normal",
+        steps: 24,
+        cfg: 6.5,
+        denoise: 1,
+      },
+      evidence: {
+        expected_success_rate: 0.8,
+        image_count: 6,
+        review_count: 8,
+        confidence: "low",
+        jointly_observed: true,
+        relative_rank: 1,
+      },
+    };
+    panel.render({
+      current: { observed: recommendation, predicted: recommendation },
+      recommendations: {
+        observed_setup: recommendation,
+        observed_parameters: recommendation,
+        predicted_setup: recommendation,
+        predicted_parameters: recommendation,
+      },
+      parameter_values: Object.entries(recommendation.settings).map(
+        ([parameter, value]) => ({
+          parameter,
+          value: String(value),
+          applicable: true,
+          observed: recommendation.evidence,
+          predicted: recommendation.evidence,
+        }),
+      ),
+    });
+    const setupAction = /** @type {HTMLButtonElement} */ (
+      root.querySelector("[data-guidance-action='setup']")
+    );
+    setupAction.click();
+    expect(onApplySetup).toHaveBeenCalledWith(recommendation.settings);
+    let radios = root.querySelectorAll("input[type='radio']");
+    radios[1].checked = true;
+    radios[1].dispatchEvent(new Event("change", { bubbles: true }));
+    const parameterMode = /** @type {HTMLInputElement} */ (
+      root.querySelector('input[name="guidance-scope"][value="parameter"]')
+    );
+    parameterMode.checked = true;
+    parameterMode.dispatchEvent(new Event("change", { bubbles: true }));
+    const parameterAction = /** @type {HTMLButtonElement} */ (
+      root.querySelector("[data-guidance-action='parameter']")
+    );
+    expect(parameterAction).toBeInstanceOf(HTMLButtonElement);
+    expect(parameterAction.disabled).toBe(false);
+    parameterAction.click();
+    expect(onApplyParameter).toHaveBeenCalled();
+    expect(root.querySelector("[data-source='predicted']")).not.toBeNull();
+    panel.dispose();
+  });
+
+  it("renders guidance loading, empty, unavailable and neutral states safely", () => {
+    const root = document.createElement("section");
+    const onApplySetup = vi.fn();
+    const onApplyParameter = vi.fn();
+    const onModeChange = vi.fn();
+    const panel = new RenderGuidancePanel(root, {
+      onApplySetup,
+      onApplyParameter,
+      onModeChange,
+    });
+    panel.renderLoading();
+    expect(root.textContent).toContain("Evidenz wird berechnet");
+    panel.renderLoading("Neu laden");
+    expect(root.textContent).toContain("Neu laden");
+    root.dispatchEvent(new Event("change", { bubbles: true }));
+    root.dispatchEvent(new Event("click", { bubbles: true }));
+
+    panel.render({
+      current: {},
+      recommendations: {
+        observed_setup: {
+          applicable: false,
+          settings: {},
+          evidence: {
+            expected_success_rate: "invalid",
+            image_count: 0,
+            review_count: 0,
+            confidence: "unknown",
+            relative_rank: null,
+          },
+        },
+      },
+      parameter_values: null,
+    });
+    expect(root.textContent).toContain("nicht belastbar bewertbar");
+    const setup = root.querySelector("[data-guidance-action='setup']");
+    expect(setup.disabled).toBe(true);
+    setup.click();
+    setup.disabled = false;
+    setup.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(onApplySetup).not.toHaveBeenCalled();
+
+    const parameterMode = root.querySelector(
+      'input[name="guidance-scope"][value="parameter"]',
+    );
+    parameterMode.checked = true;
+    parameterMode.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(root.textContent).toContain("keine belastbare Empfehlung");
+    expect(onModeChange).toHaveBeenCalledWith("observed", "parameter");
+    panel.dispose();
+
+    const defaultPanel = new RenderGuidancePanel(
+      document.createElement("section"),
+    );
+    defaultPanel.render(null);
+    const noRecommendation = new RenderGuidancePanel(
+      document.createElement("section"),
+    );
+    noRecommendation.render({ current: {}, recommendations: {} });
+    expect(noRecommendation.root.textContent).toContain(
+      "keine belastbare Empfehlung",
+    );
+    noRecommendation.dispose();
+    defaultPanel.root.querySelector("[data-guidance-body]").remove();
+    defaultPanel.render({ current: {}, recommendations: {} });
+    const actionable = new RenderGuidancePanel(
+      document.createElement("section"),
+    );
+    actionable.render({
+      current: {},
+      recommendations: {
+        observed_setup: {
+          applicable: true,
+          settings: {},
+          evidence: {},
+        },
+        observed_parameters: {
+          applicable: true,
+          settings: { checkpoint: "model" },
+          evidence: {},
+        },
+      },
+      parameter_values: [],
+    });
+    actionable.root.querySelector("[data-guidance-action='setup']").click();
+    const actionableParameter = actionable.root.querySelector(
+      'input[name="guidance-scope"][value="parameter"]',
+    );
+    actionableParameter.checked = true;
+    actionableParameter.dispatchEvent(new Event("change", { bubbles: true }));
+    actionable.root.querySelector("[data-guidance-action='parameter']").click();
+    actionable.dispose();
+    defaultPanel.dispose();
+  });
+
+  it("ignores dormant profiles and keeps direct generator defaults", () => {
     const root = document.createElement("div");
     const controls = new GenerationControls(root);
     controls.render({
@@ -174,6 +573,13 @@ describe("Playground browser components", () => {
       samplers: ["euler", "dpmpp_2m"],
       schedulers: ["normal", "karras"],
       loras: ["style.safetensors"],
+      lora_definitions: [
+        {
+          lora_uid: "lora-style",
+          provider_name: "style.safetensors",
+          content_level: "lewd",
+        },
+      ],
       defaults: {
         checkpoint: "model-a.safetensors",
         seed: 7,
@@ -194,41 +600,45 @@ describe("Playground browser components", () => {
       ],
     });
 
+    expect(root.querySelector('[data-field="profile_uid"]')).toBeNull();
     expect(controls.value()).toEqual(
       expect.objectContaining({
-        checkpoint: "model-b.safetensors",
-        loras: [
-          {
-            name: "style.safetensors",
-            model_strength: 0.8,
-            clip_strength: 0.6,
-          },
-        ],
-        blueprint_uid: "default-character",
-        blueprint_version: 3,
-        image_width: 832,
-        image_height: 1216,
-        sampler: expect.objectContaining({
-          seed: 42,
-          steps: 24,
-          steps_max: 36,
-          cfg: 4.5,
-          cfg_max: 7,
-          randomize_seed: false,
-        }),
+        checkpoint: "model-a.safetensors",
+        aspect_format: "1:1",
+        resolution_class: "1080",
       }),
     );
     controls.applyIntent({
-      generationProfileUid: "profile-active",
       steps_min: "invalid",
       cfg_max: 8,
     });
     expect(controls.value().sampler).toEqual(
-      expect.objectContaining({ steps: 24, cfg_max: 8 }),
+      expect.objectContaining({ steps: 20, cfg_max: 8 }),
     );
-    const profile = root.querySelector('[data-field="profile_uid"]');
-    profile.value = "";
-    profile.dispatchEvent(new Event("change"));
+    controls.dispose();
+  });
+
+  it("falls back to a real capability when a blueprint default is stale", () => {
+    const root = document.createElement("div");
+    const controls = new GenerationControls(root);
+    controls.render({
+      checkpoints: ["available.safetensors"],
+      samplers: ["euler"],
+      schedulers: ["normal"],
+      defaults: {
+        checkpoint: "missing.safetensors",
+        sampler: "missing",
+        scheduler: "missing",
+      },
+    });
+
+    expect(controls.draftValue()).toEqual(
+      expect.objectContaining({
+        checkpoint: "available.safetensors",
+        sampler: "euler",
+        scheduler: "normal",
+      }),
+    );
     controls.dispose();
   });
 
@@ -236,7 +646,8 @@ describe("Playground browser components", () => {
     const root = document.createElement("div");
     const state = document.createElement("span");
     const onChange = vi.fn();
-    const preview = new DraftPreview(root, state, onChange);
+    const onImageSelect = vi.fn();
+    const preview = new DraftPreview(root, state, onChange, onImageSelect);
     expect(preview.generationPayload({})).toBeNull();
     expect(preview.promptPayload()).toBeNull();
 
@@ -247,6 +658,15 @@ describe("Playground browser components", () => {
         negative_prompt: "negative",
         positive_atoms: [{ text: "positive", weight: 1 }],
         negative_atoms: [{ text: "negative", weight: 1 }],
+        groups: [
+          {
+            component_uid: "character-a",
+            kind: "character",
+            name: "Aiko",
+            positive_atoms: [{ text: "positive", weight: 1 }],
+            negative_atoms: [{ text: "negative", weight: 1 }],
+          },
+        ],
         revision_uids: ["revision-character-a"],
         draft_overridden: false,
       },
@@ -270,14 +690,45 @@ describe("Playground browser components", () => {
       negative_prompt: "server negative",
     });
     expect(root.textContent).toContain("server edited");
+    preview.renderEvidence({
+      prompt_match: {
+        image_uid: "shared-image",
+        image_url: "/image/shared",
+        average_rating: 9,
+        rating_count: 4,
+      },
+      sampler_match: {
+        image_uid: "shared-image",
+        image_url: "/image/shared",
+        average_rating: 9,
+        rating_count: 4,
+      },
+    });
+    expect(root.querySelectorAll(".draft-evidence-card")).toHaveLength(1);
+    expect(root.textContent).toContain("Prompt-ähnlich · Sampler-ähnlich");
+    expect(root.querySelector(".draft-evidence-card img")?.alt).toContain(
+      "Prompt-ähnlich",
+    );
+    preview.renderEvidence({ prompt_match: null, sampler_match: null });
+    expect(root.textContent).toContain("Noch kein passender Bildtreffer");
+    preview.renderEvidence({
+      prompt_matches: [
+        { image_uid: "prompt-only", image_url: "/prompt.png" },
+        { image_url: "/ignored.png" },
+      ],
+      sampler_matches: [
+        { image_uid: "sampler-only", image_url: "/sampler.png" },
+      ],
+    });
+    expect(root.querySelectorAll(".draft-evidence-carousel")).toHaveLength(2);
+    root.querySelector(".evidence-carousel-image").click();
+    expect(onImageSelect).toHaveBeenCalledWith("/prompt.png");
 
     expect(
       preview.generationPayload({
         checkpoint: "model.safetensors",
-        blueprint_uid: "default-character",
-        blueprint_version: 3,
-        image_width: 768,
-        image_height: 1152,
+        aspect_format: "2:3",
+        resolution_class: "1080",
         sampler: { seed: 1 },
         loras: [{ name: "style.safetensors" }],
       }),
@@ -297,12 +748,47 @@ describe("Playground browser components", () => {
         negative_prompt: "negative",
         positive_atoms: [{ text: "positive", weight: 1 }],
         negative_atoms: [{ text: "negative", weight: 1 }],
+        groups: [],
         draft_overridden: true,
       },
       "draft-2",
     );
     expect(preview.generationPayload({})).toBeNull();
     preview.dispose();
+
+    const defaultImageRoot = document.createElement("div");
+    const defaultState = document.createElement("span");
+    const defaultImagePreview = new DraftPreview(
+      defaultImageRoot,
+      defaultState,
+    );
+    defaultImagePreview.render(
+      {
+        components: [component("character-default", "character", "Default")],
+        groups: [
+          {
+            component_uid: "character-default",
+            kind: "character",
+            name: "Default",
+            positive_atoms: [{ text: "tag", weight: 1 }],
+            negative_atoms: [],
+          },
+        ],
+      },
+      "draft-default",
+    );
+    defaultImageRoot
+      .querySelector("[data-atom-text]")
+      .dispatchEvent(new Event("input"));
+    defaultImagePreview.renderEvidence({
+      prompt_match: {
+        image_uid: "default-image",
+        image_url: "/default.png",
+      },
+    });
+    defaultImageRoot.querySelector(".evidence-carousel-image").click();
+    defaultImagePreview.evidenceCarousel.onSelect({ image_url: "" });
+    defaultImagePreview.dispose();
 
     const defaultRoot = document.createElement("div");
     const defaultPreview = new DraftPreview(
@@ -314,6 +800,14 @@ describe("Playground browser components", () => {
         components,
         positive_atoms: [{ text: "positive", weight: 1 }],
         negative_atoms: [],
+        groups: [
+          {
+            kind: "character",
+            name: "Aiko",
+            positive_atoms: [{ text: "positive", weight: 1 }],
+            negative_atoms: [],
+          },
+        ],
       },
       "draft-default",
     );
@@ -321,6 +815,29 @@ describe("Playground browser components", () => {
       .querySelector("[data-atom-text]")
       .dispatchEvent(new Event("input"));
     defaultPreview.dispose();
+
+    const sceneOnly = new DraftPreview(
+      document.createElement("div"),
+      document.createElement("span"),
+    );
+    sceneOnly.render(
+      {
+        components: [component("scene-a", "scene", "Scene")],
+        positive_atoms: [{ text: "scene", weight: 1 }],
+        negative_atoms: [],
+        groups: [
+          {
+            kind: "scene",
+            name: "Scene",
+            positive_atoms: [{ text: "scene", weight: 1 }],
+            negative_atoms: [],
+          },
+        ],
+      },
+      "draft-scene",
+    );
+    expect(sceneOnly.generationPayload({})).toBeNull();
+    sceneOnly.dispose();
   });
 
   it("renders separate top two- and three-component evidence", () => {
@@ -360,13 +877,18 @@ describe("Playground browser components", () => {
     expect(root.textContent).toContain("Unbenannte Kombination");
     expect(root.textContent).toContain("Kein Bildbeispiel");
     expect(root.querySelector("img")?.getAttribute("src")).toBe("best.png");
-    expect(root.querySelectorAll("img")).toHaveLength(4);
+    expect(root.querySelectorAll("img")).toHaveLength(2);
     expect(root.querySelector("img[src='ignored.png']")).toBeNull();
     const firstCard = root.querySelector(".playground-combination-card");
     expect(firstCard?.getAttribute("data-image-count")).toBe("3");
+    firstCard?.querySelector(".evidence-carousel-control.is-next")?.click();
+    expect(firstCard?.querySelector("img")?.getAttribute("src")).toBe(
+      "second.png",
+    );
     const next = root.querySelector("[data-carousel-direction='next']");
     const previous = root.querySelector("[data-carousel-direction='previous']");
     const track = root.querySelector("[data-carousel-track]");
+    track?.dispatchEvent(touchEvent("touchend", "changedTouches", 50));
     next?.dispatchEvent(new Event("click", { bubbles: true }));
     expect(track?.getAttribute("data-carousel-index")).toBe("1");
     if (!(track instanceof HTMLElement)) throw new Error("track missing");
@@ -377,14 +899,28 @@ describe("Playground browser components", () => {
     expect(track.scrollTo).toHaveBeenCalled();
     previous?.dispatchEvent(new Event("click", { bubbles: true }));
     expect(track?.getAttribute("data-carousel-index")).toBe("2");
-    expect(
-      root
-        .querySelectorAll("[data-carousel-direction]")[2]
-        .hasAttribute("hidden"),
-    ).toBe(true);
-    root
-      .querySelectorAll("[data-carousel-direction]")[2]
-      .dispatchEvent(new Event("click", { bubbles: true }));
+    track.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, deltaX: 40, deltaY: 0 }),
+    );
+    expect(track?.getAttribute("data-carousel-index")).toBe("0");
+    track.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, deltaX: -40, deltaY: 0 }),
+    );
+    expect(track?.getAttribute("data-carousel-index")).toBe("2");
+    next?.dispatchEvent(new Event("click", { bubbles: true }));
+    track.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, deltaX: 0, deltaY: 40 }),
+    );
+    expect(track?.getAttribute("data-carousel-index")).toBe("0");
+    track.dispatchEvent(touchEvent("touchstart", "touches", 100));
+    track.dispatchEvent(touchEvent("touchmove", "touches", 70));
+    track.dispatchEvent(touchEvent("touchend", "changedTouches", 50));
+    expect(track?.getAttribute("data-carousel-index")).toBe("1");
+    track.dispatchEvent(touchEvent("touchstart", "touches", 50));
+    track.dispatchEvent(touchEvent("touchmove", "touches", 80));
+    track.dispatchEvent(touchEvent("touchend", "changedTouches", 100));
+    expect(track?.getAttribute("data-carousel-index")).toBe("0");
+    expect(root.querySelectorAll(".playground-character-row")).toHaveLength(1);
     const carouselText = document.createTextNode("carousel plain");
     root.querySelector(".playground-combination-group")?.append(carouselText);
     carouselText.dispatchEvent(new Event("click", { bubbles: true }));
@@ -397,6 +933,36 @@ describe("Playground browser components", () => {
     view.dispose();
     expect(root.children).toHaveLength(0);
   });
+
+  it("renders independent two- and three-component rows per character", () => {
+    const root = document.createElement("div");
+    const view = new TopCombinationsView(root, { open: vi.fn() });
+
+    view.render({
+      characters: [
+        {
+          character_uid: "character-a",
+          character_name: "Aiko",
+          two_component: [{ label: "Aiko + Rooftop" }],
+          three_component: [{ label: "Aiko + Rooftop + Uniform" }],
+        },
+        {
+          character_uid: "character-b",
+          character_name: "Hina",
+          two_component: [{ label: "Hina + Park" }],
+          three_component: [],
+        },
+      ],
+    });
+
+    expect(
+      [...root.querySelectorAll(".playground-character-row h3")].map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(["Aiko", "Hina", "Aiko"]);
+    expect(root.querySelectorAll("[data-card-rail]")).toHaveLength(3);
+    view.dispose();
+  });
 });
 
 function component(componentUid, kind, name) {
@@ -408,13 +974,19 @@ function component(componentUid, kind, name) {
   };
 }
 
+async function settle() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function generationProfile(overrides = {}) {
   return {
     profile_uid: "profile-a",
     name: "Editorial",
     checkpoint: "model-b.safetensors",
     blueprint_uid: "default-character",
-    blueprint_version: 3,
+    blueprint_version: 4,
+    output_tier: "full_hd_1080",
     sampler: "dpmpp_2m",
     scheduler: "karras",
     seed_mode: "fixed",
@@ -432,10 +1004,20 @@ function generationProfile(overrides = {}) {
         name: "style.safetensors",
         model_strength: 0.8,
         clip_strength: 0.6,
+        lora_uid: "lora-style",
+        content_level: "lewd",
       },
     ],
     archived: false,
     is_default: false,
     ...overrides,
   };
+}
+
+function touchEvent(type, property, clientX) {
+  const event = new Event(type, { bubbles: true });
+  Object.defineProperty(event, property, {
+    value: [{ clientX, clientY: 0 }],
+  });
+  return event;
 }

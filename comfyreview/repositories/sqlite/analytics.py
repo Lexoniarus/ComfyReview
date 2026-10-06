@@ -8,6 +8,7 @@ from typing import Any
 
 from comfyreview.application.analytics import (
     AnalyticsImage,
+    CharacterCombinationGroup,
     ObservedPromptCombination,
     PromptMatchPreview,
     PromptTokenStatistic,
@@ -23,6 +24,8 @@ _PARAMETER_COLUMNS = {
     "cfg": "ROUND(generation.cfg, 1)",
     "sampler": "generation.sampler",
     "scheduler": "generation.scheduler",
+    "aspect_format": "geometry.aspect_format",
+    "resolution_class": "geometry.resolution_class",
 }
 
 
@@ -258,6 +261,41 @@ class SqliteAnalyticsRepository:
         limit: int,
     ) -> tuple[ObservedPromptCombination, ...]:
         """Aggregate canonical character/scene[/outfit] memberships."""
+        combinations = self._observed_combinations(combo_size)
+        return tuple(combinations[:limit])
+
+    def list_observed_combinations_by_character(
+        self,
+        *,
+        combo_size: int,
+        limit_per_character: int,
+    ) -> tuple[CharacterCombinationGroup, ...]:
+        """Rank combinations independently for every canonical character."""
+        grouped: dict[str, list[ObservedPromptCombination]] = defaultdict(list)
+        for combination in self._observed_combinations(combo_size):
+            grouped[combination.component_uids[0]].append(combination)
+        groups = [
+            CharacterCombinationGroup(
+                character_uid=character_uid,
+                character_name=combinations[0].component_names[0],
+                combinations=tuple(combinations[:limit_per_character]),
+            )
+            for character_uid, combinations in grouped.items()
+            if combinations
+        ]
+        groups.sort(
+            key=lambda item: (
+                item.character_name.casefold(),
+                item.character_uid,
+            )
+        )
+        return tuple(groups)
+
+    def _observed_combinations(
+        self,
+        combo_size: int,
+    ) -> list[ObservedPromptCombination]:
+        """Aggregate and rank all canonical combinations of one size."""
         connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
@@ -377,7 +415,7 @@ class SqliteAnalyticsRepository:
             ),
             reverse=True,
         )
-        return tuple(combinations[:limit])
+        return combinations
 
     def latest_review_sequence(self) -> int:
         """Read the append-only review-event frontier."""
@@ -422,6 +460,8 @@ class SqliteAnalyticsRepository:
                         ON generation.id = image.generation_id
                     JOIN image_review_summary AS summary
                         ON summary.image_id = image.id
+                    LEFT JOIN image_geometry_projection AS geometry
+                        ON geometry.image_id = image.id
                     WHERE image.deleted_at IS NULL
                       AND {content_visibility_predicate()}
                       AND CAST({expression} AS TEXT) IN ({placeholders})

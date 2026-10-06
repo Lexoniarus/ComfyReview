@@ -12,21 +12,32 @@ from fastapi.staticfiles import StaticFiles
 
 from comfyreview.api.v2_presenters import ImageResponseMapper
 from comfyreview.application import (
+    AnalyticsCoverageService,
     AnalyticsReportService,
     AnalyticsService,
     ArenaService,
     CanonicalSchemaLifecycle,
     CatalogEvidenceService,
+    CompiledLoraGraphPolicy,
     CompositionAnalyticsService,
     CurationService,
     DraftOverridePolicy,
+    GenerationLifecycleCoordinator,
+    GenerationLifecycleWorker,
     GenerationOutputCollector,
-    GenerationProfileService,
+    GenerationOutputRecoveryService,
     GenerationQueryService,
     GenerationReconciliationService,
     GenerationService,
+    ImageContentLevelService,
     ImageContextQueryService,
+    ImageGeneratorHandoffService,
+    ImageGeometryProjectionService,
+    LoraCatalogService,
+    LoraDraftSelectionService,
+    LoraSelectionContentPolicy,
     OutputImageCatalog,
+    PlaygroundEvidenceService,
     PlaygroundGenerationPolicy,
     PlaygroundGenerationSweepPolicy,
     PlaygroundService,
@@ -36,6 +47,7 @@ from comfyreview.application import (
     PromptRenderer,
     PromptSelectionPolicy,
     RenderAnalyticsService,
+    RenderGuidanceService,
     ReviewCandidateService,
     ReviewHistoryService,
     ReviewService,
@@ -53,12 +65,13 @@ from comfyreview.observability import (
 from comfyreview.providers import (
     CanonicalOutputImageCatalog,
     LocalCurationFileManager,
+    LocalGenerationOutputRecoverySource,
     LocalGenerationOutputSource,
     NativeComfyUiProvider,
     OutputFileUrlMapper,
+    PngHeaderDimensionReader,
     UrlLibJsonTransport,
     UuidGenerationIdentitySource,
-    UuidGenerationProfileIdentitySource,
     UuidPromptIdentitySource,
 )
 from comfyreview.repositories.filesystem import (
@@ -68,6 +81,7 @@ from comfyreview.repositories.filesystem import (
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
+    SqliteAnalyticsCoverageRepository,
     SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
@@ -75,14 +89,19 @@ from comfyreview.repositories.sqlite import (
     SqliteCompositionAnalyticsRepository,
     SqliteCurationRepository,
     SqliteGenerationOutputRepository,
-    SqliteGenerationProfileRepository,
     SqliteGenerationQueryRepository,
     SqliteGenerationRepository,
+    SqliteImageContentLevelRepository,
     SqliteImageContextRepository,
     SqliteImageFileRepository,
+    SqliteImageGeneratorHandoffRepository,
+    SqliteImageGeometryRepository,
+    SqliteLoraCatalogRepository,
     SqliteOutputImageRepository,
+    SqlitePlaygroundEvidenceRepository,
     SqlitePromptCatalogRepository,
     SqliteRenderAnalyticsRepository,
+    SqliteRenderEvidenceRepository,
     SqliteReviewCandidateRepository,
     SqliteReviewHistoryRepository,
     SqliteReviewRepository,
@@ -104,6 +123,9 @@ from services.output_file_service import OutputFileService
 from services.playground_discovery_service import PlaygroundDiscoveryService
 from services.playground_generator_ui.ports import PlaygroundGeneratorState
 from services.playground_label_service import PromptLabelService
+from services.playground_render_guidance_service import (
+    PlaygroundRenderGuidanceService,
+)
 from services.prompt_catalog_view_service import PromptCatalogViewService
 
 
@@ -116,15 +138,20 @@ class ApplicationContainer:
     output_images: OutputImageCatalog
     file_urls: OutputFileUrlMapper
     image_contexts: ImageContextQueryService
+    image_generator_handoffs: ImageGeneratorHandoffService
     scope_facets: ScopeFacetService
     review_candidates: ReviewCandidateService
     image_responses: ImageResponseMapper
     analytics_service: AnalyticsService
     analytics_reports: AnalyticsReportService
     analytics_pages: AnalyticsPageService
+    analytics_coverage: AnalyticsCoverageService
+    render_guidance: RenderGuidanceService
+    playground_render_guidance: PlaygroundRenderGuidanceService
     playground_discovery: PlaygroundDiscoveryService
     playground_ui_state: PlaygroundGeneratorState
     generation_service: GenerationService
+    generation_worker: GenerationLifecycleWorker
     generation_queries: GenerationQueryService
     generation_reconciliation: GenerationReconciliationService
     prompt_catalog_service: PromptCatalogService
@@ -135,14 +162,17 @@ class ApplicationContainer:
     playground_service: PlaygroundService
     playground_submission_service: PlaygroundSubmissionService
     playground_generation_sweeps: PlaygroundGenerationSweepPolicy
+    playground_evidence: PlaygroundEvidenceService
     workflow_defaults: WorkflowDefaultsService
     review_service: ReviewService
     review_history: ReviewHistoryService
     arena_service: ArenaService
     curation_service: CurationService
     workspace_preferences: WorkspacePreferencesService
-    generation_profiles: GenerationProfileService
     runtime_diagnostics: RuntimeDiagnosticsService
+    lora_catalog: LoraCatalogService
+    lora_drafts: LoraDraftSelectionService
+    image_content_levels: ImageContentLevelService
 
 
 def _prepare_directories(settings: Settings) -> None:
@@ -172,9 +202,10 @@ def build_application_container(
     file_urls = OutputFileUrlMapper(configured.output_root)
     prompt_renderer = PromptRenderer()
     draft_overrides = DraftOverridePolicy(prompt_renderer)
-    profile_repository = SqliteGenerationProfileRepository(
-        configured.canonical_database_path
+    lora_catalog = LoraCatalogService(
+        SqliteLoraCatalogRepository(configured.canonical_database_path)
     )
+    lora_content = LoraSelectionContentPolicy(lora_catalog)
     preferences_repository = SqliteWorkspacePreferencesRepository(
         configured.canonical_database_path
     )
@@ -206,6 +237,15 @@ def build_application_container(
     render_analytics = RenderAnalyticsService(
         SqliteRenderAnalyticsRepository(configured.canonical_database_path)
     )
+    render_guidance = RenderGuidanceService(
+        SqliteRenderEvidenceRepository(configured.canonical_database_path)
+    )
+    analytics_coverage = AnalyticsCoverageService(
+        repository=SqliteAnalyticsCoverageRepository(
+            configured.canonical_database_path
+        ),
+        render_guidance=render_guidance,
+    )
     composition_analytics = CompositionAnalyticsService(
         SqliteCompositionAnalyticsRepository(
             configured.canonical_database_path
@@ -220,29 +260,51 @@ def build_application_container(
     blueprints = JsonWorkflowBlueprintRepository(
         configured.workflows_directory
     )
+    image_geometry = ImageGeometryProjectionService(
+        SqliteImageGeometryRepository(configured.canonical_database_path),
+        PngHeaderDimensionReader(configured.output_root),
+    )
+    generation_repository = SqliteGenerationRepository(
+        configured.canonical_database_path
+    )
+    generation_output_repository = SqliteGenerationOutputRepository(
+        configured.canonical_database_path
+    )
     generation_output_collector = GenerationOutputCollector(
         comfyui=comfyui_provider,
         source=LocalGenerationOutputSource(configured.output_root),
-        repository=SqliteGenerationOutputRepository(
-            configured.canonical_database_path
-        ),
+        repository=generation_output_repository,
+        image_geometry=image_geometry,
     )
     generation_service = GenerationService(
         blueprints=blueprints,
         compiler=WorkflowCompiler(),
-        generations=SqliteGenerationRepository(
-            configured.canonical_database_path
-        ),
+        generations=generation_repository,
         comfyui=comfyui_provider,
         outputs=generation_output_collector,
         identities=UuidGenerationIdentitySource(),
+        lora_content=lora_content,
+        lora_graph_policy=CompiledLoraGraphPolicy(),
     )
     generation_reconciliation = GenerationReconciliationService(
-        generations=SqliteGenerationRepository(
-            configured.canonical_database_path
-        ),
+        generations=generation_repository,
         comfyui=comfyui_provider,
         outputs=generation_output_collector,
+        recovery=GenerationOutputRecoveryService(
+            source=LocalGenerationOutputRecoverySource(configured.output_root),
+            repository=generation_output_repository,
+            collector=generation_output_collector,
+        ),
+    )
+    generation_worker = GenerationLifecycleWorker(
+        GenerationLifecycleCoordinator(
+            generations=generation_repository,
+            observer=generation_service,
+        )
+    )
+    playground_discovery = PlaygroundDiscoveryService(
+        comfyui_provider,
+        capability_cache,
     )
     return ApplicationContainer(
         settings=configured,
@@ -252,6 +314,13 @@ def build_application_container(
         output_images=output_images,
         file_urls=file_urls,
         image_contexts=image_contexts,
+        image_generator_handoffs=ImageGeneratorHandoffService(
+            images=image_contexts,
+            repository=SqliteImageGeneratorHandoffRepository(
+                configured.canonical_database_path
+            ),
+            capabilities=comfyui_provider,
+        ),
         scope_facets=ScopeFacetService(
             SqliteScopeFacetRepository(configured.canonical_database_path)
         ),
@@ -260,6 +329,7 @@ def build_application_container(
                 configured.canonical_database_path
             ),
             draft_overrides,
+            preferences_repository,
         ),
         image_responses=ImageResponseMapper(
             files=SqliteImageFileRepository(
@@ -276,9 +346,12 @@ def build_application_container(
             composition_analytics=composition_analytics,
             image_url=file_urls.existing_url,
         ),
-        playground_discovery=PlaygroundDiscoveryService(
-            comfyui_provider,
-            capability_cache,
+        analytics_coverage=analytics_coverage,
+        render_guidance=render_guidance,
+        playground_discovery=playground_discovery,
+        playground_render_guidance=PlaygroundRenderGuidanceService(
+            guidance=render_guidance,
+            discovery=playground_discovery,
         ),
         playground_ui_state=PlaygroundGeneratorStateRepository(
             head_path=(
@@ -293,6 +366,7 @@ def build_application_container(
             ),
         ),
         generation_service=generation_service,
+        generation_worker=generation_worker,
         generation_queries=GenerationQueryService(
             SqliteGenerationQueryRepository(configured.canonical_database_path)
         ),
@@ -315,11 +389,16 @@ def build_application_container(
             generation=generation_service,
             policy=PlaygroundGenerationPolicy(
                 blueprint_uid="default-character",
-                blueprint_version=3,
+                blueprint_version=4,
                 expected_output_roles=("primary",),
             ),
         ),
         playground_generation_sweeps=PlaygroundGenerationSweepPolicy(),
+        playground_evidence=PlaygroundEvidenceService(
+            SqlitePlaygroundEvidenceRepository(
+                configured.canonical_database_path
+            )
+        ),
         workflow_defaults=WorkflowDefaultsService(blueprints),
         review_service=review_service,
         review_history=ReviewHistoryService(
@@ -340,12 +419,7 @@ def build_application_container(
         ),
         workspace_preferences=WorkspacePreferencesService(
             preferences_repository,
-            profile_repository,
             curation_set_keys=configured.curation_set_keys,
-        ),
-        generation_profiles=GenerationProfileService(
-            profile_repository,
-            UuidGenerationProfileIdentitySource(),
         ),
         runtime_diagnostics=RuntimeDiagnosticsService(
             RuntimeConfigurationSnapshot(
@@ -367,6 +441,15 @@ def build_application_container(
             comfyui_provider,
             capability_cache,
         ),
+        lora_catalog=lora_catalog,
+        lora_drafts=LoraDraftSelectionService(
+            lora_catalog, preferences_repository
+        ),
+        image_content_levels=ImageContentLevelService(
+            SqliteImageContentLevelRepository(
+                configured.canonical_database_path
+            )
+        ),
     )
 
 
@@ -380,7 +463,11 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
         _prepare_directories(resources.settings)
         resources.canonical_schema.prepare_startup()
-        yield
+        resources.generation_worker.start()
+        try:
+            yield
+        finally:
+            resources.generation_worker.stop()
 
     configure_logging()
     application = FastAPI(title="Comfy Review", lifespan=lifespan)

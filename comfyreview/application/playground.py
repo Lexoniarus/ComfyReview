@@ -7,11 +7,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
+from comfyreview.application.image_queries import ImageContext
 from comfyreview.application.prompt_catalog import (
     PromptComponent,
 )
 from comfyreview.application.workspace_settings import (
-    CONTENT_LEVEL_TAGS,
     ContentLevel,
     PreferencesRepository,
 )
@@ -101,15 +101,7 @@ class PromptContentPolicy:
 
     @classmethod
     def _level(cls, component: PromptComponent) -> ContentLevel:
-        tags = {tag.strip().lower() for tag in component.tags}
-        levels = {
-            level for tag, level in CONTENT_LEVEL_TAGS.items() if tag in tags
-        }
-        if len(levels) > 1:
-            raise PromptSelectionError(
-                f"component has conflicting content levels: {component.component_uid}"
-            )
-        return next(iter(levels), ContentLevel.STANDARD)
+        return component.content_level
 
 
 class PromptCatalogReader(Protocol):
@@ -624,6 +616,45 @@ class PlaygroundService:
         return PlaygroundDraft(
             selection=selection,
             prompt=self._renderer.render(selection),
+        )
+
+    def prepare_image_snapshot(
+        self,
+        image: ImageContext,
+        *,
+        overrides: PromptDraftOverrides | None = None,
+    ) -> PlaygroundDraft:
+        """Load an authoritative visible image prompt without inventing revisions."""
+        revision_uids = tuple(scope.revision_uid for scope in image.scopes)
+        components = (
+            self._catalog.list_components_for_revisions(revision_uids)
+            if revision_uids
+            else ()
+        )
+        if components:
+            self._require_allowed(components)
+        positive = prompt_atom_usages_from_text(image.prompt_snapshot.positive)
+        negative = prompt_atom_usages_from_text(image.prompt_snapshot.negative)
+        if overrides is not None:
+            positive = overrides.positive_atoms or positive
+            negative = overrides.negative_atoms or negative
+        positive_text, negative_text = self._renderer.render_atoms(
+            positive, negative
+        )
+        return PlaygroundDraft(
+            selection=PromptSelection(components),
+            prompt=RenderedPrompt(
+                positive_text=positive_text,
+                negative_text=negative_text,
+                notes="historical image snapshot",
+                revision_uids=revision_uids,
+                draft_overridden=(
+                    image.prompt_snapshot.draft_overridden
+                    or overrides is not None
+                ),
+                positive_atoms=positive,
+                negative_atoms=negative,
+            ),
         )
 
     def confirm_draft(

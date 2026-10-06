@@ -12,6 +12,7 @@ from comfyreview.application import (
     AnalyticsReportService,
     AnalyticsService,
     CalculatedRenderRecommendation,
+    CharacterCombinationGroup,
     CollectionPage,
     CompositionAnalyticsService,
     CompositionStatistic,
@@ -67,6 +68,10 @@ class _AnalyticsRepository:
 
     def list_observed_combinations(self, **values):
         self.calls.append(("observed", values))
+        return ()
+
+    def list_observed_combinations_by_character(self, **values):
+        self.calls.append(("observed-by-character", values))
         return ()
 
     def latest_review_sequence(self):
@@ -257,11 +262,20 @@ def test_analytics_service_handles_empty_and_observed_queries() -> None:
     assert service.best_images_for_combos(()) == {}
     assert service.best_images_for_parameter("steps", ()) == {}
     assert service.observed_combinations(combo_size=2, limit=-1) == ()
+    assert (
+        service.observed_combinations_by_character(
+            combo_size=3,
+            limit_per_character=-1,
+        )
+        == ()
+    )
     assert service.latest_review_sequence() == 9
     assert service.token_statistics_for(()) == {}
     assert service.best_prompt_match(()) is None
     with pytest.raises(ValueError, match="combo_size must be 2 or 3"):
         service.observed_combinations(combo_size=4)
+    with pytest.raises(ValueError, match="combo_size must be 2 or 3"):
+        service.observed_combinations_by_character(combo_size=4)
 
 
 def test_analytics_service_normalizes_selected_tokens_and_matches() -> None:
@@ -761,6 +775,10 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         limit_per_value=3,
     )
     observed = repository.list_observed_combinations(combo_size=3, limit=8)
+    observed_by_character = repository.list_observed_combinations_by_character(
+        combo_size=3,
+        limit_per_character=8,
+    )
     selected = repository.list_selected_prompt_token_statistics(
         ("hero", "missing"),
         model_branch="sdxl",
@@ -807,6 +825,13 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
             ),
         ),
     )
+    assert observed_by_character == (
+        CharacterCombinationGroup(
+            character_uid="component-1",
+            character_name="Alice",
+            combinations=observed,
+        ),
+    )
     assert repository.latest_review_sequence() == 1
     with pytest.raises(ValueError, match="Unsupported analytics parameter"):
         repository.list_best_images_for_parameter(
@@ -825,9 +850,7 @@ def test_sqlite_analytics_apply_workspace_content_visibility(
     _insert_analytics_fixture(database_path, tmp_path)
     with sqlite3.connect(database_path) as connection:
         connection.execute(
-            "UPDATE prompt_components SET tags = ? "
-            "WHERE component_uid = 'component-3'",
-            ('["nsfw_level_nude"]',),
+            "UPDATE generations SET inferred_content_level = 'nude'"
         )
         connection.commit()
 
@@ -1018,6 +1041,14 @@ def test_focused_sqlite_analytics_uses_normalized_render_facts(
         connection.execute(
             "UPDATE generations SET combo_key = 'not-a-render-contract'"
         )
+        connection.execute(
+            "INSERT INTO image_geometry_projection("
+            "image_id, actual_width, actual_height, aspect_format, "
+            "resolution_class, target_width, target_height, is_exact, "
+            "classifier_version, projected_at"
+            ") SELECT id, 2160, 3240, '2:3', '2160', 2160, 3240, 1, 1, "
+            "'2026-10-05T00:00:00Z' FROM images WHERE image_uid = 'image-1'"
+        )
 
     render_repository = SqliteRenderAnalyticsRepository(database_path)
     recommendations = render_repository.list_calculated_recommendations(
@@ -1036,6 +1067,14 @@ def test_focused_sqlite_analytics_uses_normalized_render_facts(
     )
     values = render_repository.list_parameter_values(
         RenderParameter.STEPS,
+        model="sdxl",
+        minimum_samples=1,
+        success_threshold=4,
+        delete_weight=5,
+        limit=10,
+    )
+    geometry_values = render_repository.list_parameter_values(
+        RenderParameter.ASPECT_FORMAT,
         model="sdxl",
         minimum_samples=1,
         success_threshold=4,
@@ -1067,5 +1106,7 @@ def test_focused_sqlite_analytics_uses_normalized_render_facts(
     assert setups.entries[0].best_images[0].png_path == tmp_path / "image.png"
     assert values.entries[0].parameter is RenderParameter.STEPS
     assert values.entries[0].value == "20"
+    assert geometry_values.entries[0].value == "2:3"
+    assert geometry_values.entries[0].best_images[0].image_uid == "image-1"
     assert combinations.entries[0].composition_uid == "composition-1"
     assert composition_setups == setups.entries

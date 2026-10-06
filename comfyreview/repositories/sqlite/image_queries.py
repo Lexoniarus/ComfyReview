@@ -7,6 +7,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from comfyreview.application.content_classification import (
+    ImageContentClassification,
+)
+from comfyreview.application.generation_geometry import (
+    AspectFormat,
+    ImageGeometryProjection,
+    ResolutionClass,
+)
 from comfyreview.application.image_queries import (
     CurationSummary,
     GenerationSettings,
@@ -19,11 +27,13 @@ from comfyreview.application.image_queries import (
     ImageScope,
     PromptCompositionEvidence,
     PromptSnapshot,
+    ReviewCandidateOrder,
     ReviewSummary,
     ScopeFacet,
     ScopeKind,
     WorkflowProvenance,
 )
+from comfyreview.application.workspace_settings import ContentLevel
 from comfyreview.repositories.sqlite.connection import connect_read_only
 from comfyreview.repositories.sqlite.content_visibility import (
     content_visibility_predicate,
@@ -159,7 +169,11 @@ class SqliteScopeFacetRepository(_CanonicalScopeLookup):
 class SqliteReviewCandidateRepository(_CanonicalScopeLookup):
     """Select review candidates using canonical filters only."""
 
-    def next_candidate(self, filters: ImageFilter) -> ImageContext | None:
+    def next_candidate(
+        self,
+        filters: ImageFilter,
+        order: ReviewCandidateOrder,
+    ) -> ImageContext | None:
         """Return the least recently reviewed matching live image."""
         connection = connect_read_only(self._database_path, rows=True)
         try:
@@ -170,8 +184,8 @@ class SqliteReviewCandidateRepository(_CanonicalScopeLookup):
             fragment = _filter_fragment(filters, groups)
             rows = connection.execute(
                 _context_statement(fragment.statement)
-                + " ORDER BY COALESCE(summary.latest_rating_sequence, 0), "
-                "image.id LIMIT 1",
+                + _review_order_clause(order)
+                + " LIMIT 1",
                 fragment.parameters,
             ).fetchall()
             contexts = _map_context_rows(connection, rows)
@@ -290,7 +304,17 @@ def _context_statement(where: str) -> str:
             summary.rating_count,
             summary.average_rating,
             assignment.set_key,
-            assignment.assigned_at
+            assignment.assigned_at,
+            generation.inferred_content_level,
+            content_state.override_content_level
+            , geometry.actual_width
+            , geometry.actual_height
+            , geometry.aspect_format
+            , geometry.resolution_class
+            , geometry.target_width
+            , geometry.target_height
+            , geometry.is_exact
+            , geometry.classifier_version
         FROM images AS image
         JOIN generations AS generation ON generation.id = image.generation_id
         JOIN prompts AS positive_prompt
@@ -300,6 +324,10 @@ def _context_statement(where: str) -> str:
         JOIN image_review_summary AS summary ON summary.image_id = image.id
         LEFT JOIN curation_assignments AS assignment
             ON assignment.image_id = image.id
+        LEFT JOIN image_content_level_state AS content_state
+            ON content_state.image_id = image.id
+        LEFT JOIN image_geometry_projection AS geometry
+            ON geometry.image_id = image.id
         WHERE {where}
     """
 
@@ -326,6 +354,21 @@ def _order_clause(order: ImageOrder) -> str:
             "summary.rating_count DESC, image.image_uid"
         )
     return " ORDER BY image.id DESC"
+
+
+def _review_order_clause(order: ReviewCandidateOrder) -> str:
+    if order is ReviewCandidateOrder.PRIORITIZE_UNRATED:
+        return (
+            " ORDER BY CASE WHEN COALESCE(summary.rating_count, 0) = 0 "
+            "THEN 0 ELSE 1 END, "
+            "CASE WHEN COALESCE(summary.rating_count, 0) = 0 "
+            "THEN image.id END DESC, "
+            "summary.latest_rating_sequence, image.image_uid"
+        )
+    return (
+        " ORDER BY COALESCE(summary.latest_rating_sequence, 0), "
+        "image.image_uid"
+    )
 
 
 def _facet_statement(where: str) -> str:
@@ -492,6 +535,35 @@ def _map_context(
                 assigned_at=str(row["assigned_at"]),
             )
             if row["set_key"] is not None
+            else None
+        ),
+        content=ImageContentClassification(
+            inferred_level=ContentLevel(str(row["inferred_content_level"])),
+            effective_level=ContentLevel(
+                str(
+                    row["override_content_level"]
+                    or row["inferred_content_level"]
+                )
+            ),
+            override_level=(
+                ContentLevel(str(row["override_content_level"]))
+                if row["override_content_level"] is not None
+                else None
+            ),
+        ),
+        geometry=(
+            ImageGeometryProjection(
+                image_uid=str(row["image_uid"]),
+                actual_width=int(row["actual_width"]),
+                actual_height=int(row["actual_height"]),
+                aspect_format=AspectFormat(str(row["aspect_format"])),
+                resolution_class=ResolutionClass(str(row["resolution_class"])),
+                target_width=int(row["target_width"]),
+                target_height=int(row["target_height"]),
+                exact=bool(row["is_exact"]),
+                classifier_version=int(row["classifier_version"]),
+            )
+            if row["actual_width"] is not None
             else None
         ),
     )

@@ -1,10 +1,10 @@
 # routers/playground/__init__.py
 from fastapi import APIRouter
 
-from .hub import router as hub_router
+from .api import router as api_router
 from .browse import router as browse_router
 from .generator import router as generator_router
-from .api import router as api_router
+from .hub import router as hub_router
 
 router = APIRouter()
 

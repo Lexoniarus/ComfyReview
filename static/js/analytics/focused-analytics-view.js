@@ -7,23 +7,25 @@ import { ScopeEvidenceView } from "./scope-evidence-view.js";
 
 /** Compose focused analytics views without owning requests or query state. */
 export class AnalyticsView {
-  /** @param {HTMLElement} root @param {{onImageSelect?: (imageUid: string) => void}} [actions] */
+  /** @param {HTMLElement} root @param {{onImageSelect?: (imageUid: string, imageUrl: string) => void, createGeneratorActions?: (imageUid: string) => HTMLElement}} [actions] */
   constructor(root, actions = {}) {
     this.root = root;
-    this.images = new EvidenceImageStrip({ onSelect: actions.onImageSelect });
+    this.images = new EvidenceImageStrip({
+      onSelect: actions.onImageSelect,
+      createGeneratorActions: actions.createGeneratorActions,
+    });
     this.setups = new RenderSetupView({ images: this.images });
     this.overview = new OverviewAnalyticsView();
     this.scopes = new ScopeEvidenceView({ images: this.images });
-    this.parameters = new ParameterEvidenceView({
-      images: this.images,
-      setups: this.setups,
-    });
+    this.parameters = new ParameterEvidenceView({ images: this.images });
     this.compositions = new CompositionEvidenceView({
       images: this.images,
       setups: this.setups,
     });
     this.section = "overview";
     this.viewName = "";
+    this.basis = "observed";
+    this.scope = "setup";
   }
 
   /** @param {string} section @param {Record<string, any>} payload */
@@ -31,6 +33,8 @@ export class AnalyticsView {
     this.clear();
     this.section = section;
     this.viewName = String(payload.view || "");
+    this.basis = String(payload.basis || "observed");
+    this.scope = String(payload.scope || "setup");
     if (section === "overview") this.overview.render(this.root, payload);
     else if (section === "scopes") this.scopes.render(this.root, payload);
     else if (section === "parameters")
@@ -43,7 +47,7 @@ export class AnalyticsView {
   append(payload) {
     if (this.section === "scopes") this.scopes.append(payload.items);
     else if (this.section === "parameters") {
-      this.parameters.append(payload.items, this.viewName);
+      this.parameters.append(payload.items, this.scope, this.basis);
     } else if (this.section === "combinations") {
       this.compositions.append(payload.items);
     }
@@ -62,6 +66,9 @@ export class AnalyticsView {
   /** Release listeners owned by child views. */
   dispose() {
     this.images.dispose();
+    this.overview.dispose();
+    this.scopes.dispose();
+    this.parameters.dispose();
     this.clear();
   }
 

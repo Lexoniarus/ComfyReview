@@ -7,7 +7,7 @@ const numericFields = [
   "denoise",
 ];
 
-/** @typedef {{componentUids?: string[], revisionUids?: string[], compositionUid?: string, imageUid?: string, generationProfileUid?: string, checkpoint?: string, sampler?: string, scheduler?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
+/** @typedef {{componentUids?: string[], revisionUids?: string[], compositionUid?: string, imageUid?: string, promptImageUid?: string, renderImageUid?: string, loras?: any[], checkpoint?: string, sampler?: string, scheduler?: string, aspectFormat?: string, resolutionClass?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
 
 /** @param {HTMLElement} element @returns {PlaygroundIntent} */
 export function intentFromAnalyticsAction(element) {
@@ -53,10 +53,13 @@ export function playgroundIntentUrl(intent) {
   for (const uid of intent.revisionUids || []) query.append("revision", uid);
   set(query, "composition", intent.compositionUid);
   set(query, "image", intent.imageUid);
-  set(query, "profile", intent.generationProfileUid);
+  set(query, "prompt_image", intent.promptImageUid);
+  set(query, "render_image", intent.renderImageUid);
   set(query, "checkpoint", intent.checkpoint);
   set(query, "sampler", intent.sampler);
   set(query, "scheduler", intent.scheduler);
+  set(query, "aspect_format", intent.aspectFormat);
+  set(query, "resolution_class", intent.resolutionClass);
   set(query, "seed_mode", intent.seedMode);
   for (const field of numericFields) set(query, field, intentValues[field]);
   const suffix = query.toString();
@@ -72,12 +75,17 @@ export function readPlaygroundIntent(search) {
     revisionUids: cleanValues(query.getAll("revision")),
     compositionUid: text(query.get("composition")),
     imageUid: text(query.get("image")),
-    generationProfileUid: text(query.get("profile")),
     checkpoint: text(query.get("checkpoint")),
     sampler: text(query.get("sampler")),
     scheduler: text(query.get("scheduler")),
+    aspectFormat: text(query.get("aspect_format")),
+    resolutionClass: text(query.get("resolution_class")),
     seedMode: text(query.get("seed_mode")),
   };
+  if (query.has("prompt_image"))
+    intent.promptImageUid = text(query.get("prompt_image"));
+  if (query.has("render_image"))
+    intent.renderImageUid = text(query.get("render_image"));
   for (const field of numericFields) {
     if (!query.has(field)) continue;
     const value = Number(query.get(field));
@@ -101,15 +109,189 @@ export class PlaygroundIntentNavigator {
   }
 }
 
+/** Own one versioned, tab-local staging area for Analytics handoffs. */
+export class PlaygroundIntentStore {
+  /** @param {Storage} storage @param {string} [key] */
+  constructor(storage, key = "comfyreview.playground-intent.v2") {
+    this.storage = storage;
+    this.key = key;
+  }
+
+  /** @returns {PlaygroundIntent} */
+  read() {
+    const stored = jsonRecord(this.storage.getItem(this.key));
+    if (stored.version === 2) {
+      return { ...record(stored.prompt), ...record(stored.render) };
+    }
+    return stored.version === 1 ? record(stored.intent) : {};
+  }
+
+  /** @param {string} componentUid @param {string} kind */
+  mergePromptComponent(componentUid, kind) {
+    const stored = this.#state();
+    const current = stored.prompt;
+    const kinds = stored.promptKinds;
+    const previous = text(kinds[kind]);
+    const values = (current.componentUids || []).filter(
+      (/** @type {string} */ uid) => uid !== previous && uid !== componentUid,
+    );
+    values.push(componentUid);
+    current.componentUids = values;
+    delete current.compositionUid;
+    kinds[kind] = componentUid;
+    this.#write(current, stored.render, kinds);
+    return this.read();
+  }
+
+  /** @param {PlaygroundIntent} incoming */
+  merge(incoming) {
+    const stored = this.#state();
+    /** @type {PlaygroundIntent} */
+    const prompt = { ...stored.prompt };
+    /** @type {PlaygroundIntent} */
+    const render = { ...stored.render };
+    const promptKinds = stored.promptKinds;
+    /** @type {Record<string, any>} */
+    const incomingValues = incoming;
+    /** @type {Record<string, any>} */
+    const mergedValues = render;
+    if (incoming.compositionUid) {
+      prompt.compositionUid = incoming.compositionUid;
+      prompt.componentUids = incoming.componentUids || [];
+      delete prompt.revisionUids;
+      for (const key of Object.keys(promptKinds)) delete promptKinds[key];
+    } else if (incoming.componentUids?.length) {
+      prompt.componentUids = cleanValues([
+        ...(prompt.componentUids || []),
+        ...incoming.componentUids,
+      ]);
+      delete prompt.compositionUid;
+    }
+    if (incoming.revisionUids?.length)
+      prompt.revisionUids = incoming.revisionUids;
+    if (incoming.promptImageUid || incoming.imageUid) {
+      prompt.promptImageUid = incoming.promptImageUid || incoming.imageUid;
+      delete prompt.componentUids;
+      delete prompt.revisionUids;
+      delete prompt.compositionUid;
+    }
+    if (Array.isArray(incoming.loras)) prompt.loras = incoming.loras;
+    for (const field of [
+      "checkpoint",
+      "sampler",
+      "scheduler",
+      "aspectFormat",
+      "resolutionClass",
+      "seedMode",
+      "seed",
+      "steps_min",
+      "steps_max",
+      "cfg_min",
+      "cfg_max",
+      "denoise",
+    ]) {
+      if (
+        incomingValues[field] !== undefined &&
+        incomingValues[field] !== null &&
+        incomingValues[field] !== ""
+      )
+        mergedValues[field] = incomingValues[field];
+    }
+    if (incoming.renderImageUid || incoming.imageUid)
+      render.renderImageUid = incoming.renderImageUid || incoming.imageUid;
+    this.#write(prompt, render, promptKinds);
+    return this.read();
+  }
+
+  /** @param {string} imageUid */
+  stagePromptSetup(imageUid) {
+    const stored = this.#state();
+    this.#write({ promptImageUid: text(imageUid) }, stored.render, {});
+    return this.read();
+  }
+
+  /** @param {string} imageUid */
+  stageRenderSetup(imageUid) {
+    const stored = this.#state();
+    this.#write(
+      stored.prompt,
+      { renderImageUid: text(imageUid) },
+      stored.promptKinds,
+    );
+    return this.read();
+  }
+
+  clearPrompt() {
+    const stored = this.#state();
+    this.#write({}, stored.render, {});
+  }
+
+  clearRender() {
+    const stored = this.#state();
+    this.#write(stored.prompt, {}, stored.promptKinds);
+  }
+
+  clear() {
+    this.storage.removeItem(this.key);
+  }
+
+  /** Return the staged URL; the generator clears it after successful apply. */
+  consumeUrl() {
+    const intent = this.read();
+    return playgroundIntentUrl(intent);
+  }
+
+  #state() {
+    const stored = jsonRecord(this.storage.getItem(this.key));
+    if (stored.version === 2) {
+      return {
+        prompt: record(stored.prompt),
+        render: record(stored.render),
+        promptKinds: record(stored.prompt_kinds),
+      };
+    }
+    if (stored.version === 1) {
+      const legacy = record(stored.intent);
+      return {
+        prompt: {
+          componentUids: legacy.componentUids,
+          revisionUids: legacy.revisionUids,
+          compositionUid: legacy.compositionUid,
+          imageUid: legacy.imageUid,
+        },
+        render: legacy,
+        promptKinds: record(stored.prompt_kinds),
+      };
+    }
+    return { prompt: {}, render: {}, promptKinds: {} };
+  }
+
+  /** @param {Record<string, any>} prompt @param {Record<string, any>} render @param {Record<string, string>} promptKinds */
+  #write(prompt, render, promptKinds) {
+    this.storage.setItem(
+      this.key,
+      JSON.stringify({
+        version: 2,
+        prompt,
+        render,
+        prompt_kinds: promptKinds,
+      }),
+    );
+  }
+}
+
 /** @param {string} parameter @param {string} value */
 function parameterIntent(parameter, value) {
   if (["checkpoint", "sampler", "scheduler"].includes(parameter)) {
     return { [parameter]: value };
   }
+  if (parameter === "aspect_format") return { aspectFormat: value };
+  if (parameter === "resolution_class") return { resolutionClass: value };
   const number = Number(value);
   if (!Number.isFinite(number)) return {};
   if (parameter === "steps") return { steps_min: number, steps_max: number };
   if (parameter === "cfg") return { cfg_min: number, cfg_max: number };
+  if (parameter === "denoise") return { denoise: number };
   return {};
 }
 

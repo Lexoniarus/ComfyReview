@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 
 def norm_name(value: str) -> str:
@@ -22,12 +22,12 @@ def is_empty_placeholder_value(value: str) -> bool:
     return n in {"empty", "none", "null"}
 
 
-def is_empty_item(item: Dict[str, Any]) -> bool:
+def is_empty_item(item: dict[str, Any]) -> bool:
     name = str(item.get("name") or "")
     key = str(item.get("key") or "")
     return is_empty_placeholder_value(name) or is_empty_placeholder_value(key)
 
 
-def filter_random_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def filter_random_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Filter out empty placeholders from a random candidate list."""
     return [x for x in (items or []) if not is_empty_item(x)]

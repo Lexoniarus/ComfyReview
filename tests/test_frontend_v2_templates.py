@@ -136,6 +136,7 @@ def test_only_external_asset_v2_templates_remain() -> None:
         "index.html",
         "playground.html",
         "playground_generator.html",
+        "playground_overview.html",
         "settings.html",
         "top_pictures.html",
     }

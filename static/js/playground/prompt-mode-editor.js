@@ -1,3 +1,5 @@
+import { LoraStackEditor } from "../settings/lora-stack-editor.js";
+
 const promptKinds = [
   ["character", "Charakter"],
   ["scene", "Szene"],
@@ -8,20 +10,29 @@ const promptKinds = [
   ["modifier", "Modifier"],
 ];
 
-/** Own fixed, random and disabled prompt-role controls. */
+/** Own fixed, random and disabled prompt-role controls plus catalog evidence. */
 export class PromptModeEditor {
-  /** @param {HTMLElement} root @param {HTMLInputElement} seedInput @param {() => void} [onChange] */
-  constructor(root, seedInput, onChange = () => {}) {
+  /** @param {HTMLElement} root @param {() => void} [onChange] @param {{loadComponent?: (uid: string, signal: AbortSignal) => Promise<any>, onImageSelect?: (url: string) => void}} [evidence] */
+  constructor(root, onChange = () => {}, evidence = {}) {
     this.root = root;
-    this.seedInput = seedInput;
     this.abortController = new AbortController();
-    this.onChange = onChange;
-    /** @type {Map<string, {mode: HTMLSelectElement, component: HTMLSelectElement}>} */
+    this.onChange = typeof onChange === "function" ? onChange : () => {};
+    this.loadComponent = evidence.loadComponent || null;
+    this.onImageSelect = evidence.onImageSelect || (() => {});
+    /** @type {Map<string, {mode: HTMLSelectElement, component: HTMLSelectElement, evidence: HTMLElement}>} */
     this.rows = new Map();
+    /** @type {Map<string, any>} */
+    this.cache = new Map();
+    /** @type {Map<string, AbortController>} */
+    this.requests = new Map();
+    this.loras = null;
+    /** @type {Array<Record<string, any>>} */
+    this.loraDefinitions = [];
   }
 
-  /** @param {Array<Record<string, any>>} components */
-  render(components) {
+  /** @param {Array<Record<string, any>>} components @param {Array<Record<string, any>>} [loraDefinitions] */
+  render(components, loraDefinitions = []) {
+    this.#cancelRequests();
     this.root.replaceChildren();
     this.rows.clear();
     const list = document.createElement("div");
@@ -30,28 +41,47 @@ export class PromptModeEditor {
       const row = this.#row(kind, label, components);
       list.append(row.element);
       this.rows.set(kind, row.controls);
+      void this.#refresh(kind);
     }
-    this.root.append(list);
+    const loraRoot = document.createElement("section");
+    loraRoot.className = "prompt-lora-layer";
+    const heading = document.createElement("div");
+    heading.className = "prompt-lora-heading";
+    const title = document.createElement("h3");
+    title.textContent = "LoRAs";
+    const note = document.createElement("p");
+    note.textContent =
+      "Eigene Prompt-Ebene mit Revision, Triggern und getrennten Model-/CLIP-Gewichten.";
+    heading.append(title, note);
+    const editorRoot = document.createElement("div");
+    loraRoot.append(heading, editorRoot);
+    this.loraDefinitions = loraDefinitions;
+    this.loras?.dispose();
+    this.loras = new LoraStackEditor(editorRoot, () => this.onChange());
+    this.loras.render([], loraDefinitions);
+    this.root.append(list, loraRoot);
   }
 
   /** Return the complete API selection intent. */
   value() {
-    const selections = promptKinds.map(([kind]) => {
-      const row = this.rows.get(kind);
-      return {
-        kind,
-        mode: row?.mode.value || "random",
-        component_uid: row?.mode.value === "fixed" ? row.component.value : null,
-      };
-    });
-    const seed = Number.parseInt(this.seedInput.value, 10);
-    return { selections, seed: Number.isFinite(seed) ? seed : null };
+    return {
+      selections: promptKinds.map(([kind]) => {
+        const row = this.rows.get(kind);
+        return {
+          kind,
+          mode: row?.mode.value || "random",
+          component_uid:
+            row?.mode.value === "fixed" ? row.component.value : null,
+        };
+      }),
+      loras: this.loras?.value() || [],
+    };
   }
 
-  /** @param {{componentUids?: string[]}} intent */
+  /** @param {{componentUids?: string[], loras?: Array<Record<string, any>>}} intent */
   applyIntent(intent) {
     const requested = new Set(intent.componentUids || []);
-    for (const row of this.rows.values()) {
+    for (const [kind, row] of this.rows) {
       const selected = Array.from(row.component.options).find((candidate) =>
         requested.has(candidate.value),
       );
@@ -59,12 +89,37 @@ export class PromptModeEditor {
       row.component.value = selected.value;
       row.mode.value = "fixed";
       row.component.disabled = false;
+      void this.#refresh(kind);
+    }
+    if (Array.isArray(intent.loras)) {
+      this.loras?.render(intent.loras, this.loraDefinitions);
+    }
+    return Array.isArray(intent.loras) &&
+      intent.loras.some((requestedLora) => {
+        const definition = this.loraDefinitions.find(
+          (candidate) => candidate.lora_uid === requestedLora.lora_uid,
+        );
+        return !definition || definition.available === false;
+      })
+      ? ["loras"]
+      : [];
+  }
+
+  /** Show server-resolved random selections after draft creation. @param {Array<Record<string, any>>} components */
+  showResolvedComponents(components) {
+    for (const component of components || []) {
+      const kind = String(component.kind || "");
+      const row = this.rows.get(kind);
+      if (row?.mode.value === "random")
+        void this.#loadInto(kind, String(component.component_uid || ""));
     }
   }
 
-  /** Release owned input listeners. */
   dispose() {
     this.abortController.abort();
+    this.#cancelRequests();
+    this.loras?.dispose();
+    this.loras = null;
     this.rows.clear();
   }
 
@@ -83,25 +138,114 @@ export class PromptModeEditor {
     mode.value = kind === "character" ? "fixed" : "random";
     const component = document.createElement("select");
     component.setAttribute("aria-label", `${label}: Katalogeintrag`);
-    const matching = components.filter((item) => item.kind === kind);
-    for (const item of matching) {
+    for (const item of components.filter((item) => item.kind === kind))
       component.append(option(String(item.component_uid), String(item.name)));
-    }
     component.disabled = mode.value !== "fixed";
+    const evidence = document.createElement("div");
+    evidence.className = "prompt-reference";
     mode.addEventListener(
       "change",
       () => {
         component.disabled = mode.value !== "fixed";
+        void this.#refresh(kind);
         this.onChange();
       },
       { signal: this.abortController.signal },
     );
-    component.addEventListener("change", () => this.onChange(), {
-      signal: this.abortController.signal,
-    });
-    element.append(title, mode, component);
-    return { element, controls: { mode, component } };
+    component.addEventListener(
+      "change",
+      () => {
+        void this.#refresh(kind);
+        this.onChange();
+      },
+      { signal: this.abortController.signal },
+    );
+    element.append(title, mode, component, evidence);
+    return { element, controls: { mode, component, evidence } };
   }
+
+  /** @param {string} kind */
+  async #refresh(kind) {
+    const row = this.rows.get(kind);
+    if (!row) return;
+    this.requests.get(kind)?.abort();
+    if (row.mode.value === "off")
+      return renderMessage(row.evidence, "Nicht aktiv");
+    if (row.mode.value === "random")
+      return renderMessage(row.evidence, "Wird beim Entwurf ausgewählt");
+    await this.#loadInto(kind, row.component.value);
+  }
+
+  /** @param {string} kind @param {string} uid */
+  async #loadInto(kind, uid) {
+    const row = this.rows.get(kind);
+    if (!row || !uid)
+      return renderMessage(row?.evidence, "Kein Katalogeintrag gewählt");
+    const cached = this.cache.get(uid);
+    if (cached) return this.#renderEvidence(row.evidence, cached);
+    if (!this.loadComponent)
+      return renderMessage(row.evidence, "Referenz nicht verfügbar");
+    this.requests.get(kind)?.abort();
+    const controller = new AbortController();
+    this.requests.set(kind, controller);
+    renderMessage(row.evidence, "Referenz wird geladen …");
+    try {
+      const payload = await this.loadComponent(uid, controller.signal);
+      this.cache.set(uid, payload);
+      this.#renderEvidence(row.evidence, payload);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        renderMessage(row.evidence, "Referenz konnte nicht geladen werden");
+    } finally {
+      if (this.requests.get(kind) === controller) this.requests.delete(kind);
+    }
+  }
+
+  /** @param {HTMLElement} root @param {Record<string, any>} component */
+  #renderEvidence(root, component) {
+    root.replaceChildren();
+    const images = Array.isArray(component.top_images)
+      ? component.top_images
+      : [];
+    const heading = document.createElement("strong");
+    heading.textContent = `${component.name || "Katalogeintrag"} · ${component.kind || ""}`;
+    if (!images.length) {
+      const empty = document.createElement("span");
+      empty.textContent = "Noch kein sichtbares Referenzbild";
+      root.append(heading, empty);
+      return;
+    }
+    const image = images[0];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "prompt-reference-image";
+    const img = document.createElement("img");
+    img.src = String(image.image_url || "");
+    img.alt = `Referenz für ${component.name || "Prompt-Baustein"}`;
+    button.append(img);
+    button.addEventListener(
+      "click",
+      () => this.onImageSelect(String(image.image_url || "")),
+      { signal: this.abortController.signal },
+    );
+    const meta = document.createElement("span");
+    meta.textContent = `${Number(image.average_rating || 0).toFixed(2)} Bewertung · ${Number(image.rating_count || 0)} Belege`;
+    root.append(heading, button, meta);
+  }
+
+  #cancelRequests() {
+    for (const request of this.requests.values()) request.abort();
+    this.requests.clear();
+  }
+}
+
+/** @param {HTMLElement | undefined} root @param {string} text */
+function renderMessage(root, text) {
+  if (!root) return;
+  root.replaceChildren();
+  const message = document.createElement("span");
+  message.textContent = text;
+  root.append(message);
 }
 
 /** @param {string} value @param {string} label */

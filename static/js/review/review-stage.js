@@ -2,7 +2,7 @@
 export class ReviewStage {
   /**
    * @param {HTMLElement} root
-   * @param {{onRate: (rating: number) => void, onDelete: () => void, onExpand: (url: string) => void}} callbacks
+   * @param {{onRate: (rating: number) => void, onDelete: () => void, onExpand: (url: string) => void, createGeneratorActions?: (uid: string) => HTMLElement}} callbacks
    */
   constructor(root, callbacks) {
     this.root = root;
@@ -18,7 +18,9 @@ export class ReviewStage {
   /** @param {Record<string, unknown>} image */
   render(image) {
     this.current = image;
-    this.root.replaceChildren(reviewCard(image));
+    this.root.replaceChildren(
+      reviewCard(image, this.callbacks.createGeneratorActions),
+    );
   }
 
   /** @param {string} [message] */
@@ -81,8 +83,8 @@ export class ReviewStage {
   }
 }
 
-/** @param {Record<string, unknown>} image */
-function reviewCard(image) {
+/** @param {Record<string, unknown>} image @param {((uid: string) => HTMLElement) | undefined} createGeneratorActions */
+function reviewCard(image, createGeneratorActions) {
   const card = document.createElement("article");
   card.className = "v2-panel review-card";
   const imageButton = document.createElement("button");
@@ -113,5 +115,9 @@ function reviewCard(image) {
   remove.dataset.reviewAction = "delete";
   remove.textContent = "Bild löschen";
   card.append(imageButton, scoreRow, remove);
+  const uid = String(image.image_uid || "");
+  if (uid && typeof createGeneratorActions === "function") {
+    card.append(createGeneratorActions(uid));
+  }
   return card;
 }
