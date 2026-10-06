@@ -7,48 +7,53 @@ export class ApiClient {
     this.baseUrl = baseUrl.replace(/\/$/u, "");
   }
 
-  /** @param {string} path @param {{signal?: AbortSignal}} [options] */
+  /** @param {string} path @param {{signal?: AbortSignal, keepalive?: boolean}} [options] */
   get(path, options = {}) {
-    return this.#request("GET", path, undefined, options.signal);
+    return this.#request("GET", path, undefined, options);
   }
 
   /**
    * @param {string} path
    * @param {unknown} body
-   * @param {{signal?: AbortSignal}} [options]
+   * @param {{signal?: AbortSignal, keepalive?: boolean}} [options]
    */
   post(path, body, options = {}) {
-    return this.#request("POST", path, body, options.signal);
+    return this.#request("POST", path, body, options);
   }
 
   /**
    * @param {string} path
    * @param {unknown} body
-   * @param {{signal?: AbortSignal}} [options]
+   * @param {{signal?: AbortSignal, keepalive?: boolean}} [options]
    */
   put(path, body, options = {}) {
-    return this.#request("PUT", path, body, options.signal);
+    return this.#request("PUT", path, body, options);
   }
 
   /**
    * @param {string} path
    * @param {unknown} body
-   * @param {{signal?: AbortSignal}} [options]
+   * @param {{signal?: AbortSignal, keepalive?: boolean}} [options]
    */
   patch(path, body, options = {}) {
-    return this.#request("PATCH", path, body, options.signal);
+    return this.#request("PATCH", path, body, options);
   }
 
   /**
    * @param {string} method
    * @param {string} path
    * @param {unknown} body
-   * @param {AbortSignal | undefined} signal
+   * @param {{signal?: AbortSignal, keepalive?: boolean}} options
    */
-  async #request(method, path, body, signal) {
+  async #request(method, path, body, options) {
     const requestHeaders = new Headers({ Accept: "application/json" });
     /** @type {RequestInit} */
-    const request = { headers: requestHeaders, method, signal };
+    const request = {
+      headers: requestHeaders,
+      method,
+      signal: options.signal,
+      keepalive: Boolean(options.keepalive),
+    };
     if (body !== undefined) {
       requestHeaders.set("Content-Type", "application/json");
       request.body = JSON.stringify(body);

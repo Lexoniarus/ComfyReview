@@ -31,7 +31,7 @@ export class DraftPreview {
 
   /** @param {Record<string, any>} draft @param {string} draftUid */
   render(draft, draftUid) {
-    this.#disposeEditors();
+    this.clear();
     this.draft = draft;
     this.draftUid = draftUid;
     this.root.replaceChildren();
@@ -64,6 +64,18 @@ export class DraftPreview {
     this.root.append(memberships, groups, snapshots, this.evidenceRoot);
     this.renderSnapshots(draft);
     this.#updateState(false);
+  }
+
+  /** Clear every visible and retained value for an invalidated draft. */
+  clear() {
+    this.#disposeEditors();
+    this.draft = null;
+    this.draftUid = "";
+    this.root.replaceChildren();
+    this.positiveSnapshot.textContent = "";
+    this.negativeSnapshot.textContent = "";
+    this.evidenceRoot.replaceChildren();
+    this.state.textContent = "Kein gültiger Entwurf";
   }
 
   /** Return flattened canonical group order for the server renderer. */
@@ -153,8 +165,7 @@ export class DraftPreview {
   dispose() {
     this.abortController.abort();
     this.evidenceCarousel.dispose();
-    this.#disposeEditors();
-    this.draft = null;
+    this.clear();
   }
 
   /** @param {Record<string, any>} group */

@@ -1,7 +1,8 @@
 import { EvidenceCarousel } from "../components/evidence-carousel.js";
 import { CyclicCardRail } from "../components/cyclic-card-rail.js";
+import { createGeneratorHandoffAction } from "./generator-handoff-action.js";
 
-/** @typedef {{open?: (element: HTMLElement) => void, openIntent: (intent: {promptCombination: Array<{kind: string, component_uid: string, revision_uid: string | null}>}) => void}} PlaygroundIntentNavigatorBoundary */
+/** @typedef {{openIntent: (intent: {kind: "combination", selections: Array<{kind: string, component_uid: string, revision_uid: string | null}>}) => void}} PlaygroundIntentNavigatorBoundary */
 
 /** Render the two canonical Playground evidence groups. */
 export class TopCombinationsView {
@@ -15,15 +16,6 @@ export class TopCombinationsView {
     this.carousels = [];
     /** @type {EvidenceCarousel[]} */
     this.evidenceCarousels = [];
-    this.root.addEventListener(
-      "click",
-      (event) => {
-        if (!(event.target instanceof Element)) return;
-        const action = event.target.closest("[data-playground-intent]");
-        if (action instanceof HTMLElement) this.navigator.open?.(action);
-      },
-      { signal: this.abortController.signal },
-    );
   }
 
   /** @param {Record<string, any>} payload */
@@ -212,17 +204,17 @@ function combinationCard(
   title.textContent = String(row.label || "Unbenannte Kombination");
   const evidence = document.createElement("span");
   evidence.textContent = `${textValue(row.image_count)} Bilder · ${textValue(row.rating_count)} Bewertungen · Ø ${decimalValue(row.average_rating)} / 10`;
-  const action = document.createElement("button");
-  action.type = "button";
-  action.className = "secondary-button playground-combination-generator-action";
-  action.textContent = "Im Generator verwenden";
+  const action = createGeneratorHandoffAction("combination", {
+    className: "playground-combination-generator-action",
+  });
   const source = combinationSource(row.component_uids, kinds);
   if (source.selections) {
     action.addEventListener(
       "click",
       () =>
         navigator.openIntent({
-          promptCombination: source.selections,
+          kind: "combination",
+          selections: source.selections,
         }),
       { signal },
     );

@@ -27,6 +27,10 @@ static/js/review/review-keyboard.js
 static/js/review/review-stage.js
 static/js/playground/prompt-mode-editor.js
 static/js/playground/playground-intent.js
+static/js/playground/generator-handoff-action.js
+static/js/playground/generator-handoff-applier.js
+static/js/playground/generator-state-persistence.js
+static/js/playground/draft-session.js
 static/js/playground/render-guidance-panel.js
 static/js/playground/top-combinations.js
 static/js/playground/generation-controls.js
@@ -43,7 +47,6 @@ static/js/analytics/composition-evidence-view.js
 static/js/analytics/evidence-image-strip.js
 static/js/analytics/overview-analytics-view.js
 static/js/analytics/parameter-evidence-view.js
-static/js/analytics/playground-intent-tray.js
 static/js/analytics/render-setup-view.js
 static/js/analytics/scope-evidence-view.js
 static/js/scopes/active-scope-chips.js

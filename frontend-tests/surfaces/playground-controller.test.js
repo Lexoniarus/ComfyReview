@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RequestLifecycle } from "../../static/js/core/request-lifecycle.js";
+import { DraftSession } from "../../static/js/playground/draft-session.js";
+import { GeneratorHandoffApplier } from "../../static/js/playground/generator-handoff-applier.js";
 import {
-  PlaygroundIntentStore,
-  PlaygroundIntentUrlCleaner,
+  GeneratorHandoffUrlCleaner,
   readPlaygroundIntent,
 } from "../../static/js/playground/playground-intent.js";
+import { GeneratorStatePersistence } from "../../static/js/playground/generator-state-persistence.js";
 import { PlaygroundController } from "../../static/js/surfaces/playground-controller.js";
 
 describe("PlaygroundController", () => {
@@ -22,7 +24,7 @@ describe("PlaygroundController", () => {
     expect(fixture.controls.render).toHaveBeenCalledWith({ defaults: {} });
     expect(fixture.modes.applyState).toHaveBeenCalledWith({});
     expect(fixture.controls.applyState).toHaveBeenCalledWith({});
-    expect(fixture.controls.applyIntent).toHaveBeenCalledWith({});
+    expect(fixture.controls.applyIntent).not.toHaveBeenCalled();
 
     await fixture.controller.prepare();
     expect(fixture.api.post).toHaveBeenCalledWith(
@@ -61,10 +63,8 @@ describe("PlaygroundController", () => {
   });
 
   it("consumes a successful non-prompt render prefill", async () => {
-    const intentStore = { clear: vi.fn() };
     const fixture = createFixture({
       intent: { sampler: "euler" },
-      intentStore,
     });
 
     await fixture.controller.start();
@@ -72,7 +72,28 @@ describe("PlaygroundController", () => {
     expect(fixture.controls.applyIntent).toHaveBeenCalledWith(
       expect.objectContaining({ sampler: "euler" }),
     );
-    expect(intentStore.clear).toHaveBeenCalledOnce();
+    expect(fixture.api.put).toHaveBeenCalledOnce();
+    expect(fixture.urlCleaner.removeHandoff).toHaveBeenCalledOnce();
+  });
+
+  it("rejects inapplicable image render setups without changing controls", async () => {
+    for (const renderSetup of [
+      { applicable: false, issues: ["checkpoint", "upscale_model"] },
+      { applicable: false },
+    ]) {
+      const fixture = createFixture({
+        intent: { renderImageUid: "image-render" },
+        image: { render_setup: renderSetup },
+      });
+
+      await fixture.controller.start();
+
+      expect(fixture.api.put).not.toHaveBeenCalled();
+      expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
+      expect(fixture.status.textContent).toContain(
+        renderSetup.issues ? "checkpoint, upscale_model" : "nicht anwendbar",
+      );
+    }
   });
 
   it("rejects multiple typed prompt sources before changing generator state", async () => {
@@ -109,17 +130,8 @@ describe("PlaygroundController", () => {
     ];
 
     for (const { prompt } of cases) {
-      const storage = new MemoryStorage();
-      const storedIntent = JSON.stringify({
-        version: 2,
-        prompt,
-        render: { renderImageUid: "render-image" },
-        prompt_kinds: {},
-      });
-      storage.setItem("comfyreview.playground-intent.v2", storedIntent);
-      const intentStore = new PlaygroundIntentStore(storage);
       const intentUrlCleaner = {
-        removeTypedPromptSource: vi.fn(),
+        removeHandoff: vi.fn(),
       };
       const existingPromptState = {
         selections: [
@@ -133,8 +145,7 @@ describe("PlaygroundController", () => {
         loras: [],
       };
       const fixture = createFixture({
-        intent: intentStore.read(),
-        intentStore,
+        intent: { ...prompt, renderImageUid: "render-image" },
         intentUrlCleaner,
         selectionValue: existingPromptState,
         savedState: {
@@ -154,19 +165,27 @@ describe("PlaygroundController", () => {
       expect(fixture.status.textContent).toContain(
         "Mehrdeutiger Prompt-Handoff",
       );
-      expect(fixture.modes.render).not.toHaveBeenCalled();
-      expect(fixture.modes.applyState).not.toHaveBeenCalled();
-      expect(fixture.controls.render).not.toHaveBeenCalled();
-      expect(fixture.controls.applyState).not.toHaveBeenCalled();
-      expect(fixture.api.get).not.toHaveBeenCalled();
+      expect(fixture.modes.render).toHaveBeenCalledOnce();
+      expect(fixture.controls.render).toHaveBeenCalledOnce();
       expect(fixture.api.put).not.toHaveBeenCalled();
-      expect(fixture.api.post).not.toHaveBeenCalled();
-      expect(fixture.modes.value()).toEqual(existingPromptState);
-      expect(storage.getItem("comfyreview.playground-intent.v2")).toBe(
-        storedIntent,
-      );
-      expect(intentUrlCleaner.removeTypedPromptSource).not.toHaveBeenCalled();
-      expect(fixture.prepareButton.disabled).toBe(true);
+      expect(
+        fixture.api.post.mock.calls.some(
+          ([path]) => path === "playground/drafts",
+        ),
+      ).toBe(false);
+      expect(fixture.modes.value()).toEqual({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-persisted",
+            revision_uid: "character-persisted-revision",
+          },
+        ],
+        loras: [],
+      });
+      expect(intentUrlCleaner.removeHandoff).not.toHaveBeenCalled();
+      expect(fixture.prepareButton.disabled).toBe(false);
       expect(fixture.submitButton.disabled).toBe(true);
     }
   });
@@ -189,9 +208,19 @@ describe("PlaygroundController", () => {
       generationError: new Error("comfy kaputt"),
     });
     await generationFailure.controller.start();
+    await generationFailure.controller.prepare();
     await generationFailure.controller.submit();
     expect(generationFailure.result.dataset.state).toBe("error");
     expect(generationFailure.result.textContent).toBe("comfy kaputt");
+
+    const generationAbort = createFixture({
+      generationError: new DOMException("aborted", "AbortError"),
+    });
+    await generationAbort.controller.start();
+    await generationAbort.controller.prepare();
+    await generationAbort.controller.submit();
+    expect(generationAbort.result.textContent).toBe("");
+    expect(generationAbort.result.dataset.state).toBeUndefined();
 
     const empty = createFixture({ emptyPayload: true });
     await empty.controller.start();
@@ -210,6 +239,18 @@ describe("PlaygroundController", () => {
     await noPreview.controller.refreshPreview();
     await noPreview.controller.refreshEvidence();
     expect(noPreview.api.post).not.toHaveBeenCalled();
+
+    const evidenceFailure = createFixture({
+      evidenceError: new Error("evidence kaputt"),
+    });
+    await evidenceFailure.controller.refreshEvidence();
+    expect(evidenceFailure.status.textContent).toBe("evidence kaputt");
+
+    const evidenceAbort = createFixture({
+      evidenceError: new DOMException("aborted", "AbortError"),
+    });
+    await evidenceAbort.controller.refreshEvidence();
+    expect(evidenceAbort.status.textContent).toBe("");
   });
 
   it("binds its action buttons through one owned listener lifecycle", async () => {
@@ -227,6 +268,7 @@ describe("PlaygroundController", () => {
   it("reports every generation returned for a batch", async () => {
     const fixture = createFixture({ batch: true });
     await fixture.controller.start();
+    await fixture.controller.prepare();
     await fixture.controller.submit();
 
     expect(fixture.result.textContent).toContain("generation-2 · submitted");
@@ -235,10 +277,7 @@ describe("PlaygroundController", () => {
     );
   });
 
-  it("applies typed image prompt selections and LoRAs, persists, and clears only prompt staging", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptImage("image-prompt");
-    intentStore.stageRenderSetup("image-render");
+  it("applies typed image prompt selections and all canonical LoRAs without creating a draft", async () => {
     const promptSelectionState = {
       selections: [
         {
@@ -290,7 +329,14 @@ describe("PlaygroundController", () => {
           revision_uid: "lora-rev-2",
           provider_name: "style.safetensors",
           model_strength: 0.7,
-          clip_strength: 0,
+          clip_strength: 0.8,
+        },
+        {
+          lora_uid: "lora-unused",
+          revision_uid: "lora-rev-unused",
+          provider_name: "unused.safetensors",
+          model_strength: 0.9,
+          clip_strength: 0.6,
         },
       ],
     };
@@ -315,8 +361,7 @@ describe("PlaygroundController", () => {
       },
     ];
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptImageUid: "image-prompt" },
       savedState: {
         selections: [
           {
@@ -349,16 +394,6 @@ describe("PlaygroundController", () => {
           },
           render_setup: {},
         },
-        "image-render": {
-          prompt_setup: { selections: [], loras: [] },
-          render_setup: {
-            applicable: true,
-            checkpoint: "handoff.safetensors",
-            sampler_stages: [
-              { sampler: "euler", scheduler: "normal", steps: 22, cfg: 6 },
-            ],
-          },
-        },
       },
     });
 
@@ -375,7 +410,7 @@ describe("PlaygroundController", () => {
       },
       expect.any(Object),
     );
-    expect(intentStore.read()).toEqual({ renderImageUid: "image-render" });
+    expect(fixture.urlCleaner.removeHandoff).toHaveBeenCalledOnce();
     expect(
       fixture.api.post.mock.calls.some(
         ([path]) => path === "playground/drafts",
@@ -394,8 +429,6 @@ describe("PlaygroundController", () => {
   });
 
   it("rolls back a rejected image prompt without persisting or clearing its source", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptImage("image-prompt");
     const previousPromptState = {
       selections: [
         {
@@ -408,8 +441,7 @@ describe("PlaygroundController", () => {
       loras: [],
     };
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptImageUid: "image-prompt" },
       savedState: previousPromptState,
       selectionValue: previousPromptState,
       modeStateRejection: (state) =>
@@ -437,6 +469,7 @@ describe("PlaygroundController", () => {
           loras: [
             {
               lora_uid: "unavailable-lora",
+              revision_uid: "unavailable-lora-revision",
               provider_name: "missing",
               model_strength: 1,
               clip_strength: 1,
@@ -451,18 +484,15 @@ describe("PlaygroundController", () => {
     await fixture.controller.start();
 
     expect(fixture.modes.value()).toEqual(previousPromptState);
-    expect(fixture.modes.applyState).toHaveBeenCalledTimes(3);
+    expect(fixture.modes.applyState).toHaveBeenCalled();
     expect(fixture.api.put).not.toHaveBeenCalled();
-    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
     expect(fixture.status.textContent).toContain("scene, loras");
   });
 
   it("visibly rejects a typed handoff without its required character", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptImage("image-prompt");
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptImageUid: "image-prompt" },
       image: {
         prompt_setup: {
           selections: [
@@ -484,12 +514,10 @@ describe("PlaygroundController", () => {
       "Character-Prompt-Auswahl fehlt",
     );
     expect(fixture.api.put).not.toHaveBeenCalled();
-    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
   });
 
   it("restores the prior prompt and retains staging when immediate state persistence fails", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptImage("image-prompt");
     const previousPromptState = {
       selections: [
         {
@@ -502,8 +530,7 @@ describe("PlaygroundController", () => {
       loras: [],
     };
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptImageUid: "image-prompt" },
       savedState: previousPromptState,
       selectionValue: previousPromptState,
       stateSaveError: new Error("state save kaputt"),
@@ -526,13 +553,11 @@ describe("PlaygroundController", () => {
 
     expect(fixture.modes.value()).toEqual(previousPromptState);
     expect(fixture.api.put).toHaveBeenCalledOnce();
-    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
     expect(fixture.status.textContent).toContain("state save kaputt");
   });
 
   it("rolls back through the public state API when editor application throws", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptImage("image-prompt");
     const previousPromptState = {
       selections: [
         {
@@ -546,8 +571,7 @@ describe("PlaygroundController", () => {
     };
     let attemptedNewState = false;
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptImageUid: "image-prompt" },
       savedState: previousPromptState,
       selectionValue: previousPromptState,
       modeStateError: (state) => {
@@ -568,6 +592,10 @@ describe("PlaygroundController", () => {
           return new Error("rollback kaputt");
         return null;
       },
+      controlStateError: (state) =>
+        state.checkpoint === "model"
+          ? new Error("controls rollback kaputt")
+          : null,
       image: {
         prompt_setup: {
           selections: [
@@ -586,19 +614,20 @@ describe("PlaygroundController", () => {
     await fixture.controller.start();
 
     expect(fixture.api.put).not.toHaveBeenCalled();
-    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
     expect(fixture.status.textContent).toContain("rollback kaputt");
+    expect(fixture.status.textContent).toContain("controls rollback kaputt");
   });
 
   it("reports prompt-source cleanup failures after a successful state save", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptImage("image-prompt");
-    vi.spyOn(intentStore, "clearPromptImage").mockImplementation(() => {
-      throw new Error("storage kaputt");
-    });
+    const intentUrlCleaner = {
+      removeHandoff: vi.fn(() => {
+        throw new Error("URL kaputt");
+      }),
+    };
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptImageUid: "image-prompt" },
+      intentUrlCleaner,
       image: {
         prompt_setup: {
           selections: [
@@ -617,8 +646,12 @@ describe("PlaygroundController", () => {
     await fixture.controller.start();
 
     expect(fixture.api.put).toHaveBeenCalledOnce();
-    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
-    expect(fixture.status.textContent).toContain("storage kaputt");
+    expect(fixture.modes.value().selections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ component_uid: "character-a" }),
+      ]),
+    );
+    expect(fixture.status.textContent).toContain("URL kaputt");
   });
 
   it("rejects malformed typed prompt ordering and identities visibly", async () => {
@@ -694,11 +727,8 @@ describe("PlaygroundController", () => {
     ];
 
     for (const invalid of invalidSelections) {
-      const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-      intentStore.stagePromptImage("image-prompt");
       const fixture = createFixture({
-        intent: intentStore.read(),
-        intentStore,
+        intent: { promptImageUid: "image-prompt" },
         image: {
           prompt_setup: { selections: invalid.selections, loras: [] },
         },
@@ -708,7 +738,7 @@ describe("PlaygroundController", () => {
 
       expect(fixture.status.textContent).toContain(invalid.message);
       expect(fixture.api.put).not.toHaveBeenCalled();
-      expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+      expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
     }
   });
 
@@ -720,12 +750,14 @@ describe("PlaygroundController", () => {
       },
       {
         loras: [{ lora_uid: "lora-style" }],
-        message: "LoRA-Wirksamkeit des Bildes ist nicht verfügbar",
+        message: "LoRA-Identität des Bildes ist unvollständig",
       },
       {
         loras: [
           {
             lora_uid: "lora-style",
+            revision_uid: "lora-style-revision",
+            provider_name: "style.safetensors",
             model_effective: true,
             clip_effective: true,
             model_strength: "invalid",
@@ -745,11 +777,8 @@ describe("PlaygroundController", () => {
     ];
 
     for (const invalid of malformedLoras) {
-      const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-      intentStore.stagePromptImage("image-prompt");
       const fixture = createFixture({
-        intent: intentStore.read(),
-        intentStore,
+        intent: { promptImageUid: "image-prompt" },
         image: {
           prompt_setup: {
             selections: characterSelection,
@@ -762,14 +791,11 @@ describe("PlaygroundController", () => {
 
       expect(fixture.status.textContent).toContain(invalid.message);
       expect(fixture.api.put).not.toHaveBeenCalled();
-      expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+      expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
     }
 
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptImage("image-prompt");
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptImageUid: "image-prompt" },
       image: {
         prompt_setup: { selections: characterSelection },
       },
@@ -779,16 +805,12 @@ describe("PlaygroundController", () => {
 
     expect(fixture.modes.value().loras).toEqual([]);
     expect(fixture.api.put).toHaveBeenCalledOnce();
-    expect(intentStore.read()).toEqual({});
+    expect(fixture.urlCleaner.removeHandoff).toHaveBeenCalledOnce();
   });
 
   it("applies a complete composition as the normal exact generator state", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptComposition("composition-exact");
-    intentStore.stageRenderSetup("render-image");
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptCompositionUid: "composition-exact" },
       savedState: {
         selections: [
           {
@@ -856,7 +878,7 @@ describe("PlaygroundController", () => {
     expect(
       fixture.controls.applyIntent.mock.invocationCallOrder[0],
     ).toBeLessThan(fixture.api.put.mock.invocationCallOrder[0]);
-    expect(intentStore.read()).toEqual({ renderImageUid: "render-image" });
+    expect(fixture.urlCleaner.removeHandoff).toHaveBeenCalledOnce();
     expect(
       fixture.api.post.mock.calls.some(
         ([path]) => path === "playground/drafts",
@@ -886,13 +908,11 @@ describe("PlaygroundController", () => {
   });
 
   it("applies one exact scope selection as a partial prompt patch", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptScope({
+    const promptScope = {
       kind: "scene",
       component_uid: "scene-a",
       revision_uid: "scene-revision-historical",
-    });
-    intentStore.stageRenderSetup("render-image");
+    };
     const savedState = {
       selections: [
         {
@@ -917,8 +937,7 @@ describe("PlaygroundController", () => {
       loras: [],
     };
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptScope },
       savedState,
     });
 
@@ -947,7 +966,7 @@ describe("PlaygroundController", () => {
     });
     expect(byKind.get("character")).toEqual(savedState.selections[0]);
     expect(byKind.get("modifier")).toEqual(savedState.selections[2]);
-    expect(intentStore.read()).toEqual({ renderImageUid: "render-image" });
+    expect(fixture.urlCleaner.removeHandoff).toHaveBeenCalledOnce();
 
     await fixture.controller.prepare();
     const draftCall = fixture.api.post.mock.calls.find(
@@ -964,18 +983,15 @@ describe("PlaygroundController", () => {
     expect(draftCall[1]).not.toHaveProperty("composition_uid");
   });
 
-  it("applies, persists, and removes only a typed Combination source", async () => {
+  it("applies, persists, and removes all handoff query parameters", async () => {
     const selections = [
       { kind: "scene", component_uid: "scene-a", revision_uid: null },
       { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
     ];
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stageRenderSetup("render-image");
-    intentStore.stagePromptCombination(selections);
     const locationRef = {
       href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
         JSON.stringify(selections),
-      )}&render_image=render-image&sampler=euler&view=cards`,
+      )}&sampler=euler&view=cards`,
     };
     const historyRef = {
       state: null,
@@ -1001,12 +1017,8 @@ describe("PlaygroundController", () => {
       loras: [{ lora_uid: "existing-lora" }],
     };
     const fixture = createFixture({
-      intent: {
-        ...intentStore.read(),
-        ...readPlaygroundIntent(new URL(locationRef.href).search),
-      },
-      intentStore,
-      intentUrlCleaner: new PlaygroundIntentUrlCleaner(locationRef, historyRef),
+      intent: readPlaygroundIntent(new URL(locationRef.href).search),
+      intentUrlCleaner: new GeneratorHandoffUrlCleaner(locationRef, historyRef),
       savedState,
       selectionValue: savedState,
     });
@@ -1047,16 +1059,12 @@ describe("PlaygroundController", () => {
       }),
       expect.any(Object),
     );
-    expect(intentStore.read()).toEqual({ renderImageUid: "render-image" });
-
     const currentUrl = new URL(locationRef.href);
     expect(currentUrl.searchParams.has("prompt_combination")).toBe(false);
-    expect(currentUrl.searchParams.get("render_image")).toBe("render-image");
-    expect(currentUrl.searchParams.get("sampler")).toBe("euler");
+    expect(currentUrl.searchParams.has("sampler")).toBe(false);
     expect(currentUrl.searchParams.get("view")).toBe("cards");
     expect(historyRef.replaceState).toHaveBeenCalledOnce();
     const reloadedIntent = {
-      ...intentStore.read(),
       ...readPlaygroundIntent(currentUrl.search),
     };
     expect(reloadedIntent.promptCombination).toBeUndefined();
@@ -1096,13 +1104,10 @@ describe("PlaygroundController", () => {
         revision_uid: null,
       },
     ];
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stageRenderSetup("render-image");
-    intentStore.stagePromptCombination(selections);
     const locationRef = {
       href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
         JSON.stringify(selections),
-      )}&render_image=render-image`,
+      )}`,
     };
     const historyRef = { state: null, replaceState: vi.fn() };
     const savedState = {
@@ -1117,12 +1122,8 @@ describe("PlaygroundController", () => {
       loras: [{ lora_uid: "existing-lora" }],
     };
     const fixture = createFixture({
-      intent: {
-        ...intentStore.read(),
-        ...readPlaygroundIntent(new URL(locationRef.href).search),
-      },
-      intentStore,
-      intentUrlCleaner: new PlaygroundIntentUrlCleaner(locationRef, historyRef),
+      intent: readPlaygroundIntent(new URL(locationRef.href).search),
+      intentUrlCleaner: new GeneratorHandoffUrlCleaner(locationRef, historyRef),
       savedState,
       selectionValue: savedState,
       modeStateRejection: (state) =>
@@ -1131,15 +1132,9 @@ describe("PlaygroundController", () => {
 
     await fixture.controller.start();
 
-    expect(fixture.status.textContent).toContain(
-      "Combination-Prompt abgewiesen: outfit",
-    );
+    expect(fixture.status.textContent).toContain("outfit");
     expect(fixture.modes.value()).toEqual(savedState);
     expect(fixture.api.put).not.toHaveBeenCalled();
-    expect(intentStore.read()).toEqual({
-      promptCombination: selections,
-      renderImageUid: "render-image",
-    });
     expect(historyRef.replaceState).not.toHaveBeenCalled();
     expect(
       new URL(locationRef.href).searchParams.has("prompt_combination"),
@@ -1151,12 +1146,10 @@ describe("PlaygroundController", () => {
       { kind: "scene", component_uid: "scene-a", revision_uid: null },
       { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
     ];
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptCombination(selections);
     const locationRef = {
       href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
         JSON.stringify(selections),
-      )}&render_image=render-image`,
+      )}`,
     };
     const historyRef = { state: null, replaceState: vi.fn() };
     const savedState = {
@@ -1171,12 +1164,8 @@ describe("PlaygroundController", () => {
       loras: [],
     };
     const fixture = createFixture({
-      intent: {
-        ...intentStore.read(),
-        ...readPlaygroundIntent(new URL(locationRef.href).search),
-      },
-      intentStore,
-      intentUrlCleaner: new PlaygroundIntentUrlCleaner(locationRef, historyRef),
+      intent: readPlaygroundIntent(new URL(locationRef.href).search),
+      intentUrlCleaner: new GeneratorHandoffUrlCleaner(locationRef, historyRef),
       savedState,
       selectionValue: savedState,
       stateSaveError: new Error("persist failed"),
@@ -1184,12 +1173,9 @@ describe("PlaygroundController", () => {
 
     await fixture.controller.start();
 
-    expect(fixture.status.textContent).toContain(
-      "Combination-Prompt konnte nicht übernommen werden",
-    );
+    expect(fixture.status.textContent).toContain("persist failed");
     expect(fixture.modes.value()).toEqual(savedState);
     expect(fixture.api.put).toHaveBeenCalledOnce();
-    expect(intentStore.read()).toEqual({ promptCombination: selections });
     expect(historyRef.replaceState).not.toHaveBeenCalled();
     expect(
       new URL(locationRef.href).searchParams.has("prompt_combination"),
@@ -1197,8 +1183,6 @@ describe("PlaygroundController", () => {
   });
 
   it("retains a typed composition source and restores state after persistence fails", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptComposition("composition-failed");
     const savedState = {
       selections: [
         {
@@ -1211,8 +1195,7 @@ describe("PlaygroundController", () => {
       loras: [],
     };
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptCompositionUid: "composition-failed" },
       savedState,
       stateSaveError: new Error("persist failed"),
       compositionHandoff: {
@@ -1228,18 +1211,12 @@ describe("PlaygroundController", () => {
 
     await fixture.controller.start();
 
-    expect(fixture.status.textContent).toContain(
-      "Composition-Prompt konnte nicht übernommen werden",
-    );
-    expect(intentStore.read()).toEqual({
-      promptCompositionUid: "composition-failed",
-    });
+    expect(fixture.status.textContent).toContain("persist failed");
+    expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
     expect(fixture.modes.value().selections).toEqual(savedState.selections);
   });
 
   it("rejects an incomplete composition without changing or clearing the prompt", async () => {
-    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
-    intentStore.stagePromptComposition("composition-no-character");
     const savedState = {
       selections: [
         {
@@ -1252,8 +1229,7 @@ describe("PlaygroundController", () => {
       loras: [],
     };
     const fixture = createFixture({
-      intent: intentStore.read(),
-      intentStore,
+      intent: { promptCompositionUid: "composition-no-character" },
       savedState,
       compositionHandoff: {
         selections: [
@@ -1273,28 +1249,31 @@ describe("PlaygroundController", () => {
     );
     expect(fixture.modes.value().selections).toEqual(savedState.selections);
     expect(fixture.api.put).not.toHaveBeenCalled();
-    expect(intentStore.read()).toEqual({
-      promptCompositionUid: "composition-no-character",
-    });
+    expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
   });
 
-  it("keeps rejected image staging and resolves independent packages", async () => {
-    const intentStore = { clear: vi.fn() };
+  it("keeps rejected image handoff parameters and resolves independent packages", async () => {
     const fixture = createFixture({
       intent: {
         promptImageUid: "image-prompt",
         renderImageUid: "image-render",
       },
       intentRejected: ["checkpoint"],
-      intentStore,
       image: {
         prompt_setup: {
           source_image_uid: "image-prompt",
-          component_uids: ["character-a"],
-          revision_uids: ["revision-character-a"],
+          selections: [
+            {
+              kind: "character",
+              component_uid: "character-a",
+              revision_uid: "revision-character-a",
+              position: 0,
+            },
+          ],
           loras: [],
         },
         render_setup: {
+          applicable: true,
           checkpoint: "missing.safetensors",
           seed: 42,
           aspect_format: "1:1",
@@ -1318,7 +1297,7 @@ describe("PlaygroundController", () => {
       fixture.api.get.mock.calls.filter(([path]) => path.startsWith("images/")),
     ).toHaveLength(2);
     expect(fixture.status.textContent).toContain("checkpoint");
-    expect(intentStore.clear).not.toHaveBeenCalled();
+    expect(fixture.urlCleaner.removeHandoff).not.toHaveBeenCalled();
   });
 
   it("owns guidance modes, explicit application, invalidation and refresh errors", async () => {
@@ -1511,6 +1490,7 @@ function createFixture(options = {}) {
       return options.modeStateRejection?.(state) || options.stateRejected || [];
     }),
     showResolvedComponents: vi.fn(),
+    setBusy: vi.fn(),
     value: vi.fn(() => {
       selectionSnapshots.add(activeSelectionValue);
       return activeSelectionValue;
@@ -1518,7 +1498,11 @@ function createFixture(options = {}) {
   });
   const controls = disposable({
     render: vi.fn(),
-    applyState: vi.fn(() => options.stateRejected || []),
+    applyState: vi.fn((state) => {
+      const error = options.controlStateError?.(state);
+      if (error) throw error;
+      return options.stateRejected || [];
+    }),
     applyIntent: vi.fn(() => options.intentRejected || []),
     stateValue: vi.fn(() => ({
       checkpoint: "model",
@@ -1553,6 +1537,7 @@ function createFixture(options = {}) {
   });
   const draft = disposable({
     render: vi.fn(),
+    clear: vi.fn(),
     promptPayload: vi.fn(() =>
       options.emptyPromptPayload
         ? null
@@ -1619,7 +1604,9 @@ function createFixture(options = {}) {
             });
       }
       if (path === "playground/evidence") {
-        return Promise.resolve({ prompt_match: null, sampler_match: null });
+        return options.evidenceError
+          ? Promise.reject(options.evidenceError)
+          : Promise.resolve({ prompt_match: null, sampler_match: null });
       }
       return options.generationError
         ? Promise.reject(options.generationError)
@@ -1639,6 +1626,26 @@ function createFixture(options = {}) {
     render: vi.fn(),
     renderLoading: vi.fn(),
   });
+  const persistence = new GeneratorStatePersistence({
+    api,
+    snapshot: () => ({
+      ...modes.value(),
+      ...controls.stateValue(),
+    }),
+    onError: (error) => {
+      status.textContent = `Einstellungen konnten nicht gespeichert werden: ${error.message}`;
+    },
+  });
+  const handoffRequests = new RequestLifecycle();
+  const urlCleaner = options.intentUrlCleaner || { removeHandoff: vi.fn() };
+  const handoffApplier = new GeneratorHandoffApplier({
+    api,
+    modes,
+    controls,
+    persistence,
+    requests: handoffRequests,
+    urlCleaner,
+  });
   const controller = new PlaygroundController({
     api,
     modes,
@@ -1648,14 +1655,14 @@ function createFixture(options = {}) {
     requests: new RequestLifecycle(),
     previewRequests: new RequestLifecycle(),
     guidanceRequests: new RequestLifecycle(),
-    stateRequests: new RequestLifecycle(),
+    persistence,
+    handoffApplier,
+    draftSession: new DraftSession(new RequestLifecycle()),
     prepareButton,
     submitButton,
     status,
     result,
     intent: options.intent,
-    intentStore: options.intentStore,
-    intentUrlCleaner: options.intentUrlCleaner,
   });
   return {
     controller,
@@ -1668,25 +1675,8 @@ function createFixture(options = {}) {
     status,
     result,
     guidance,
+    urlCleaner,
   };
-}
-
-class MemoryStorage {
-  constructor() {
-    this.values = new Map();
-  }
-
-  getItem(key) {
-    return this.values.get(key) ?? null;
-  }
-
-  setItem(key, value) {
-    this.values.set(key, String(value));
-  }
-
-  removeItem(key) {
-    this.values.delete(key);
-  }
 }
 
 function disposable(methods) {

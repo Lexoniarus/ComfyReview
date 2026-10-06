@@ -9,6 +9,7 @@ export class LoraStackEditor {
     /** @type {Array<Record<string, any>>} */
     this.items = [];
     this.abortController = new AbortController();
+    this.isBusy = false;
   }
 
   /** @param {Array<Record<string, any>>} items @param {Array<string | Record<string, any>>} available */
@@ -68,6 +69,21 @@ export class LoraStackEditor {
     }));
   }
 
+  /** Disable the complete mutable stack without losing row semantics. */
+  /** @param {boolean} busy */
+  setBusy(busy) {
+    this.isBusy = busy;
+    for (const control of this.root.querySelectorAll("button, input, select")) {
+      if (
+        control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement ||
+        control instanceof HTMLSelectElement
+      ) {
+        control.disabled = busy || control.dataset.baseDisabled === "true";
+      }
+    }
+  }
+
   /** Release listeners and retained state. */
   dispose() {
     this.abortController.abort();
@@ -108,6 +124,12 @@ export class LoraStackEditor {
       { signal: this.abortController.signal },
     );
     this.root.append(heading, list, add);
+    for (const control of this.root.querySelectorAll("button:disabled")) {
+      if (control instanceof HTMLButtonElement) {
+        control.dataset.baseDisabled = "true";
+      }
+    }
+    this.setBusy(this.isBusy);
   }
 
   /** @param {Record<string, any>} item @param {number} index */

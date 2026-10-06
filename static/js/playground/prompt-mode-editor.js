@@ -29,6 +29,7 @@ export class PromptModeEditor {
     /** @type {Map<string, AbortController>} */
     this.requests = new Map();
     this.loras = null;
+    this.isBusy = false;
     /** @type {Array<Record<string, any>>} */
     this.loraDefinitions = [];
   }
@@ -79,6 +80,7 @@ export class PromptModeEditor {
     this.loras?.dispose();
     this.loras = new LoraStackEditor(editorRoot, () => this.onChange());
     this.loras.render([], loraDefinitions);
+    this.setBusy(this.isBusy);
     this.root.append(list, loraRoot);
   }
 
@@ -175,6 +177,17 @@ export class PromptModeEditor {
     }
   }
 
+  /** Prevent prompt and LoRA mutations while a draft transition is active. */
+  /** @param {boolean} busy */
+  setBusy(busy) {
+    this.isBusy = busy;
+    for (const row of this.rows.values()) {
+      row.mode.disabled = busy;
+      row.component.disabled = busy || row.mode.value !== "fixed";
+    }
+    this.loras?.setBusy(busy);
+  }
+
   dispose() {
     this.abortController.abort();
     this.#cancelRequests();
@@ -262,7 +275,7 @@ export class PromptModeEditor {
     }
     row.mode.value = mode;
     row.component.value = componentUid || "";
-    row.component.disabled = mode !== "fixed";
+    row.component.disabled = this.isBusy || mode !== "fixed";
     this.#selectionState.set(
       kind,
       Object.freeze({ kind, mode, componentUid, revisionUid }),

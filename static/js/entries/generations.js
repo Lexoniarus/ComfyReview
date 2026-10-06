@@ -3,7 +3,7 @@ import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { GenerationDetail } from "../generations/generation-detail.js";
 import { GenerationList } from "../generations/generation-list.js";
 import { ImageGeneratorActions } from "../images/image-generator-actions.js";
-import { PlaygroundIntentStore } from "../playground/playground-intent.js";
+import { GeneratorHandoffNavigator } from "../playground/playground-intent.js";
 import { GenerationsController } from "../surfaces/generations-controller.js";
 
 const root = document.querySelector("[data-v2-surface='generations']");
@@ -23,10 +23,9 @@ if (root) {
   /** @type {GenerationsController | null} */
   let controller = null;
   const api = new ApiClient("/api/v2");
-  const generatorActions = new ImageGeneratorActions({
-    api,
-    store: new PlaygroundIntentStore(window.sessionStorage),
-  });
+  const generatorActions = new ImageGeneratorActions(
+    new GeneratorHandoffNavigator(window.location),
+  );
   const list = new GenerationList(listRoot, statusFilter, {
     onSelect: (uid) => void controller?.select(uid),
     onFilter: () => void controller?.reload(),

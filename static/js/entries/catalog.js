@@ -4,7 +4,7 @@ import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { ImageViewer } from "../images/image-viewer.js";
 import { ImageGeneratorActions } from "../images/image-generator-actions.js";
-import { PlaygroundIntentStore } from "../playground/playground-intent.js";
+import { GeneratorHandoffNavigator } from "../playground/playground-intent.js";
 import { CatalogController } from "../surfaces/catalog-controller.js";
 
 const root = document.querySelector("[data-v2-surface='catalog']");
@@ -29,10 +29,9 @@ if (root instanceof HTMLElement) {
     let controller = null;
     const api = new ApiClient();
     const viewer = new ImageViewer(viewerRoot);
-    const generatorActions = new ImageGeneratorActions({
-      api,
-      store: new PlaygroundIntentStore(window.sessionStorage),
-    });
+    const generatorActions = new ImageGeneratorActions(
+      new GeneratorHandoffNavigator(window.location),
+    );
     const browser = new CatalogBrowser(kindsRoot, listRoot, search, {
       onSelect: (uid, catalogKind) => void controller?.select(uid, catalogKind),
     });

@@ -85,7 +85,7 @@ describe("AnalyticsView", () => {
       .querySelector(".evidence-carousel-image")
       ?.dispatchEvent(new Event("click"));
     expect(open).toHaveBeenCalledWith("image-1", "/one.png");
-    expect(root.textContent).toContain("Prompt vormerken");
+    expect(root.textContent).toContain("Prompt & LoRAs übernehmen");
   });
 
   it("renders every observed/predicted setup/parameter mode with concrete support", () => {
@@ -116,7 +116,7 @@ describe("AnalyticsView", () => {
     expect(root.textContent).toContain("Rechnerisch");
     expect(root.textContent).toContain("82.0 % prognostizierter Erfolg");
     expect(root.textContent).toContain("14 unabhängige Bilder");
-    expect(root.textContent).toContain("Parameter vormerken");
+    expect(root.textContent).toContain("Parameter übernehmen");
     expect(root.querySelectorAll("[data-guidance-basis]")).toHaveLength(2);
     expect(
       root.querySelectorAll("[data-guidance-scope]").length,
@@ -138,7 +138,7 @@ describe("AnalyticsView", () => {
         },
       ],
     });
-    expect(root.textContent).toContain("Prompt vormerken");
+    expect(root.textContent).toContain("Prompt & LoRAs übernehmen");
     expect(root.querySelector("[data-analytics-view]")).toBeNull();
     view.renderCompositionSetups("composition-a", {
       rows: [
@@ -216,7 +216,7 @@ describe("AnalyticsView", () => {
         },
       ],
     });
-    expect(root.textContent).toContain("Gesamtsetup vormerken");
+    expect(root.textContent).toContain("Generierungseinstellungen übernehmen");
     view.render("parameters", {
       basis: "predicted",
       scope: "setup",

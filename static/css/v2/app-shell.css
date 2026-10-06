@@ -2,39 +2,6 @@
   box-sizing: border-box;
 }
 
-.global-intent-tray {
-  position: fixed;
-  z-index: 90;
-  right: 1rem;
-  bottom: 1rem;
-  max-width: min(44rem, calc(100vw - 2rem));
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border-strong, #435169);
-  border-radius: 0.8rem;
-  background: var(--surface-raised, #151c28);
-  box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
-}
-
-.global-intent-tray[hidden],
-.global-intent-toast[hidden] {
-  display: none;
-}
-
-.global-intent-toast {
-  position: fixed;
-  z-index: 100;
-  left: 50%;
-  bottom: 6rem;
-  transform: translateX(-50%);
-  padding: 0.65rem 0.9rem;
-  border-radius: 999px;
-  color: var(--text-primary, #f7f9fc);
-  background: var(--accent-strong, #3f6fb8);
-}
-
 .image-generator-actions {
   display: flex;
   flex-wrap: wrap;

@@ -1,12 +1,9 @@
-/** Own image-to-generator action menus, validation requests and staging. */
+/** Own the shared image-to-generator action presentation. */
 export class ImageGeneratorActions {
-  /** @param {{api: {get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>}, store: {stagePromptImage: (uid: string) => any, stageRenderSetup: (uid: string) => any}, eventTarget?: EventTarget}} dependencies */
-  constructor(dependencies) {
-    this.api = dependencies.api;
-    this.store = dependencies.store;
-    this.eventTarget = dependencies.eventTarget || window;
+  /** @param {import("../playground/playground-intent.js").GeneratorHandoffNavigator} navigator */
+  constructor(navigator) {
+    this.navigator = navigator;
     this.abortController = new AbortController();
-    this.request = null;
   }
 
   /** @param {string} imageUid @param {"compact" | "prominent"} [variant] */
@@ -34,100 +31,40 @@ export class ImageGeneratorActions {
         { signal: this.abortController.signal },
       );
       menu.append(
-        this.#button(imageUid, "prompt", "Prompt-Setup vormerken"),
-        this.#button(imageUid, "render", "Generierungseinstellungen vormerken"),
+        this.#button(imageUid, "prompt", "compact"),
+        this.#button(imageUid, "render", "compact"),
       );
       root.append(toggle, menu);
       return root;
     }
     root.append(
-      this.#button(imageUid, "prompt", "Prompt-Setup vormerken"),
-      this.#button(imageUid, "render", "Generierungseinstellungen vormerken"),
+      this.#button(imageUid, "prompt", "prominent"),
+      this.#button(imageUid, "render", "prominent"),
     );
     return root;
   }
 
   dispose() {
     this.abortController.abort();
-    this.request?.abort();
   }
 
-  /** @param {string} imageUid @param {"prompt" | "render"} kind @param {string} label */
-  #button(imageUid, kind, label) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = kind === "prompt" ? "secondary-button" : "ghost-button";
-    button.textContent = label;
+  /** @param {string} imageUid @param {"prompt" | "render"} kind @param {"compact" | "prominent"} variant */
+  #button(imageUid, kind, variant) {
+    const button = createGeneratorHandoffAction(kind, { variant });
     button.addEventListener(
       "click",
       (event) => {
         event.preventDefault();
         event.stopPropagation();
-        void this.#stage(button, imageUid, kind);
+        this.navigator.openIntent(
+          kind === "prompt"
+            ? { kind: "image-prompt", imageUid }
+            : { kind: "image-render", imageUid },
+        );
       },
       { signal: this.abortController.signal },
     );
     return button;
   }
-
-  /** @param {HTMLButtonElement} button @param {string} imageUid @param {"prompt" | "render"} kind */
-  async #stage(button, imageUid, kind) {
-    this.request?.abort();
-    this.request = new AbortController();
-    button.disabled = true;
-    try {
-      const handoff = await this.api.get(
-        `images/${encodeURIComponent(imageUid)}/generator-handoff`,
-        { signal: this.request.signal },
-      );
-      if (kind === "render" && !handoff.render_setup?.applicable) {
-        const issues = Array.isArray(handoff.render_setup?.issues)
-          ? handoff.render_setup.issues.join(", ")
-          : "nicht anwendbar";
-        throw new Error(`Render-Setup kann nicht übernommen werden: ${issues}`);
-      }
-      if (kind === "prompt") {
-        const promptSetup = handoff.prompt_setup || {};
-        if (
-          !Array.isArray(promptSetup.selections) ||
-          !promptSetup.selections.some(
-            (/** @type {Record<string, any>} */ selection) =>
-              selection?.kind === "character" &&
-              typeof selection.component_uid === "string" &&
-              selection.component_uid.trim() &&
-              typeof selection.revision_uid === "string" &&
-              selection.revision_uid.trim(),
-          )
-        )
-          throw new Error(
-            "Für dieses Bild ist kein vollständiges Character-Prompt-Setup verfügbar.",
-          );
-        this.store.stagePromptImage(imageUid);
-      } else {
-        this.store.stageRenderSetup(imageUid);
-      }
-      this.#notify(
-        kind === "prompt"
-          ? "Prompt-Setup für den Generator vorgemerkt"
-          : "Generierungseinstellungen für den Generator vorgemerkt",
-      );
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        this.#notify(
-          error && typeof error === "object" && "message" in error
-            ? String(error.message)
-            : "Übernahme konnte nicht vorbereitet werden",
-        );
-      }
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  /** @param {string} message */
-  #notify(message) {
-    this.eventTarget.dispatchEvent(
-      new CustomEvent("comfyreview:intent-staged", { detail: { message } }),
-    );
-  }
 }
+import { createGeneratorHandoffAction } from "../playground/generator-handoff-action.js";

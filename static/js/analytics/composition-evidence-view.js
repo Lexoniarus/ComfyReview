@@ -6,6 +6,7 @@ import {
   reportIntro,
   textValue,
 } from "./analytics-formatters.js";
+import { createGeneratorHandoffAction } from "../playground/generator-handoff-action.js";
 
 /** Render actually used prompt-composition evidence. */
 export class CompositionEvidenceView {
@@ -87,11 +88,9 @@ export class CompositionEvidenceView {
     evidence.textContent = `${textValue(row.image_count)} Bilder · ${textValue(row.rating_count)} Bewertungen · Ø ${decimalValue(row.average_rating)} / 10`;
     const actions = document.createElement("div");
     actions.className = "analytics-card-actions";
-    const use = document.createElement("button");
-    use.type = "button";
-    use.dataset.playgroundIntent = "composition";
-    use.dataset.compositionUid = String(row.composition_uid || "");
-    use.textContent = "Prompt vormerken";
+    const use = createGeneratorHandoffAction("composition", {
+      data: { compositionUid: String(row.composition_uid || "") },
+    });
     const details = document.createElement("button");
     details.type = "button";
     details.dataset.compositionDetails = String(row.composition_uid || "");

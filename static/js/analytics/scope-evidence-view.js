@@ -7,6 +7,7 @@ import {
   textValue,
 } from "./analytics-formatters.js";
 import { AnalyticsCardRail } from "./analytics-card-rail.js";
+import { createGeneratorHandoffAction } from "../playground/generator-handoff-action.js";
 
 /** Render one focused canonical scope collection. */
 export class ScopeEvidenceView {
@@ -45,13 +46,13 @@ export class ScopeEvidenceView {
       card.dataset.itemKey = String(row.component_uid || "");
       const title = document.createElement("h3");
       title.textContent = textValue(row.name);
-      const action = document.createElement("button");
-      action.type = "button";
-      action.className = "secondary-button analytics-use-button";
-      action.dataset.playgroundIntent = "scope";
-      action.dataset.componentUid = String(row.component_uid || "");
-      action.dataset.promptKind = String(row.kind || "");
-      action.textContent = "Prompt vormerken";
+      const action = createGeneratorHandoffAction("scope", {
+        className: "analytics-use-button",
+        data: {
+          componentUid: String(row.component_uid || ""),
+          promptKind: String(row.kind || ""),
+        },
+      });
       const body = document.createElement("div");
       body.className = "analytics-card-body";
       body.append(title);

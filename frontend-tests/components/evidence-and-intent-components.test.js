@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PlaygroundIntentTray } from "../../static/js/analytics/playground-intent-tray.js";
 import { EvidenceCarousel } from "../../static/js/components/evidence-carousel.js";
 import { ImageGeneratorActions } from "../../static/js/images/image-generator-actions.js";
-import { PlaygroundIntentStore } from "../../static/js/playground/playground-intent.js";
 
 describe("Shared evidence and Playground intent components", () => {
   beforeEach(() => {
@@ -107,190 +105,38 @@ describe("Shared evidence and Playground intent components", () => {
     isolatedCarousel.dispose();
   });
 
-  it("stages, summarizes, resets and consumes tab-local intents", () => {
-    const storage = new MemoryStorage();
-    const store = new PlaygroundIntentStore(storage);
-    const root = document.createElement("aside");
-    const toast = document.createElement("div");
-    const locationRef = { assign: vi.fn() };
-    const tray = new PlaygroundIntentTray(root, toast, store, locationRef);
-    expect(root.hidden).toBe(true);
-    root.append(document.createElement("span"));
-    root.firstElementChild.click();
-    tray.notify("Direkte Nachricht");
-    expect(toast.textContent).toBe("Direkte Nachricht");
-
-    tray.stage(
-      action("scope", {
-        componentUid: "character-a",
-        promptKind: "character",
-      }),
-    );
-    expect(root.textContent).toContain("Prompt-Baustein");
-    expect(toast.textContent).toContain("Prompt");
-    tray.stage(action("parameter", { parameter: "cfg", value: "6.5" }));
-    expect(root.textContent).toContain("CFG 6.5");
-    expect(toast.textContent).toContain("cfg");
-    tray.stage(
-      action("recommendation", {
-        recommendation: JSON.stringify({
-          checkpoint: "model",
-          sampler: "euler",
-          scheduler: "normal",
-          steps: 24,
-          cfg: 6,
-          denoise: 1,
-        }),
-      }),
-    );
-    expect(root.textContent).toContain("Checkpoint model");
-    expect(toast.textContent).toContain("Gesamtsetup");
-    tray.stage(
-      action("composition", {
-        compositionUid: "composition-a",
-      }),
-    );
-    expect(root.textContent).toContain("Prompt-Komposition");
-    store.stagePromptImage("image-prompt");
-    tray.render();
-    expect(root.textContent).toContain("Prompt-Setup eines Bildes");
-    store.stageRenderSetup("image-render");
-    tray.render();
-    expect(root.textContent).toContain(
-      "Generierungseinstellungen eines Bildes",
-    );
-    tray.stage(action("unknown", {}));
-    expect(toast.textContent).toContain("Auswahl");
-
-    root.querySelector("[data-intent-open]").click();
-    expect(locationRef.assign).toHaveBeenCalledWith(
-      expect.stringContaining("/playground/generator?"),
-    );
-    tray.render();
-    expect(root.hidden).toBe(false);
-    store.clear();
-    tray.render();
-    expect(root.hidden).toBe(true);
-
-    tray.stage(action("parameter", { parameter: "sampler", value: "euler" }));
-    root.querySelector("[data-intent-reset]").click();
-    expect(root.hidden).toBe(true);
-    tray.stage(action("parameter", { parameter: "steps", value: "20" }));
-    vi.runAllTimers();
-    expect(toast.hidden).toBe(true);
-    tray.stage(action("parameter", { parameter: "cfg", value: "7" }));
-    tray.dispose();
-  });
-
-  it("owns image handoff menus, validation, notifications and disposal", async () => {
-    const promptSetup = {
-      selections: [
-        {
-          kind: "character",
-          component_uid: "character-a",
-          revision_uid: "character-rev-1",
-          position: 0,
-        },
-        {
-          kind: "scene",
-          component_uid: "scene-a",
-          revision_uid: "scene-rev-1",
-          position: 1,
-        },
-      ],
-      loras: [],
-    };
-    const api = {
-      get: vi.fn(async () => ({
-        prompt_setup: promptSetup,
-        render_setup: { applicable: true },
-      })),
-    };
-    const store = {
-      stagePromptImage: vi.fn(),
-      stageRenderSetup: vi.fn(),
-    };
-    const eventTarget = new EventTarget();
-    const notifications = [];
-    eventTarget.addEventListener("comfyreview:intent-staged", (event) =>
-      notifications.push(event.detail.message),
-    );
-    const actions = new ImageGeneratorActions({ api, store, eventTarget });
+  it("owns consistent direct image handoff actions and disposal", () => {
+    const navigator = { openIntent: vi.fn() };
+    const actions = new ImageGeneratorActions(navigator);
     const compact = actions.create("image-1");
     document.body.append(compact);
     const toggle = compact.querySelector(".image-generator-actions-toggle");
     toggle.click();
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    compact.querySelector(".secondary-button").click();
-    await settle();
-    expect(store.stagePromptImage).toHaveBeenCalledWith("image-1");
-    expect(notifications.at(-1)).toContain("Prompt-Setup");
+    compact.querySelector("[data-playground-intent='prompt']").click();
+    expect(navigator.openIntent).toHaveBeenCalledWith({
+      kind: "image-prompt",
+      imageUid: "image-1",
+    });
+    expect(compact.textContent).toContain("Prompt & LoRAs übernehmen");
 
     const prominent = actions.create("image-2", "prominent");
-    prominent.querySelector(".ghost-button").click();
-    await settle();
-    expect(store.stageRenderSetup).toHaveBeenCalledWith("image-2");
-
-    api.get.mockResolvedValueOnce({
-      render_setup: { applicable: false, issues: ["multi_stage"] },
+    prominent.querySelector("[data-playground-intent='render']").click();
+    expect(navigator.openIntent).toHaveBeenCalledWith({
+      kind: "image-render",
+      imageUid: "image-2",
     });
-    prominent.querySelector(".ghost-button").click();
-    await settle();
-    expect(notifications.at(-1)).toContain("multi_stage");
-    api.get.mockRejectedValueOnce(new Error("kaputt"));
-    prominent.querySelector(".secondary-button").click();
-    await settle();
-    expect(notifications.at(-1)).toBe("kaputt");
-    api.get.mockResolvedValueOnce({
-      prompt_setup: {
-        selections: [],
-        component_uids: ["legacy-character"],
-        revision_uids: ["legacy-revision"],
-      },
-      render_setup: { applicable: true },
-    });
-    prominent.querySelector(".secondary-button").click();
-    await settle();
-    expect(notifications.at(-1)).toContain("Character-Prompt-Setup");
-    api.get.mockRejectedValueOnce(new DOMException("aborted", "AbortError"));
-    prominent.querySelector(".secondary-button").click();
-    await settle();
+    expect(prominent.textContent).toContain(
+      "Generierungseinstellungen übernehmen",
+    );
     actions.dispose();
+    compact.querySelector("[data-playground-intent='prompt']").click();
+    expect(navigator.openIntent).toHaveBeenCalledTimes(2);
   });
 });
-
-class MemoryStorage {
-  constructor() {
-    this.values = new Map();
-  }
-
-  getItem(key) {
-    return this.values.get(key) ?? null;
-  }
-
-  setItem(key, value) {
-    this.values.set(key, String(value));
-  }
-
-  removeItem(key) {
-    this.values.delete(key);
-  }
-}
-
-function action(kind, values) {
-  const element = document.createElement("button");
-  element.dataset.playgroundIntent = kind;
-  Object.assign(element.dataset, values);
-  return element;
-}
 
 function pointerEvent(type, clientX) {
   const event = new Event(type, { bubbles: true });
   Object.defineProperty(event, "clientX", { value: clientX });
   return event;
-}
-
-async function settle() {
-  await Promise.resolve();
-  await Promise.resolve();
 }

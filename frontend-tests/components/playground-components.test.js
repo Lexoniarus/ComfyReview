@@ -1307,17 +1307,6 @@ describe("Playground browser components", () => {
     track.dispatchEvent(touchEvent("touchend", "changedTouches", 100));
     expect(track?.getAttribute("data-carousel-index")).toBe("0");
     expect(root.querySelectorAll(".playground-character-row")).toHaveLength(1);
-    const carouselText = document.createTextNode("carousel plain");
-    root.querySelector(".playground-combination-group")?.append(carouselText);
-    carouselText.dispatchEvent(new Event("click", { bubbles: true }));
-    const legacyAction = document.createElement("button");
-    legacyAction.dataset.playgroundIntent = "image";
-    root.append(legacyAction);
-    legacyAction.click();
-    expect(navigator.open).toHaveBeenCalled();
-    root
-      .appendChild(document.createTextNode("plain"))
-      .dispatchEvent(new Event("click", { bubbles: true }));
 
     view.dispose();
     expect(root.children).toHaveLength(0);
@@ -1385,16 +1374,18 @@ describe("Playground browser components", () => {
       ".playground-combination-generator-action",
     );
     expect(actions).toHaveLength(2);
-    expect(actions[0].dataset.playgroundIntent).toBeUndefined();
+    expect(actions[0].dataset.playgroundIntent).toBe("combination");
     expect(actions[0].dataset.promptCombination).toBeUndefined();
     const twoComponentIntent = {
-      promptCombination: [
+      kind: "combination",
+      selections: [
         { kind: "character", component_uid: "character-a", revision_uid: null },
         { kind: "scene", component_uid: "scene-a", revision_uid: null },
       ],
     };
     const threeComponentIntent = {
-      promptCombination: [
+      kind: "combination",
+      selections: [
         { kind: "character", component_uid: "character-a", revision_uid: null },
         { kind: "scene", component_uid: "scene-a", revision_uid: null },
         { kind: "outfit", component_uid: "outfit-a", revision_uid: null },

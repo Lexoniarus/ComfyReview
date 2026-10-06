@@ -53,25 +53,26 @@ test("analytics cards remain contained and hand off without drafting", async ({
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(1180);
 
-  await page
-    .getByRole("button", { name: "Gesamtsetup vormerken" })
-    .first()
+  const applicableSetup = page
+    .locator(".analytics-guidance-card")
+    .filter({ hasText: "NetaYume-e2e-1.safetensors" })
+    .first();
+  await applicableSetup
+    .getByRole("button", { name: "Generierungseinstellungen übernehmen" })
     .click();
-  await expect(
-    page.getByText("Für den Generator vorgemerkt", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Gesamtsetup für den Generator vorgemerkt"),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/playground\/generator$/);
+  await expect(page.getByText("Kein Entwurf")).toBeVisible();
 
+  await page.goto("/param_stats?min_n=1");
   await page.getByRole("button", { name: "Einzelwerte" }).click();
   await page.locator("[data-guidance-parameter='checkpoint']").click();
-  const checkpointCard = page.locator(".analytics-guidance-card").first();
+  const checkpointCard = page
+    .locator(".analytics-guidance-card")
+    .filter({ hasText: "NetaYume-e2e-1.safetensors" })
+    .first();
   await expect(checkpointCard).toBeVisible();
   await checkpointCard.locator("[data-playground-intent='parameter']").click();
-  await expect(page).toHaveURL(/\/param_stats/);
-  await page.getByRole("button", { name: "Generator öffnen" }).click();
-  await expect(page).toHaveURL(/\/playground\/generator\?/);
+  await expect(page).toHaveURL(/\/playground\/generator$/);
   await expect(page.getByText("Kein Entwurf")).toBeVisible();
   expect(errors).toEqual([]);
 });

@@ -9,15 +9,19 @@ const numericFields = [
 
 /** @typedef {{kind: string, component_uid: string, revision_uid?: string | null}} PromptScopeSource */
 /** @typedef {{kind: string, component_uid: string, revision_uid?: string | null}} PromptCombinationSelection */
-/** @typedef {{promptCompositionUid?: string, promptScope?: PromptScopeSource, promptCombination?: PromptCombinationSelection[], promptImageUid?: string, renderImageUid?: string, checkpoint?: string, sampler?: string, scheduler?: string, aspectFormat?: string, resolutionClass?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} PlaygroundIntent */
+/** @typedef {{checkpoint?: string, sampler?: string, scheduler?: string, aspectFormat?: string, resolutionClass?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} RenderSettingsIntent */
+/** @typedef {{kind: "image-prompt", imageUid: string} | {kind: "image-render", imageUid: string} | {kind: "composition", compositionUid: string} | {kind: "scope", scope: PromptScopeSource} | {kind: "combination", selections: PromptCombinationSelection[]} | {kind: "render-settings", settings: RenderSettingsIntent} | {kind: "parameter", parameter: string, value: string}} GeneratorHandoff */
+/** @typedef {RenderSettingsIntent & {promptCompositionUid?: string, promptScope?: PromptScopeSource, promptCombination?: PromptCombinationSelection[], promptImageUid?: string, renderImageUid?: string}} PlaygroundIntent */
 
-/** @param {HTMLElement} element @returns {PlaygroundIntent} */
+/** @param {HTMLElement} element @returns {GeneratorHandoff | null} */
 export function intentFromAnalyticsAction(element) {
   const kind = String(element.dataset.playgroundIntent || "");
   if (kind === "scope") {
-    if (!element.dataset.promptKind || !element.dataset.componentUid) return {};
+    if (!element.dataset.promptKind || !element.dataset.componentUid)
+      return null;
     return {
-      promptScope: {
+      kind: "scope",
+      scope: {
         kind: text(element.dataset.promptKind),
         component_uid: text(element.dataset.componentUid),
         revision_uid: text(element.dataset.revisionUid) || null,
@@ -26,26 +30,35 @@ export function intentFromAnalyticsAction(element) {
   }
   if (kind === "composition") {
     return {
-      promptCompositionUid: text(element.dataset.compositionUid),
+      kind: "composition",
+      compositionUid: text(element.dataset.compositionUid),
     };
   }
   if (kind === "parameter") {
-    return parameterIntent(
-      text(element.dataset.parameter),
-      text(element.dataset.value),
-    );
+    return {
+      kind: "parameter",
+      parameter: text(element.dataset.parameter),
+      value: text(element.dataset.value),
+    };
   }
   if (kind === "recommendation") {
-    return settingsIntent(jsonRecord(element.dataset.recommendation));
+    return {
+      kind: "render-settings",
+      settings: settingsIntent(jsonRecord(element.dataset.recommendation)),
+    };
   }
   if (kind === "render_setup") {
-    return settingsIntent(jsonRecord(element.dataset.renderSetup));
+    return {
+      kind: "render-settings",
+      settings: settingsIntent(jsonRecord(element.dataset.renderSetup)),
+    };
   }
-  return {};
+  return null;
 }
 
-/** @param {PlaygroundIntent} intent */
-export function playgroundIntentUrl(intent) {
+/** @param {GeneratorHandoff} handoff */
+export function playgroundIntentUrl(handoff) {
+  const intent = handoffProjection(handoff);
   const query = new URLSearchParams();
   /** @type {Record<string, unknown>} */
   const intentValues = intent;
@@ -105,268 +118,59 @@ export function readPlaygroundIntent(search) {
   return intent;
 }
 
-/** Own navigation from evidence to the Playground prefill surface. */
-export class PlaygroundIntentNavigator {
-  /** @param {{assign: (url: string) => void}} locationRef @param {{stagePromptCombination?: (selections: PromptCombinationSelection[]) => unknown, consumeUrl?: () => string}} [store] */
-  constructor(locationRef, store = undefined) {
+/** Own direct navigation from every source surface to the Generator. */
+export class GeneratorHandoffNavigator {
+  /** @param {{assign: (url: string) => void}} locationRef */
+  constructor(locationRef) {
     this.locationRef = locationRef;
-    this.store = store;
   }
 
   /** @param {HTMLElement} element */
   open(element) {
-    this.openIntent(intentFromAnalyticsAction(element));
+    const handoff = intentFromAnalyticsAction(element);
+    if (handoff) this.openIntent(handoff);
   }
 
-  /** @param {PlaygroundIntent} intent */
-  openIntent(intent) {
-    if (
-      Array.isArray(intent.promptCombination) &&
-      this.store?.stagePromptCombination &&
-      this.store.consumeUrl
-    ) {
-      this.store.stagePromptCombination(intent.promptCombination);
-      this.locationRef.assign(this.store.consumeUrl());
-      return;
-    }
-    this.locationRef.assign(playgroundIntentUrl(intent));
+  /** @param {GeneratorHandoff} handoff */
+  openIntent(handoff) {
+    this.locationRef.assign(playgroundIntentUrl(handoff));
   }
 }
 
-/** Own source-specific removal from a consumed typed URL handoff. */
-export class PlaygroundIntentUrlCleaner {
+/** Own removal of an applied handoff while preserving unrelated URL state. */
+export class GeneratorHandoffUrlCleaner {
   /** @param {{href: string}} locationRef @param {{state: unknown, replaceState: (state: unknown, title: string, url?: string | URL | null) => void}} historyRef */
   constructor(locationRef, historyRef) {
     this.locationRef = locationRef;
     this.historyRef = historyRef;
   }
 
-  /** @param {{type: string, imageUid?: string, compositionUid?: string, scope?: PromptScopeSource, selections?: PromptCombinationSelection[]}} source */
-  removeTypedPromptSource(source) {
+  removeHandoff() {
     const url = new URL(this.locationRef.href);
-    let key = "";
-    let matches = false;
-    if (source.type === "image") {
-      key = "prompt_image";
-      matches = url.searchParams.get(key) === source.imageUid;
-    } else if (source.type === "composition") {
-      key = "prompt_composition";
-      matches = url.searchParams.get(key) === source.compositionUid;
-    } else if (source.type === "scope") {
-      key = "prompt_scope";
-      const currentScope = record(json(url.searchParams.get(key)));
-      matches = sameScope(currentScope, source.scope);
-    } else if (source.type === "combination") {
-      key = "prompt_combination";
-      matches = sameCombinationSelections(
-        json(url.searchParams.get(key)),
-        source.selections,
-      );
-    }
-    if (!key || !matches) return false;
-    url.searchParams.delete(key);
-    const suffix = `${url.pathname}${url.search}${url.hash}`;
-    this.historyRef.replaceState(this.historyRef.state, "", suffix);
-    return true;
-  }
-}
-
-/** Own one versioned, tab-local staging area for Analytics handoffs. */
-export class PlaygroundIntentStore {
-  /** @param {Storage} storage @param {string} [key] */
-  constructor(storage, key = "comfyreview.playground-intent.v2") {
-    this.storage = storage;
-    this.key = key;
-  }
-
-  /** @returns {PlaygroundIntent} */
-  read() {
-    const stored = jsonRecord(this.storage.getItem(this.key));
-    if (stored.version === 2) {
-      return { ...record(stored.prompt), ...record(stored.render) };
-    }
-    return {};
-  }
-
-  /** @param {PlaygroundIntent} incoming */
-  merge(incoming) {
-    const stored = this.#state();
-    /** @type {Record<string, any>} */
-    const render = { ...stored.render };
-    /** @type {Record<string, any>} */
-    const incomingValues = incoming;
-    for (const field of [
+    let changed = false;
+    for (const key of [
+      "prompt_composition",
+      "prompt_scope",
+      "prompt_combination",
+      "prompt_image",
+      "render_image",
       "checkpoint",
       "sampler",
       "scheduler",
-      "aspectFormat",
-      "resolutionClass",
-      "seedMode",
-      "seed",
-      "steps_min",
-      "steps_max",
-      "cfg_min",
-      "cfg_max",
-      "denoise",
+      "aspect_format",
+      "resolution_class",
+      "seed_mode",
+      ...numericFields,
     ]) {
-      if (
-        incomingValues[field] !== undefined &&
-        incomingValues[field] !== null &&
-        incomingValues[field] !== ""
-      )
-        render[field] = incomingValues[field];
+      if (url.searchParams.has(key)) {
+        url.searchParams.delete(key);
+        changed = true;
+      }
     }
-    this.#write(stored.prompt, render);
-    return this.read();
-  }
-
-  /** @param {string} imageUid */
-  stagePromptImage(imageUid) {
-    const stored = this.#state();
-    const prompt = { ...stored.prompt };
-    this.#setTypedPromptSource(prompt, "promptImageUid", text(imageUid));
-    this.#write(prompt, stored.render);
-    return this.read();
-  }
-
-  /** @param {string} compositionUid */
-  stagePromptComposition(compositionUid) {
-    const stored = this.#state();
-    const prompt = { ...stored.prompt };
-    this.#setTypedPromptSource(
-      prompt,
-      "promptCompositionUid",
-      text(compositionUid),
-    );
-    this.#write(prompt, stored.render);
-    return this.read();
-  }
-
-  /** @param {PromptScopeSource} scope */
-  stagePromptScope(scope) {
-    const stored = this.#state();
-    const prompt = { ...stored.prompt };
-    this.#setTypedPromptSource(prompt, "promptScope", {
-      kind: text(scope.kind),
-      component_uid: text(scope.component_uid),
-      revision_uid: text(scope.revision_uid) || null,
-    });
-    this.#write(prompt, stored.render);
-    return this.read();
-  }
-
-  /** @param {PromptCombinationSelection[]} selections */
-  stagePromptCombination(selections) {
-    const stored = this.#state();
-    const prompt = { ...stored.prompt };
-    this.#setTypedPromptSource(
-      prompt,
-      "promptCombination",
-      selections.map(combinationSelection),
-    );
-    this.#write(prompt, stored.render);
-    return this.read();
-  }
-
-  /** @param {string} imageUid */
-  stageRenderSetup(imageUid) {
-    const stored = this.#state();
-    this.#write(stored.prompt, {
-      renderImageUid: text(imageUid),
-    });
-    return this.read();
-  }
-
-  /** @param {string} imageUid */
-  clearPromptImage(imageUid) {
-    const stored = this.#state();
-    if (text(stored.prompt.promptImageUid) !== text(imageUid)) return;
-    const prompt = { ...stored.prompt };
-    delete prompt.promptImageUid;
-    this.#write(prompt, stored.render);
-  }
-
-  /** @param {string} compositionUid */
-  clearPromptComposition(compositionUid) {
-    const stored = this.#state();
-    if (text(stored.prompt.promptCompositionUid) !== text(compositionUid)) {
-      return;
-    }
-    const prompt = { ...stored.prompt };
-    delete prompt.promptCompositionUid;
-    this.#write(prompt, stored.render);
-  }
-
-  /** @param {PromptScopeSource} scope */
-  clearPromptScope(scope) {
-    const stored = this.#state();
-    const current = record(stored.prompt.promptScope);
-    if (
-      text(current.kind) !== text(scope.kind) ||
-      text(current.component_uid) !== text(scope.component_uid) ||
-      (text(current.revision_uid) || null) !==
-        (text(scope.revision_uid) || null)
-    ) {
-      return;
-    }
-    const prompt = { ...stored.prompt };
-    delete prompt.promptScope;
-    this.#write(prompt, stored.render);
-  }
-
-  /** @param {PromptCombinationSelection[]} selections */
-  clearPromptCombination(selections) {
-    const stored = this.#state();
-    if (
-      !sameCombinationSelections(stored.prompt.promptCombination, selections)
-    ) {
-      return;
-    }
-    const prompt = { ...stored.prompt };
-    delete prompt.promptCombination;
-    this.#write(prompt, stored.render);
-  }
-
-  clear() {
-    this.storage.removeItem(this.key);
-  }
-
-  /** Return the staged URL; the generator clears it after successful apply. */
-  consumeUrl() {
-    const intent = this.read();
-    return playgroundIntentUrl(intent);
-  }
-
-  #state() {
-    const stored = jsonRecord(this.storage.getItem(this.key));
-    if (stored.version === 2) {
-      return {
-        prompt: record(stored.prompt),
-        render: record(stored.render),
-      };
-    }
-    return { prompt: {}, render: {} };
-  }
-
-  /** @param {Record<string, any>} prompt @param {Record<string, any>} render */
-  #write(prompt, render) {
-    this.storage.setItem(
-      this.key,
-      JSON.stringify({
-        version: 2,
-        prompt,
-        render,
-      }),
-    );
-  }
-
-  /** @param {Record<string, any>} prompt @param {"promptImageUid" | "promptCompositionUid" | "promptScope" | "promptCombination"} key @param {unknown} value */
-  #setTypedPromptSource(prompt, key, value) {
-    delete prompt.promptImageUid;
-    delete prompt.promptCompositionUid;
-    delete prompt.promptScope;
-    delete prompt.promptCombination;
-    prompt[key] = value;
+    if (!changed) return false;
+    const suffix = `${url.pathname}${url.search}${url.hash}`;
+    this.historyRef.replaceState(this.historyRef.state, "", suffix);
+    return true;
   }
 }
 
@@ -382,6 +186,28 @@ function parameterIntent(parameter, value) {
   if (parameter === "steps") return { steps_min: number, steps_max: number };
   if (parameter === "cfg") return { cfg_min: number, cfg_max: number };
   if (parameter === "denoise") return { denoise: number };
+  return {};
+}
+
+/** @param {GeneratorHandoff} handoff @returns {PlaygroundIntent} */
+function handoffProjection(handoff) {
+  if (handoff.kind === "image-prompt") {
+    return { promptImageUid: text(handoff.imageUid) };
+  }
+  if (handoff.kind === "image-render") {
+    return { renderImageUid: text(handoff.imageUid) };
+  }
+  if (handoff.kind === "composition") {
+    return { promptCompositionUid: text(handoff.compositionUid) };
+  }
+  if (handoff.kind === "scope") return { promptScope: handoff.scope };
+  if (handoff.kind === "combination") {
+    return { promptCombination: handoff.selections };
+  }
+  if (handoff.kind === "render-settings") return handoff.settings;
+  if (handoff.kind === "parameter") {
+    return parameterIntent(handoff.parameter, handoff.value);
+  }
   return {};
 }
 
@@ -405,42 +231,6 @@ function record(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
-}
-
-/** @param {unknown} selection @returns {PromptCombinationSelection} */
-function combinationSelection(selection) {
-  const item = record(selection);
-  return {
-    kind: text(item.kind),
-    component_uid: text(item.component_uid),
-    revision_uid: text(item.revision_uid) || null,
-  };
-}
-
-/** @param {unknown} actual @param {unknown} expected */
-function sameCombinationSelections(actual, expected) {
-  if (!Array.isArray(actual) || !Array.isArray(expected)) return false;
-  if (actual.length !== expected.length) return false;
-  return actual.every((value, index) => {
-    const left = combinationSelection(value);
-    const right = combinationSelection(expected[index]);
-    return (
-      left.kind === right.kind &&
-      left.component_uid === right.component_uid &&
-      left.revision_uid === right.revision_uid
-    );
-  });
-}
-
-/** @param {Record<string, any>} actual @param {PromptScopeSource | undefined} expected */
-function sameScope(actual, expected) {
-  return Boolean(
-    expected &&
-    text(actual.kind) === text(expected.kind) &&
-    text(actual.component_uid) === text(expected.component_uid) &&
-    (text(actual.revision_uid) || null) ===
-      (text(expected.revision_uid) || null),
-  );
 }
 
 /** @param {URLSearchParams} query @param {string} key @param {unknown} value */

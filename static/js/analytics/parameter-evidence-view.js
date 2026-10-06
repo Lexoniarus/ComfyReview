@@ -6,6 +6,7 @@ import {
   textValue,
 } from "./analytics-formatters.js";
 import { AnalyticsCardRail } from "./analytics-card-rail.js";
+import { createGeneratorHandoffAction } from "../playground/generator-handoff-action.js";
 
 /** Render the same four evidence modes exposed by the Generator. */
 export class ParameterEvidenceView {
@@ -116,19 +117,15 @@ function setupCard(item, basis, images) {
   const values = document.createElement("span");
   values.textContent = `Sampler ${textValue(settings.sampler)} · ${textValue(settings.scheduler)} · Steps ${textValue(settings.steps)} · CFG ${textValue(settings.cfg)} · Denoise ${textValue(settings.denoise)}`;
   const support = evidenceLine(evidence, basis);
-  const action = document.createElement("button");
-  action.type = "button";
-  action.className = "secondary-button analytics-use-button";
-  action.dataset.playgroundIntent =
-    basis === "predicted" ? "recommendation" : "render_setup";
-  if (basis === "predicted")
-    action.dataset.recommendation = JSON.stringify(settings);
-  else action.dataset.renderSetup = JSON.stringify(settings);
-  action.disabled = row.applicable === false;
-  action.textContent =
-    basis === "predicted"
-      ? "Rechnerische Kombination vormerken"
-      : "Gesamtsetup vormerken";
+  const intentKind = basis === "predicted" ? "recommendation" : "render_setup";
+  const action = createGeneratorHandoffAction(intentKind, {
+    className: "analytics-use-button",
+    data:
+      basis === "predicted"
+        ? { recommendation: JSON.stringify(settings) }
+        : { renderSetup: JSON.stringify(settings) },
+    disabled: row.applicable === false,
+  });
   const body = cardBody(heading, values, support, action);
   card.append(images.render(row.best_images, "Render-Setup"), body);
   return card;
@@ -142,14 +139,14 @@ function parameterCard(item, basis, images) {
   const heading = document.createElement("strong");
   heading.textContent = `${parameterLabels.get(String(row.parameter)) || textValue(row.parameter)}: ${textValue(row.value)}`;
   const support = evidenceLine(evidence, basis);
-  const action = document.createElement("button");
-  action.type = "button";
-  action.className = "secondary-button analytics-use-button";
-  action.dataset.playgroundIntent = "parameter";
-  action.dataset.parameter = String(row.parameter || "");
-  action.dataset.value = String(row.value || "");
-  action.disabled = row.applicable === false;
-  action.textContent = "Parameter vormerken";
+  const action = createGeneratorHandoffAction("parameter", {
+    className: "analytics-use-button",
+    data: {
+      parameter: String(row.parameter || ""),
+      value: String(row.value || ""),
+    },
+    disabled: row.applicable === false,
+  });
   const body = cardBody(heading, support, action);
   card.append(images.render(row.best_images, heading.textContent), body);
   return card;

@@ -13,7 +13,7 @@ import { ActiveScopeChips } from "../scopes/active-scope-chips.js";
 import { ScopeNavigator } from "../scopes/scope-navigator.js";
 import { ScopeStateController } from "../scopes/scope-state-controller.js";
 import { ReviewController } from "../surfaces/review-controller.js";
-import { PlaygroundIntentStore } from "../playground/playground-intent.js";
+import { GeneratorHandoffNavigator } from "../playground/playground-intent.js";
 
 const root = document.querySelector("[data-v2-surface='review']");
 if (root instanceof HTMLElement) {
@@ -41,10 +41,9 @@ if (root instanceof HTMLElement) {
     /** @type {ImageCurationController | null} */
     let curation = null;
     const api = new ApiClient();
-    const generatorActions = new ImageGeneratorActions({
-      api,
-      store: new PlaygroundIntentStore(window.sessionStorage),
-    });
+    const generatorActions = new ImageGeneratorActions(
+      new GeneratorHandoffNavigator(window.location),
+    );
     const inspectorView = new ImageInspector(inspectorRoot, {
       onCuration: (imageUid, setKey) => void curation?.assign(imageUid, setKey),
       createGeneratorActions: (uid) =>
