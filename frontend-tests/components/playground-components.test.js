@@ -43,6 +43,43 @@ describe("Playground browser components", () => {
     const rows = root.querySelectorAll(".prompt-mode-row");
     expect(rows).toHaveLength(7);
     expect(rows[0].querySelector("select")?.value).toBe("fixed");
+    expect(
+      editor.applyState({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-a",
+          },
+          { kind: "scene", mode: "off", component_uid: null },
+        ],
+        loras: [
+          {
+            lora_uid: "lora-style",
+            revision_uid: "lora-revision-1",
+            model_strength: 0.7,
+            clip_strength: 0.5,
+          },
+        ],
+      }),
+    ).toEqual([]);
+    expect(rows[1].querySelector("select")?.value).toBe("off");
+    expect(editor.value().loras).toEqual([
+      expect.objectContaining({
+        name: "style.safetensors",
+        lora_uid: "lora-style",
+      }),
+    ]);
+    expect(
+      editor.applyState({
+        selections: [
+          { kind: "character", mode: "off", component_uid: null },
+          { kind: "scene", mode: "fixed", component_uid: "missing" },
+          { kind: "unknown", mode: "random", component_uid: null },
+        ],
+        loras: [{ lora_uid: "missing" }],
+      }),
+    ).toEqual(["character", "scene", "loras"]);
     editor.applyIntent({ componentUids: ["scene-a"] });
     expect(rows[1].querySelector("select")?.value).toBe("fixed");
     editor.applyIntent({
@@ -244,6 +281,47 @@ describe("Playground browser components", () => {
     });
     const cfgStep = root.querySelector('[data-field="cfg_step"]');
     expect(cfgStep.closest("label").hidden).toBe(true);
+    expect(
+      controls.applyState({
+        checkpoint: "model.safetensors",
+        sampler: "euler",
+        scheduler: "normal",
+        seed_mode: "random",
+        seed: 99,
+        steps_min: 18,
+        steps_max: 30,
+        cfg_min: 5,
+        cfg_max: 7,
+        cfg_step: 0.25,
+        denoise: 0.8,
+        batch_runs: 3,
+        aspect_format: "16:9",
+        resolution_class: "2160",
+      }),
+    ).toEqual([]);
+    expect(controls.stateValue()).toEqual({
+      checkpoint: "model.safetensors",
+      sampler: "euler",
+      scheduler: "normal",
+      seed_mode: "random",
+      seed: 99,
+      steps_min: 18,
+      steps_max: 30,
+      cfg_min: 5,
+      cfg_max: 7,
+      cfg_step: 0.25,
+      denoise: 0.8,
+      batch_runs: 3,
+      aspect_format: "16:9",
+      resolution_class: "2160",
+    });
+    expect(
+      controls.applyState({
+        checkpoint: "missing",
+        seed_mode: "unsupported",
+        aspect_format: "missing",
+      }),
+    ).toEqual(["checkpoint", "seed_mode", "aspect_format"]);
     controls.applyIntent({
       checkpoint: "model.safetensors",
       sampler: "euler",
@@ -737,7 +815,15 @@ describe("Playground browser components", () => {
         draft_uid: "draft-1",
         component_uids: components.map((item) => item.component_uid),
         positive_atoms: [{ text: "edited", weight: 1 }],
-        loras: [{ name: "style.safetensors" }],
+        loras: [
+          {
+            name: "style.safetensors",
+            lora_uid: null,
+            revision_uid: null,
+            model_strength: 1,
+            clip_strength: 1,
+          },
+        ],
       }),
     );
 
@@ -838,6 +924,50 @@ describe("Playground browser components", () => {
     );
     expect(sceneOnly.generationPayload({})).toBeNull();
     sceneOnly.dispose();
+  });
+
+  it("normalizes server draft LoRAs for generation submission", () => {
+    const root = document.createElement("div");
+    const preview = new DraftPreview(root, document.createElement("span"));
+    preview.render(
+      {
+        components: [component("character-a", "character", "Aiko")],
+        positive_atoms: [{ text: "positive", weight: 1 }],
+        negative_atoms: [],
+        groups: [
+          {
+            component_uid: "character-a",
+            kind: "character",
+            name: "Aiko",
+            positive_atoms: [{ text: "positive", weight: 1 }],
+            negative_atoms: [],
+          },
+        ],
+        loras: [
+          {
+            lora_uid: "lora-style",
+            revision_uid: "lora-revision-1",
+            provider_name: "style.safetensors",
+            display_name: "Style",
+            position: 0,
+            model_strength: 0.8,
+            clip_strength: 0.6,
+          },
+        ],
+      },
+      "draft-lora",
+    );
+
+    expect(preview.generationPayload({ sampler: { seed: 1 } }).loras).toEqual([
+      {
+        name: "style.safetensors",
+        lora_uid: "lora-style",
+        revision_uid: "lora-revision-1",
+        model_strength: 0.8,
+        clip_strength: 0.6,
+      },
+    ]);
+    preview.dispose();
   });
 
   it("renders separate top two- and three-component evidence", () => {

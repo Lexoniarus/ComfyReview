@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from comfyreview.api import get_application_container
 from comfyreview.application import (
@@ -114,6 +114,51 @@ class PlaygroundRenderGuidanceRequest(BaseModel):
     steps: int = Field(ge=1, le=100)
     cfg: float = Field(gt=0, le=30)
     denoise: float = Field(ge=0, le=1)
+
+
+class PlaygroundGeneratorSettingsPayload(BaseModel):
+    """Carry the complete user-owned Playground control state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    selections: list[PlaygroundSelectionIntent] = Field(default_factory=list)
+    loras: list[PlaygroundDraftLora] = Field(default_factory=list)
+    checkpoint: str
+    sampler: str
+    scheduler: str
+    seed_mode: Literal["fixed", "random"]
+    seed: int
+    steps_min: int = Field(ge=1, le=100)
+    steps_max: int = Field(ge=1, le=100)
+    cfg_min: float = Field(gt=0, le=30)
+    cfg_max: float = Field(gt=0, le=30)
+    cfg_step: float = Field(gt=0, le=30)
+    denoise: float = Field(ge=0, le=1)
+    batch_runs: int = Field(ge=1)
+    aspect_format: AspectFormat
+    resolution_class: ResolutionClass
+
+
+@router.get("/playground/generator-state")
+def playground_generator_state(request: Request) -> JSONResponse:
+    """Return the last explicit generator settings snapshot."""
+    settings = get_application_container(
+        request
+    ).playground_generator_settings.load()
+    return JSONResponse(settings)
+
+
+@router.put("/playground/generator-state")
+def save_playground_generator_state(
+    request: Request,
+    payload: PlaygroundGeneratorSettingsPayload,
+) -> JSONResponse:
+    """Persist the complete generator state after an explicit UI change."""
+    settings = payload.model_dump(mode="json")
+    get_application_container(request).playground_generator_settings.save(
+        settings
+    )
+    return JSONResponse(settings)
 
 
 @router.get("/playground/capabilities")

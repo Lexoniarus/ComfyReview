@@ -296,6 +296,63 @@ export class GenerationControls {
     };
   }
 
+  /** Return the complete persistent UI state. */
+  stateValue() {
+    const value = this.value();
+    const sampler = value.sampler;
+    return {
+      checkpoint: value.checkpoint,
+      sampler: sampler.sampler,
+      scheduler: sampler.scheduler,
+      seed_mode: this.#text("seed_mode"),
+      seed: sampler.seed,
+      steps_min: sampler.steps,
+      steps_max: sampler.steps_max,
+      cfg_min: sampler.cfg,
+      cfg_max: sampler.cfg_max,
+      cfg_step: sampler.cfg_step,
+      denoise: sampler.denoise,
+      batch_runs: sampler.batch_runs,
+      aspect_format: value.aspect_format,
+      resolution_class: value.resolution_class,
+    };
+  }
+
+  /** Restore saved controls after native capabilities have rendered. @param {Record<string, any>} state */
+  applyState(state) {
+    const rejected = [];
+    for (const name of [
+      "checkpoint",
+      "sampler",
+      "scheduler",
+      "seed_mode",
+      "aspect_format",
+      "resolution_class",
+    ]) {
+      const value = state[name];
+      if (value === undefined || value === null || value === "") continue;
+      if (!this.#setAvailable(name, value)) rejected.push(name);
+    }
+    for (const name of ["seed", "cfg_step", "denoise", "batch_runs"]) {
+      const value = state[name];
+      if (value !== undefined && value !== null && value !== "")
+        this.#set(name, value);
+    }
+    const currentSteps = this.steps?.value();
+    const currentCfg = this.cfg?.value();
+    this.steps?.set(
+      numeric(state.steps_min, currentSteps?.lower ?? 1),
+      numeric(state.steps_max, currentSteps?.upper ?? 1),
+    );
+    this.cfg?.set(
+      numeric(state.cfg_min, currentCfg?.lower ?? 1),
+      numeric(state.cfg_max, currentCfg?.upper ?? 1),
+    );
+    this.#syncSeedMode();
+    this.#syncCfgStep();
+    return rejected;
+  }
+
   /** @param {number} seed */
   useConcreteSeed(seed) {
     this.#set("seed", seed);

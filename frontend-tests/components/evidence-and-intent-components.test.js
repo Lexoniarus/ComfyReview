@@ -176,8 +176,15 @@ describe("Shared evidence and Playground intent components", () => {
   });
 
   it("owns image handoff menus, validation, notifications and disposal", async () => {
+    const promptSetup = {
+      component_uids: ["character-a", "scene-a"],
+      loras: [],
+    };
     const api = {
-      get: vi.fn(async () => ({ render_setup: { applicable: true } })),
+      get: vi.fn(async () => ({
+        prompt_setup: promptSetup,
+        render_setup: { applicable: true },
+      })),
     };
     const store = {
       stagePromptSetup: vi.fn(),
@@ -196,7 +203,7 @@ describe("Shared evidence and Playground intent components", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     compact.querySelector(".secondary-button").click();
     await settle();
-    expect(store.stagePromptSetup).toHaveBeenCalledWith("image-1");
+    expect(store.stagePromptSetup).toHaveBeenCalledWith(promptSetup);
     expect(notifications.at(-1)).toContain("Prompt-Setup");
 
     const prominent = actions.create("image-2", "prominent");
@@ -214,6 +221,13 @@ describe("Shared evidence and Playground intent components", () => {
     prominent.querySelector(".secondary-button").click();
     await settle();
     expect(notifications.at(-1)).toBe("kaputt");
+    api.get.mockResolvedValueOnce({
+      prompt_setup: { component_uids: [] },
+      render_setup: { applicable: true },
+    });
+    prominent.querySelector(".secondary-button").click();
+    await settle();
+    expect(notifications.at(-1)).toContain("keine Prompt-Bausteine");
     api.get.mockRejectedValueOnce(new DOMException("aborted", "AbortError"));
     prominent.querySelector(".secondary-button").click();
     await settle();

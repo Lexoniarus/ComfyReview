@@ -126,6 +126,11 @@ export class DraftPreview {
     const components = Array.isArray(this.draft.components)
       ? this.draft.components
       : [];
+    const loras = Array.isArray(this.draft.loras)
+      ? this.draft.loras
+      : Array.isArray(settings.loras)
+        ? settings.loras
+        : [];
     if (
       !this.draft.source_image_uid &&
       !components.some((component) => component.kind === "character")
@@ -141,7 +146,7 @@ export class DraftPreview {
       aspect_format: settings.aspect_format,
       resolution_class: settings.resolution_class,
       sampler: settings.sampler,
-      loras: this.draft.loras || settings.loras || [],
+      loras: loras.map(generationLoraPayload),
     };
   }
 
@@ -247,4 +252,16 @@ function evidenceCard(title, message, kind) {
 function matches(values, fallback) {
   if (Array.isArray(values) && values.length) return values;
   return fallback ? [fallback] : [];
+}
+
+/** Translate draft display metadata into the generation API contract. */
+/** @param {Record<string, any>} lora */
+function generationLoraPayload(lora) {
+  return {
+    name: String(lora.provider_name || lora.name || ""),
+    lora_uid: lora.lora_uid || null,
+    revision_uid: lora.revision_uid || null,
+    model_strength: Number(lora.model_strength ?? 1),
+    clip_strength: Number(lora.clip_strength ?? 1),
+  };
 }

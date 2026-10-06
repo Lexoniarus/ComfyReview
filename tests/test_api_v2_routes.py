@@ -162,6 +162,52 @@ class _ImageContentLevels:
         )
 
 
+class _ImageGeneratorHandoffs:
+    def get(self, image_uid):
+        if image_uid == "missing":
+            raise ImageContextNotFoundError("missing")
+        return SimpleNamespace(
+            image_uid=image_uid,
+            generation_uid="generation-1",
+            prompt_setup=SimpleNamespace(
+                source_image_uid=image_uid,
+                availability="grouped",
+                component_uids=("character-a", "scene-a"),
+                revision_uids=("revision-character-a", "revision-scene-a"),
+                positive_atoms=prompt_atom_usages_from_text("hero"),
+                negative_atoms=prompt_atom_usages_from_text("blur"),
+                draft_overridden=False,
+                loras=(),
+                issues=(),
+            ),
+            render_setup=SimpleNamespace(
+                applicable=True,
+                checkpoint="model.safetensors",
+                sampler_stages=(
+                    SimpleNamespace(
+                        role="base_sampler",
+                        order=0,
+                        seed=17,
+                        steps=24,
+                        cfg=6.5,
+                        sampler="euler",
+                        scheduler="normal",
+                        denoise=1.0,
+                    ),
+                ),
+                seed=17,
+                aspect_format="1:1",
+                resolution_class="1080",
+                actual_width=1080,
+                actual_height=1080,
+                target_width=1080,
+                target_height=1080,
+                geometry_match="exact",
+                issues=(),
+            ),
+        )
+
+
 class _LoraCatalog:
     def list_definitions(self):
         return (
@@ -171,6 +217,24 @@ class _LoraCatalog:
                 ContentLevel.LEWD,
                 1,
             ),
+        )
+
+
+class _LoraDrafts:
+    def resolve(self, selections):
+        return tuple(
+            SimpleNamespace(
+                selection=replace(selection, name="style.safetensors"),
+                display_name="Style",
+                revision=SimpleNamespace(
+                    revision_uid="lora-revision-style",
+                    positive_atoms=prompt_atom_usages_from_text(
+                        "style trigger"
+                    ),
+                    negative_atoms=(),
+                ),
+            )
+            for selection in selections
         )
 
 
@@ -660,6 +724,34 @@ class _PlaygroundRenderGuidance:
         return self.guidance.build()
 
 
+class _PlaygroundGeneratorSettings:
+    def __init__(self) -> None:
+        self.settings = {
+            "selections": [],
+            "loras": [],
+            "checkpoint": "model.safetensors",
+            "sampler": "euler",
+            "scheduler": "normal",
+            "seed_mode": "fixed",
+            "seed": 17,
+            "steps_min": 24,
+            "steps_max": 24,
+            "cfg_min": 6.5,
+            "cfg_max": 6.5,
+            "cfg_step": 0.1,
+            "denoise": 1.0,
+            "batch_runs": 1,
+            "aspect_format": "1:1",
+            "resolution_class": "1080",
+        }
+
+    def load(self):
+        return dict(self.settings)
+
+    def save(self, settings) -> None:
+        self.settings = dict(settings)
+
+
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
     client, container = _client()
 
@@ -704,6 +796,24 @@ def test_v2_image_context_has_url_but_never_exposes_local_path() -> None:
     assert response.json()["prompt_snapshot"]["positive"] == "positive"
     assert "png_path" not in response.text
     assert "json_path" not in response.text
+
+
+def test_v2_image_generator_handoff_exposes_visible_prompt_components() -> (
+    None
+):
+    client, _container = _client()
+
+    response = client.get("/api/v2/images/image-1/generator-handoff")
+
+    assert response.status_code == 200
+    assert response.json()["prompt_setup"]["component_uids"] == [
+        "character-a",
+        "scene-a",
+    ]
+    assert response.json()["prompt_setup"]["revision_uids"] == [
+        "revision-character-a",
+        "revision-scene-a",
+    ]
 
 
 def test_v2_image_content_level_supports_override_and_inherit() -> None:
@@ -911,6 +1021,27 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
     ]
 
 
+def test_v2_playground_generator_state_round_trips_strict_payload() -> None:
+    client, container = _client()
+
+    current = client.get("/api/v2/playground/generator-state")
+    changed = {**current.json(), "steps_min": 28, "steps_max": 32}
+    saved = client.put(
+        "/api/v2/playground/generator-state",
+        json=changed,
+    )
+    invalid = client.put(
+        "/api/v2/playground/generator-state",
+        json={**changed, "unknown": True},
+    )
+
+    assert current.status_code == 200
+    assert saved.status_code == 200
+    assert saved.json()["steps_min"] == 28
+    assert container.playground_generator_settings.settings == changed
+    assert invalid.status_code == 422
+
+
 def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
     None
 ):
@@ -1072,6 +1203,59 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         container.playground_evidence.query.positive_atoms[0].weight_milli
         == 1010
     )
+
+
+def test_v2_playground_draft_appends_selected_lora_triggers() -> None:
+    client, _container = _client()
+
+    response = client.post(
+        "/api/v2/playground/drafts",
+        json={
+            "selections": [
+                {
+                    "kind": kind,
+                    "mode": "fixed" if kind == "character" else "off",
+                    **(
+                        {"component_uid": "character-a"}
+                        if kind == "character"
+                        else {}
+                    ),
+                }
+                for kind in (
+                    "character",
+                    "scene",
+                    "outfit",
+                    "pose",
+                    "expression",
+                    "lighting",
+                    "modifier",
+                )
+            ],
+            "generation": _draft_generation(),
+            "loras": [
+                {
+                    "lora_uid": "lora-style",
+                    "revision_uid": "lora-revision-style",
+                    "model_strength": 0.8,
+                    "clip_strength": 0.7,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert (
+        response.json()["positive_prompt"]
+        == "rendered positive, style trigger"
+    )
+    assert response.json()["positive_atoms"][-1] == {
+        "text": "style trigger",
+        "weight": 1.0,
+    }
+    assert response.json()["groups"][-1]["kind"] == "lora"
+    assert response.json()["groups"][-1]["positive_atoms"] == [
+        {"text": "style trigger", "weight": 1.0}
+    ]
 
 
 def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
@@ -1359,6 +1543,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         review_history=_ReviewHistory(),
         curation_service=_Curation(),
         image_content_levels=_ImageContentLevels(),
+        image_generator_handoffs=_ImageGeneratorHandoffs(),
         arena_service=_Arena(),
         prompt_catalog_service=_PromptCatalog(),
         catalog_evidence=_CatalogEvidence(),
@@ -1372,10 +1557,12 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         playground_discovery=_PlaygroundDiscovery(),
         workflow_defaults=_WorkflowDefaults(),
         lora_catalog=_LoraCatalog(),
+        lora_drafts=_LoraDrafts(),
         analytics_pages=_AnalyticsPages(),
         analytics_coverage=_AnalyticsCoverage(),
         render_guidance=render_guidance,
         playground_render_guidance=_PlaygroundRenderGuidance(render_guidance),
+        playground_generator_settings=_PlaygroundGeneratorSettings(),
     )
     application = FastAPI()
     application.state.container = container

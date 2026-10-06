@@ -78,6 +78,38 @@ export class PromptModeEditor {
     };
   }
 
+  /** Restore a complete saved UI state after the catalog has rendered. @param {{selections?: Array<Record<string, any>>, loras?: Array<Record<string, any>>}} state */
+  applyState(state) {
+    const rejected = [];
+    const selections = Array.isArray(state.selections) ? state.selections : [];
+    for (const selection of selections) {
+      const kind = String(selection.kind || "");
+      const row = this.rows.get(kind);
+      if (!row) continue;
+      const mode = String(selection.mode || "");
+      if (![...row.mode.options].some((option) => option.value === mode)) {
+        rejected.push(kind);
+        continue;
+      }
+      const componentUid = String(selection.component_uid || "");
+      if (
+        mode === "fixed" &&
+        ![...row.component.options].some(
+          (option) => option.value === componentUid,
+        )
+      ) {
+        rejected.push(kind);
+        continue;
+      }
+      row.mode.value = mode;
+      if (mode === "fixed") row.component.value = componentUid;
+      row.component.disabled = mode !== "fixed";
+      void this.#refresh(kind);
+    }
+    if (this.#applyLoras(state.loras)) rejected.push("loras");
+    return rejected;
+  }
+
   /** @param {{componentUids?: string[], loras?: Array<Record<string, any>>}} intent */
   applyIntent(intent) {
     const requested = new Set(intent.componentUids || []);
@@ -91,18 +123,19 @@ export class PromptModeEditor {
       row.component.disabled = false;
       void this.#refresh(kind);
     }
-    if (Array.isArray(intent.loras)) {
-      this.loras?.render(intent.loras, this.loraDefinitions);
-    }
-    return Array.isArray(intent.loras) &&
-      intent.loras.some((requestedLora) => {
-        const definition = this.loraDefinitions.find(
-          (candidate) => candidate.lora_uid === requestedLora.lora_uid,
-        );
-        return !definition || definition.available === false;
-      })
-      ? ["loras"]
-      : [];
+    return this.#applyLoras(intent.loras) ? ["loras"] : [];
+  }
+
+  /** @param {unknown} loras */
+  #applyLoras(loras) {
+    if (!Array.isArray(loras)) return false;
+    this.loras?.render(loras, this.loraDefinitions);
+    return loras.some((requestedLora) => {
+      const definition = this.loraDefinitions.find(
+        (candidate) => candidate.lora_uid === requestedLora.lora_uid,
+      );
+      return !definition || definition.available === false;
+    });
   }
 
   /** Show server-resolved random selections after draft creation. @param {Array<Record<string, any>>} components */

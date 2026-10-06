@@ -167,7 +167,7 @@ def test_default_blueprint_v4_compiles_animesharp_and_exact_output() -> None:
     compiled = WorkflowCompiler().compile(blueprint, request)
 
     assert compiled.graph["cr:upscale_model"]["inputs"]["model_name"] == (
-        "example-upscaler.pth"
+        "4x-AnimeSharp.pth"
     )
     assert compiled.graph["cr:anime_upscale"]["inputs"]["image"] == ["8", 0]
     assert compiled.graph["cr:sharpen"]["inputs"] == {
@@ -183,7 +183,7 @@ def test_default_blueprint_v4_compiles_animesharp_and_exact_output() -> None:
         "height": 1620,
         "crop": "disabled",
     }
-    assert compiled.upscale_model_requirements == ("example-upscaler.pth",)
+    assert compiled.upscale_model_requirements == ("4x-AnimeSharp.pth",)
     assert CompiledLoraGraphPolicy().validate(compiled.graph, ()) == ()
 
 

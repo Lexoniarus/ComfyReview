@@ -340,7 +340,10 @@ generation row or ComfyUI submission. It requires one ordered loader per
 selection, exact provider filenames/weights, an unbroken Model route to the
 sampler and an unbroken CLIP route to both encoders. The provider still sees
 only the finished graph. `ImageGeneratorHandoffService` independently exposes
-authoritative prompt and render packages for visible image UIDs.
+authoritative prompt and render packages for visible image UIDs. Prompt
+handoffs expose stable component IDs so every image-originated transfer fills
+the visible Playground selection controls; historical prompt snapshots remain
+provenance and are not used as a hidden generator input.
 
 The older multi-file schema lifecycle remains centralized in
 `comfyreview.repositories.sqlite.legacy_schema`. Its explicit
@@ -357,6 +360,10 @@ The canonical cutover is intentionally not the end of the wider refactor.
 - Frontend V2 uses native ES modules, one shared API client, lifecycle-owned
   requests and focused view/controller classes. Playwright verifies bounded
   rendering and all required desktop/tablet viewports.
+- Playground V2 loads and saves one complete generator-control snapshot through
+  `/api/v2/playground/generator-state`. The injected settings service preserves
+  the existing server-owned UI-state file, migrates legacy render values on
+  first read and keeps explicit cross-surface handoffs as the final override.
 - `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or

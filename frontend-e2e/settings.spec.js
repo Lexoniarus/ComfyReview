@@ -19,7 +19,7 @@ test("settings persist preferences and expose LoRA catalog status without profil
   await page.getByRole("button", { name: "Verbindung testen" }).click();
   await expect(page.locator(".settings-status")).toContainText("Verbunden");
   await expect(page.getByText("character-detail.safetensors")).toBeVisible();
-  await expect(page.getByText("example-upscaler.pth")).toBeVisible();
+  await expect(page.getByText("4x-AnimeSharp.pth")).toBeVisible();
 
   await page.getByRole("button", { name: "Inhaltsstufen" }).click();
   await expect(

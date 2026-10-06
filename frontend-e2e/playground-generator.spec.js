@@ -45,7 +45,26 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   ]) {
     await page.getByLabel(label).selectOption("off");
   }
+  await page.getByRole("button", { name: "LoRA hinzufügen" }).click();
+  await expect(page.locator(".settings-lora-row")).toHaveCount(1);
+  await expect(page.getByLabel("LoRA")).toHaveValue(
+    "character-detail.safetensors",
+  );
+  const stateSaved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PUT" &&
+      response.url().endsWith("/api/v2/playground/generator-state") &&
+      response.ok(),
+  );
   await page.getByLabel("Seed-Modus").selectOption("random");
+  await stateSaved;
+  await page.reload();
+  await expect(page.getByLabel("Seed-Modus")).toHaveValue("random");
+  await expect(page.getByLabel("Outfit: Modus")).toHaveValue("off");
+  await expect(page.locator(".settings-lora-row")).toHaveCount(1);
+  await expect(page.getByLabel("LoRA")).toHaveValue(
+    "character-detail.safetensors",
+  );
   await page.getByRole("button", { name: "Entwurf erstellen" }).click();
 
   await expect(page.locator("[data-draft-state]")).toHaveText(

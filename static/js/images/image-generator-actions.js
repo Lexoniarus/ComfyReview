@@ -1,6 +1,6 @@
 /** Own image-to-generator action menus, validation requests and staging. */
 export class ImageGeneratorActions {
-  /** @param {{api: {get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>}, store: {stagePromptSetup: (uid: string) => any, stageRenderSetup: (uid: string) => any}, eventTarget?: EventTarget}} dependencies */
+  /** @param {{api: {get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>}, store: {stagePromptSetup: (setup: Record<string, any>) => any, stageRenderSetup: (uid: string) => any}, eventTarget?: EventTarget}} dependencies */
   constructor(dependencies) {
     this.api = dependencies.api;
     this.store = dependencies.store;
@@ -86,8 +86,19 @@ export class ImageGeneratorActions {
           : "nicht anwendbar";
         throw new Error(`Render-Setup kann nicht übernommen werden: ${issues}`);
       }
-      if (kind === "prompt") this.store.stagePromptSetup(imageUid);
-      else this.store.stageRenderSetup(imageUid);
+      if (kind === "prompt") {
+        const promptSetup = handoff.prompt_setup || {};
+        if (
+          !Array.isArray(promptSetup.component_uids) ||
+          !promptSetup.component_uids.length
+        )
+          throw new Error(
+            "Für dieses Bild sind keine Prompt-Bausteine verknüpft.",
+          );
+        this.store.stagePromptSetup(promptSetup);
+      } else {
+        this.store.stageRenderSetup(imageUid);
+      }
       this.#notify(
         kind === "prompt"
           ? "Prompt-Setup für den Generator vorgemerkt"

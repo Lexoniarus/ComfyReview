@@ -35,14 +35,25 @@ export class LoraStackEditor {
             available: item.available !== false,
           },
     );
-    this.items = items.map((item) => ({
-      name: String(item.provider_name || item.name || ""),
-      model_strength: Number(item.model_strength ?? 1),
-      clip_strength: Number(item.clip_strength ?? 1),
-      lora_uid: item.lora_uid || null,
-      revision_uid: item.revision_uid || null,
-      content_level: item.content_level || null,
-    }));
+    this.items = items.map((item) => {
+      const definition = this.available.find(
+        (candidate) =>
+          (item.lora_uid && candidate.lora_uid === item.lora_uid) ||
+          (item.name && candidate.name === item.name),
+      );
+      return {
+        name: String(item.provider_name || item.name || definition?.name || ""),
+        model_strength: Number(
+          item.model_strength ?? definition?.default_model_strength ?? 1,
+        ),
+        clip_strength: Number(
+          item.clip_strength ?? definition?.default_clip_strength ?? 1,
+        ),
+        lora_uid: item.lora_uid || definition?.lora_uid || null,
+        revision_uid: item.revision_uid || definition?.revision_uid || null,
+        content_level: item.content_level || definition?.content_level || null,
+      };
+    });
     this.#draw();
   }
 

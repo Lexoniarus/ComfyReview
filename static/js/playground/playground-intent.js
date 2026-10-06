@@ -203,10 +203,20 @@ export class PlaygroundIntentStore {
     return this.read();
   }
 
-  /** @param {string} imageUid */
-  stagePromptSetup(imageUid) {
+  /** @param {Record<string, any>} promptSetup */
+  stagePromptSetup(promptSetup) {
     const stored = this.#state();
-    this.#write({ promptImageUid: text(imageUid) }, stored.render, {});
+    const setup = record(promptSetup);
+    this.#write(
+      {
+        componentUids: cleanValues(
+          Array.isArray(setup.component_uids) ? setup.component_uids : [],
+        ),
+        loras: Array.isArray(setup.loras) ? setup.loras : [],
+      },
+      stored.render,
+      {},
+    );
     return this.read();
   }
 

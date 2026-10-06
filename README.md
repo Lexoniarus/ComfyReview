@@ -490,8 +490,10 @@ the generation's persisted directory and filename prefix.
 
 Analytics uses the same `render-guidance-v1` calculation. Actions stage prompt
 and render values in a tab-local tray; they navigate only after “Generator
-öffnen”. Scores and discovery candidates are derived from canonical facts and
-are not persisted, so schema v11 is unchanged.
+öffnen”. Image prompt handoffs stage their linked canonical prompt components
+and show them in the Generator's “01 Auswahl” controls instead of silently
+using a historical prompt snapshot. Scores and discovery candidates are derived
+from canonical facts and are not persisted, so schema v11 is unchanged.
 
 </details>
 

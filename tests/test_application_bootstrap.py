@@ -61,6 +61,9 @@ from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.settings import Settings, load_settings
 from services.analytics_page_service import AnalyticsPageService
 from services.playground_discovery_service import PlaygroundDiscoveryService
+from services.playground_generator_ui.settings_state import (
+    PlaygroundGeneratorSettingsService,
+)
 from services.playground_label_service import PromptLabelService
 from services.playground_render_guidance_service import (
     PlaygroundRenderGuidanceService,
@@ -134,6 +137,10 @@ class _RecordingGenerationWorker:
 
 def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
+    playground_ui_state = PlaygroundGeneratorStateRepository(
+        head_path=tmp_path / "head.json",
+        preview_path=tmp_path / "preview.json",
+    )
     return ApplicationContainer(
         settings=settings,
         canonical_schema=_RecordingCanonicalSchema(settings, events),
@@ -153,9 +160,9 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
             PlaygroundRenderGuidanceService, object()
         ),
         playground_discovery=cast(PlaygroundDiscoveryService, object()),
-        playground_ui_state=PlaygroundGeneratorStateRepository(
-            head_path=tmp_path / "head.json",
-            preview_path=tmp_path / "preview.json",
+        playground_ui_state=playground_ui_state,
+        playground_generator_settings=PlaygroundGeneratorSettingsService(
+            playground_ui_state
         ),
         generation_service=cast(GenerationService, object()),
         generation_worker=cast(

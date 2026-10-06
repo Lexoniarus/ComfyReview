@@ -114,6 +114,7 @@ def image_generator_handoff(request: Request, image_uid: str) -> JSONResponse:
             "prompt_setup": {
                 "source_image_uid": prompt.source_image_uid,
                 "availability": prompt.availability,
+                "component_uids": prompt.component_uids,
                 "revision_uids": prompt.revision_uids,
                 "positive_atoms": [
                     {"text": atom.text, "weight": atom.weight}

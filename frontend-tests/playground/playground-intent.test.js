@@ -148,21 +148,24 @@ describe("Playground intent codec", () => {
     const storage = new MemoryStorage();
     const store = new PlaygroundIntentStore(storage);
 
-    store.stagePromptSetup("image-prompt");
-    store.merge({
+    store.stagePromptSetup({
+      component_uids: ["character-a", "scene-a"],
       loras: [{ lora_uid: "lora-style", revision_uid: "revision-1" }],
     });
     store.stageRenderSetup("image-render");
     expect(store.read()).toEqual({
-      promptImageUid: "image-prompt",
+      componentUids: ["character-a", "scene-a"],
       loras: [{ lora_uid: "lora-style", revision_uid: "revision-1" }],
       renderImageUid: "image-render",
     });
     store.clearPrompt();
     expect(store.read()).toEqual({ renderImageUid: "image-render" });
-    store.stagePromptSetup("image-new");
+    store.stagePromptSetup({ component_uids: ["character-new"] });
     store.clearRender();
-    expect(store.read()).toEqual({ promptImageUid: "image-new" });
+    expect(store.read()).toEqual({
+      componentUids: ["character-new"],
+      loras: [],
+    });
 
     storage.setItem(
       "comfyreview.playground-intent.v2",

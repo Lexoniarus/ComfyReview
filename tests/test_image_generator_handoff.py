@@ -190,6 +190,7 @@ def test_image_handoff_separates_prompt_render_and_graph_effective_loras() -> (
     ).get("image-1")
 
     assert handoff.prompt_setup.availability == "snapshot_only"
+    assert handoff.prompt_setup.component_uids == ()
     assert handoff.prompt_setup.positive_atoms[1].text == "style"
     assert tuple(
         item.provider_name for item in handoff.prompt_setup.loras
@@ -277,6 +278,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
         capabilities=_Capabilities(),
     ).get("image-1")
     assert handoff.prompt_setup.availability == "grouped"
+    assert handoff.prompt_setup.component_uids == ("character-a",)
     assert handoff.prompt_setup.issues == (
         "lora_unavailable:missing.safetensors",
     )

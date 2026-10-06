@@ -15,6 +15,8 @@ describe("PlaygroundController", () => {
     );
     expect(fixture.controls.render).toHaveBeenCalled();
     expect(fixture.controls.render).toHaveBeenCalledWith({ defaults: {} });
+    expect(fixture.modes.applyState).toHaveBeenCalledWith({});
+    expect(fixture.controls.applyState).toHaveBeenCalledWith({});
     expect(fixture.modes.applyIntent).toHaveBeenCalledWith({});
     expect(fixture.controls.applyIntent).toHaveBeenCalledWith({});
 
@@ -118,13 +120,14 @@ describe("PlaygroundController", () => {
     );
   });
 
-  it("prefills an exact image without drafting or submitting", async () => {
+  it("prefills visible component selections from an image handoff", async () => {
     const fixture = createFixture({
       intent: { imageUid: "image-1" },
       image: {
         image_uid: "image-1",
         prompt_setup: {
           source_image_uid: "image-1",
+          component_uids: ["character-a"],
           revision_uids: ["revision-character-a"],
           loras: [],
         },
@@ -153,8 +156,7 @@ describe("PlaygroundController", () => {
     );
     expect(fixture.modes.applyIntent).toHaveBeenCalledWith(
       expect.objectContaining({
-        sourceImageUid: "image-1",
-        revisionUids: ["revision-character-a"],
+        componentUids: ["character-a"],
       }),
     );
     expect(
@@ -166,7 +168,7 @@ describe("PlaygroundController", () => {
     expect(fixture.api.post).toHaveBeenCalledWith(
       "playground/drafts",
       {
-        prompt_source: { mode: "image_snapshot", image_uid: "image-1" },
+        selections: [],
         generation: expect.any(Object),
       },
       expect.any(Object),
@@ -217,6 +219,7 @@ describe("PlaygroundController", () => {
       image: {
         prompt_setup: {
           source_image_uid: "image-prompt",
+          component_uids: ["character-a"],
           revision_uids: ["revision-character-a"],
           loras: [],
         },
@@ -313,6 +316,58 @@ describe("PlaygroundController", () => {
       vi.useRealTimers();
     }
   });
+
+  it("restores saved values and persists the complete state after changes", async () => {
+    vi.useFakeTimers();
+    try {
+      const savedState = { checkpoint: "saved.safetensors" };
+      const fixture = createFixture({ savedState });
+
+      await fixture.controller.start();
+      expect(fixture.modes.applyState).toHaveBeenCalledWith(savedState);
+      expect(fixture.controls.applyState).toHaveBeenCalledWith(savedState);
+
+      fixture.controller.settingsChanged();
+      fixture.controller.settingsChanged();
+      await vi.advanceTimersByTimeAsync(180);
+      await settle();
+
+      expect(fixture.api.put).toHaveBeenCalledOnce();
+      expect(fixture.api.put).toHaveBeenCalledWith(
+        "playground/generator-state",
+        {
+          selections: [],
+          checkpoint: "model",
+          seed_mode: "fixed",
+        },
+        expect.any(Object),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the generator usable when state loading or saving fails", async () => {
+    vi.useFakeTimers();
+    try {
+      const fixture = createFixture({
+        stateLoadError: new Error("state load kaputt"),
+        stateSaveError: new Error("state save kaputt"),
+      });
+
+      await fixture.controller.start();
+      expect(fixture.prepareButton.disabled).toBe(false);
+      fixture.controller.clearDraftReference();
+      await vi.advanceTimersByTimeAsync(180);
+      await settle();
+
+      expect(fixture.status.textContent).toContain(
+        "Einstellungen konnten nicht gespeichert werden",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function createFixture(options = {}) {
@@ -323,13 +378,19 @@ function createFixture(options = {}) {
   const result = document.createElement("div");
   const modes = disposable({
     render: vi.fn(),
+    applyState: vi.fn(() => options.stateRejected || []),
     applyIntent: vi.fn(() => options.intentRejected || []),
     showResolvedComponents: vi.fn(),
     value: vi.fn(() => ({ selections: [] })),
   });
   const controls = disposable({
     render: vi.fn(),
+    applyState: vi.fn(() => options.stateRejected || []),
     applyIntent: vi.fn(() => options.intentRejected || []),
+    stateValue: vi.fn(() => ({
+      checkpoint: "model",
+      seed_mode: "fixed",
+    })),
     renderSettings: vi.fn(() => ({
       checkpoint: "model",
       sampler: "euler",
@@ -373,6 +434,10 @@ function createFixture(options = {}) {
   const api = {
     get: vi.fn((path) => {
       if (options.loadError) return Promise.reject(options.loadError);
+      if (path === "playground/generator-state")
+        return options.stateLoadError
+          ? Promise.reject(options.stateLoadError)
+          : Promise.resolve(options.savedState || {});
       return Promise.resolve(
         path.startsWith("images/")
           ? options.image
@@ -381,6 +446,11 @@ function createFixture(options = {}) {
             : { defaults: {} },
       );
     }),
+    put: vi.fn(() =>
+      options.stateSaveError
+        ? Promise.reject(options.stateSaveError)
+        : Promise.resolve({}),
+    ),
     post: vi.fn((path) => {
       if (path === "playground/render-guidance") {
         return options.guidanceError
@@ -434,6 +504,7 @@ function createFixture(options = {}) {
     requests: new RequestLifecycle(),
     previewRequests: new RequestLifecycle(),
     guidanceRequests: new RequestLifecycle(),
+    stateRequests: new RequestLifecycle(),
     prepareButton,
     submitButton,
     status,

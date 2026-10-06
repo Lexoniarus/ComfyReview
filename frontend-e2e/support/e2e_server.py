@@ -88,6 +88,7 @@ class BrowserTestRuntime:
                 name="Aiko",
                 positive_text="aiko",
             )
+            self._insert_lora(connection)
             self._insert_component(
                 connection,
                 kind="outfit",
@@ -307,6 +308,36 @@ class BrowserTestRuntime:
         return revision_id
 
     @staticmethod
+    def _insert_lora(connection: sqlite3.Connection) -> None:
+        definition_id = BrowserTestRuntime._last_row_id(
+            connection.execute(
+                """
+                INSERT INTO lora_definitions(
+                    lora_uid, provider_name, display_name, content_level
+                ) VALUES (
+                    'lora-e2e-detail', 'character-detail.safetensors',
+                    'Character Detail', 'standard'
+                )
+                """
+            )
+        )
+        content_hash = BrowserTestRuntime._digest(
+            "\0".join(("1000", "1000", "", ""))
+        )
+        connection.execute(
+            """
+            INSERT INTO lora_revisions(
+                revision_uid, lora_definition_id, revision_number,
+                default_model_strength_milli,
+                default_clip_strength_milli, content_hash
+            ) VALUES (
+                'lora-revision-e2e-detail', ?, 1, 1000, 1000, ?
+            )
+            """,
+            (definition_id, content_hash),
+        )
+
+    @staticmethod
     def _insert_prompt(
         connection: sqlite3.Connection, scope: str, text: str
     ) -> int:
@@ -393,7 +424,7 @@ class BrowserTestRuntime:
                 },
                 "UpscaleModelLoader": {
                     "input": {
-                        "required": {"model_name": [["example-upscaler.pth"]]}
+                        "required": {"model_name": [["4x-AnimeSharp.pth"]]}
                     }
                 },
                 "ImageUpscaleWithModel": {},

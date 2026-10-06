@@ -223,7 +223,7 @@
     },
     "cr:upscale_model": {
       "inputs": {
-        "model_name": "example-upscaler.pth"
+        "model_name": "4x-AnimeSharp.pth"
       },
       "class_type": "UpscaleModelLoader",
       "_meta": {
@@ -343,7 +343,7 @@
     "ImageScale"
   ],
   "upscale_model_requirements": [
-    "example-upscaler.pth"
+    "4x-AnimeSharp.pth"
   ],
   "lora_chain_binding": {
     "model_source": {

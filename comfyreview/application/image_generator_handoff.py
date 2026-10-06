@@ -42,6 +42,7 @@ class PromptSetupHandoff:
 
     source_image_uid: str
     availability: str
+    component_uids: tuple[str, ...]
     revision_uids: tuple[str, ...]
     positive_atoms: tuple[PromptAtomUsage, ...]
     negative_atoms: tuple[PromptAtomUsage, ...]
@@ -133,6 +134,9 @@ class ImageGeneratorHandoffService:
         prompt = PromptSetupHandoff(
             source_image_uid=image.image_uid,
             availability=availability,
+            component_uids=tuple(
+                scope.component_uid for scope in image.scopes
+            ),
             revision_uids=tuple(scope.revision_uid for scope in image.scopes),
             positive_atoms=prompt_atom_usages_from_text(
                 image.prompt_snapshot.positive

@@ -1,10 +1,10 @@
-/** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
-/** @typedef {{render: (components: any[], loras?: any[]) => void, applyIntent: (intent: Record<string, any>) => string[] | void, showResolvedComponents: (components: any[]) => void, value: () => {selections: any[], loras?: any[]}, dispose: () => void}} ModesBoundary */
-/** @typedef {{render: (capabilities: any) => void, applyIntent: (intent: Record<string, any>) => string[] | void, draftValue: () => any, renderSettings: () => any, renderGuidance: (payload: any, basis: "observed" | "predicted") => void, applyRenderSettings: (settings: Record<string, any>) => string[], applyParameter: (parameter: string, value: unknown) => boolean, value: () => any, useConcreteSeed: (seed: number) => void, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
+/** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>, put: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
+/** @typedef {{render: (components: any[], loras?: any[]) => void, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void, showResolvedComponents: (components: any[]) => void, value: () => {selections: any[], loras?: any[]}, dispose: () => void}} ModesBoundary */
+/** @typedef {{render: (capabilities: any) => void, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void, stateValue: () => Record<string, any>, draftValue: () => any, renderSettings: () => any, renderGuidance: (payload: any, basis: "observed" | "predicted") => void, applyRenderSettings: (settings: Record<string, any>) => string[], applyParameter: (parameter: string, value: unknown) => boolean, value: () => any, useConcreteSeed: (seed: number) => void, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
 /** @typedef {{render: (draft: any, draftUid: string) => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (payload: any) => void, renderLoading: (message?: string) => void, dispose: () => void}} GuidanceBoundary */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>, intentStore?: {clear: () => void}}} PlaygroundDependencies */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, stateRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>, intentStore?: {clear: () => void}}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -18,6 +18,7 @@ export class PlaygroundController {
     this.requests = dependencies.requests;
     this.previewRequests = dependencies.previewRequests;
     this.guidanceRequests = dependencies.guidanceRequests;
+    this.stateRequests = dependencies.stateRequests;
     this.prepareButton = dependencies.prepareButton;
     this.submitButton = dependencies.submitButton;
     this.status = dependencies.status;
@@ -28,6 +29,7 @@ export class PlaygroundController {
     this.abortController = new AbortController();
     this.hasDraft = false;
     this.guidanceTimer = null;
+    this.stateTimer = null;
     this.guidancePayload = null;
     /** @type {"observed" | "predicted"} */
     this.guidanceBasis = "observed";
@@ -71,18 +73,26 @@ export class PlaygroundController {
       signal: this.abortController.signal,
     });
     try {
-      const [catalog, capabilities] = await this.requests.run((signal) =>
-        Promise.all([
-          this.api.get("playground/components", { signal }),
-          this.api.get("playground/capabilities", { signal }),
-        ]),
+      const [catalog, capabilities, savedState] = await this.requests.run(
+        (signal) =>
+          Promise.all([
+            this.api.get("playground/components", { signal }),
+            this.api.get("playground/capabilities", { signal }),
+            this.api
+              .get("playground/generator-state", { signal })
+              .catch(() => ({})),
+          ]),
       );
       this.modes.render(
         catalog.components || [],
         capabilities.lora_definitions || [],
       );
       this.controls.render(capabilities);
-      const rejected = await this.#applyIntent();
+      const rejected = [
+        ...(this.modes.applyState(savedState) || []),
+        ...(this.controls.applyState(savedState) || []),
+        ...(await this.#applyIntent()),
+      ];
       await this.refreshGuidance();
       this.status.textContent = rejected.length
         ? `Vorbelegung teilweise abgewiesen: ${rejected.join(", ")}`
@@ -129,6 +139,7 @@ export class PlaygroundController {
   /** Invalidate the draft and debounce a new evidence calculation. */
   settingsChanged() {
     this.invalidateDraft();
+    this.#scheduleStateSave();
     this.guidanceRequests.cancel(this.guidanceTimer);
     this.guidanceTimer = this.guidanceRequests.schedule(
       () => void this.refreshGuidance(),
@@ -221,6 +232,7 @@ export class PlaygroundController {
     this.requests.dispose();
     this.previewRequests.dispose();
     this.guidanceRequests.dispose();
+    this.stateRequests.dispose();
     this.modes.dispose();
     this.controls.dispose();
     this.draft.dispose();
@@ -231,6 +243,7 @@ export class PlaygroundController {
   clearDraftReference() {
     this.draftReference = null;
     this.invalidateDraft();
+    this.#scheduleStateSave();
   }
 
   /** Invalidate a reviewed snapshot after its source settings change. */
@@ -244,6 +257,34 @@ export class PlaygroundController {
     this.prepareButton.disabled = busy;
     this.submitButton.disabled = busy || !this.hasDraft;
     this.controls.setBusy(busy);
+  }
+
+  #scheduleStateSave() {
+    this.stateRequests.cancel(this.stateTimer);
+    this.stateTimer = this.stateRequests.schedule(
+      () => void this.#saveState(),
+      180,
+    );
+  }
+
+  async #saveState() {
+    this.stateRequests.cancelRequests();
+    try {
+      await this.stateRequests.run((signal) =>
+        this.api.put(
+          "playground/generator-state",
+          {
+            ...this.modes.value(),
+            ...this.controls.stateValue(),
+          },
+          { signal },
+        ),
+      );
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        this.status.textContent = `Einstellungen konnten nicht gespeichert werden: ${errorMessage(error)}`;
+      }
+    }
   }
 
   async #applyIntent() {
@@ -271,17 +312,10 @@ export class PlaygroundController {
       ...(this.modes.applyIntent(intent) || []),
       ...(this.controls.applyIntent(intent) || []),
     ];
-    if (intent.sourceImageUid) {
-      this.draftReference = {
-        prompt_source: {
-          mode: "image_snapshot",
-          image_uid: intent.sourceImageUid,
-        },
-      };
-    } else if (
-      Array.isArray(intent.revisionUids) &&
-      intent.revisionUids.length
-    ) {
+    if (promptImageUid && !intent.componentUids?.length) {
+      rejected.push("Prompt-Bausteine des Bildes");
+    }
+    if (Array.isArray(intent.revisionUids) && intent.revisionUids.length) {
       this.draftReference = { revision_uids: intent.revisionUids };
     } else if (intent.compositionUid) {
       this.draftReference = { composition_uid: intent.compositionUid };
@@ -303,9 +337,8 @@ export class PlaygroundController {
 function promptIntent(handoff) {
   const prompt = handoff.prompt_setup || {};
   return {
-    sourceImageUid: String(prompt.source_image_uid || handoff.image_uid || ""),
-    revisionUids: Array.isArray(prompt.revision_uids)
-      ? prompt.revision_uids
+    componentUids: Array.isArray(prompt.component_uids)
+      ? prompt.component_uids
       : [],
     loras: Array.isArray(prompt.loras) ? prompt.loras : [],
   };

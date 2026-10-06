@@ -79,6 +79,7 @@ if (root instanceof HTMLElement) {
       requests: new RequestLifecycle(),
       previewRequests: new RequestLifecycle(),
       guidanceRequests: new RequestLifecycle(),
+      stateRequests: new RequestLifecycle(),
       prepareButton,
       submitButton,
       status,
