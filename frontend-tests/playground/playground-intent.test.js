@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   PlaygroundIntentNavigator,
+  PlaygroundIntentUrlCleaner,
   PlaygroundIntentStore,
   intentFromAnalyticsAction,
   playgroundIntentUrl,
@@ -23,6 +24,10 @@ describe("Playground intent codec", () => {
         component_uid: "scene-a",
         revision_uid: "scene-revision-old",
       },
+      promptCombination: [
+        { kind: "character", component_uid: "character-a", revision_uid: null },
+        { kind: "scene", component_uid: "scene-a" },
+      ],
       checkpoint: "model.safetensors",
       sampler: "euler",
       scheduler: "normal",
@@ -73,6 +78,16 @@ describe("Playground intent codec", () => {
     ).toEqual({ componentUids: ["character-a", "scene-a"] });
     expect(action("composition", { compositionUid: "composition-a" })).toEqual({
       promptCompositionUid: "composition-a",
+    });
+    expect(
+      action("combination", {
+        promptCombination:
+          '[{"kind":"scene","component_uid":"scene-a","revision_uid":null}]',
+      }),
+    ).toEqual({
+      promptCombination: [
+        { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      ],
     });
     expect(action("image", { imageUid: "image-a" })).toEqual({
       imageUid: "image-a",
@@ -127,6 +142,137 @@ describe("Playground intent codec", () => {
     expect(locationRef.assign).toHaveBeenCalledWith(
       "/playground/generator?image=image-a",
     );
+  });
+
+  it("stages only typed combination selections and encodes them in navigation", () => {
+    const locationRef = { assign: vi.fn() };
+    const store = new PlaygroundIntentStore(new MemoryStorage());
+    store.stageRenderSetup("render-image");
+    const element = document.createElement("button");
+    element.dataset.playgroundIntent = "combination";
+    element.dataset.promptCombination = JSON.stringify([
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+    ]);
+
+    new PlaygroundIntentNavigator(locationRef, store).open(element);
+
+    const stagedUrl = locationRef.assign.mock.calls[0][0];
+    const stagedIntent = readPlaygroundIntent(stagedUrl.split("?")[1]);
+    expect(stagedIntent.promptCombination).toEqual([
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+    ]);
+    expect(stagedIntent.renderImageUid).toBe("render-image");
+    expect(store.read()).toEqual({
+      promptCombination: stagedIntent.promptCombination,
+      renderImageUid: "render-image",
+    });
+  });
+
+  it("removes only the consumed combination URL source", () => {
+    const selections = [
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+    ];
+    const locationRef = {
+      href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
+        JSON.stringify(selections),
+      )}&render_image=render-image&component=legacy-scene#generator`,
+    };
+    const historyRef = {
+      state: { navigation: 1 },
+      replaceState: vi.fn((_state, _title, path) => {
+        locationRef.href = new URL(path, locationRef.href).href;
+      }),
+    };
+    const cleaner = new PlaygroundIntentUrlCleaner(locationRef, historyRef);
+
+    expect(
+      cleaner.removeTypedPromptSource({ type: "combination", selections }),
+    ).toBe(true);
+    const currentUrl = new URL(locationRef.href);
+    expect(currentUrl.searchParams.has("prompt_combination")).toBe(false);
+    expect(currentUrl.searchParams.get("render_image")).toBe("render-image");
+    expect(currentUrl.searchParams.get("component")).toBe("legacy-scene");
+    expect(currentUrl.hash).toBe("#generator");
+    expect(
+      readPlaygroundIntent(currentUrl.search).promptCombination,
+    ).toBeUndefined();
+    expect(historyRef.replaceState).toHaveBeenCalledOnce();
+
+    expect(
+      cleaner.removeTypedPromptSource({ type: "combination", selections }),
+    ).toBe(false);
+    expect(historyRef.replaceState).toHaveBeenCalledOnce();
+  });
+
+  it("removes matching image, composition, and scope URL sources only", () => {
+    const sources = [
+      {
+        key: "prompt_image",
+        value: "image-a",
+        source: { type: "image", imageUid: "image-a" },
+        mismatch: { type: "image", imageUid: "image-b" },
+      },
+      {
+        key: "prompt_composition",
+        value: "composition-a",
+        source: { type: "composition", compositionUid: "composition-a" },
+        mismatch: { type: "composition", compositionUid: "composition-b" },
+      },
+      {
+        key: "prompt_scope",
+        value: JSON.stringify({
+          kind: "scene",
+          component_uid: "scene-a",
+          revision_uid: "scene-revision-a",
+        }),
+        source: {
+          type: "scope",
+          scope: {
+            kind: "scene",
+            component_uid: "scene-a",
+            revision_uid: "scene-revision-a",
+          },
+        },
+        mismatch: {
+          type: "scope",
+          scope: {
+            kind: "scene",
+            component_uid: "scene-b",
+            revision_uid: "scene-revision-a",
+          },
+        },
+      },
+    ];
+
+    for (const { key, value, source, mismatch } of sources) {
+      const query = new URLSearchParams({
+        [key]: value,
+        render_image: "render-image",
+      });
+      const locationRef = {
+        href: `https://example.test/playground/generator?${query}`,
+      };
+      const historyRef = {
+        state: null,
+        replaceState: vi.fn((_state, _title, path) => {
+          locationRef.href = new URL(path, locationRef.href).href;
+        }),
+      };
+      const cleaner = new PlaygroundIntentUrlCleaner(locationRef, historyRef);
+
+      expect(cleaner.removeTypedPromptSource(mismatch)).toBe(false);
+      expect(historyRef.replaceState).not.toHaveBeenCalled();
+      expect(cleaner.removeTypedPromptSource(source)).toBe(true);
+      const currentUrl = new URL(locationRef.href);
+      expect(currentUrl.searchParams.has(key)).toBe(false);
+      expect(currentUrl.searchParams.get("render_image")).toBe("render-image");
+      expect(historyRef.replaceState).toHaveBeenCalledOnce();
+      expect(cleaner.removeTypedPromptSource({ type: "unknown" })).toBe(false);
+      expect(historyRef.replaceState).toHaveBeenCalledOnce();
+    }
   });
 
   it("stages prompt and render intents per tab with deterministic merging", () => {
@@ -278,6 +424,30 @@ describe("Playground intent codec", () => {
       compositionUid: "legacy-composition",
       renderImageUid: "image-render",
     });
+  });
+
+  it("clears only a matching staged combination and preserves independent sources", () => {
+    const store = new PlaygroundIntentStore(new MemoryStorage());
+    const selections = [
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+    ];
+    store.stageRenderSetup("render-image");
+    store.stagePromptCombination(selections);
+
+    store.clearPromptCombination([
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+    ]);
+    expect(store.read().promptCombination).toEqual(selections);
+
+    store.clearPromptCombination([
+      { kind: "scene", component_uid: "other-scene", revision_uid: null },
+      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+    ]);
+    expect(store.read().promptCombination).toEqual(selections);
+
+    store.clearPromptCombination(selections);
+    expect(store.read()).toEqual({ renderImageUid: "render-image" });
   });
 
   it("keeps the legacy source-identity merge contract", () => {

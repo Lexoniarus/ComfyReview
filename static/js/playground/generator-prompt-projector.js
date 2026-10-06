@@ -1,6 +1,4 @@
-import { promptKinds } from "./prompt-mode-editor.js";
-
-const generatorPromptKinds = promptKinds.map(([kind]) => kind);
+import { generatorPromptKinds } from "./prompt-kind-contract.js";
 
 /** @param {Record<string, any>} promptSetup */
 export function imagePromptState(promptSetup) {
@@ -47,6 +45,43 @@ export function scopePromptPatch(selection) {
       },
     ],
   };
+}
+
+/** @param {unknown} selections */
+export function combinationPromptPatch(selections) {
+  if (!Array.isArray(selections) || selections.length === 0) {
+    throw new Error("Combination enthält keine Prompt-Auswahlen.");
+  }
+  const selectedKinds = new Set();
+  const projectedSelections = selections.map((selection) => {
+    const kind = String(selection?.kind || "");
+    if (!generatorPromptKinds.includes(kind)) {
+      throw new Error(`Unbekannte Prompt-Rolle: ${kind || "ohne Kind"}`);
+    }
+    if (selectedKinds.has(kind)) {
+      throw new Error(`Prompt-Rolle mehrfach vorhanden: ${kind}`);
+    }
+    const componentUid = selection?.component_uid;
+    if (typeof componentUid !== "string" || !componentUid.trim()) {
+      throw new Error(`Prompt-Rolle unvollständig: ${kind}`);
+    }
+    const revisionUid = selection?.revision_uid;
+    if (
+      revisionUid !== undefined &&
+      revisionUid !== null &&
+      (typeof revisionUid !== "string" || !revisionUid.trim())
+    ) {
+      throw new Error(`Prompt-Revision ungültig: ${kind}`);
+    }
+    selectedKinds.add(kind);
+    return {
+      kind,
+      mode: "fixed",
+      component_uid: componentUid,
+      revision_uid: revisionUid ?? null,
+    };
+  });
+  return { selections: projectedSelections };
 }
 
 /**

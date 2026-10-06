@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RequestLifecycle } from "../../static/js/core/request-lifecycle.js";
-import { PlaygroundIntentStore } from "../../static/js/playground/playground-intent.js";
+import {
+  PlaygroundIntentStore,
+  PlaygroundIntentUrlCleaner,
+  readPlaygroundIntent,
+} from "../../static/js/playground/playground-intent.js";
 import { PlaygroundController } from "../../static/js/surfaces/playground-controller.js";
 
 describe("PlaygroundController", () => {
@@ -75,6 +79,19 @@ describe("PlaygroundController", () => {
           },
         },
       },
+      {
+        prompt: {
+          promptCombination: [
+            { kind: "scene", component_uid: "scene-a" },
+            { kind: "outfit", component_uid: "outfit-a" },
+          ],
+          promptScope: {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: null,
+          },
+        },
+      },
     ];
 
     for (const { prompt } of cases) {
@@ -87,6 +104,9 @@ describe("PlaygroundController", () => {
       });
       storage.setItem("comfyreview.playground-intent.v2", storedIntent);
       const intentStore = new PlaygroundIntentStore(storage);
+      const intentUrlCleaner = {
+        removeTypedPromptSource: vi.fn(),
+      };
       const existingPromptState = {
         selections: [
           {
@@ -101,6 +121,7 @@ describe("PlaygroundController", () => {
       const fixture = createFixture({
         intent: intentStore.read(),
         intentStore,
+        intentUrlCleaner,
         selectionValue: existingPromptState,
         savedState: {
           selections: [
@@ -130,6 +151,7 @@ describe("PlaygroundController", () => {
       expect(storage.getItem("comfyreview.playground-intent.v2")).toBe(
         storedIntent,
       );
+      expect(intentUrlCleaner.removeTypedPromptSource).not.toHaveBeenCalled();
       expect(fixture.prepareButton.disabled).toBe(true);
       expect(fixture.submitButton.disabled).toBe(true);
     }
@@ -1015,6 +1037,238 @@ describe("PlaygroundController", () => {
     expect(draftCall[1]).not.toHaveProperty("composition_uid");
   });
 
+  it("applies, persists, and removes only a typed Combination source", async () => {
+    const selections = [
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+    ];
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stageRenderSetup("render-image");
+    intentStore.stagePromptCombination(selections);
+    const locationRef = {
+      href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
+        JSON.stringify(selections),
+      )}&render_image=render-image&sampler=euler&component=legacy-scene`,
+    };
+    const historyRef = {
+      state: null,
+      replaceState: vi.fn((_state, _title, path) => {
+        locationRef.href = new URL(path, locationRef.href).href;
+      }),
+    };
+    const savedState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-a",
+          revision_uid: "character-revision-a",
+        },
+        {
+          kind: "pose",
+          mode: "fixed",
+          component_uid: "pose-a",
+          revision_uid: "pose-revision-a",
+        },
+      ],
+      loras: [{ lora_uid: "existing-lora" }],
+    };
+    const fixture = createFixture({
+      intent: {
+        ...intentStore.read(),
+        ...readPlaygroundIntent(new URL(locationRef.href).search),
+      },
+      intentStore,
+      intentUrlCleaner: new PlaygroundIntentUrlCleaner(locationRef, historyRef),
+      savedState,
+      selectionValue: savedState,
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.modes.applyState).toHaveBeenLastCalledWith({
+      selections: selections.map((selection) => ({
+        ...selection,
+        mode: "fixed",
+      })),
+    });
+    const appliedByKind = new Map(
+      fixture.modes
+        .value()
+        .selections.map((selection) => [selection.kind, selection]),
+    );
+    expect(appliedByKind.get("scene")).toEqual({
+      kind: "scene",
+      mode: "fixed",
+      component_uid: "scene-a",
+      revision_uid: null,
+    });
+    expect(appliedByKind.get("outfit")).toEqual({
+      kind: "outfit",
+      mode: "fixed",
+      component_uid: "outfit-a",
+      revision_uid: null,
+    });
+    expect(appliedByKind.get("character")).toEqual(savedState.selections[0]);
+    expect(appliedByKind.get("pose")).toEqual(savedState.selections[1]);
+    expect(fixture.modes.value().loras).toEqual(savedState.loras);
+    expect(fixture.api.put).toHaveBeenCalledWith(
+      "playground/generator-state",
+      expect.objectContaining({
+        selections: expect.any(Array),
+        loras: savedState.loras,
+      }),
+      expect.any(Object),
+    );
+    expect(intentStore.read()).toEqual({ renderImageUid: "render-image" });
+
+    const currentUrl = new URL(locationRef.href);
+    expect(currentUrl.searchParams.has("prompt_combination")).toBe(false);
+    expect(currentUrl.searchParams.get("render_image")).toBe("render-image");
+    expect(currentUrl.searchParams.get("sampler")).toBe("euler");
+    expect(currentUrl.searchParams.get("component")).toBe("legacy-scene");
+    expect(historyRef.replaceState).toHaveBeenCalledOnce();
+    const reloadedIntent = {
+      ...intentStore.read(),
+      ...readPlaygroundIntent(currentUrl.search),
+    };
+    expect(reloadedIntent.promptCombination).toBeUndefined();
+
+    expect(
+      fixture.api.post.mock.calls.some(
+        ([path]) => path === "playground/drafts",
+      ),
+    ).toBe(false);
+    await fixture.controller.prepare();
+    const draftCall = fixture.api.post.mock.calls.find(
+      ([path]) => path === "playground/drafts",
+    );
+    expect(draftCall[1]).toEqual(
+      expect.objectContaining({
+        selections: expect.arrayContaining(
+          selections.map((selection) =>
+            expect.objectContaining({
+              kind: selection.kind,
+              component_uid: selection.component_uid,
+            }),
+          ),
+        ),
+      }),
+    );
+    expect(draftCall[1]).not.toHaveProperty("componentUids");
+    expect(draftCall[1]).not.toHaveProperty("composition_uid");
+    expect(draftCall[1]).not.toHaveProperty("revision_uids");
+  });
+
+  it("retains Combination staging and URL when selection application is rejected", async () => {
+    const selections = [
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      {
+        kind: "outfit",
+        component_uid: "outfit-unavailable",
+        revision_uid: null,
+      },
+    ];
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stageRenderSetup("render-image");
+    intentStore.stagePromptCombination(selections);
+    const locationRef = {
+      href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
+        JSON.stringify(selections),
+      )}&render_image=render-image`,
+    };
+    const historyRef = { state: null, replaceState: vi.fn() };
+    const savedState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-before",
+          revision_uid: "character-before-revision",
+        },
+      ],
+      loras: [{ lora_uid: "existing-lora" }],
+    };
+    const fixture = createFixture({
+      intent: {
+        ...intentStore.read(),
+        ...readPlaygroundIntent(new URL(locationRef.href).search),
+      },
+      intentStore,
+      intentUrlCleaner: new PlaygroundIntentUrlCleaner(locationRef, historyRef),
+      savedState,
+      selectionValue: savedState,
+      modeStateRejection: (state) =>
+        state.selections.length === 2 ? ["outfit"] : [],
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.status.textContent).toContain(
+      "Combination-Prompt abgewiesen: outfit",
+    );
+    expect(fixture.modes.value()).toEqual(savedState);
+    expect(fixture.api.put).not.toHaveBeenCalled();
+    expect(intentStore.read()).toEqual({
+      promptCombination: selections,
+      renderImageUid: "render-image",
+    });
+    expect(historyRef.replaceState).not.toHaveBeenCalled();
+    expect(
+      new URL(locationRef.href).searchParams.has("prompt_combination"),
+    ).toBe(true);
+  });
+
+  it("leaves Combination staging and URL intact when generator-state persistence fails", async () => {
+    const selections = [
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+    ];
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptCombination(selections);
+    const locationRef = {
+      href: `https://example.test/playground/generator?prompt_combination=${encodeURIComponent(
+        JSON.stringify(selections),
+      )}&render_image=render-image`,
+    };
+    const historyRef = { state: null, replaceState: vi.fn() };
+    const savedState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-before",
+          revision_uid: "character-before-revision",
+        },
+      ],
+      loras: [],
+    };
+    const fixture = createFixture({
+      intent: {
+        ...intentStore.read(),
+        ...readPlaygroundIntent(new URL(locationRef.href).search),
+      },
+      intentStore,
+      intentUrlCleaner: new PlaygroundIntentUrlCleaner(locationRef, historyRef),
+      savedState,
+      selectionValue: savedState,
+      stateSaveError: new Error("persist failed"),
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.status.textContent).toContain(
+      "Combination-Prompt konnte nicht übernommen werden",
+    );
+    expect(fixture.modes.value()).toEqual(savedState);
+    expect(fixture.api.put).toHaveBeenCalledOnce();
+    expect(intentStore.read()).toEqual({ promptCombination: selections });
+    expect(historyRef.replaceState).not.toHaveBeenCalled();
+    expect(
+      new URL(locationRef.href).searchParams.has("prompt_combination"),
+    ).toBe(true);
+  });
+
   it("retains a typed composition source and restores state after persistence fails", async () => {
     const intentStore = new PlaygroundIntentStore(new MemoryStorage());
     intentStore.stagePromptComposition("composition-failed");
@@ -1491,6 +1745,7 @@ function createFixture(options = {}) {
     result,
     intent: options.intent,
     intentStore: options.intentStore,
+    intentUrlCleaner: options.intentUrlCleaner,
   });
   return {
     controller,

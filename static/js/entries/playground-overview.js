@@ -12,13 +12,14 @@ if (root instanceof HTMLElement) {
   if (combinations instanceof HTMLElement && status instanceof HTMLElement) {
     const requests = new RequestLifecycle();
     const api = new ApiClient();
+    const intentStore = new PlaygroundIntentStore(window.sessionStorage);
     const generatorActions = new ImageGeneratorActions({
       api,
-      store: new PlaygroundIntentStore(window.sessionStorage),
+      store: intentStore,
     });
     const view = new TopCombinationsView(
       combinations,
-      new PlaygroundIntentNavigator(window.location),
+      new PlaygroundIntentNavigator(window.location, intentStore),
       {
         createGeneratorActions: (imageUid) => generatorActions.create(imageUid),
       },

@@ -6,6 +6,7 @@ import { DraftPreview } from "../playground/draft-preview.js";
 import { GenerationControls } from "../playground/generation-controls.js";
 import {
   PlaygroundIntentStore,
+  PlaygroundIntentUrlCleaner,
   readPlaygroundIntent,
 } from "../playground/playground-intent.js";
 import { PromptModeEditor } from "../playground/prompt-mode-editor.js";
@@ -89,6 +90,10 @@ if (root instanceof HTMLElement) {
         ...presentIntent(readPlaygroundIntent(window.location.search)),
       },
       intentStore,
+      intentUrlCleaner: new PlaygroundIntentUrlCleaner(
+        window.location,
+        window.history,
+      ),
     });
     void controller.start();
     window.addEventListener(

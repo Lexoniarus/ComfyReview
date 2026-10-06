@@ -33,6 +33,7 @@ export class TopCombinationsView {
       "Charakter + Szene · getrennt nach Charakter",
       groups,
       "two_component",
+      ["character", "scene"],
       this.evidenceCarousels,
       this.createGeneratorActions,
     );
@@ -41,6 +42,7 @@ export class TopCombinationsView {
       "Charakter + Szene + Outfit · getrennt nach Charakter",
       groups,
       "three_component",
+      ["character", "scene", "outfit"],
       this.evidenceCarousels,
       this.createGeneratorActions,
     );
@@ -69,12 +71,13 @@ export class TopCombinationsView {
   }
 }
 
-/** @param {string} title @param {string} subtitle @param {Record<string, any>[]} groups @param {"two_component" | "three_component"} field @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
+/** @param {string} title @param {string} subtitle @param {Record<string, any>[]} groups @param {"two_component" | "three_component"} field @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
 function combinationCollection(
   title,
   subtitle,
   groups,
   field,
+  kinds,
   evidenceCarousels,
   createGeneratorActions,
 ) {
@@ -96,6 +99,7 @@ function combinationCollection(
       characterCombinationRow(
         group,
         rows,
+        kinds,
         evidenceCarousels,
         createGeneratorActions,
       ),
@@ -110,10 +114,11 @@ function combinationCollection(
   return section;
 }
 
-/** @param {Record<string, any>} group @param {unknown[]} rows @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
+/** @param {Record<string, any>} group @param {unknown[]} rows @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
 function characterCombinationRow(
   group,
   rows,
+  kinds,
   evidenceCarousels,
   createGeneratorActions,
 ) {
@@ -133,6 +138,7 @@ function characterCombinationRow(
     grid.append(
       combinationCard(
         recordValue(value),
+        kinds,
         evidenceCarousels,
         createGeneratorActions,
       ),
@@ -159,8 +165,13 @@ function carouselButton(direction, label, glyph) {
   return button;
 }
 
-/** @param {Record<string, any>} row @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
-function combinationCard(row, evidenceCarousels, createGeneratorActions) {
+/** @param {Record<string, any>} row @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
+function combinationCard(
+  row,
+  kinds,
+  evidenceCarousels,
+  createGeneratorActions,
+) {
   const card = document.createElement("article");
   card.className = "playground-combination-card media-card";
   card.dataset.cardRailItem = "";
@@ -188,12 +199,46 @@ function combinationCard(row, evidenceCarousels, createGeneratorActions) {
   const action = document.createElement("button");
   action.type = "button";
   action.className = "secondary-button";
-  action.dataset.playgroundIntent = "scope";
-  action.dataset.componentUids = JSON.stringify(arrayValue(row.component_uids));
   action.textContent = "Im Generator verwenden";
+  const source = combinationSource(row.component_uids, kinds);
+  if (source.selections) {
+    action.dataset.playgroundIntent = "combination";
+    action.dataset.promptCombination = JSON.stringify(source.selections);
+  } else {
+    action.disabled = true;
+    const rejection = document.createElement("span");
+    rejection.className = "playground-combination-handoff-error";
+    rejection.setAttribute("role", "status");
+    rejection.textContent = `Generator-Handoff abgewiesen: ${source.error}`;
+    content.append(title, evidence, action, rejection);
+    card.append(images, content);
+    return card;
+  }
   content.append(title, evidence, action);
   card.append(images, content);
   return card;
+}
+
+/** @param {unknown} value @param {string[]} kinds */
+function combinationSource(value, kinds) {
+  if (!Array.isArray(value) || value.length !== kinds.length) {
+    return {
+      error: `Erwartet werden exakt ${kinds.length} Komponenten.`,
+    };
+  }
+  const selections = [];
+  for (const [index, kind] of kinds.entries()) {
+    const componentUid = value[index];
+    if (typeof componentUid !== "string" || !componentUid.trim()) {
+      return { error: `Komponente für ${kind} fehlt.` };
+    }
+    selections.push({
+      kind,
+      component_uid: componentUid.trim(),
+      revision_uid: null,
+    });
+  }
+  return { selections };
 }
 
 /** @param {Record<string, any>} payload */

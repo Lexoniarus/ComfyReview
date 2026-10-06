@@ -1,4 +1,5 @@
 import {
+  combinationPromptPatch,
   compositionPromptState,
   imagePromptState,
   scopePromptPatch,
@@ -10,8 +11,8 @@ import {
 /** @typedef {{render: (draft: any, draftUid: string) => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (payload: any) => void, renderLoading: (message?: string) => void, dispose: () => void}} GuidanceBoundary */
-/** @typedef {{type: "image", imageUid: string} | {type: "composition", compositionUid: string} | {type: "scope", scope: {kind: string, component_uid: string, revision_uid: string | null}}} TypedPromptSource */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, stateRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>, intentStore?: {clear?: () => void, clearPromptImage?: (imageUid: string) => void, clearPromptComposition?: (compositionUid: string) => void, clearPromptScope?: (scope: {kind: string, component_uid: string, revision_uid?: string | null}) => void}}} PlaygroundDependencies */
+/** @typedef {{type: "image", imageUid: string} | {type: "composition", compositionUid: string} | {type: "scope", scope: {kind: string, component_uid: string, revision_uid: string | null}} | {type: "combination", selections: any}} TypedPromptSource */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, stateRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>, intentStore?: {clear?: () => void, clearPromptImage?: (imageUid: string) => void, clearPromptComposition?: (compositionUid: string) => void, clearPromptScope?: (scope: {kind: string, component_uid: string, revision_uid?: string | null}) => void, clearPromptCombination?: (selections: any) => void}, intentUrlCleaner?: {removeTypedPromptSource?: (source: TypedPromptSource) => boolean}}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -33,6 +34,7 @@ export class PlaygroundController {
     this.intent = dependencies.intent || {};
     this.typedPromptSource = null;
     this.intentStore = dependencies.intentStore || null;
+    this.intentUrlCleaner = dependencies.intentUrlCleaner || null;
     this.draftReference = null;
     this.abortController = new AbortController();
     this.hasDraft = false;
@@ -413,6 +415,9 @@ export class PlaygroundController {
       );
       return compositionPromptState(handoff.selections);
     }
+    if (source.type === "combination") {
+      return combinationPromptPatch(source.selections);
+    }
     return scopePromptPatch(source.scope);
   }
 
@@ -422,9 +427,12 @@ export class PlaygroundController {
       this.intentStore?.clearPromptImage?.(source.imageUid);
     } else if (source.type === "composition") {
       this.intentStore?.clearPromptComposition?.(source.compositionUid);
+    } else if (source.type === "combination") {
+      this.intentStore?.clearPromptCombination?.(source.selections);
     } else {
       this.intentStore?.clearPromptScope?.(source.scope);
     }
+    this.intentUrlCleaner?.removeTypedPromptSource?.(source);
   }
 
   /** @param {Record<string, any>} state @returns {string[]} */
@@ -474,9 +482,18 @@ function resolveTypedPromptSource(intent) {
       },
     });
   }
+  if (
+    intent.promptCombination !== undefined &&
+    intent.promptCombination !== null
+  ) {
+    sources.push({
+      type: "combination",
+      selections: intent.promptCombination,
+    });
+  }
   if (sources.length > 1) {
     throw new AmbiguousTypedPromptSourceError(
-      "Mehrdeutiger Prompt-Handoff: Bitte nur eine Quelle (Bild, Composition oder Scope) auswählen.",
+      "Mehrdeutiger Prompt-Handoff: Bitte nur eine Quelle (Bild, Composition, Scope oder Combination) auswählen.",
     );
   }
   return sources[0] || null;
@@ -491,6 +508,7 @@ function hasTypedPromptSource(intent) {
 function promptSourceLabel(type) {
   if (type === "image") return "Image-Prompt";
   if (type === "composition") return "Composition-Prompt";
+  if (type === "combination") return "Combination-Prompt";
   return "Scope-Prompt";
 }
 

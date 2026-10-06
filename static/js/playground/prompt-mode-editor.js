@@ -1,14 +1,7 @@
 import { LoraStackEditor } from "../settings/lora-stack-editor.js";
+import { promptKinds } from "./prompt-kind-contract.js";
 
-export const promptKinds = [
-  ["character", "Charakter"],
-  ["scene", "Szene"],
-  ["outfit", "Outfit"],
-  ["pose", "Pose"],
-  ["expression", "Ausdruck"],
-  ["lighting", "Licht"],
-  ["modifier", "Modifier"],
-];
+export { promptKinds } from "./prompt-kind-contract.js";
 
 /** @typedef {Readonly<{kind: string, mode: "fixed" | "random" | "off", componentUid: string | null, revisionUid: string | null}>} PromptSelectionState */
 /** @typedef {{mode?: string, componentUid?: string | null, revisionUid?: string | null}} PromptSelectionPatch */

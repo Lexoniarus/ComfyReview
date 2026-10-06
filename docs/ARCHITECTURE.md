@@ -399,8 +399,17 @@ The canonical cutover is intentionally not the end of the wider refactor.
   before editor rendering, saved-state restore, handoff, persistence or
   cleanup. Both single-source Scope and Composition actions apply through the
   shared rollback/persist operation and clear only their typed source after the
-  normal generator state is saved. Top Combinations remains on its existing
-  legacy handoff path.
+  normal generator state is saved. Top Combinations stages a typed
+  `promptCombination` source containing only kind/component/revision selections.
+  Its producer validates exact member counts and maps the known ordered
+  `two_component` and `three_component` response shapes to Character/Scene and
+  Character/Scene/Outfit; the stateless projector applies only those kinds as
+  a partial patch, leaving all other selections and LoRAs unchanged. After
+  successful apply and generator-state persistence, only that typed source is
+  removed from tab-local staging and the current URL. The injected URL cleanup
+  preserves independent render and legacy query parameters, and failed or
+  ambiguous handoffs leave both source transports untouched. Legacy
+  `componentUids` remains available to producers not yet migrated.
 - `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or

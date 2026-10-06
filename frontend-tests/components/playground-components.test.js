@@ -8,6 +8,7 @@ import {
 import { GenerationControls } from "../../static/js/playground/generation-controls.js";
 import { PromptModeEditor } from "../../static/js/playground/prompt-mode-editor.js";
 import { RenderGuidancePanel } from "../../static/js/playground/render-guidance-panel.js";
+import { combinationPromptPatch } from "../../static/js/playground/generator-prompt-projector.js";
 import { TopCombinationsView } from "../../static/js/playground/top-combinations.js";
 
 const components = [
@@ -187,6 +188,77 @@ describe("Playground browser components", () => {
       revision_uid: "character-rev-1",
     });
 
+    editor.dispose();
+  });
+
+  it("applies a Combination patch with latest revisions and preserves other roles", () => {
+    const root = document.createElement("div");
+    const editor = new PromptModeEditor(root);
+    const catalog = components.map((item) => ({
+      ...item,
+      latest_revision: {
+        revision_uid: `${item.component_uid}-latest`,
+        revision_number: 4,
+      },
+    }));
+    editor.render(catalog);
+    expect(
+      editor.applyState({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-a",
+            revision_uid: "character-historical",
+          },
+          {
+            kind: "pose",
+            mode: "fixed",
+            component_uid: "pose-a",
+            revision_uid: "pose-historical",
+          },
+        ],
+        loras: [],
+      }),
+    ).toEqual([]);
+
+    expect(
+      editor.applyState(
+        combinationPromptPatch([
+          { kind: "scene", component_uid: "scene-a" },
+          { kind: "outfit", component_uid: "outfit-a" },
+        ]),
+      ),
+    ).toEqual([]);
+    expect(editor.value()).toEqual({
+      selections: expect.arrayContaining([
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-a",
+          revision_uid: "character-historical",
+        },
+        {
+          kind: "scene",
+          mode: "fixed",
+          component_uid: "scene-a",
+          revision_uid: "scene-a-latest",
+        },
+        {
+          kind: "outfit",
+          mode: "fixed",
+          component_uid: "outfit-a",
+          revision_uid: "outfit-a-latest",
+        },
+        {
+          kind: "pose",
+          mode: "fixed",
+          component_uid: "pose-a",
+          revision_uid: "pose-historical",
+        },
+      ]),
+      loras: [],
+    });
     editor.dispose();
   });
 
@@ -1274,6 +1346,79 @@ describe("Playground browser components", () => {
       ),
     ).toEqual(["Aiko", "Hina", "Aiko"]);
     expect(root.querySelectorAll("[data-card-rail]")).toHaveLength(3);
+    view.dispose();
+  });
+
+  it("produces typed kinds only from valid ordered top-combination members", () => {
+    const root = document.createElement("div");
+    const navigator = { open: vi.fn() };
+    const view = new TopCombinationsView(root, navigator);
+    view.render({
+      characters: [
+        {
+          character_uid: "character-a",
+          character_name: "Aiko",
+          two_component: [
+            {
+              label: "Aiko + Rooftop",
+              component_uids: ["character-a", "scene-a"],
+            },
+          ],
+          three_component: [
+            {
+              label: "Aiko + Rooftop + Uniform",
+              component_uids: ["character-a", "scene-a", "outfit-a"],
+            },
+          ],
+        },
+      ],
+    });
+
+    const actions = root.querySelectorAll("[data-playground-intent]");
+    expect(actions).toHaveLength(2);
+    expect(actions[0].dataset.playgroundIntent).toBe("combination");
+    expect(JSON.parse(actions[0].dataset.promptCombination)).toEqual([
+      { kind: "character", component_uid: "character-a", revision_uid: null },
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+    ]);
+    expect(JSON.parse(actions[1].dataset.promptCombination)).toEqual([
+      { kind: "character", component_uid: "character-a", revision_uid: null },
+      { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+    ]);
+    expect(actions[0].dataset.componentUids).toBeUndefined();
+    actions[0].click();
+    expect(navigator.open).toHaveBeenCalledOnce();
+    view.dispose();
+  });
+
+  it("visibly rejects malformed Top Combination source members", () => {
+    const root = document.createElement("div");
+    const navigator = { open: vi.fn() };
+    const view = new TopCombinationsView(root, navigator);
+    view.render({
+      two_component: [
+        { component_uids: ["character-a"] },
+        { component_uids: ["character-a", " "] },
+      ],
+      three_component: [{ component_uids: ["character-a", "scene-a"] }],
+    });
+
+    const rejectedActions = root.querySelectorAll(
+      ".playground-combination-handoff-error",
+    );
+    expect(rejectedActions).toHaveLength(3);
+    expect(root.textContent).toContain(
+      "Generator-Handoff abgewiesen: Erwartet werden exakt 2 Komponenten.",
+    );
+    expect(root.textContent).toContain(
+      "Generator-Handoff abgewiesen: Komponente für scene fehlt.",
+    );
+    expect(
+      root.querySelectorAll("[data-playground-intent='combination']"),
+    ).toHaveLength(0);
+    root.querySelectorAll("button").forEach((button) => button.click());
+    expect(navigator.open).not.toHaveBeenCalled();
     view.dispose();
   });
 });
