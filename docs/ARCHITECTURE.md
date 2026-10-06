@@ -381,7 +381,13 @@ The canonical cutover is intentionally not the end of the wider refactor.
   existence and component ownership validation remains in the Application
   layer. Random/off choices carry no revision binding. Explicit cross-surface
   `draftReference` precedence remains a separate legacy path until its
-  handoffs are migrated.
+  handoffs are migrated. Image prompt actions stage only the source image UID;
+  the controller reloads typed prompt selections and effective LoRAs from the
+  image handoff, applies them as a complete editor-state replacement, and
+  persists the ordinary generator snapshot before clearing only that prompt
+  source. Rejected or unpersisted applications restore the prior prompt state
+  and retain the staged source. A separately staged render image is not cleared
+  by prompt cleanup, and applying this handoff does not create a draft.
 - `CyclicCardRail` is the single browser lifecycle owner for cyclic collection
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or

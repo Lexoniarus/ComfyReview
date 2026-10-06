@@ -190,6 +190,31 @@ describe("Playground browser components", () => {
     editor.dispose();
   });
 
+  it("ignores invalid prompt modes and safely skips stale evidence rows", () => {
+    const root = document.createElement("div");
+    const editor = new PromptModeEditor(root);
+    editor.render(components);
+    const sceneRow = root.querySelector('.prompt-mode-row[data-kind="scene"]');
+    const mode = sceneRow.querySelector("select");
+    const previous = editor.value();
+    mode.append(new Option("invalid", "invalid"));
+    mode.value = "invalid";
+    mode.dispatchEvent(new Event("change"));
+    expect(editor.value()).toEqual(previous);
+
+    const originalGet = editor.rows.get.bind(editor.rows);
+    let sceneLookups = 0;
+    vi.spyOn(editor.rows, "get").mockImplementation((kind) => {
+      if (kind === "scene" && ++sceneLookups === 2) return undefined;
+      return originalGet(kind);
+    });
+    mode.value = "off";
+    mode.dispatchEvent(new Event("change"));
+    expect(editor.value().selections[1].mode).toBe("off");
+
+    editor.dispose();
+  });
+
   it("uses latest after a manual component change or leaving fixed mode", () => {
     const root = document.createElement("div");
     const editor = new PromptModeEditor(root);

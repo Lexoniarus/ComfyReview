@@ -177,7 +177,20 @@ describe("Shared evidence and Playground intent components", () => {
 
   it("owns image handoff menus, validation, notifications and disposal", async () => {
     const promptSetup = {
-      component_uids: ["character-a", "scene-a"],
+      selections: [
+        {
+          kind: "character",
+          component_uid: "character-a",
+          revision_uid: "character-rev-1",
+          position: 0,
+        },
+        {
+          kind: "scene",
+          component_uid: "scene-a",
+          revision_uid: "scene-rev-1",
+          position: 1,
+        },
+      ],
       loras: [],
     };
     const api = {
@@ -187,7 +200,7 @@ describe("Shared evidence and Playground intent components", () => {
       })),
     };
     const store = {
-      stagePromptSetup: vi.fn(),
+      stagePromptImage: vi.fn(),
       stageRenderSetup: vi.fn(),
     };
     const eventTarget = new EventTarget();
@@ -203,7 +216,7 @@ describe("Shared evidence and Playground intent components", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     compact.querySelector(".secondary-button").click();
     await settle();
-    expect(store.stagePromptSetup).toHaveBeenCalledWith(promptSetup);
+    expect(store.stagePromptImage).toHaveBeenCalledWith("image-1");
     expect(notifications.at(-1)).toContain("Prompt-Setup");
 
     const prominent = actions.create("image-2", "prominent");
@@ -222,12 +235,16 @@ describe("Shared evidence and Playground intent components", () => {
     await settle();
     expect(notifications.at(-1)).toBe("kaputt");
     api.get.mockResolvedValueOnce({
-      prompt_setup: { component_uids: [] },
+      prompt_setup: {
+        selections: [],
+        component_uids: ["legacy-character"],
+        revision_uids: ["legacy-revision"],
+      },
       render_setup: { applicable: true },
     });
     prominent.querySelector(".secondary-button").click();
     await settle();
-    expect(notifications.at(-1)).toContain("keine Prompt-Bausteine");
+    expect(notifications.at(-1)).toContain("Character-Prompt-Setup");
     api.get.mockRejectedValueOnce(new DOMException("aborted", "AbortError"));
     prominent.querySelector(".secondary-button").click();
     await settle();

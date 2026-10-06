@@ -1,6 +1,6 @@
 /** Own image-to-generator action menus, validation requests and staging. */
 export class ImageGeneratorActions {
-  /** @param {{api: {get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>}, store: {stagePromptSetup: (setup: Record<string, any>) => any, stageRenderSetup: (uid: string) => any}, eventTarget?: EventTarget}} dependencies */
+  /** @param {{api: {get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>}, store: {stagePromptImage: (uid: string) => any, stageRenderSetup: (uid: string) => any}, eventTarget?: EventTarget}} dependencies */
   constructor(dependencies) {
     this.api = dependencies.api;
     this.store = dependencies.store;
@@ -89,13 +89,20 @@ export class ImageGeneratorActions {
       if (kind === "prompt") {
         const promptSetup = handoff.prompt_setup || {};
         if (
-          !Array.isArray(promptSetup.component_uids) ||
-          !promptSetup.component_uids.length
+          !Array.isArray(promptSetup.selections) ||
+          !promptSetup.selections.some(
+            (/** @type {Record<string, any>} */ selection) =>
+              selection?.kind === "character" &&
+              typeof selection.component_uid === "string" &&
+              selection.component_uid.trim() &&
+              typeof selection.revision_uid === "string" &&
+              selection.revision_uid.trim(),
+          )
         )
           throw new Error(
-            "Für dieses Bild sind keine Prompt-Bausteine verknüpft.",
+            "Für dieses Bild ist kein vollständiges Character-Prompt-Setup verfügbar.",
           );
-        this.store.stagePromptSetup(promptSetup);
+        this.store.stagePromptImage(imageUid);
       } else {
         this.store.stageRenderSetup(imageUid);
       }

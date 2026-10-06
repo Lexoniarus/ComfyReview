@@ -177,6 +177,41 @@ describe("Playground intent codec", () => {
       expect.objectContaining({ imageUid: "legacy", sampler: "euler" }),
     );
   });
+
+  it("stages only the prompt image identity and clears only that source", () => {
+    const storage = new MemoryStorage();
+    const store = new PlaygroundIntentStore(storage);
+    store.stageRenderSetup("image-render");
+    store.stagePromptImage("image-prompt");
+
+    expect(store.read()).toEqual({
+      promptImageUid: "image-prompt",
+      renderImageUid: "image-render",
+    });
+
+    store.clearPromptImage("another-image");
+    expect(store.read()).toEqual({
+      promptImageUid: "image-prompt",
+      renderImageUid: "image-render",
+    });
+
+    store.clearPromptImage("image-prompt");
+    expect(store.read()).toEqual({ renderImageUid: "image-render" });
+  });
+
+  it("keeps the legacy source-identity merge contract", () => {
+    const store = new PlaygroundIntentStore(new MemoryStorage());
+    store.merge({
+      componentUids: ["character-a"],
+      promptImageUid: "image-prompt",
+      loras: [],
+    });
+
+    expect(store.read()).toEqual({
+      promptImageUid: "image-prompt",
+      loras: [],
+    });
+  });
 });
 
 class MemoryStorage {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RequestLifecycle } from "../../static/js/core/request-lifecycle.js";
+import { PlaygroundIntentStore } from "../../static/js/playground/playground-intent.js";
 import { PlaygroundController } from "../../static/js/surfaces/playground-controller.js";
 
 describe("PlaygroundController", () => {
@@ -180,6 +181,553 @@ describe("PlaygroundController", () => {
       { selections: [], generation: expect.any(Object) },
       expect.any(Object),
     );
+  });
+
+  it("applies typed image prompt selections and LoRAs, persists, and clears only prompt staging", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptImage("image-prompt");
+    intentStore.stageRenderSetup("image-render");
+    const promptSelectionState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-a",
+          revision_uid: "character-rev-1",
+        },
+        {
+          kind: "scene",
+          mode: "fixed",
+          component_uid: "scene-a",
+          revision_uid: "scene-rev-3",
+        },
+        {
+          kind: "outfit",
+          mode: "off",
+          component_uid: null,
+          revision_uid: null,
+        },
+        {
+          kind: "pose",
+          mode: "off",
+          component_uid: null,
+          revision_uid: null,
+        },
+        {
+          kind: "expression",
+          mode: "off",
+          component_uid: null,
+          revision_uid: null,
+        },
+        {
+          kind: "lighting",
+          mode: "off",
+          component_uid: null,
+          revision_uid: null,
+        },
+        {
+          kind: "modifier",
+          mode: "off",
+          component_uid: null,
+          revision_uid: null,
+        },
+      ],
+      loras: [
+        {
+          lora_uid: "lora-style",
+          revision_uid: "lora-rev-2",
+          provider_name: "style.safetensors",
+          model_strength: 0.7,
+          clip_strength: 0,
+        },
+      ],
+    };
+    const handoffLoras = [
+      {
+        lora_uid: "lora-style",
+        revision_uid: "lora-rev-2",
+        provider_name: "style.safetensors",
+        model_strength: 0.7,
+        clip_strength: 0.8,
+        model_effective: true,
+        clip_effective: false,
+      },
+      {
+        lora_uid: "lora-unused",
+        revision_uid: "lora-rev-unused",
+        provider_name: "unused.safetensors",
+        model_strength: 0.9,
+        clip_strength: 0.6,
+        model_effective: false,
+        clip_effective: false,
+      },
+    ];
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      savedState: {
+        selections: [
+          {
+            kind: "modifier",
+            mode: "fixed",
+            component_uid: "modifier-old",
+            revision_uid: "modifier-old-rev",
+          },
+        ],
+        loras: [],
+      },
+      images: {
+        "image-prompt": {
+          prompt_setup: {
+            selections: [
+              {
+                kind: "scene",
+                component_uid: "scene-a",
+                revision_uid: "scene-rev-3",
+                position: 0,
+              },
+              {
+                kind: "character",
+                component_uid: "character-a",
+                revision_uid: "character-rev-1",
+                position: 0,
+              },
+            ],
+            loras: handoffLoras,
+          },
+          render_setup: {},
+        },
+        "image-render": {
+          prompt_setup: { selections: [], loras: [] },
+          render_setup: {
+            applicable: true,
+            checkpoint: "handoff.safetensors",
+            sampler_stages: [
+              { sampler: "euler", scheduler: "normal", steps: 22, cfg: 6 },
+            ],
+          },
+        },
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.modes.value()).toEqual(promptSelectionState);
+    expect(fixture.modes.applyState).toHaveBeenCalledWith(promptSelectionState);
+    expect(fixture.api.put).toHaveBeenCalledWith(
+      "playground/generator-state",
+      {
+        ...promptSelectionState,
+        checkpoint: "model",
+        seed_mode: "fixed",
+      },
+      expect.any(Object),
+    );
+    expect(intentStore.read()).toEqual({ renderImageUid: "image-render" });
+    expect(
+      fixture.api.post.mock.calls.some(
+        ([path]) => path === "playground/drafts",
+      ),
+    ).toBe(false);
+
+    await fixture.controller.prepare();
+    expect(fixture.api.post).toHaveBeenCalledWith(
+      "playground/drafts",
+      {
+        ...promptSelectionState,
+        generation: expect.any(Object),
+      },
+      expect.any(Object),
+    );
+  });
+
+  it("rolls back a rejected image prompt without persisting or clearing its source", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptImage("image-prompt");
+    const previousPromptState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-existing",
+          revision_uid: "character-existing-rev",
+        },
+      ],
+      loras: [],
+    };
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      savedState: previousPromptState,
+      selectionValue: previousPromptState,
+      modeStateRejection: (state) =>
+        state.selections?.some(
+          (selection) => selection.component_uid === "unavailable-scene",
+        ) || state.loras?.some((lora) => lora.lora_uid === "unavailable-lora")
+          ? ["scene", "loras"]
+          : [],
+      image: {
+        prompt_setup: {
+          selections: [
+            {
+              kind: "character",
+              component_uid: "character-new",
+              revision_uid: "character-rev-1",
+              position: 0,
+            },
+            {
+              kind: "scene",
+              component_uid: "unavailable-scene",
+              revision_uid: "scene-rev-1",
+              position: 1,
+            },
+          ],
+          loras: [
+            {
+              lora_uid: "unavailable-lora",
+              provider_name: "missing",
+              model_strength: 1,
+              clip_strength: 1,
+              model_effective: true,
+              clip_effective: true,
+            },
+          ],
+        },
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.modes.value()).toEqual(previousPromptState);
+    expect(fixture.modes.applyState).toHaveBeenCalledTimes(3);
+    expect(fixture.api.put).not.toHaveBeenCalled();
+    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    expect(fixture.status.textContent).toContain("scene, loras");
+  });
+
+  it("visibly rejects a typed handoff without its required character", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptImage("image-prompt");
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      image: {
+        prompt_setup: {
+          selections: [
+            {
+              kind: "scene",
+              component_uid: "scene-a",
+              revision_uid: "scene-rev-1",
+              position: 0,
+            },
+          ],
+          loras: [],
+        },
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.status.textContent).toContain(
+      "Character-Prompt-Auswahl fehlt",
+    );
+    expect(fixture.api.put).not.toHaveBeenCalled();
+    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+  });
+
+  it("restores the prior prompt and retains staging when immediate state persistence fails", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptImage("image-prompt");
+    const previousPromptState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-existing",
+          revision_uid: "character-existing-rev",
+        },
+      ],
+      loras: [],
+    };
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      savedState: previousPromptState,
+      selectionValue: previousPromptState,
+      stateSaveError: new Error("state save kaputt"),
+      image: {
+        prompt_setup: {
+          selections: [
+            {
+              kind: "character",
+              component_uid: "character-new",
+              revision_uid: "character-rev-1",
+              position: 0,
+            },
+          ],
+          loras: [],
+        },
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.modes.value()).toEqual(previousPromptState);
+    expect(fixture.api.put).toHaveBeenCalledOnce();
+    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    expect(fixture.status.textContent).toContain("state save kaputt");
+  });
+
+  it("rolls back through the public state API when editor application throws", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptImage("image-prompt");
+    const previousPromptState = {
+      selections: [
+        {
+          kind: "character",
+          mode: "fixed",
+          component_uid: "character-existing",
+          revision_uid: "character-existing-rev",
+        },
+      ],
+      loras: [],
+    };
+    let attemptedNewState = false;
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      savedState: previousPromptState,
+      selectionValue: previousPromptState,
+      modeStateError: (state) => {
+        if (
+          state.selections?.some(
+            (selection) => selection.component_uid === "character-new",
+          )
+        ) {
+          attemptedNewState = true;
+          return new Error("editor apply kaputt");
+        }
+        if (
+          attemptedNewState &&
+          state.selections?.some(
+            (selection) => selection.component_uid === "character-existing",
+          )
+        )
+          return new Error("rollback kaputt");
+        return null;
+      },
+      image: {
+        prompt_setup: {
+          selections: [
+            {
+              kind: "character",
+              component_uid: "character-new",
+              revision_uid: "character-rev-1",
+              position: 0,
+            },
+          ],
+          loras: [],
+        },
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.api.put).not.toHaveBeenCalled();
+    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    expect(fixture.status.textContent).toContain("rollback kaputt");
+  });
+
+  it("reports prompt-source cleanup failures after a successful state save", async () => {
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptImage("image-prompt");
+    vi.spyOn(intentStore, "clearPromptImage").mockImplementation(() => {
+      throw new Error("storage kaputt");
+    });
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      image: {
+        prompt_setup: {
+          selections: [
+            {
+              kind: "character",
+              component_uid: "character-a",
+              revision_uid: "character-rev-1",
+              position: 0,
+            },
+          ],
+          loras: [],
+        },
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.api.put).toHaveBeenCalledOnce();
+    expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    expect(fixture.status.textContent).toContain("storage kaputt");
+  });
+
+  it("rejects malformed typed prompt ordering and identities visibly", async () => {
+    const invalidSelections = [
+      {
+        message: "Prompt-Reihenfolge ist ungültig",
+        selections: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "character-rev-1",
+            position: 0,
+          },
+          {
+            kind: "scene",
+            component_uid: "scene-a",
+            revision_uid: "scene-rev-1",
+            position: -1,
+          },
+        ],
+      },
+      {
+        message: "Unbekannte Prompt-Rolle",
+        selections: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "character-rev-1",
+            position: 0,
+          },
+          {
+            kind: "unknown",
+            component_uid: "unknown-a",
+            revision_uid: "unknown-rev",
+            position: 1,
+          },
+        ],
+      },
+      {
+        message: "Prompt-Rolle mehrfach vorhanden: character",
+        selections: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "character-rev-1",
+            position: 0,
+          },
+          {
+            kind: "character",
+            component_uid: "character-b",
+            revision_uid: "character-rev-2",
+            position: 1,
+          },
+        ],
+      },
+      {
+        message: "Prompt-Rolle unvollständig: scene",
+        selections: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "character-rev-1",
+            position: 0,
+          },
+          {
+            kind: "scene",
+            component_uid: "",
+            revision_uid: "scene-rev-1",
+            position: 1,
+          },
+        ],
+      },
+    ];
+
+    for (const invalid of invalidSelections) {
+      const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+      intentStore.stagePromptImage("image-prompt");
+      const fixture = createFixture({
+        intent: intentStore.read(),
+        intentStore,
+        image: {
+          prompt_setup: { selections: invalid.selections, loras: [] },
+        },
+      });
+
+      await fixture.controller.start();
+
+      expect(fixture.status.textContent).toContain(invalid.message);
+      expect(fixture.api.put).not.toHaveBeenCalled();
+      expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    }
+  });
+
+  it("rejects malformed LoRA handoff data and permits an absent empty list", async () => {
+    const malformedLoras = [
+      {
+        loras: "not-an-array",
+        message: "LoRA-Setup des Bildes ist ungültig",
+      },
+      {
+        loras: [{ lora_uid: "lora-style" }],
+        message: "LoRA-Wirksamkeit des Bildes ist nicht verfügbar",
+      },
+      {
+        loras: [
+          {
+            lora_uid: "lora-style",
+            model_effective: true,
+            clip_effective: true,
+            model_strength: "invalid",
+            clip_strength: 1,
+          },
+        ],
+        message: "LoRA-Stärken des Bildes sind ungültig",
+      },
+    ];
+    const characterSelection = [
+      {
+        kind: "character",
+        component_uid: "character-a",
+        revision_uid: "character-rev-1",
+        position: 0,
+      },
+    ];
+
+    for (const invalid of malformedLoras) {
+      const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+      intentStore.stagePromptImage("image-prompt");
+      const fixture = createFixture({
+        intent: intentStore.read(),
+        intentStore,
+        image: {
+          prompt_setup: {
+            selections: characterSelection,
+            loras: invalid.loras,
+          },
+        },
+      });
+
+      await fixture.controller.start();
+
+      expect(fixture.status.textContent).toContain(invalid.message);
+      expect(fixture.api.put).not.toHaveBeenCalled();
+      expect(intentStore.read()).toEqual({ promptImageUid: "image-prompt" });
+    }
+
+    const intentStore = new PlaygroundIntentStore(new MemoryStorage());
+    intentStore.stagePromptImage("image-prompt");
+    const fixture = createFixture({
+      intent: intentStore.read(),
+      intentStore,
+      image: {
+        prompt_setup: { selections: characterSelection },
+      },
+    });
+
+    await fixture.controller.start();
+
+    expect(fixture.modes.value().loras).toEqual([]);
+    expect(fixture.api.put).toHaveBeenCalledOnce();
+    expect(intentStore.read()).toEqual({});
   });
 
   it("keeps a composition handoff as an explicit draft action", async () => {
@@ -420,12 +968,24 @@ function createFixture(options = {}) {
   submitButton.disabled = true;
   const status = document.createElement("span");
   const result = document.createElement("div");
+  let activeSelectionValue = options.selectionValue || { selections: [] };
   const modes = disposable({
     render: vi.fn(),
-    applyState: vi.fn(() => options.stateRejected || []),
+    applyState: vi.fn((state) => {
+      activeSelectionValue = {
+        selections: state.selections || activeSelectionValue.selections || [],
+        ...(state.loras !== undefined ||
+        activeSelectionValue.loras !== undefined
+          ? { loras: state.loras || activeSelectionValue.loras || [] }
+          : {}),
+      };
+      const error = options.modeStateError?.(state);
+      if (error) throw error;
+      return options.modeStateRejection?.(state) || options.stateRejected || [];
+    }),
     applyIntent: vi.fn(() => options.intentRejected || []),
     showResolvedComponents: vi.fn(),
-    value: vi.fn(() => options.selectionValue || { selections: [] }),
+    value: vi.fn(() => activeSelectionValue),
   });
   const controls = disposable({
     render: vi.fn(),
@@ -482,12 +1042,18 @@ function createFixture(options = {}) {
         return options.stateLoadError
           ? Promise.reject(options.stateLoadError)
           : Promise.resolve(options.savedState || {});
+      if (path.startsWith("images/")) {
+        const imageUid = decodeURIComponent(
+          path.slice("images/".length, -"/generator-handoff".length),
+        );
+        return Promise.resolve(
+          options.images?.[imageUid] || options.image || {},
+        );
+      }
       return Promise.resolve(
-        path.startsWith("images/")
-          ? options.image
-          : path === "playground/components"
-            ? { components: [{ component_uid: "a" }] }
-            : { defaults: {} },
+        path === "playground/components"
+          ? { components: [{ component_uid: "a" }] }
+          : { defaults: {} },
       );
     }),
     put: vi.fn(() =>
@@ -568,6 +1134,24 @@ function createFixture(options = {}) {
     result,
     guidance,
   };
+}
+
+class MemoryStorage {
+  constructor() {
+    this.values = new Map();
+  }
+
+  getItem(key) {
+    return this.values.get(key) ?? null;
+  }
+
+  setItem(key, value) {
+    this.values.set(key, String(value));
+  }
+
+  removeItem(key) {
+    this.values.delete(key);
+  }
 }
 
 function disposable(methods) {

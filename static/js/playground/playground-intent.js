@@ -221,6 +221,13 @@ export class PlaygroundIntentStore {
   }
 
   /** @param {string} imageUid */
+  stagePromptImage(imageUid) {
+    const stored = this.#state();
+    this.#write({ promptImageUid: text(imageUid) }, stored.render, {});
+    return this.read();
+  }
+
+  /** @param {string} imageUid */
   stageRenderSetup(imageUid) {
     const stored = this.#state();
     this.#write(
@@ -234,6 +241,15 @@ export class PlaygroundIntentStore {
   clearPrompt() {
     const stored = this.#state();
     this.#write({}, stored.render, {});
+  }
+
+  /** @param {string} imageUid */
+  clearPromptImage(imageUid) {
+    const stored = this.#state();
+    if (text(stored.prompt.promptImageUid) !== text(imageUid)) return;
+    const prompt = { ...stored.prompt };
+    delete prompt.promptImageUid;
+    this.#write(prompt, stored.render, stored.promptKinds);
   }
 
   clearRender() {

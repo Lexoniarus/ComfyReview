@@ -1,10 +1,12 @@
+import { promptKinds } from "../playground/prompt-mode-editor.js";
+
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>, put: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
 /** @typedef {{render: (components: any[], loras?: any[]) => void, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void, showResolvedComponents: (components: any[]) => void, value: () => {selections: any[], loras?: any[]}, dispose: () => void}} ModesBoundary */
 /** @typedef {{render: (capabilities: any) => void, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void, stateValue: () => Record<string, any>, draftValue: () => any, renderSettings: () => any, renderGuidance: (payload: any, basis: "observed" | "predicted") => void, applyRenderSettings: (settings: Record<string, any>) => string[], applyParameter: (parameter: string, value: unknown) => boolean, value: () => any, useConcreteSeed: (seed: number) => void, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
 /** @typedef {{render: (draft: any, draftUid: string) => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (payload: any) => void, renderLoading: (message?: string) => void, dispose: () => void}} GuidanceBoundary */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, stateRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>, intentStore?: {clear: () => void}}} PlaygroundDependencies */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, stateRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>, intentStore?: {clear?: () => void, clearPromptImage?: (imageUid: string) => void}}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -99,8 +101,12 @@ export class PlaygroundController {
         : hasPrefill(this.intent)
           ? "Vorbelegung übernommen – erstelle den Entwurf ausdrücklich"
           : "Bereit für deinen Entwurf";
-      if (hasPrefill(this.intent) && !rejected.length)
-        this.intentStore?.clear();
+      if (
+        hasPrefill(this.intent) &&
+        !rejected.length &&
+        !this.intent.promptImageUid
+      )
+        this.intentStore?.clear?.();
     } catch (error) {
       this.status.textContent = errorMessage(error);
       this.prepareButton.disabled = true;
@@ -268,18 +274,8 @@ export class PlaygroundController {
   }
 
   async #saveState() {
-    this.stateRequests.cancelRequests();
     try {
-      await this.stateRequests.run((signal) =>
-        this.api.put(
-          "playground/generator-state",
-          {
-            ...this.modes.value(),
-            ...this.controls.stateValue(),
-          },
-          { signal },
-        ),
-      );
+      await this.#persistState();
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         this.status.textContent = `Einstellungen konnten nicht gespeichert werden: ${errorMessage(error)}`;
@@ -287,40 +283,121 @@ export class PlaygroundController {
     }
   }
 
+  async #persistState() {
+    this.stateRequests.cancelRequests();
+    return this.stateRequests.run((signal) =>
+      this.api.put(
+        "playground/generator-state",
+        {
+          ...this.modes.value(),
+          ...this.controls.stateValue(),
+        },
+        { signal },
+      ),
+    );
+  }
+
   async #applyIntent() {
     let intent = this.intent;
-    const promptImageUid = String(
-      intent.promptImageUid || intent.imageUid || "",
-    );
-    const renderImageUid = String(
-      intent.renderImageUid || intent.imageUid || "",
-    );
+    const promptImageUid = String(intent.promptImageUid || "");
+    const legacyImageUid = String(intent.imageUid || "");
+    const renderImageUid = String(intent.renderImageUid || legacyImageUid);
     let promptHandoff = null;
     if (promptImageUid) {
       promptHandoff = await this.#loadHandoff(promptImageUid);
-      intent = { ...intent, ...promptIntent(promptHandoff) };
+    } else if (legacyImageUid) {
+      promptHandoff = await this.#loadHandoff(legacyImageUid);
     }
+    let renderHandoff = null;
     if (renderImageUid) {
-      const handoff =
-        promptHandoff && renderImageUid === promptImageUid
+      renderHandoff =
+        promptHandoff && renderImageUid === (promptImageUid || legacyImageUid)
           ? promptHandoff
           : await this.#loadHandoff(renderImageUid);
-      intent = { ...intent, ...renderIntent(handoff) };
     }
+
+    /** @type {string[]} */
+    const rejected = [];
+    /** @type {Record<string, any> | null} */
+    let priorPromptState = null;
+    if (promptImageUid) {
+      this.draftReference = null;
+      try {
+        const promptState = imagePromptState(promptHandoff?.prompt_setup || {});
+        priorPromptState = this.modes.value();
+        const promptRejections = this.modes.applyState(promptState) || [];
+        if (promptRejections.length) {
+          rejected.push(
+            `Image-Prompt abgewiesen: ${promptRejections.join(", ")}`,
+          );
+          rejected.push(...this.#restorePromptState(priorPromptState));
+          priorPromptState = null;
+        }
+      } catch (error) {
+        rejected.push(`Image-Prompt abgewiesen: ${errorMessage(error)}`);
+        if (priorPromptState) {
+          rejected.push(...this.#restorePromptState(priorPromptState));
+          priorPromptState = null;
+        }
+      }
+    } else if (legacyImageUid) {
+      intent = { ...intent, ...promptIntent(promptHandoff || {}) };
+    }
+    if (renderHandoff) {
+      intent = { ...intent, ...renderIntent(renderHandoff) };
+    }
+
     this.intent = intent;
-    const rejected = [
-      ...(this.modes.applyIntent(intent) || []),
-      ...(this.controls.applyIntent(intent) || []),
-    ];
-    if (promptImageUid && !intent.componentUids?.length) {
-      rejected.push("Prompt-Bausteine des Bildes");
-    }
-    if (Array.isArray(intent.revisionUids) && intent.revisionUids.length) {
+    if (!promptImageUid)
+      rejected.push(...(this.modes.applyIntent(intent) || []));
+    rejected.push(...(this.controls.applyIntent(intent) || []));
+    if (
+      !promptImageUid &&
+      Array.isArray(intent.revisionUids) &&
+      intent.revisionUids.length
+    ) {
       this.draftReference = { revision_uids: intent.revisionUids };
-    } else if (intent.compositionUid) {
+    } else if (!promptImageUid && intent.compositionUid) {
       this.draftReference = { composition_uid: intent.compositionUid };
     }
+
+    if (promptImageUid && priorPromptState) {
+      this.stateRequests.cancel(this.stateTimer);
+      this.stateTimer = null;
+      try {
+        await this.#persistState();
+      } catch (error) {
+        rejected.push(
+          `Image-Prompt konnte nicht gespeichert werden: ${errorMessage(error)}`,
+        );
+        rejected.push(...this.#restorePromptState(priorPromptState));
+        return rejected;
+      }
+      try {
+        this.intentStore?.clearPromptImage?.(promptImageUid);
+      } catch (error) {
+        rejected.push(
+          `Image-Prompt übernommen, Quelle konnte nicht entfernt werden: ${errorMessage(error)}`,
+        );
+      }
+    }
     return rejected;
+  }
+
+  /** @param {Record<string, any>} state @returns {string[]} */
+  #restorePromptState(state) {
+    try {
+      const rejected = this.modes.applyState(state) || [];
+      return rejected.length
+        ? [
+            `Vorheriger Prompt-State konnte nicht vollständig wiederhergestellt werden: ${rejected.join(", ")}`,
+          ]
+        : [];
+    } catch (error) {
+      return [
+        `Vorheriger Prompt-State konnte nicht wiederhergestellt werden: ${errorMessage(error)}`,
+      ];
+    }
   }
 
   /** @param {string} imageUid */
@@ -342,6 +419,99 @@ function promptIntent(handoff) {
       : [],
     loras: Array.isArray(prompt.loras) ? prompt.loras : [],
   };
+}
+
+const generatorPromptKinds = promptKinds.map(([kind]) => kind);
+
+/** @param {Record<string, any>} promptSetup */
+function imagePromptState(promptSetup) {
+  if (!Array.isArray(promptSetup.selections)) {
+    throw new Error("Typed Prompt-Selections fehlen.");
+  }
+  const selectedByKind = new Map();
+  const positionedSelections = promptSetup.selections
+    .map((selection, index) => ({ selection, index }))
+    .sort((left, right) => {
+      const positionDifference =
+        Number(left.selection?.position) - Number(right.selection?.position);
+      return Number.isFinite(positionDifference) && positionDifference !== 0
+        ? positionDifference
+        : left.index - right.index;
+    });
+  for (const { selection } of positionedSelections) {
+    const position = selection?.position;
+    if (!Number.isInteger(position) || position < 0) {
+      throw new Error("Prompt-Reihenfolge ist ungültig.");
+    }
+    const kind = String(selection?.kind || "");
+    if (!generatorPromptKinds.includes(kind)) {
+      throw new Error(`Unbekannte Prompt-Rolle: ${kind || "ohne Kind"}`);
+    }
+    if (selectedByKind.has(kind)) {
+      throw new Error(`Prompt-Rolle mehrfach vorhanden: ${kind}`);
+    }
+    const componentUid = String(selection?.component_uid || "").trim();
+    const revisionUid = String(selection?.revision_uid || "").trim();
+    if (!componentUid || !revisionUid) {
+      throw new Error(`Prompt-Rolle unvollständig: ${kind}`);
+    }
+    selectedByKind.set(kind, {
+      kind,
+      mode: "fixed",
+      component_uid: componentUid,
+      revision_uid: revisionUid,
+    });
+  }
+  if (!selectedByKind.has("character")) {
+    throw new Error("Character-Prompt-Auswahl fehlt.");
+  }
+  return {
+    selections: generatorPromptKinds.map(
+      (kind) =>
+        selectedByKind.get(kind) || {
+          kind,
+          mode: "off",
+          component_uid: null,
+          revision_uid: null,
+        },
+    ),
+    loras: imagePromptLoras(promptSetup.loras),
+  };
+}
+
+/** @param {unknown} loras */
+function imagePromptLoras(loras) {
+  if (loras === undefined || loras === null) return [];
+  if (!Array.isArray(loras)) {
+    throw new Error("LoRA-Setup des Bildes ist ungültig.");
+  }
+  return loras.flatMap((lora) => {
+    if (
+      !lora ||
+      typeof lora !== "object" ||
+      typeof lora.model_effective !== "boolean" ||
+      typeof lora.clip_effective !== "boolean"
+    ) {
+      throw new Error("LoRA-Wirksamkeit des Bildes ist nicht verfügbar.");
+    }
+    if (!lora.model_effective && !lora.clip_effective) return [];
+    const modelStrength = lora.model_effective
+      ? Number(lora.model_strength)
+      : 0;
+    const clipStrength = lora.clip_effective ? Number(lora.clip_strength) : 0;
+    if (!Number.isFinite(modelStrength) || !Number.isFinite(clipStrength)) {
+      throw new Error("LoRA-Stärken des Bildes sind ungültig.");
+    }
+    return [
+      {
+        lora_uid: lora.lora_uid,
+        revision_uid: lora.revision_uid,
+        provider_name: lora.provider_name,
+        model_strength: modelStrength,
+        clip_strength: clipStrength,
+      },
+    ];
+  });
 }
 
 /** @param {Record<string, any>} handoff */

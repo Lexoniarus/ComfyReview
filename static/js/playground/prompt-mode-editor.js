@@ -1,6 +1,6 @@
 import { LoraStackEditor } from "../settings/lora-stack-editor.js";
 
-const promptKinds = [
+export const promptKinds = [
   ["character", "Charakter"],
   ["scene", "Szene"],
   ["outfit", "Outfit"],
