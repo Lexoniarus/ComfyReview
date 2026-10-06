@@ -79,16 +79,6 @@ describe("Playground intent codec", () => {
     expect(action("composition", { compositionUid: "composition-a" })).toEqual({
       promptCompositionUid: "composition-a",
     });
-    expect(
-      action("combination", {
-        promptCombination:
-          '[{"kind":"scene","component_uid":"scene-a","revision_uid":null}]',
-      }),
-    ).toEqual({
-      promptCombination: [
-        { kind: "scene", component_uid: "scene-a", revision_uid: null },
-      ],
-    });
     expect(action("image", { imageUid: "image-a" })).toEqual({
       imageUid: "image-a",
     });
@@ -280,14 +270,6 @@ describe("Playground intent codec", () => {
     store.merge({ componentUids: ["scene-a"] });
     store.merge({ sampler: "euler", steps_min: 24, steps_max: 24 });
     store.merge({ sampler: "dpmpp_2m", cfg_min: 6.5, cfg_max: 6.5 });
-    const previousState = JSON.parse(
-      storage.getItem("comfyreview.playground-intent.v2"),
-    );
-    previousState.prompt_kinds.character = "character-b";
-    storage.setItem(
-      "comfyreview.playground-intent.v2",
-      JSON.stringify(previousState),
-    );
     store.merge({
       compositionUid: "composition-a",
       componentUids: ["character-c"],
@@ -318,28 +300,9 @@ describe("Playground intent codec", () => {
     );
   });
 
-  it("keeps image prompt and render packages independent until applied", () => {
+  it("keeps version 1 staged intent compatibility", () => {
     const storage = new MemoryStorage();
     const store = new PlaygroundIntentStore(storage);
-
-    store.stagePromptSetup({
-      component_uids: ["character-a", "scene-a"],
-      loras: [{ lora_uid: "lora-style", revision_uid: "revision-1" }],
-    });
-    store.stageRenderSetup("image-render");
-    expect(store.read()).toEqual({
-      componentUids: ["character-a", "scene-a"],
-      loras: [{ lora_uid: "lora-style", revision_uid: "revision-1" }],
-      renderImageUid: "image-render",
-    });
-    store.clearPrompt();
-    expect(store.read()).toEqual({ renderImageUid: "image-render" });
-    store.stagePromptSetup({ component_uids: ["character-new"] });
-    store.clearRender();
-    expect(store.read()).toEqual({
-      componentUids: ["character-new"],
-      loras: [],
-    });
 
     storage.setItem(
       "comfyreview.playground-intent.v2",
@@ -382,7 +345,10 @@ describe("Playground intent codec", () => {
       compositionUid: "legacy-composition",
     });
     store.stageRenderSetup("image-render");
-    store.mergePromptComponent("scene-a", "scene");
+    store.stagePromptScope({
+      kind: "scene",
+      component_uid: "scene-a",
+    });
     store.clearPromptScope({
       kind: "scene",
       component_uid: "other-scene",

@@ -36,9 +36,6 @@ export function intentFromAnalyticsAction(element) {
       promptCompositionUid: text(element.dataset.compositionUid),
     };
   }
-  if (kind === "combination") {
-    return { promptCombination: json(element.dataset.promptCombination) };
-  }
   if (kind === "image") {
     return { imageUid: text(element.dataset.imageUid) };
   }
@@ -209,14 +206,6 @@ export class PlaygroundIntentStore {
     return stored.version === 1 ? record(stored.intent) : {};
   }
 
-  /** @param {string} componentUid @param {string} kind */
-  mergePromptComponent(componentUid, kind) {
-    return this.stagePromptScope({
-      kind,
-      component_uid: componentUid,
-    });
-  }
-
   /** @param {PlaygroundIntent} incoming */
   merge(incoming) {
     const stored = this.#state();
@@ -224,7 +213,6 @@ export class PlaygroundIntentStore {
     const prompt = { ...stored.prompt };
     /** @type {PlaygroundIntent} */
     const render = { ...stored.render };
-    const promptKinds = stored.promptKinds;
     /** @type {Record<string, any>} */
     const incomingValues = incoming;
     /** @type {Record<string, any>} */
@@ -233,7 +221,6 @@ export class PlaygroundIntentStore {
       prompt.compositionUid = incoming.compositionUid;
       prompt.componentUids = incoming.componentUids || [];
       delete prompt.revisionUids;
-      for (const key of Object.keys(promptKinds)) delete promptKinds[key];
     } else if (incoming.componentUids?.length) {
       prompt.componentUids = cleanValues([
         ...(prompt.componentUids || []),
@@ -277,24 +264,7 @@ export class PlaygroundIntentStore {
     }
     if (incoming.renderImageUid || incoming.imageUid)
       render.renderImageUid = incoming.renderImageUid || incoming.imageUid;
-    this.#write(prompt, render, promptKinds);
-    return this.read();
-  }
-
-  /** @param {Record<string, any>} promptSetup */
-  stagePromptSetup(promptSetup) {
-    const stored = this.#state();
-    const setup = record(promptSetup);
-    this.#write(
-      {
-        componentUids: cleanValues(
-          Array.isArray(setup.component_uids) ? setup.component_uids : [],
-        ),
-        loras: Array.isArray(setup.loras) ? setup.loras : [],
-      },
-      stored.render,
-      {},
-    );
+    this.#write(prompt, render);
     return this.read();
   }
 
@@ -303,7 +273,7 @@ export class PlaygroundIntentStore {
     const stored = this.#state();
     const prompt = { ...stored.prompt };
     this.#setTypedPromptSource(prompt, "promptImageUid", text(imageUid));
-    this.#write(prompt, stored.render, stored.promptKinds);
+    this.#write(prompt, stored.render);
     return this.read();
   }
 
@@ -316,7 +286,7 @@ export class PlaygroundIntentStore {
       "promptCompositionUid",
       text(compositionUid),
     );
-    this.#write(prompt, stored.render, stored.promptKinds);
+    this.#write(prompt, stored.render);
     return this.read();
   }
 
@@ -329,7 +299,7 @@ export class PlaygroundIntentStore {
       component_uid: text(scope.component_uid),
       revision_uid: text(scope.revision_uid) || null,
     });
-    this.#write(prompt, stored.render, stored.promptKinds);
+    this.#write(prompt, stored.render);
     return this.read();
   }
 
@@ -342,24 +312,22 @@ export class PlaygroundIntentStore {
       "promptCombination",
       selections.map(combinationSelection),
     );
-    this.#write(prompt, stored.render, stored.promptKinds);
+    this.#write(prompt, stored.render);
     return this.read();
   }
 
   /** @param {string} imageUid */
   stageRenderSetup(imageUid) {
     const stored = this.#state();
-    this.#write(
-      stored.prompt,
-      { renderImageUid: text(imageUid) },
-      stored.promptKinds,
-    );
+    this.#write(stored.prompt, {
+      renderImageUid: text(imageUid),
+    });
     return this.read();
   }
 
   clearPrompt() {
     const stored = this.#state();
-    this.#write({}, stored.render, {});
+    this.#write({}, stored.render);
   }
 
   /** @param {string} imageUid */
@@ -368,7 +336,7 @@ export class PlaygroundIntentStore {
     if (text(stored.prompt.promptImageUid) !== text(imageUid)) return;
     const prompt = { ...stored.prompt };
     delete prompt.promptImageUid;
-    this.#write(prompt, stored.render, stored.promptKinds);
+    this.#write(prompt, stored.render);
   }
 
   /** @param {string} compositionUid */
@@ -379,7 +347,7 @@ export class PlaygroundIntentStore {
     }
     const prompt = { ...stored.prompt };
     delete prompt.promptCompositionUid;
-    this.#write(prompt, stored.render, stored.promptKinds);
+    this.#write(prompt, stored.render);
   }
 
   /** @param {PromptScopeSource} scope */
@@ -396,7 +364,7 @@ export class PlaygroundIntentStore {
     }
     const prompt = { ...stored.prompt };
     delete prompt.promptScope;
-    this.#write(prompt, stored.render, stored.promptKinds);
+    this.#write(prompt, stored.render);
   }
 
   /** @param {PromptCombinationSelection[]} selections */
@@ -409,12 +377,12 @@ export class PlaygroundIntentStore {
     }
     const prompt = { ...stored.prompt };
     delete prompt.promptCombination;
-    this.#write(prompt, stored.render, stored.promptKinds);
+    this.#write(prompt, stored.render);
   }
 
   clearRender() {
     const stored = this.#state();
-    this.#write(stored.prompt, {}, stored.promptKinds);
+    this.#write(stored.prompt, {});
   }
 
   clear() {
@@ -433,7 +401,6 @@ export class PlaygroundIntentStore {
       return {
         prompt: record(stored.prompt),
         render: record(stored.render),
-        promptKinds: record(stored.prompt_kinds),
       };
     }
     if (stored.version === 1) {
@@ -446,21 +413,19 @@ export class PlaygroundIntentStore {
           imageUid: legacy.imageUid,
         },
         render: legacy,
-        promptKinds: record(stored.prompt_kinds),
       };
     }
-    return { prompt: {}, render: {}, promptKinds: {} };
+    return { prompt: {}, render: {} };
   }
 
-  /** @param {Record<string, any>} prompt @param {Record<string, any>} render @param {Record<string, string>} promptKinds */
-  #write(prompt, render, promptKinds) {
+  /** @param {Record<string, any>} prompt @param {Record<string, any>} render */
+  #write(prompt, render) {
     this.storage.setItem(
       this.key,
       JSON.stringify({
         version: 2,
         prompt,
         render,
-        prompt_kinds: promptKinds,
       }),
     );
   }
