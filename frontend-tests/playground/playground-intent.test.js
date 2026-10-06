@@ -148,21 +148,18 @@ describe("Playground intent codec", () => {
     const locationRef = { assign: vi.fn() };
     const store = new PlaygroundIntentStore(new MemoryStorage());
     store.stageRenderSetup("render-image");
-    const element = document.createElement("button");
-    element.dataset.playgroundIntent = "combination";
-    element.dataset.promptCombination = JSON.stringify([
-      { kind: "scene", component_uid: "scene-a", revision_uid: null },
-      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
-    ]);
+    const intent = {
+      promptCombination: [
+        { kind: "scene", component_uid: "scene-a", revision_uid: null },
+        { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+      ],
+    };
 
-    new PlaygroundIntentNavigator(locationRef, store).open(element);
+    new PlaygroundIntentNavigator(locationRef, store).openIntent(intent);
 
     const stagedUrl = locationRef.assign.mock.calls[0][0];
     const stagedIntent = readPlaygroundIntent(stagedUrl.split("?")[1]);
-    expect(stagedIntent.promptCombination).toEqual([
-      { kind: "scene", component_uid: "scene-a", revision_uid: null },
-      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
-    ]);
+    expect(stagedIntent.promptCombination).toEqual(intent.promptCombination);
     expect(stagedIntent.renderImageUid).toBe("render-image");
     expect(store.read()).toEqual({
       promptCombination: stagedIntent.promptCombination,

@@ -136,7 +136,11 @@ export class PlaygroundIntentNavigator {
 
   /** @param {HTMLElement} element */
   open(element) {
-    const intent = intentFromAnalyticsAction(element);
+    this.openIntent(intentFromAnalyticsAction(element));
+  }
+
+  /** @param {PlaygroundIntent} intent */
+  openIntent(intent) {
     if (
       Array.isArray(intent.promptCombination) &&
       this.store?.stagePromptCombination &&

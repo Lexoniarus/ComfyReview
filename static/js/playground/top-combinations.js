@@ -1,9 +1,11 @@
 import { EvidenceCarousel } from "../components/evidence-carousel.js";
 import { CyclicCardRail } from "../components/cyclic-card-rail.js";
 
+/** @typedef {{open?: (element: HTMLElement) => void, openIntent: (intent: {promptCombination: Array<{kind: string, component_uid: string, revision_uid: string | null}>}) => void}} PlaygroundIntentNavigatorBoundary */
+
 /** Render the two canonical Playground evidence groups. */
 export class TopCombinationsView {
-  /** @param {HTMLElement} root @param {{open: (element: HTMLElement) => void}} navigator @param {{createGeneratorActions?: (imageUid: string) => HTMLElement}} [options] */
+  /** @param {HTMLElement} root @param {PlaygroundIntentNavigatorBoundary} navigator @param {{createGeneratorActions?: (imageUid: string) => HTMLElement}} [options] */
   constructor(root, navigator, options = {}) {
     this.root = root;
     this.navigator = navigator;
@@ -18,7 +20,7 @@ export class TopCombinationsView {
       (event) => {
         if (!(event.target instanceof Element)) return;
         const action = event.target.closest("[data-playground-intent]");
-        if (action instanceof HTMLElement) this.navigator.open(action);
+        if (action instanceof HTMLElement) this.navigator.open?.(action);
       },
       { signal: this.abortController.signal },
     );
@@ -36,6 +38,8 @@ export class TopCombinationsView {
       ["character", "scene"],
       this.evidenceCarousels,
       this.createGeneratorActions,
+      this.navigator,
+      this.abortController.signal,
     );
     const threeComponent = combinationCollection(
       "Top 3er-Kombinationen",
@@ -45,6 +49,8 @@ export class TopCombinationsView {
       ["character", "scene", "outfit"],
       this.evidenceCarousels,
       this.createGeneratorActions,
+      this.navigator,
+      this.abortController.signal,
     );
     this.root.replaceChildren(twoComponent, threeComponent);
     this.carousels = Array.from(
@@ -71,7 +77,7 @@ export class TopCombinationsView {
   }
 }
 
-/** @param {string} title @param {string} subtitle @param {Record<string, any>[]} groups @param {"two_component" | "three_component"} field @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
+/** @param {string} title @param {string} subtitle @param {Record<string, any>[]} groups @param {"two_component" | "three_component"} field @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
 function combinationCollection(
   title,
   subtitle,
@@ -80,6 +86,8 @@ function combinationCollection(
   kinds,
   evidenceCarousels,
   createGeneratorActions,
+  navigator,
+  signal,
 ) {
   const section = document.createElement("section");
   section.className = "playground-combination-group";
@@ -102,6 +110,8 @@ function combinationCollection(
         kinds,
         evidenceCarousels,
         createGeneratorActions,
+        navigator,
+        signal,
       ),
     );
   }
@@ -114,13 +124,15 @@ function combinationCollection(
   return section;
 }
 
-/** @param {Record<string, any>} group @param {unknown[]} rows @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
+/** @param {Record<string, any>} group @param {unknown[]} rows @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
 function characterCombinationRow(
   group,
   rows,
   kinds,
   evidenceCarousels,
   createGeneratorActions,
+  navigator,
+  signal,
 ) {
   const row = document.createElement("section");
   row.className = "playground-character-row";
@@ -141,6 +153,8 @@ function characterCombinationRow(
         kinds,
         evidenceCarousels,
         createGeneratorActions,
+        navigator,
+        signal,
       ),
     );
   }
@@ -165,12 +179,14 @@ function carouselButton(direction, label, glyph) {
   return button;
 }
 
-/** @param {Record<string, any>} row @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions */
+/** @param {Record<string, any>} row @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
 function combinationCard(
   row,
   kinds,
   evidenceCarousels,
   createGeneratorActions,
+  navigator,
+  signal,
 ) {
   const card = document.createElement("article");
   card.className = "playground-combination-card media-card";
@@ -198,12 +214,18 @@ function combinationCard(
   evidence.textContent = `${textValue(row.image_count)} Bilder · ${textValue(row.rating_count)} Bewertungen · Ø ${decimalValue(row.average_rating)} / 10`;
   const action = document.createElement("button");
   action.type = "button";
-  action.className = "secondary-button";
+  action.className = "secondary-button playground-combination-generator-action";
   action.textContent = "Im Generator verwenden";
   const source = combinationSource(row.component_uids, kinds);
   if (source.selections) {
-    action.dataset.playgroundIntent = "combination";
-    action.dataset.promptCombination = JSON.stringify(source.selections);
+    action.addEventListener(
+      "click",
+      () =>
+        navigator.openIntent({
+          promptCombination: source.selections,
+        }),
+      { signal },
+    );
   } else {
     action.disabled = true;
     const rejection = document.createElement("span");

@@ -1227,7 +1227,7 @@ describe("Playground browser components", () => {
 
   it("renders separate top two- and three-component evidence", () => {
     const root = document.createElement("div");
-    const navigator = { open: vi.fn() };
+    const navigator = { open: vi.fn(), openIntent: vi.fn() };
     const view = new TopCombinationsView(root, navigator);
 
     view.render({
@@ -1309,7 +1309,10 @@ describe("Playground browser components", () => {
     const carouselText = document.createTextNode("carousel plain");
     root.querySelector(".playground-combination-group")?.append(carouselText);
     carouselText.dispatchEvent(new Event("click", { bubbles: true }));
-    root.querySelector("[data-playground-intent]")?.click();
+    const legacyAction = document.createElement("button");
+    legacyAction.dataset.playgroundIntent = "image";
+    root.append(legacyAction);
+    legacyAction.click();
     expect(navigator.open).toHaveBeenCalled();
     root
       .appendChild(document.createTextNode("plain"))
@@ -1321,7 +1324,10 @@ describe("Playground browser components", () => {
 
   it("renders independent two- and three-component rows per character", () => {
     const root = document.createElement("div");
-    const view = new TopCombinationsView(root, { open: vi.fn() });
+    const view = new TopCombinationsView(root, {
+      open: vi.fn(),
+      openIntent: vi.fn(),
+    });
 
     view.render({
       characters: [
@@ -1351,7 +1357,7 @@ describe("Playground browser components", () => {
 
   it("produces typed kinds only from valid ordered top-combination members", () => {
     const root = document.createElement("div");
-    const navigator = { open: vi.fn() };
+    const navigator = { open: vi.fn(), openIntent: vi.fn() };
     const view = new TopCombinationsView(root, navigator);
     view.render({
       characters: [
@@ -1374,27 +1380,56 @@ describe("Playground browser components", () => {
       ],
     });
 
-    const actions = root.querySelectorAll("[data-playground-intent]");
+    const actions = root.querySelectorAll(
+      ".playground-combination-generator-action",
+    );
     expect(actions).toHaveLength(2);
-    expect(actions[0].dataset.playgroundIntent).toBe("combination");
-    expect(JSON.parse(actions[0].dataset.promptCombination)).toEqual([
-      { kind: "character", component_uid: "character-a", revision_uid: null },
-      { kind: "scene", component_uid: "scene-a", revision_uid: null },
-    ]);
-    expect(JSON.parse(actions[1].dataset.promptCombination)).toEqual([
-      { kind: "character", component_uid: "character-a", revision_uid: null },
-      { kind: "scene", component_uid: "scene-a", revision_uid: null },
-      { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
-    ]);
-    expect(actions[0].dataset.componentUids).toBeUndefined();
+    expect(actions[0].dataset.playgroundIntent).toBeUndefined();
+    expect(actions[0].dataset.promptCombination).toBeUndefined();
+    const twoComponentIntent = {
+      promptCombination: [
+        { kind: "character", component_uid: "character-a", revision_uid: null },
+        { kind: "scene", component_uid: "scene-a", revision_uid: null },
+      ],
+    };
+    const threeComponentIntent = {
+      promptCombination: [
+        { kind: "character", component_uid: "character-a", revision_uid: null },
+        { kind: "scene", component_uid: "scene-a", revision_uid: null },
+        { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
+      ],
+    };
     actions[0].click();
-    expect(navigator.open).toHaveBeenCalledOnce();
+    actions[1].click();
+    expect(navigator.openIntent).toHaveBeenNthCalledWith(1, twoComponentIntent);
+    expect(navigator.openIntent).toHaveBeenNthCalledWith(
+      2,
+      threeComponentIntent,
+    );
+    expect(navigator.open).not.toHaveBeenCalled();
     view.dispose();
+  });
+
+  it("disposes direct Combination button listeners with the view", () => {
+    const root = document.createElement("div");
+    const navigator = { open: vi.fn(), openIntent: vi.fn() };
+    const view = new TopCombinationsView(root, navigator);
+    view.render({
+      two_component: [{ component_uids: ["character-a", "scene-a"] }],
+    });
+    const action = root.querySelector(
+      ".playground-combination-generator-action",
+    );
+
+    view.dispose();
+    action.click();
+
+    expect(navigator.openIntent).not.toHaveBeenCalled();
   });
 
   it("visibly rejects malformed Top Combination source members", () => {
     const root = document.createElement("div");
-    const navigator = { open: vi.fn() };
+    const navigator = { open: vi.fn(), openIntent: vi.fn() };
     const view = new TopCombinationsView(root, navigator);
     view.render({
       two_component: [
@@ -1414,11 +1449,9 @@ describe("Playground browser components", () => {
     expect(root.textContent).toContain(
       "Generator-Handoff abgewiesen: Komponente für scene fehlt.",
     );
-    expect(
-      root.querySelectorAll("[data-playground-intent='combination']"),
-    ).toHaveLength(0);
+    expect(root.querySelector("[data-prompt-combination]")).toBeNull();
     root.querySelectorAll("button").forEach((button) => button.click());
-    expect(navigator.open).not.toHaveBeenCalled();
+    expect(navigator.openIntent).not.toHaveBeenCalled();
     view.dispose();
   });
 });
