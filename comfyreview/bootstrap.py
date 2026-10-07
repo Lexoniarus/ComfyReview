@@ -18,6 +18,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaLifecycle,
     CardBattlerModelRepository,
+    CardImprintMapper,
     CatalogEvidenceService,
     CompiledLoraGraphPolicy,
     CompositionAnalyticsService,
@@ -147,6 +148,7 @@ class ApplicationContainer:
     settings: Settings
     canonical_schema: CanonicalSchemaLifecycle
     card_battler_model: CardBattlerModelRepository
+    card_imprint_mapper: CardImprintMapper
     output_images: OutputImageCatalog
     file_urls: OutputFileUrlMapper
     image_contexts: ImageContextQueryService
@@ -343,14 +345,16 @@ def build_application_container(
         preferences=preferences_repository,
         content_policy=PromptContentPolicy(),
     )
+    card_battler_model = SqliteCardBattlerModelRepository(
+        configured.card_battler_model_database_path
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
             configured.canonical_database_path
         ),
-        card_battler_model=SqliteCardBattlerModelRepository(
-            configured.card_battler_model_database_path
-        ),
+        card_battler_model=card_battler_model,
+        card_imprint_mapper=CardImprintMapper(card_battler_model),
         output_images=output_images,
         file_urls=file_urls,
         image_contexts=image_contexts,

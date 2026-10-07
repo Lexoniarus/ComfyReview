@@ -2,22 +2,28 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 from comfyreview.application.card_battler_model import (
+    CardBattlerMappingPolicy,
     CardBattlerModelInvalid,
     CardBattlerModelMetadata,
     CardBattlerModelNotFound,
     CardBattlerModelSummary,
     CardBattlerModelVersionUnsupported,
+    CardBattlerRngPolicy,
     CardBattlerRulesetRef,
     CardClassDefinition,
     CombatRoleDefinition,
+    CompatibilityFact,
     DevelopmentTierDefinition,
+    FallbackCandidate,
     MechanicTemplateReference,
+    SemanticAffinity,
     SemanticConceptDefinition,
     TraitLineageDefinition,
     WorldStyleDefinition,
@@ -121,6 +127,56 @@ _REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "category",
             "active",
         }
+    ),
+    "mapping_policies": frozenset(
+        {"id", "ruleset_id", "policy_key", "version", "config_json", "active"}
+    ),
+    "rng_policies": frozenset(
+        {
+            "id",
+            "ruleset_id",
+            "policy_key",
+            "version",
+            "algorithm",
+            "config_json",
+            "active",
+        }
+    ),
+    "semantic_world_style_affinity": frozenset(
+        {"concept_id", "world_style_id", "weight_milli"}
+    ),
+    "semantic_class_affinity": frozenset(
+        {"concept_id", "class_id", "weight_milli"}
+    ),
+    "semantic_role_affinity": frozenset(
+        {"concept_id", "role_id", "weight_milli"}
+    ),
+    "semantic_lineage_affinity": frozenset(
+        {"concept_id", "lineage_id", "weight_milli"}
+    ),
+    "world_style_class_compatibility": frozenset(
+        {"world_style_id", "class_id", "weight_milli", "enabled"}
+    ),
+    "class_role_compatibility": frozenset(
+        {"class_id", "role_id", "weight_milli", "enabled"}
+    ),
+    "class_lineage_compatibility": frozenset(
+        {"class_id", "lineage_id", "weight_milli", "enabled"}
+    ),
+    "role_lineage_compatibility": frozenset(
+        {"role_id", "lineage_id", "weight_milli", "enabled"}
+    ),
+    "mapping_fallback_world_styles": frozenset(
+        {"mapping_policy_id", "world_style_id", "weight_milli"}
+    ),
+    "mapping_fallback_classes": frozenset(
+        {"mapping_policy_id", "class_id", "weight_milli"}
+    ),
+    "mapping_fallback_roles": frozenset(
+        {"mapping_policy_id", "role_id", "weight_milli"}
+    ),
+    "mapping_fallback_lineages": frozenset(
+        {"mapping_policy_id", "lineage_id", "weight_milli"}
     ),
 }
 
@@ -355,6 +411,256 @@ class SqliteCardBattlerModelRepository:
                 )
                 for row in rows
             )
+
+    def mapping_policy(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+        *,
+        key: str | None = None,
+        version: int | None = None,
+    ) -> CardBattlerMappingPolicy:
+        with self._validated_connection() as connection:
+            ruleset_id, _ = self._resolve_ruleset_ref(connection, ruleset)
+            row = self._resolve_policy_row(
+                connection, "mapping_policies", ruleset_id, key, version
+            )
+            config = self._json_object(row["config_json"], "mapping policy")
+            components = config.get("score_components")
+            if not isinstance(components, dict):
+                raise self._invalid(
+                    "mapping policy score_components is invalid"
+                )
+            expected_sort = ["score_desc", "key_asc"]
+            if config.get("stable_sort") != expected_sort:
+                raise self._invalid("unsupported mapping policy stable_sort")
+            policy = CardBattlerMappingPolicy(
+                key=str(row["policy_key"]),
+                version=int(row["version"]),
+                signal_min_milli=self._config_int(config, "signal_min_milli"),
+                candidate_min_score_milli=self._config_int(
+                    config, "candidate_min_score_milli"
+                ),
+                compatibility_floor_milli=self._config_int(
+                    config, "compatibility_floor_milli"
+                ),
+                minimum_candidate_count=self._config_int(
+                    config, "minimum_candidate_count", minimum=1
+                ),
+                top_pool_size=self._config_int(
+                    config, "top_pool_size", minimum=1
+                ),
+                use_seeded_weighted_selection=self._config_bool(
+                    config, "use_seeded_weighted_selection"
+                ),
+                fallback_when_no_candidate=self._config_bool(
+                    config, "fallback_when_no_candidate"
+                ),
+                semantic_affinity_weight=self._config_int(
+                    components, "semantic_affinity", minimum=0
+                ),
+                compatibility_weight=self._config_int(
+                    components, "compatibility", minimum=0
+                ),
+                fallback_prior_weight=self._config_int(
+                    components, "fallback_prior", minimum=0
+                ),
+            )
+            base_weight = (
+                policy.semantic_affinity_weight + policy.fallback_prior_weight
+            )
+            if base_weight <= 0:
+                raise self._invalid(
+                    "mapping policy World Style score weights are empty"
+                )
+            if base_weight + policy.compatibility_weight <= 0:
+                raise self._invalid(
+                    "mapping policy compatible-axis score weights are empty"
+                )
+            return policy
+
+    def rng_policy(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+        *,
+        key: str | None = None,
+        version: int | None = None,
+    ) -> CardBattlerRngPolicy:
+        with self._validated_connection() as connection:
+            ruleset_id, _ = self._resolve_ruleset_ref(connection, ruleset)
+            row = self._resolve_policy_row(
+                connection, "rng_policies", ruleset_id, key, version
+            )
+            config = self._json_object(row["config_json"], "RNG policy")
+            seed_material = config.get("seed_material")
+            if not isinstance(seed_material, list) or not all(
+                isinstance(value, str) and value for value in seed_material
+            ):
+                raise self._invalid("RNG policy seed_material is invalid")
+            if config.get("stable_candidate_key") != "entity_key":
+                raise self._invalid("unsupported RNG stable_candidate_key")
+            if config.get("sql_row_order_is_not_randomness") is not True:
+                raise self._invalid(
+                    "RNG policy must reject SQL row-order randomness"
+                )
+            if config.get("runtime_hash_is_not_randomness") is not True:
+                raise self._invalid(
+                    "RNG policy must reject runtime hash randomness"
+                )
+            return CardBattlerRngPolicy(
+                key=str(row["policy_key"]),
+                version=int(row["version"]),
+                algorithm=str(row["algorithm"]),
+                seed_material=tuple(seed_material),
+                stable_candidate_key="entity_key",
+            )
+
+    def world_style_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[SemanticAffinity, ...]:
+        return self._affinities(
+            ruleset,
+            "semantic_world_style_affinity",
+            "world_styles",
+            "world_style_id",
+        )
+
+    def class_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[SemanticAffinity, ...]:
+        return self._affinities(
+            ruleset,
+            "semantic_class_affinity",
+            "card_classes",
+            "class_id",
+        )
+
+    def role_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[SemanticAffinity, ...]:
+        return self._affinities(
+            ruleset,
+            "semantic_role_affinity",
+            "combat_roles",
+            "role_id",
+        )
+
+    def lineage_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[SemanticAffinity, ...]:
+        return self._affinities(
+            ruleset,
+            "semantic_lineage_affinity",
+            "trait_lineages",
+            "lineage_id",
+        )
+
+    def world_style_class_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[CompatibilityFact, ...]:
+        return self._compatibility(
+            ruleset,
+            "world_style_class_compatibility",
+            "world_styles",
+            "world_style_id",
+            "card_classes",
+            "class_id",
+        )
+
+    def class_role_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[CompatibilityFact, ...]:
+        return self._compatibility(
+            ruleset,
+            "class_role_compatibility",
+            "card_classes",
+            "class_id",
+            "combat_roles",
+            "role_id",
+        )
+
+    def class_lineage_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[CompatibilityFact, ...]:
+        return self._compatibility(
+            ruleset,
+            "class_lineage_compatibility",
+            "card_classes",
+            "class_id",
+            "trait_lineages",
+            "lineage_id",
+        )
+
+    def role_lineage_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[CompatibilityFact, ...]:
+        return self._compatibility(
+            ruleset,
+            "role_lineage_compatibility",
+            "combat_roles",
+            "role_id",
+            "trait_lineages",
+            "lineage_id",
+        )
+
+    def fallback_world_styles(
+        self,
+        policy: CardBattlerMappingPolicy,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[FallbackCandidate, ...]:
+        return self._fallback(
+            ruleset,
+            policy,
+            "mapping_fallback_world_styles",
+            "world_styles",
+            "world_style_id",
+        )
+
+    def fallback_classes(
+        self,
+        policy: CardBattlerMappingPolicy,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[FallbackCandidate, ...]:
+        return self._fallback(
+            ruleset,
+            policy,
+            "mapping_fallback_classes",
+            "card_classes",
+            "class_id",
+        )
+
+    def fallback_roles(
+        self,
+        policy: CardBattlerMappingPolicy,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[FallbackCandidate, ...]:
+        return self._fallback(
+            ruleset,
+            policy,
+            "mapping_fallback_roles",
+            "combat_roles",
+            "role_id",
+        )
+
+    def fallback_lineages(
+        self,
+        policy: CardBattlerMappingPolicy,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[FallbackCandidate, ...]:
+        return self._fallback(
+            ruleset,
+            policy,
+            "mapping_fallback_lineages",
+            "trait_lineages",
+            "lineage_id",
+        )
 
     def summary(
         self,
@@ -687,6 +993,237 @@ class SqliteCardBattlerModelRepository:
             (ruleset_id,),
         ).fetchall()
         return tuple(rows)
+
+    def _resolve_policy_row(
+        self,
+        connection: sqlite3.Connection,
+        table: str,
+        ruleset_id: int,
+        key: str | None,
+        version: int | None,
+    ) -> sqlite3.Row:
+        if table not in {"mapping_policies", "rng_policies"}:
+            raise ValueError(f"unsupported policy table: {table}")
+        if version is not None and key is None:
+            raise self._invalid("policy version requires a policy key")
+        clauses = ["ruleset_id = ?"]
+        parameters: list[object] = [ruleset_id]
+        if key is None:
+            clauses.append("active = 1")
+        else:
+            clauses.append("policy_key = ?")
+            parameters.append(key)
+        if version is not None:
+            clauses.append("version = ?")
+            parameters.append(version)
+        rows = connection.execute(
+            f"SELECT * FROM {table} WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY version DESC, policy_key COLLATE BINARY",
+            tuple(parameters),
+        ).fetchall()
+        if not rows:
+            raise self._invalid(f"cannot resolve {table} policy")
+        return rows[0]
+
+    @staticmethod
+    def _json_object(value: object, label: str) -> dict[str, object]:
+        try:
+            parsed = json.loads(str(value))
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{label} config_json is invalid JSON") from error
+        if not isinstance(parsed, dict):
+            raise ValueError(f"{label} config_json must be an object")
+        return parsed
+
+    @staticmethod
+    def _config_int(
+        config: dict[str, object],
+        key: str,
+        *,
+        minimum: int = 0,
+        maximum: int = 1000,
+    ) -> int:
+        value = config.get(key)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"policy field {key} must be an integer")
+        if not minimum <= value <= maximum:
+            raise ValueError(f"policy field {key} is out of range")
+        return value
+
+    @staticmethod
+    def _config_bool(config: dict[str, object], key: str) -> bool:
+        value = config.get(key)
+        if not isinstance(value, bool):
+            raise ValueError(f"policy field {key} must be boolean")
+        return value
+
+    def _affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None,
+        relation_table: str,
+        entity_table: str,
+        entity_id_column: str,
+    ) -> tuple[SemanticAffinity, ...]:
+        allowed = {
+            (
+                "semantic_world_style_affinity",
+                "world_styles",
+                "world_style_id",
+            ),
+            ("semantic_class_affinity", "card_classes", "class_id"),
+            ("semantic_role_affinity", "combat_roles", "role_id"),
+            ("semantic_lineage_affinity", "trait_lineages", "lineage_id"),
+        }
+        if (relation_table, entity_table, entity_id_column) not in allowed:
+            raise ValueError("unsupported semantic affinity relation")
+        with self._validated_connection() as connection:
+            ruleset_id, resolved = self._resolve_ruleset_ref(
+                connection, ruleset
+            )
+            vocabulary_id = self._vocabulary_id(connection, resolved)
+            rows = connection.execute(
+                f"""
+                SELECT concepts.key AS concept_key, entities.key AS entity_key,
+                       relation.weight_milli
+                FROM {relation_table} AS relation
+                JOIN semantic_concepts AS concepts ON concepts.id = relation.concept_id
+                JOIN {entity_table} AS entities ON entities.id = relation.{entity_id_column}
+                WHERE concepts.vocabulary_id = ? AND concepts.active = 1
+                  AND entities.ruleset_id = ? AND entities.active = 1
+                ORDER BY concepts.key COLLATE BINARY, entities.key COLLATE BINARY
+                """,
+                (vocabulary_id, ruleset_id),
+            ).fetchall()
+            return tuple(
+                SemanticAffinity(
+                    concept_key=str(row["concept_key"]),
+                    entity_key=str(row["entity_key"]),
+                    weight_milli=int(row["weight_milli"]),
+                )
+                for row in rows
+            )
+
+    def _compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None,
+        relation_table: str,
+        source_table: str,
+        source_id_column: str,
+        target_table: str,
+        target_id_column: str,
+    ) -> tuple[CompatibilityFact, ...]:
+        allowed = {
+            (
+                "world_style_class_compatibility",
+                "world_styles",
+                "world_style_id",
+                "card_classes",
+                "class_id",
+            ),
+            (
+                "class_role_compatibility",
+                "card_classes",
+                "class_id",
+                "combat_roles",
+                "role_id",
+            ),
+            (
+                "class_lineage_compatibility",
+                "card_classes",
+                "class_id",
+                "trait_lineages",
+                "lineage_id",
+            ),
+            (
+                "role_lineage_compatibility",
+                "combat_roles",
+                "role_id",
+                "trait_lineages",
+                "lineage_id",
+            ),
+        }
+        signature = (
+            relation_table,
+            source_table,
+            source_id_column,
+            target_table,
+            target_id_column,
+        )
+        if signature not in allowed:
+            raise ValueError("unsupported compatibility relation")
+        with self._validated_connection() as connection:
+            ruleset_id, _ = self._resolve_ruleset_ref(connection, ruleset)
+            rows = connection.execute(
+                f"""
+                SELECT source.key AS source_key, target.key AS target_key,
+                       relation.weight_milli, relation.enabled
+                FROM {relation_table} AS relation
+                JOIN {source_table} AS source ON source.id = relation.{source_id_column}
+                JOIN {target_table} AS target ON target.id = relation.{target_id_column}
+                WHERE source.ruleset_id = ? AND target.ruleset_id = ?
+                  AND source.active = 1 AND target.active = 1
+                ORDER BY source.key COLLATE BINARY, target.key COLLATE BINARY
+                """,
+                (ruleset_id, ruleset_id),
+            ).fetchall()
+            return tuple(
+                CompatibilityFact(
+                    source_key=str(row["source_key"]),
+                    target_key=str(row["target_key"]),
+                    weight_milli=int(row["weight_milli"]),
+                    enabled=bool(row["enabled"]),
+                )
+                for row in rows
+            )
+
+    def _fallback(
+        self,
+        ruleset: CardBattlerRulesetRef | None,
+        policy: CardBattlerMappingPolicy,
+        relation_table: str,
+        entity_table: str,
+        entity_id_column: str,
+    ) -> tuple[FallbackCandidate, ...]:
+        allowed = {
+            (
+                "mapping_fallback_world_styles",
+                "world_styles",
+                "world_style_id",
+            ),
+            ("mapping_fallback_classes", "card_classes", "class_id"),
+            ("mapping_fallback_roles", "combat_roles", "role_id"),
+            ("mapping_fallback_lineages", "trait_lineages", "lineage_id"),
+        }
+        if (relation_table, entity_table, entity_id_column) not in allowed:
+            raise ValueError("unsupported mapping fallback relation")
+        with self._validated_connection() as connection:
+            ruleset_id, _ = self._resolve_ruleset_ref(connection, ruleset)
+            policy_row = self._resolve_policy_row(
+                connection,
+                "mapping_policies",
+                ruleset_id,
+                policy.key,
+                policy.version,
+            )
+            rows = connection.execute(
+                f"""
+                SELECT entities.key AS entity_key, relation.weight_milli
+                FROM {relation_table} AS relation
+                JOIN {entity_table} AS entities ON entities.id = relation.{entity_id_column}
+                WHERE relation.mapping_policy_id = ?
+                  AND entities.ruleset_id = ? AND entities.active = 1
+                ORDER BY relation.weight_milli DESC, entities.key COLLATE BINARY
+                """,
+                (int(policy_row["id"]), ruleset_id),
+            ).fetchall()
+            return tuple(
+                FallbackCandidate(
+                    entity_key=str(row["entity_key"]),
+                    weight_milli=int(row["weight_milli"]),
+                )
+                for row in rows
+            )
 
     @staticmethod
     def _count(

@@ -145,6 +145,99 @@ def _create_model_database(
                 category TEXT NOT NULL,
                 active INTEGER NOT NULL DEFAULT 1
             );
+            CREATE TABLE mapping_policies (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                policy_key TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                config_json TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE rng_policies (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                policy_key TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                algorithm TEXT NOT NULL,
+                config_json TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE semantic_world_style_affinity (
+                concept_id INTEGER NOT NULL REFERENCES semantic_concepts(id),
+                world_style_id INTEGER NOT NULL REFERENCES world_styles(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (concept_id, world_style_id)
+            );
+            CREATE TABLE semantic_class_affinity (
+                concept_id INTEGER NOT NULL REFERENCES semantic_concepts(id),
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (concept_id, class_id)
+            );
+            CREATE TABLE semantic_role_affinity (
+                concept_id INTEGER NOT NULL REFERENCES semantic_concepts(id),
+                role_id INTEGER NOT NULL REFERENCES combat_roles(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (concept_id, role_id)
+            );
+            CREATE TABLE semantic_lineage_affinity (
+                concept_id INTEGER NOT NULL REFERENCES semantic_concepts(id),
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (concept_id, lineage_id)
+            );
+            CREATE TABLE world_style_class_compatibility (
+                world_style_id INTEGER NOT NULL REFERENCES world_styles(id),
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                weight_milli INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (world_style_id, class_id)
+            );
+            CREATE TABLE class_role_compatibility (
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                role_id INTEGER NOT NULL REFERENCES combat_roles(id),
+                weight_milli INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (class_id, role_id)
+            );
+            CREATE TABLE class_lineage_compatibility (
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                weight_milli INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (class_id, lineage_id)
+            );
+            CREATE TABLE role_lineage_compatibility (
+                role_id INTEGER NOT NULL REFERENCES combat_roles(id),
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                weight_milli INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (role_id, lineage_id)
+            );
+            CREATE TABLE mapping_fallback_world_styles (
+                mapping_policy_id INTEGER NOT NULL REFERENCES mapping_policies(id),
+                world_style_id INTEGER NOT NULL REFERENCES world_styles(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (mapping_policy_id, world_style_id)
+            );
+            CREATE TABLE mapping_fallback_classes (
+                mapping_policy_id INTEGER NOT NULL REFERENCES mapping_policies(id),
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (mapping_policy_id, class_id)
+            );
+            CREATE TABLE mapping_fallback_roles (
+                mapping_policy_id INTEGER NOT NULL REFERENCES mapping_policies(id),
+                role_id INTEGER NOT NULL REFERENCES combat_roles(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (mapping_policy_id, role_id)
+            );
+            CREATE TABLE mapping_fallback_lineages (
+                mapping_policy_id INTEGER NOT NULL REFERENCES mapping_policies(id),
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (mapping_policy_id, lineage_id)
+            );
             """
         )
         connection.executemany(
@@ -288,6 +381,70 @@ def _create_model_database(
                 (1, "alpha", "alpha atom"),
             ),
         )
+        connection.execute(
+            """
+            INSERT INTO mapping_policies(
+                id, ruleset_id, policy_key, version, config_json, active
+            ) VALUES (1, 1, 'semantic_imprint_mapping', 2, ?, 1)
+            """,
+            (
+                '{"signal_min_milli":180,"candidate_min_score_milli":100,'
+                '"compatibility_floor_milli":120,"minimum_candidate_count":2,'
+                '"top_pool_size":2,"use_seeded_weighted_selection":true,'
+                '"fallback_when_no_candidate":true,"score_components":{'
+                '"semantic_affinity":700,"compatibility":250,'
+                '"fallback_prior":50},"stable_sort":["score_desc","key_asc"]}',
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO rng_policies(
+                id, ruleset_id, policy_key, version, algorithm, config_json, active
+            ) VALUES (1, 1, 'deterministic_rng', 2, 'sha256-counter-v1', ?, 1)
+            """,
+            (
+                '{"seed_material":["image_uid","semantic_revision",'
+                '"ruleset_revision","mapping_policy_revision","explicit_seed"],'
+                '"stable_candidate_key":"entity_key",'
+                '"sql_row_order_is_not_randomness":true,'
+                '"runtime_hash_is_not_randomness":true}',
+            ),
+        )
+        for table, target_column in (
+            ("semantic_world_style_affinity", "world_style_id"),
+            ("semantic_class_affinity", "class_id"),
+            ("semantic_role_affinity", "role_id"),
+            ("semantic_lineage_affinity", "lineage_id"),
+        ):
+            connection.executemany(
+                f"INSERT INTO {table}(concept_id, {target_column}, weight_milli) VALUES (?, ?, ?)",
+                ((1, 1, 900), (1, 2, 300), (2, 1, 200), (2, 2, 850)),
+            )
+        for table, source_column, target_column in (
+            ("world_style_class_compatibility", "world_style_id", "class_id"),
+            ("class_role_compatibility", "class_id", "role_id"),
+            ("class_lineage_compatibility", "class_id", "lineage_id"),
+            ("role_lineage_compatibility", "role_id", "lineage_id"),
+        ):
+            connection.executemany(
+                f"INSERT INTO {table}({source_column}, {target_column}, weight_milli, enabled) VALUES (?, ?, ?, ?)",
+                (
+                    (1, 1, 900, 1),
+                    (1, 2, 700, 1),
+                    (2, 1, 700, 1),
+                    (2, 2, 900, 1),
+                ),
+            )
+        for table, target_column in (
+            ("mapping_fallback_world_styles", "world_style_id"),
+            ("mapping_fallback_classes", "class_id"),
+            ("mapping_fallback_roles", "role_id"),
+            ("mapping_fallback_lineages", "lineage_id"),
+        ):
+            connection.executemany(
+                f"INSERT INTO {table}(mapping_policy_id, {target_column}, weight_milli) VALUES (1, ?, ?)",
+                ((1, 800), (2, 700)),
+            )
         connection.commit()
     finally:
         connection.close()
@@ -518,4 +675,135 @@ def test_catalog_reads_are_stably_ordered_and_read_only(
     )
 
     assert first == second
+    assert _digest(path) == before
+
+
+def test_mapping_and_rng_policies_are_typed_and_validated(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    repository = SqliteCardBattlerModelRepository(path)
+    ruleset = repository.resolve_ruleset()
+
+    mapping = repository.mapping_policy(ruleset)
+    rng = repository.rng_policy(ruleset)
+
+    assert (mapping.key, mapping.version) == ("semantic_imprint_mapping", 2)
+    assert mapping.signal_min_milli == 180
+    assert mapping.candidate_min_score_milli == 100
+    assert mapping.compatibility_floor_milli == 120
+    assert mapping.minimum_candidate_count == 2
+    assert mapping.top_pool_size == 2
+    assert (
+        mapping.semantic_affinity_weight,
+        mapping.compatibility_weight,
+        mapping.fallback_prior_weight,
+    ) == (700, 250, 50)
+    assert (rng.key, rng.version, rng.algorithm) == (
+        "deterministic_rng",
+        2,
+        "sha256-counter-v1",
+    )
+    assert rng.seed_material == (
+        "image_uid",
+        "semantic_revision",
+        "ruleset_revision",
+        "mapping_policy_revision",
+        "explicit_seed",
+    )
+
+
+def test_mapping_relations_are_read_in_stable_typed_order(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    repository = SqliteCardBattlerModelRepository(path)
+    ruleset = repository.resolve_ruleset()
+    policy = repository.mapping_policy(ruleset)
+
+    affinity_groups = (
+        repository.world_style_affinities(ruleset),
+        repository.class_affinities(ruleset),
+        repository.role_affinities(ruleset),
+        repository.lineage_affinities(ruleset),
+    )
+    assert all(
+        [(item.concept_key, item.entity_key) for item in group]
+        == sorted((item.concept_key, item.entity_key) for item in group)
+        for group in affinity_groups
+    )
+    assert all(len(group) == 4 for group in affinity_groups)
+
+    compatibility_groups = (
+        repository.world_style_class_compatibility(ruleset),
+        repository.class_role_compatibility(ruleset),
+        repository.class_lineage_compatibility(ruleset),
+        repository.role_lineage_compatibility(ruleset),
+    )
+    assert all(len(group) == 4 for group in compatibility_groups)
+    assert all(
+        item.enabled for group in compatibility_groups for item in group
+    )
+
+    fallback_groups = (
+        repository.fallback_world_styles(policy, ruleset),
+        repository.fallback_classes(policy, ruleset),
+        repository.fallback_roles(policy, ruleset),
+        repository.fallback_lineages(policy, ruleset),
+    )
+    assert all(
+        [(item.weight_milli, item.entity_key) for item in group]
+        == sorted(
+            ((item.weight_milli, item.entity_key) for item in group),
+            key=lambda item: (-item[0], item[1]),
+        )
+        for group in fallback_groups
+    )
+
+
+def test_malformed_policy_config_is_a_model_contract_failure(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "UPDATE mapping_policies SET config_json = ? WHERE id = 1",
+            ('{"stable_sort":["key_asc"]}',),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(CardBattlerModelInvalid):
+        SqliteCardBattlerModelRepository(path).mapping_policy()
+
+
+def test_mapping_repository_reads_do_not_mutate_model_file(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    before = _digest(path)
+    repository = SqliteCardBattlerModelRepository(path)
+    ruleset = repository.resolve_ruleset()
+    policy = repository.mapping_policy(ruleset)
+
+    repository.rng_policy(ruleset)
+    repository.world_style_affinities(ruleset)
+    repository.class_affinities(ruleset)
+    repository.role_affinities(ruleset)
+    repository.lineage_affinities(ruleset)
+    repository.world_style_class_compatibility(ruleset)
+    repository.class_role_compatibility(ruleset)
+    repository.class_lineage_compatibility(ruleset)
+    repository.role_lineage_compatibility(ruleset)
+    repository.fallback_world_styles(policy, ruleset)
+    repository.fallback_classes(policy, ruleset)
+    repository.fallback_roles(policy, ruleset)
+    repository.fallback_lineages(policy, ruleset)
+
     assert _digest(path) == before

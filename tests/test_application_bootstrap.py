@@ -16,6 +16,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaReport,
     CardBattlerModelRepository,
+    CardImprintMapper,
     CatalogEvidenceService,
     CurationImage,
     CurationService,
@@ -141,6 +142,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         settings=settings,
         canonical_schema=_RecordingCanonicalSchema(settings, events),
         card_battler_model=cast(CardBattlerModelRepository, object()),
+        card_imprint_mapper=cast(CardImprintMapper, object()),
         output_images=_EmptyOutputImageCatalog(),
         file_urls=OutputFileUrlMapper(settings.output_root),
         image_contexts=cast(ImageContextQueryService, object()),
@@ -275,6 +277,7 @@ def test_default_container_wires_canonical_review_runtime(
         container.card_battler_model,
         SqliteCardBattlerModelRepository,
     )
+    assert isinstance(container.card_imprint_mapper, CardImprintMapper)
     assert not settings.card_battler_model_database_path.exists()
     assert isinstance(
         container.output_images,

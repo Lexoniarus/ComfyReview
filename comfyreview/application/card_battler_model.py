@@ -135,6 +135,62 @@ class CardBattlerModelSummary:
     foreign_key_violation_count: int
 
 
+@dataclass(frozen=True, slots=True)
+class CardBattlerMappingPolicy:
+    """Validated versioned semantic-to-imprint mapping policy."""
+
+    key: str
+    version: int
+    signal_min_milli: int
+    candidate_min_score_milli: int
+    compatibility_floor_milli: int
+    minimum_candidate_count: int
+    top_pool_size: int
+    use_seeded_weighted_selection: bool
+    fallback_when_no_candidate: bool
+    semantic_affinity_weight: int
+    compatibility_weight: int
+    fallback_prior_weight: int
+
+
+@dataclass(frozen=True, slots=True)
+class CardBattlerRngPolicy:
+    """Validated versioned deterministic RNG policy."""
+
+    key: str
+    version: int
+    algorithm: str
+    seed_material: tuple[str, ...]
+    stable_candidate_key: str
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticAffinity:
+    """Relate one semantic concept to one imprint candidate."""
+
+    concept_key: str
+    entity_key: str
+    weight_milli: int
+
+
+@dataclass(frozen=True, slots=True)
+class CompatibilityFact:
+    """Relate one selected source dimension to one target candidate."""
+
+    source_key: str
+    target_key: str
+    weight_milli: int
+    enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class FallbackCandidate:
+    """Describe one configured fallback candidate and its prior weight."""
+
+    entity_key: str
+    weight_milli: int
+
+
 class CardBattlerModelRepository(Protocol):
     """Read and validate the external Card Battler model resource."""
 
@@ -198,6 +254,114 @@ class CardBattlerModelRepository(Protocol):
         ruleset: CardBattlerRulesetRef | None = None,
     ) -> tuple[MechanicTemplateReference, ...]:
         """Return active mechanic templates at reference granularity."""
+        ...
+
+    def mapping_policy(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+        *,
+        key: str | None = None,
+        version: int | None = None,
+    ) -> CardBattlerMappingPolicy:
+        """Return the active or specified validated mapping policy."""
+        ...
+
+    def rng_policy(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+        *,
+        key: str | None = None,
+        version: int | None = None,
+    ) -> CardBattlerRngPolicy:
+        """Return the active or specified validated RNG policy."""
+        ...
+
+    def world_style_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[SemanticAffinity, ...]:
+        """Return semantic affinities for World Style candidates."""
+        ...
+
+    def class_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[SemanticAffinity, ...]:
+        """Return semantic affinities for Card Class candidates."""
+        ...
+
+    def role_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[SemanticAffinity, ...]:
+        """Return semantic affinities for Combat Role candidates."""
+        ...
+
+    def lineage_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[SemanticAffinity, ...]:
+        """Return semantic affinities for Trait Lineage candidates."""
+        ...
+
+    def world_style_class_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[CompatibilityFact, ...]:
+        """Return World Style to Card Class compatibility facts."""
+        ...
+
+    def class_role_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[CompatibilityFact, ...]:
+        """Return Card Class to Combat Role compatibility facts."""
+        ...
+
+    def class_lineage_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[CompatibilityFact, ...]:
+        """Return Card Class to Trait Lineage compatibility facts."""
+        ...
+
+    def role_lineage_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[CompatibilityFact, ...]:
+        """Return Combat Role to Trait Lineage compatibility facts."""
+        ...
+
+    def fallback_world_styles(
+        self,
+        policy: CardBattlerMappingPolicy,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[FallbackCandidate, ...]:
+        """Return configured fallback World Styles."""
+        ...
+
+    def fallback_classes(
+        self,
+        policy: CardBattlerMappingPolicy,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[FallbackCandidate, ...]:
+        """Return configured fallback Card Classes."""
+        ...
+
+    def fallback_roles(
+        self,
+        policy: CardBattlerMappingPolicy,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[FallbackCandidate, ...]:
+        """Return configured fallback Combat Roles."""
+        ...
+
+    def fallback_lineages(
+        self,
+        policy: CardBattlerMappingPolicy,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[FallbackCandidate, ...]:
+        """Return configured fallback Trait Lineages."""
         ...
 
     def summary(
