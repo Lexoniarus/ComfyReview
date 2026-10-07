@@ -502,18 +502,37 @@ views expose old query shapes but cannot be written.
 The Playground Generator is designed to carry values back into ComfyUI in a reproducible way instead of relying on memory and manual copy-paste.
 
 `/playground` is the evidence overview for Top-2/Top-3 combinations;
-`/playground/generator` creates a server-identified draft with one concrete
-shared seed, grouped editable prompt atoms and separate prompt/sampler image
-evidence. Each fixed prompt group keeps its concrete source revision and may
-also keep a concrete candidate. Its variant control independently offers the
+`/playground/generator` is an experiment workspace with the explicit flow
+`Setup konfigurieren -> Varianten vorbereiten -> vergleichen/bearbeiten ->
+Auswahl generieren`. Fixed catalog groups show their positive and negative
+atoms in Setup and keep edits local to the experiment. “Als Katalog-Test
+speichern” is the only action that materializes such edits as a manual prompt
+candidate; Reset restores the exact bound catalog revision. Random groups have
+no editable atoms until the server resolves them into concrete variants.
+
+The sampler always shows its concrete Steps, CFG and image seed. Optional
+Steps/CFG/seed ranges live behind “Variieren”; variant count defaults to four
+and is bounded to 1-12. The server returns preferably diverse transient drafts
+with unique/repeated counts and an exhaustion notice. Each card has its own
+draft UID, resolved prompt groups and concrete sampler values. Setup changes
+keep the old cards visible but mark them stale and block submission until they
+are refreshed. Every selected reviewed card submits exactly one generation
+through the batch boundary; partial failures stay associated with their draft
+UID. Preparing variants does not persist drafts and adds no database schema.
+
+Each fixed prompt group keeps its concrete source revision and may also keep a
+concrete candidate. Its variant control independently offers the
 promoted stable/provisional catalog recipe, the most recently authored manual
 catalog variant, the stable recipe's calculated weight-only optimum and the
 stable recipe's next useful weight test. The manual variant remains available
 after generation, review or promotion. Calculated guidance is materialized
 only after the user selects it; applying any variant replaces only that
 group's atoms in the ordinary editable `PromptAtomEditor`.
-Draft and generation payloads retain the exact group, source revision,
-candidate and rendered atom usages.
+Variant and generation payloads retain the exact group, source revision,
+candidate and rendered atom usages. The compatibility single-draft and sweep
+HTTP contracts remain available for older callers, but the workspace uses
+`POST /api/v2/playground/variant-batches` and
+`POST /api/v2/generations/batch`.
 
 `POST /api/v2/playground/prompt-guidance` binds to an expected current catalog
 revision and returns its recipe, best observed recipe, calculated optimum,
@@ -542,7 +561,7 @@ action navigates directly through the shared Generator handoff codec.
 Prompt/LoRA handoffs replace the visible “01 Auswahl” state with fully
 catalog-bound, normally editable component and ordered LoRA controls, while
 render-only handoffs leave it untouched. There is no tray, toast event or
-hidden prompt editor, and no draft exists until “Entwurf erstellen” is
+hidden prompt editor, and no draft exists until “Varianten vorbereiten” is
 pressed. Exact image handoffs may restore archived historical component
 revisions; those entries are labelled `Archiv`, remain manually editable and
 are never candidates for random selection. Image cards and inspectors expose

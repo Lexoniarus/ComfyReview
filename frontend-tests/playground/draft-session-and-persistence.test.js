@@ -45,6 +45,20 @@ describe("DraftSession", () => {
     );
   });
 
+  it("restores a ready draft after successful and failed submissions", async () => {
+    const session = new DraftSession(requestOwner());
+    await session.prepare(() => Promise.resolve({ draft_uid: "draft-ready" }));
+
+    await expect(
+      session.submit(() => Promise.resolve({ generation_uid: "generation-a" })),
+    ).resolves.toEqual({ generation_uid: "generation-a" });
+    expect(session.isReady).toBe(true);
+    await expect(
+      session.submit(() => Promise.reject(new Error("submission failed"))),
+    ).rejects.toThrow("submission failed");
+    expect(session.isReady).toBe(true);
+  });
+
   it("discards a late submission after its draft changes", async () => {
     const requests = requestOwner();
     const session = new DraftSession(requests);

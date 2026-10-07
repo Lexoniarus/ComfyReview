@@ -93,7 +93,16 @@ def test_playground_generator_url_renders_the_canonical_v2_shell() -> None:
     assert 'data-v2-surface="playground"' in response.text
     assert "/static/js/entries/playground.js" in response.text
     assert "/static/css/v2/playground.css" in response.text
+    assert "data-playground-workspace" in response.text
+    assert 'data-workspace-step="setup"' in response.text
+    assert 'data-workspace-step="variants"' in response.text
+    assert "data-variant-board" in response.text
+    assert "data-variant-inspector" in response.text
+    assert "Varianten vorbereiten" in response.text
+    assert "Auswahl generieren" in response.text
     assert "/api/v2" not in response.text
+    assert "<style" not in response.text
+    assert "onclick=" not in response.text
     assert "inline" not in response.text.casefold()
     assert legacy_post.status_code == 405
     assert legacy_preview.status_code == 404

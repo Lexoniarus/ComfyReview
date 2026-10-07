@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RequestLifecycle } from "../../static/js/core/request-lifecycle.js";
-import { DraftSession } from "../../static/js/playground/draft-session.js";
 import { GeneratorHandoffApplier } from "../../static/js/playground/generator-handoff-applier.js";
 import {
   GeneratorHandoffUrlCleaner,
   readPlaygroundIntent,
 } from "../../static/js/playground/playground-intent.js";
 import { GeneratorStatePersistence } from "../../static/js/playground/generator-state-persistence.js";
+import { VariantSession } from "../../static/js/playground/variant-session.js";
 import { PlaygroundController } from "../../static/js/surfaces/playground-controller.js";
 
 describe("PlaygroundController", () => {
@@ -28,14 +28,24 @@ describe("PlaygroundController", () => {
 
     await fixture.controller.prepare();
     expect(fixture.api.post).toHaveBeenCalledWith(
-      "playground/drafts",
-      { selections: [], generation: expect.any(Object) },
+      "playground/variant-batches",
+      {
+        selections: [],
+        variant_count: 1,
+        generation: expect.any(Object),
+      },
       expect.any(Object),
     );
     expect(fixture.draft.render).toHaveBeenCalledWith(
       expect.objectContaining({ positive_prompt: "positive" }),
-      "draft-1",
     );
+    fixture.controller.inspectVariant("missing");
+    fixture.controller.inspectVariant("draft-1");
+    fixture.controller.selectVariant("missing", true);
+    fixture.controller.selectVariant("draft-1", false);
+    fixture.controller.selectVariant("draft-1", true);
+    fixture.controller.variantEdited();
+    await settle();
     await fixture.controller.refreshPreview();
     expect(fixture.api.post).toHaveBeenCalledWith(
       "playground/render-preview",
@@ -49,8 +59,8 @@ describe("PlaygroundController", () => {
 
     await fixture.controller.submit();
     expect(fixture.api.post).toHaveBeenCalledWith(
-      "generations",
-      expect.objectContaining({ draft_uid: "draft-1" }),
+      "generations/batch",
+      { variants: [expect.objectContaining({ draft_uid: "draft-1" })] },
       expect.any(Object),
     );
     expect(fixture.result.dataset.state).toBe("success");
@@ -170,7 +180,7 @@ describe("PlaygroundController", () => {
       expect(fixture.api.put).not.toHaveBeenCalled();
       expect(
         fixture.api.post.mock.calls.some(
-          ([path]) => path === "playground/drafts",
+          ([path]) => path === "playground/variant-batches",
         ),
       ).toBe(false);
       expect(fixture.modes.value()).toEqual({
@@ -226,7 +236,7 @@ describe("PlaygroundController", () => {
     await empty.controller.start();
     await empty.controller.submit();
     expect(
-      empty.api.post.mock.calls.some(([path]) => path === "generations"),
+      empty.api.post.mock.calls.some(([path]) => path === "generations/batch"),
     ).toBe(false);
 
     const previewFailure = createFixture({
@@ -243,14 +253,18 @@ describe("PlaygroundController", () => {
     const evidenceFailure = createFixture({
       evidenceError: new Error("evidence kaputt"),
     });
+    await evidenceFailure.controller.prepare();
     await evidenceFailure.controller.refreshEvidence();
     expect(evidenceFailure.status.textContent).toBe("evidence kaputt");
 
     const evidenceAbort = createFixture({
       evidenceError: new DOMException("aborted", "AbortError"),
     });
+    await evidenceAbort.controller.prepare();
     await evidenceAbort.controller.refreshEvidence();
-    expect(evidenceAbort.status.textContent).toBe("");
+    expect(evidenceAbort.status.textContent).toBe(
+      "1 eindeutige Varianten bereit",
+    );
   });
 
   it("binds its action buttons through one owned listener lifecycle", async () => {
@@ -272,9 +286,20 @@ describe("PlaygroundController", () => {
     await fixture.controller.submit();
 
     expect(fixture.result.textContent).toContain("generation-2 · submitted");
-    expect(fixture.status.textContent).toBe(
-      "2 Generierungen an ComfyUI übergeben",
+    expect(fixture.status.textContent).toBe("2 Varianten an ComfyUI übergeben");
+  });
+
+  it("maps partial batch failures back to their selected draft", async () => {
+    const fixture = createFixture({ batch: true, partial: true });
+    await fixture.controller.start();
+    await fixture.controller.prepare();
+    await fixture.controller.submit();
+
+    expect(fixture.result.dataset.state).toBe("error");
+    expect(fixture.result.textContent).toContain(
+      "draft-2 · Fehler: queue failed",
     );
+    expect(fixture.status.textContent).toBe("1 übergeben · 1 fehlgeschlagen");
   });
 
   it("applies typed image prompt selections and all canonical LoRAs without creating a draft", async () => {
@@ -413,22 +438,24 @@ describe("PlaygroundController", () => {
     expect(fixture.urlCleaner.removeHandoff).toHaveBeenCalledOnce();
     expect(
       fixture.api.post.mock.calls.some(
-        ([path]) => path === "playground/drafts",
+        ([path]) => path === "playground/variant-batches",
       ),
     ).toBe(false);
 
     await fixture.controller.prepare();
     expect(fixture.api.post).toHaveBeenCalledWith(
-      "playground/drafts",
-      {
+      "playground/variant-batches",
+      expect.objectContaining({
         selections: [],
         loras: [],
+        component_overrides: [],
         prompt_source: {
           mode: "image_snapshot",
           image_uid: "image-prompt",
         },
         generation: expect.any(Object),
-      },
+        variant_count: 1,
+      }),
       expect.any(Object),
     );
     fixture.controller.promptSettingsChanged();
@@ -439,15 +466,16 @@ describe("PlaygroundController", () => {
       expect.any(Object),
     );
     expect(fixture.api.post).toHaveBeenCalledWith(
-      "playground/drafts",
-      {
+      "playground/variant-batches",
+      expect.objectContaining({
         ...promptSelectionState,
         prompt_source: {
           mode: "image_adapted",
           image_uid: "image-prompt",
         },
         generation: expect.any(Object),
-      },
+        variant_count: 1,
+      }),
       expect.any(Object),
     );
   });
@@ -905,13 +933,13 @@ describe("PlaygroundController", () => {
     expect(fixture.urlCleaner.removeHandoff).toHaveBeenCalledOnce();
     expect(
       fixture.api.post.mock.calls.some(
-        ([path]) => path === "playground/drafts",
+        ([path]) => path === "playground/variant-batches",
       ),
     ).toBe(false);
 
     await fixture.controller.prepare();
     const draftCall = fixture.api.post.mock.calls.find(
-      ([path]) => path === "playground/drafts",
+      ([path]) => path === "playground/variant-batches",
     );
     expect(draftCall[1]).toEqual(
       expect.objectContaining({
@@ -994,7 +1022,7 @@ describe("PlaygroundController", () => {
 
     await fixture.controller.prepare();
     const draftCall = fixture.api.post.mock.calls.find(
-      ([path]) => path === "playground/drafts",
+      ([path]) => path === "playground/variant-batches",
     );
     expect(draftCall[1].selections).toEqual(
       expect.arrayContaining([
@@ -1096,12 +1124,12 @@ describe("PlaygroundController", () => {
 
     expect(
       fixture.api.post.mock.calls.some(
-        ([path]) => path === "playground/drafts",
+        ([path]) => path === "playground/variant-batches",
       ),
     ).toBe(false);
     await fixture.controller.prepare();
     const draftCall = fixture.api.post.mock.calls.find(
-      ([path]) => path === "playground/drafts",
+      ([path]) => path === "playground/variant-batches",
     );
     expect(draftCall[1]).toEqual(
       expect.objectContaining({
@@ -1425,11 +1453,12 @@ describe("PlaygroundController", () => {
       expect(fixture.modes.applyState).toHaveBeenCalledWith(savedState);
       await fixture.controller.prepare();
       expect(fixture.api.post).toHaveBeenCalledWith(
-        "playground/drafts",
-        {
+        "playground/variant-batches",
+        expect.objectContaining({
           selections: [selection],
           generation: expect.any(Object),
-        },
+          variant_count: 1,
+        }),
         expect.any(Object),
       );
 
@@ -1475,10 +1504,13 @@ describe("PlaygroundController", () => {
 
 function createFixture(options = {}) {
   const prepareButton = document.createElement("button");
+  const refreshButton = document.createElement("button");
   const submitButton = document.createElement("button");
   submitButton.disabled = true;
   const status = document.createElement("span");
   const result = document.createElement("div");
+  const variantSummary = document.createElement("span");
+  const selectedCount = document.createElement("span");
   let activeSelectionValue = options.selectionValue || { selections: [] };
   const selectionSnapshots = new WeakSet();
   const modes = disposable({
@@ -1558,10 +1590,28 @@ function createFixture(options = {}) {
       resolution_class: "1080",
     })),
     value: vi.fn(() => ({ checkpoint: "model", sampler: {} })),
+    variantValue: vi.fn(() => ({
+      variant_count: options.batch ? 2 : 1,
+      generation: {
+        checkpoint: "model",
+        sampler: "euler",
+        scheduler: "normal",
+        seed: 17,
+        randomize_seed: false,
+        steps: 24,
+        steps_max: 24,
+        cfg: 6.5,
+        cfg_max: 6.5,
+        cfg_step: 0.1,
+        denoise: 1,
+        aspect_format: "1:1",
+        resolution_class: "1080",
+      },
+    })),
     useConcreteSeed: vi.fn(),
     setBusy: vi.fn(),
   });
-  const draft = disposable({
+  const inspector = disposable({
     render: vi.fn(),
     clear: vi.fn(),
     promptPayload: vi.fn(() =>
@@ -1572,8 +1622,13 @@ function createFixture(options = {}) {
     renderSnapshots: vi.fn(),
     renderEvidence: vi.fn(),
     generationPayload: vi.fn(() =>
-      options.emptyPayload ? null : { draft_uid: "draft-1" },
+      options.emptyPayload ? null : generationPayload("draft-1"),
     ),
+  });
+  const board = disposable({ render: vi.fn() });
+  const workspace = disposable({
+    setVariantsAvailable: vi.fn(),
+    show: vi.fn(() => true),
   });
   const api = {
     get: vi.fn((path) => {
@@ -1621,13 +1676,18 @@ function createFixture(options = {}) {
           ? Promise.reject(options.guidanceError)
           : Promise.resolve({ recommendations: {}, parameter_values: [] });
       }
-      if (path === "playground/drafts") {
+      if (path === "playground/variant-batches") {
         return options.draftError
           ? Promise.reject(options.draftError)
           : Promise.resolve({
-              draft_uid: "draft-1",
-              seed: 17,
-              positive_prompt: "positive",
+              requested_count: options.batch ? 2 : 1,
+              unique_count: options.batch ? 2 : 1,
+              repeated_count: 0,
+              diversity_exhausted: false,
+              notice: null,
+              variants: options.batch
+                ? [variant("draft-1", 17), variant("draft-2", 18)]
+                : [variant("draft-1", 17)],
             });
       }
       if (path === "playground/render-preview") {
@@ -1646,14 +1706,33 @@ function createFixture(options = {}) {
       return options.generationError
         ? Promise.reject(options.generationError)
         : Promise.resolve({
-            generation_uid: "generation-1",
-            status: "submitted",
             submissions: options.batch
               ? [
-                  { generation_uid: "generation-1", status: "submitted" },
-                  { generation_uid: "generation-2", status: "submitted" },
+                  {
+                    draft_uid: "draft-1",
+                    generation_uid: "generation-1",
+                    status: "submitted",
+                  },
+                  ...(options.partial
+                    ? []
+                    : [
+                        {
+                          draft_uid: "draft-2",
+                          generation_uid: "generation-2",
+                          status: "submitted",
+                        },
+                      ]),
                 ]
-              : undefined,
+              : [
+                  {
+                    draft_uid: "draft-1",
+                    generation_uid: "generation-1",
+                    status: "submitted",
+                  },
+                ],
+            failures: options.partial
+              ? [{ draft_uid: "draft-2", message: "queue failed" }]
+              : [],
           });
     }),
   };
@@ -1685,18 +1764,23 @@ function createFixture(options = {}) {
     api,
     modes,
     controls,
-    draft,
+    inspector,
+    board,
+    workspace,
+    session: new VariantSession(new RequestLifecycle()),
     guidance,
     requests: new RequestLifecycle(),
     previewRequests: new RequestLifecycle(),
     guidanceRequests: new RequestLifecycle(),
     persistence,
     handoffApplier,
-    draftSession: new DraftSession(new RequestLifecycle()),
     prepareButton,
+    refreshButton,
     submitButton,
     status,
     result,
+    variantSummary,
+    selectedCount,
     intent: options.intent,
   });
   return {
@@ -1704,13 +1788,80 @@ function createFixture(options = {}) {
     api,
     modes,
     controls,
-    draft,
+    draft: inspector,
+    inspector,
+    board,
+    workspace,
     prepareButton,
+    refreshButton,
     submitButton,
     status,
     result,
     guidance,
     urlCleaner,
+    variantSummary,
+    selectedCount,
+  };
+}
+
+function variant(draftUid, seed) {
+  return {
+    draft_uid: draftUid,
+    seed,
+    generation: {
+      checkpoint: "model",
+      sampler: "euler",
+      scheduler: "normal",
+      seed,
+      steps: 24,
+      cfg: 6.5,
+      denoise: 1,
+      aspect_format: "1:1",
+      resolution_class: "1080",
+    },
+    components: [],
+    prompt_selections: [
+      {
+        kind: "character",
+        component_uid: "character-a",
+        revision_uid: "revision-character-a",
+      },
+    ],
+    prompt_groups: [],
+    groups: [],
+    positive_atoms: [],
+    negative_atoms: [],
+    positive_prompt: "positive",
+    negative_prompt: "",
+    loras: [],
+  };
+}
+
+function generationPayload(draftUid) {
+  return {
+    draft_uid: draftUid,
+    prompt_selections: [],
+    prompt_groups: [],
+    source_image_uid: null,
+    positive_atoms: [],
+    negative_atoms: [],
+    checkpoint: "model",
+    aspect_format: "1:1",
+    resolution_class: "1080",
+    sampler: {
+      seed: 17,
+      steps: 24,
+      cfg: 6.5,
+      sampler: "euler",
+      scheduler: "normal",
+      denoise: 1,
+      batch_runs: 1,
+      randomize_seed: false,
+      steps_max: 24,
+      cfg_max: 6.5,
+      cfg_step: 0.1,
+    },
+    loras: [],
   };
 }
 

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("unsecured LAN-style origin prepares a server draft and submits it", async ({
+test("unsecured LAN-style origin prepares, reviews and submits variant batches", async ({
   page,
 }) => {
   await page.goto("http://comfyreview.test:8015/playground/generator");
@@ -15,6 +15,7 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   await expect(page.locator("[data-image-viewer]")).toHaveAttribute("open", "");
   await page.getByRole("button", { name: "Bildansicht schließen" }).click();
 
+  await page.locator(".playground-guidance > summary").click();
   await expect(
     page.getByRole("button", { name: "Gesamtsetup übernehmen" }),
   ).toBeEnabled();
@@ -58,10 +59,22 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
       response.url().endsWith("/api/v2/playground/generator-state") &&
       response.ok(),
   );
-  await page.getByLabel("Seed-Modus").selectOption("random");
+  await page.locator(".sampler-variation > summary").click();
+  await page.getByLabel("Seed variieren").selectOption("random");
   await stateSaved;
+  const variantCountSaved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PUT" &&
+      response.url().endsWith("/api/v2/playground/generator-state") &&
+      response.ok(),
+  );
+  await page.getByLabel("Anzahl Varianten").fill("4");
+  await page.getByLabel("Anzahl Varianten").dispatchEvent("change");
+  await variantCountSaved;
   await page.reload();
-  await expect(page.getByLabel("Seed-Modus")).toHaveValue("random");
+  await page.locator(".sampler-variation > summary").click();
+  await expect(page.getByLabel("Seed variieren")).toHaveValue("random");
+  await expect(page.getByLabel("Anzahl Varianten")).toHaveValue("4");
   await expect(page.getByLabel("Outfit: Modus")).toHaveValue("off");
   await expect(page.locator(".settings-lora-row")).toHaveCount(1);
   await expect(page.getByLabel("LoRA")).toHaveValue(
@@ -69,16 +82,17 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   );
   await expect(page.getByLabel("Model")).toHaveValue("0.8");
   await expect(page.getByLabel("CLIP")).toHaveValue("0.65");
-  await page.getByRole("button", { name: "Entwurf erstellen" }).click();
+  await page.getByRole("button", { name: "Varianten vorbereiten" }).click();
 
-  await expect(page.locator("[data-draft-state]")).toHaveText(
+  await expect(page.locator("[data-variant-state]")).toHaveText(
     "Katalogrevisionen unverändert",
   );
-  await expect(
-    page.locator("[data-draft-preview] [data-atom-text]"),
-  ).toHaveCount(5);
+  await expect(page.locator(".variant-card")).toHaveCount(4);
+  expect(
+    await page.locator("[data-variant-inspector] [data-atom-text]").count(),
+  ).toBeGreaterThan(0);
   const atomValues = await page
-    .locator("[data-draft-preview] [data-atom-text]")
+    .locator("[data-variant-inspector] [data-atom-text]")
     .evaluateAll((elements) => elements.map((element) => element.value));
   expect(atomValues.filter((value) => value === "detail trigger")).toHaveLength(
     1,
@@ -87,19 +101,34 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
     expect.arrayContaining(["bad anatomy", "low quality"]),
   );
   await expect(
-    page.getByRole("button", { name: "An ComfyUI senden" }),
+    page.getByRole("button", { name: "Auswahl generieren" }),
   ).toBeEnabled();
-  await expect(page.getByLabel("Gemeinsamer Seed")).not.toHaveValue("");
+  await expect(page.getByLabel("Bild-Seed")).not.toHaveValue("");
+
+  await page.getByRole("tab", { name: /Setup/ }).click();
+  await page.getByLabel("Denoise").fill("0.9");
+  await page.getByLabel("Denoise").dispatchEvent("change");
+  await page.getByRole("tab", { name: /Varianten/ }).click();
+  await expect(page.getByText("Das Setup wurde geändert")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Auswahl generieren" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Varianten aktualisieren" }).click();
+  await expect(
+    page.getByRole("button", { name: "Auswahl generieren" }),
+  ).toBeEnabled();
 
   const generationRequest = page.waitForRequest(
     (request) =>
       request.method() === "POST" &&
-      request.url().endsWith("/api/v2/generations"),
+      request.url().endsWith("/api/v2/generations/batch"),
   );
-  await page.getByRole("button", { name: "An ComfyUI senden" }).click();
+  await page.getByRole("button", { name: "Auswahl generieren" }).click();
   const submittedPayload = (await generationRequest).postDataJSON();
-  expect(submittedPayload.component_uids).toBeUndefined();
-  expect(submittedPayload.prompt_selections).toEqual(
+  expect(submittedPayload.variants).toHaveLength(4);
+  expect(submittedPayload.variants[0].component_uids).toBeUndefined();
+  expect(submittedPayload.variants[0].sampler.batch_runs).toBe(1);
+  expect(submittedPayload.variants[0].prompt_selections).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         kind: "character",

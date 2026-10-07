@@ -859,12 +859,25 @@ describe("Playground browser components", () => {
         sampler: "euler",
         scheduler: "normal",
         denoise: 1,
-        batch_runs: 1,
+        batch_runs: 4,
         randomize_seed: false,
         steps_max: 24,
         cfg_max: 6.5,
         cfg_step: 0.1,
       },
+    });
+    expect(root.querySelector(".sampler-variation").open).toBe(false);
+    expect(root.querySelector('[data-field="variant_count"]').min).toBe("1");
+    expect(root.querySelector('[data-field="variant_count"]').max).toBe("12");
+    expect(controls.variantValue()).toEqual({
+      variant_count: 4,
+      generation: expect.objectContaining({
+        seed: 7,
+        steps: 24,
+        steps_max: 24,
+        cfg: 6.5,
+        cfg_max: 6.5,
+      }),
     });
     const cfgStep = root.querySelector('[data-field="cfg_step"]');
     expect(cfgStep.closest("label").hidden).toBe(true);

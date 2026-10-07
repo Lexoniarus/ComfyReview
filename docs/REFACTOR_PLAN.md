@@ -439,6 +439,21 @@ constants.
 - Playwright proves exact LoRA weights through reload, draft, generation row,
   compiled loader and Fake-ComfyUI submission, with one trigger atom.
 
+### Playground experiment workspace (implemented feature slice)
+
+- the Generator now separates Setup from a text-first variant board and a
+  focused atom inspector without introducing a SPA or TypeScript migration;
+- fixed component atom edits are experiment-local, revision-bound and become a
+  catalog candidate only through the explicit manual candidate action;
+- the transient variant-preparation boundary produces 1-12 preferably diverse
+  concrete drafts with independent selection entropy and image seeds;
+- `VariantSession` keeps stale cards visible after Setup changes, blocks their
+  submission and owns cancellation, selection and reviewed payload state;
+- the batch generation boundary submits each selected concrete draft exactly
+  once and returns ordered partial results keyed by draft UID;
+- no draft table, schema migration or eager prompt-combination materialization
+  was introduced, and legacy single/sweep contracts remain available.
+
 ### Complete prompt attribution and trigger-based LoRA safety (implemented)
 
 - schema v14 places content level on the immutable LoRA trigger revision; the

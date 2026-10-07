@@ -61,7 +61,10 @@ test("analytics cards remain contained and hand off without drafting", async ({
     .getByRole("button", { name: "Generierungseinstellungen übernehmen" })
     .click();
   await expect(page).toHaveURL(/\/playground\/generator$/);
-  await expect(page.getByText("Kein Entwurf")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Varianten vorbereiten" }),
+  ).toBeVisible();
+  await expect(page.locator(".variant-card")).toHaveCount(0);
 
   await page.goto("/param_stats?min_n=1");
   await page.getByRole("button", { name: "Einzelwerte" }).click();
@@ -73,7 +76,10 @@ test("analytics cards remain contained and hand off without drafting", async ({
   await expect(checkpointCard).toBeVisible();
   await checkpointCard.locator("[data-playground-intent='parameter']").click();
   await expect(page).toHaveURL(/\/playground\/generator$/);
-  await expect(page.getByText("Kein Entwurf")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Varianten vorbereiten" }),
+  ).toBeVisible();
+  await expect(page.locator(".variant-card")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

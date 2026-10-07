@@ -2,8 +2,6 @@ import { ApiClient } from "../core/api-client.js";
 import { RequestLifecycle } from "../core/request-lifecycle.js";
 import { ImageViewer } from "../images/image-viewer.js";
 import { ImageGeneratorActions } from "../images/image-generator-actions.js";
-import { DraftPreview } from "../playground/draft-preview.js";
-import { DraftSession } from "../playground/draft-session.js";
 import { GeneratorHandoffApplier } from "../playground/generator-handoff-applier.js";
 import { GenerationControls } from "../playground/generation-controls.js";
 import {
@@ -13,31 +11,45 @@ import {
 } from "../playground/playground-intent.js";
 import { GeneratorStatePersistence } from "../playground/generator-state-persistence.js";
 import { PromptModeEditor } from "../playground/prompt-mode-editor.js";
+import { PlaygroundWorkspace } from "../playground/playground-workspace.js";
 import { RenderGuidancePanel } from "../playground/render-guidance-panel.js";
+import { VariantBoard } from "../playground/variant-board.js";
+import { VariantInspector } from "../playground/variant-inspector.js";
+import { VariantSession } from "../playground/variant-session.js";
 import { PlaygroundController } from "../surfaces/playground-controller.js";
 
 const root = document.querySelector("[data-v2-surface='playground']");
 if (root instanceof HTMLElement) {
   const modesRoot = root.querySelector("[data-prompt-modes]");
-  const draftRoot = root.querySelector("[data-draft-preview]");
-  const draftState = root.querySelector("[data-draft-state]");
+  const inspectorRoot = root.querySelector("[data-variant-inspector]");
+  const inspectorState = root.querySelector("[data-variant-state]");
+  const boardRoot = root.querySelector("[data-variant-board]");
+  const workspaceRoot = root.querySelector("[data-playground-workspace]");
   const controlsRoot = root.querySelector("[data-generation-controls]");
   const guidanceRoot = root.querySelector("[data-render-guidance]");
-  const prepareButton = root.querySelector("[data-prepare-draft]");
+  const prepareButton = root.querySelector("[data-prepare-variants]");
+  const refreshButton = root.querySelector("[data-refresh-variants]");
   const submitButton = root.querySelector("[data-submit-generation]");
   const status = root.querySelector("[data-playground-status]");
   const result = root.querySelector("[data-generation-result]");
+  const variantSummary = root.querySelector("[data-variant-summary]");
+  const selectedCount = root.querySelector("[data-selected-count]");
   const viewerRoot = root.querySelector("[data-image-viewer]");
   if (
     modesRoot instanceof HTMLElement &&
-    draftRoot instanceof HTMLElement &&
-    draftState instanceof HTMLElement &&
+    inspectorRoot instanceof HTMLElement &&
+    inspectorState instanceof HTMLElement &&
+    boardRoot instanceof HTMLElement &&
+    workspaceRoot instanceof HTMLElement &&
     controlsRoot instanceof HTMLElement &&
     guidanceRoot instanceof HTMLElement &&
     prepareButton instanceof HTMLButtonElement &&
+    refreshButton instanceof HTMLButtonElement &&
     submitButton instanceof HTMLButtonElement &&
     status instanceof HTMLElement &&
     result instanceof HTMLElement &&
+    variantSummary instanceof HTMLElement &&
+    selectedCount instanceof HTMLElement &&
     viewerRoot instanceof HTMLDialogElement
   ) {
     /** @type {PlaygroundController | null} */
@@ -47,13 +59,20 @@ if (root instanceof HTMLElement) {
     const generatorActions = new ImageGeneratorActions(
       new GeneratorHandoffNavigator(window.location),
     );
-    const draft = new DraftPreview(
-      draftRoot,
-      draftState,
-      () => void controller?.refreshPreview(),
+    const inspector = new VariantInspector(
+      inspectorRoot,
+      inspectorState,
+      () => controller?.variantEdited(),
       (url) => viewer.open(url),
       (imageUid) => generatorActions.create(imageUid),
     );
+    const board = new VariantBoard(boardRoot, {
+      onSelect: (draftUid, selected) =>
+        controller?.selectVariant(draftUid, selected),
+      onInspect: (draftUid) => controller?.inspectVariant(draftUid),
+    });
+    const workspace = new PlaygroundWorkspace(workspaceRoot);
+    const session = new VariantSession(new RequestLifecycle());
     const modes = new PromptModeEditor(
       modesRoot,
       () => controller?.promptSettingsChanged(),
@@ -102,18 +121,23 @@ if (root instanceof HTMLElement) {
       api,
       modes,
       controls,
-      draft,
+      inspector,
+      board,
+      workspace,
+      session,
       guidance,
       requests: new RequestLifecycle(),
       previewRequests: new RequestLifecycle(),
       guidanceRequests: new RequestLifecycle(),
       persistence,
       handoffApplier,
-      draftSession: new DraftSession(new RequestLifecycle()),
       prepareButton,
+      refreshButton,
       submitButton,
       status,
       result,
+      variantSummary,
+      selectedCount,
       intent: presentIntent(readPlaygroundIntent(window.location.search)),
     });
     void controller.start();

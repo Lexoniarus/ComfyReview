@@ -22,6 +22,8 @@ export class GenerationControls {
     this.steps = null;
     this.cfg = null;
     this.rangeHints = new Map();
+    this.stepsOutput = null;
+    this.cfgOutput = null;
     this.abortController = new AbortController();
     this.stateAdapter = new SamplerStateAdapter();
   }
@@ -67,7 +69,10 @@ export class GenerationControls {
       upper: Number(defaults.steps ?? 24),
       lowerName: "steps_min",
       upperName: "steps_max",
-      onChange: () => this.onChange(),
+      onChange: () => {
+        this.#syncConcreteSummary();
+        this.onChange();
+      },
     });
     this.cfg = new DualRangeControl({
       label: "CFG-Bereich",
@@ -80,14 +85,31 @@ export class GenerationControls {
       upperName: "cfg_max",
       onChange: () => {
         this.#syncCfgStep();
+        this.#syncConcreteSummary();
         this.onChange();
       },
     });
-    renderGroup.body.append(
+    const concrete = document.createElement("div");
+    concrete.className = "sampler-concrete-values";
+    this.stepsOutput = concreteValue("Steps");
+    this.cfgOutput = concreteValue("CFG");
+    concrete.append(this.stepsOutput.root, this.cfgOutput.root);
+    const variation = document.createElement("details");
+    variation.className = "sampler-variation";
+    const variationSummary = document.createElement("summary");
+    variationSummary.textContent = "Variieren";
+    const variationBody = document.createElement("div");
+    variationBody.className = "sampler-variation-body";
+    variationBody.append(
       this.steps.element,
       this.cfg.element,
       this.#number("cfg_step", "CFG-Schrittweite", 0.1, "0.1"),
+    );
+    variation.append(variationSummary, variationBody);
+    renderGroup.body.append(
       this.#number("denoise", "Denoise", defaults.denoise, "0.01"),
+      concrete,
+      variation,
     );
     for (const [
       parameter,
@@ -127,21 +149,31 @@ export class GenerationControls {
       "1080",
     );
 
-    const runtimeGroup = group("Laufparameter");
+    const runtimeGroup = group("Varianten");
     this.#selectOptions(
-      runtimeGroup.body,
+      variationBody,
       "seed_mode",
-      "Seed-Modus",
+      "Seed variieren",
       [
-        ["fixed", "Fest"],
-        ["random", "Zufällig"],
+        ["fixed", "Nein"],
+        ["random", "Ja"],
       ],
       "fixed",
     );
     runtimeGroup.body.append(
-      this.#number("seed", "Gemeinsamer Seed", defaults.seed, "1"),
-      this.#number("variant_count", "Anzahl Varianten", 1, "1"),
+      this.#number("seed", "Bild-Seed", defaults.seed, "1"),
+      this.#number(
+        "variant_count",
+        "Anzahl Varianten",
+        defaults.variant_count ?? 4,
+        "1",
+      ),
     );
+    const variantCount = this.fields.get("variant_count");
+    if (variantCount instanceof HTMLInputElement) {
+      variantCount.min = "1";
+      variantCount.max = "12";
+    }
     this.root.append(
       renderGroup.element,
       outputGroup.element,
@@ -160,6 +192,7 @@ export class GenerationControls {
     }
     this.#syncSeedMode();
     this.#syncCfgStep();
+    this.#syncConcreteSummary();
   }
 
   /** Return the six optimizer-controlled values. */
@@ -242,6 +275,7 @@ export class GenerationControls {
       this.cfg?.set(Number(settings.cfg), Number(settings.cfg));
     if (settings.denoise != null) this.#set("denoise", settings.denoise);
     this.#syncCfgStep();
+    this.#syncConcreteSummary();
     this.onChange();
     return rejected;
   }
@@ -255,6 +289,7 @@ export class GenerationControls {
       if (!this.#setAvailable(parameter, value)) return false;
     } else this.#set(parameter, value);
     this.#syncCfgStep();
+    this.#syncConcreteSummary();
     this.onChange();
     return true;
   }
@@ -289,6 +324,23 @@ export class GenerationControls {
         batch_runs: variation.variantCount,
         randomize_seed: false,
         steps_max: variation.stepsMax,
+        cfg_max: variation.cfgMax,
+        cfg_step: variation.cfgStep,
+      },
+    };
+  }
+
+  /** Return the bounded variant-preparation contract. */
+  variantValue() {
+    const draft = this.draftValue();
+    const variation = this.#variationValue();
+    return {
+      variant_count: variation.variantCount,
+      generation: {
+        ...draft,
+        steps: variation.stepsMin,
+        steps_max: variation.stepsMax,
+        cfg: variation.cfgMin,
         cfg_max: variation.cfgMax,
         cfg_step: variation.cfgStep,
       },
@@ -350,6 +402,7 @@ export class GenerationControls {
     );
     this.#syncSeedMode();
     this.#syncCfgStep();
+    this.#syncConcreteSummary();
     return rejected;
   }
 
@@ -393,6 +446,7 @@ export class GenerationControls {
     );
     this.#syncSeedMode();
     this.#syncCfgStep();
+    this.#syncConcreteSummary();
     return rejected;
   }
 
@@ -453,6 +507,14 @@ export class GenerationControls {
     const cfg = this.cfg?.value();
     if (wrapper instanceof HTMLElement)
       wrapper.hidden = !cfg || cfg.lower === cfg.upper;
+  }
+
+  #syncConcreteSummary() {
+    const steps = this.steps?.value().lower;
+    const cfg = this.cfg?.value().lower;
+    if (this.stepsOutput)
+      this.stepsOutput.value.textContent = String(steps ?? "—");
+    if (this.cfgOutput) this.cfgOutput.value.textContent = String(cfg ?? "—");
   }
 
   /** @param {string} name @param {unknown} value */
@@ -518,7 +580,20 @@ export class GenerationControls {
     this.cfg?.dispose();
     this.steps = null;
     this.cfg = null;
+    this.stepsOutput = null;
+    this.cfgOutput = null;
   }
+}
+
+/** @param {string} label */
+function concreteValue(label) {
+  const root = document.createElement("span");
+  root.className = "sampler-concrete-value";
+  const name = document.createElement("small");
+  name.textContent = label;
+  const value = document.createElement("strong");
+  root.append(name, value);
+  return { root, value };
 }
 
 /** @param {string} title */

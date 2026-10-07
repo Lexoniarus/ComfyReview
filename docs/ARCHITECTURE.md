@@ -456,6 +456,25 @@ The canonical cutover is intentionally not the end of the wider refactor.
   The browser treats restored revision UIDs as opaque bindings;
   authoritative existence, component ownership and content validation remain
   in the Application layer. Random/off choices carry no revision binding.
+  Fixed Setup groups expose experiment-local component overrides only when the
+  exact component, revision and optional candidate identity matches. The
+  browser sends those typed bindings to the existing Playground application
+  boundary; it never mutates catalog state implicitly. An explicit candidate
+  action remains the only catalog materialization path.
+  `PlaygroundVariantPreparationService` composes the existing selection and
+  draft service with injected selection entropy, sampler variation and a pure
+  diversity signature. Selection entropy is independent from the requested
+  image seed, so a fixed render seed does not collapse random catalog choices.
+  Prepared batches are transient and carry diversity metadata rather than a
+  persisted draft record. `VariantSession` is the browser owner for request
+  cancellation, active/selected draft UIDs, reviewed payloads and stale state.
+  `VariantBoard` and `VariantInspector` render that state; the controller only
+  orchestrates API and view transitions.
+  The reviewed batch submission boundary accepts no more than twelve concrete
+  one-job payloads. It invokes the existing submission service per variant,
+  outside an open SQLite transaction, and returns ordered successes and
+  failures keyed by `draft_uid`. Legacy single-draft and sweep endpoints remain
+  compatibility contracts and are not used by the experiment workspace.
   Browser prompt handoffs
   have no direct draft-reference path: every supported Image, Scope,
   Composition and Top Combination action navigates directly to the Generator
