@@ -1,17 +1,13 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover, structured prompt catalog, schema-v14
-data migration and Frontend V2 overhaul are implemented on
-`feature/lora-catalog-handoff`, 2026-10-07. Analytics collections are bounded,
+Status: the canonical backend cutover, structured prompt catalog, schema-v16
+data migration and Frontend V2 overhaul are implemented and integrated on
+`refactor/review-boundary`, 2026-10-07. Analytics collections are bounded,
 Playground handoffs are explicit, generation profiles are dormant migration
 compatibility, Settings is a complete product surface, the Inspector is
 composed from focused views and Playwright covers the browser acceptance
-contract. The branch stays unmerged until final user acceptance and the final
-integration review.
-
-The Anime-upscale/content-correction feature slice is implemented separately
-from the refactor history and must be cleanly rebased with concurrent
-Frontend-V2 work before integration.
+contract. The feature slices are merged into the refactor base; final user
+acceptance and eventual integration into `master` remain separate decisions.
 
 The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
@@ -49,7 +45,7 @@ Merged through PR #5:
 - compatible `app.py`, `main.py` and Uvicorn entry points;
 - no implicit upgrade of unsupported existing databases.
 
-## Implemented on the active cutover branch
+## Implemented refactor slices
 
 ### Audited historical output import
 
@@ -114,10 +110,9 @@ were validation controls, not hard-coded acceptance rules.
 
 ## Current acceptance state
 
-The active branch is the integration branch for the complete refactor. Pull
-request #7 was closed without merge so later slices can continue as small,
-pushed commits on the same branch. A new pull request is opened only after the
-complete architecture, regression and documentation acceptance.
+`refactor/review-boundary` is the integrated refactor base. Former feature and
+fix branches have no unique commits outside it. Final user acceptance and the
+decision to integrate the refactor base into `master` remain open.
 
 Runtime imports and their reports/backups are deliberately outside Git.
 
@@ -471,9 +466,9 @@ constants.
 
 ### Prompt variant guidance and evidence-based catalog promotion (implemented)
 
-Status: implemented on `feature/lora-catalog-handoff` on 2026-10-07. Schema,
-generation facts, guidance, promotion, Generator integration and recovery are
-split into independently reviewed commits.
+Status: implemented and merged into `refactor/review-boundary` on 2026-10-07.
+Schema, generation facts, guidance, promotion, Generator integration and
+recovery remain split into independently reviewed commits.
 
 The structured-prompt boundary separates atom identity from usage weight and
 makes each immutable catalog revision an exact weighted standard recipe. Schema
@@ -542,19 +537,20 @@ invoke an injected promotion coordinator after their own transaction. Failures
 leave feedback committed, surface `promotion_pending` and are recoverable with
 the idempotent `prompt-promotions audit|reconcile` command.
 
-The closing shared gate on 2026-10-07 ended with `quality gate passed`: 677
+The closing shared gate on 2026-10-07 ended with `quality gate passed`: 681
 Python tests, 162 frontend tests and 14 Playwright scenarios passed. Python Core
 and frontend statements, functions and lines retained 100% coverage; formatting,
 linting, strict typing, architecture checks and the function-to-test manifest
 also passed.
 
-## Final acceptance remaining
+## Integration and acceptance state
 
 The previously completed implementation slices and their automated integration
 gates remain valid for their stated scope. Prompt-variant guidance and
 evidence-based catalog promotion and its shared quality gate are complete. The
-local v14-to-v15 backup/new-output/validation/promotion workflow remains an
-explicit operator action outside repository state. The real
+local database was copied, upgraded through v15 to v16, validated, backed up
+and explicitly promoted while the application was stopped. The database,
+backup and operational reports remain outside repository state. The real
 Blueprint-v4 Portrait/Landscape ComfyUI
 smokes were completed successfully on 2026-10-05. On 2026-10-06 the owned
 lifecycle worker completed the newest retained ComfyUI job, and the four jobs
@@ -569,9 +565,29 @@ for the already-classified Explicit `example-lora-2.safetensors` LoRA
 through the existing revision-checked preview/apply service. No name-based LoRA
 heuristic or unreviewed bulk reclassification was introduced.
 The generator dead-path audit and its automated acceptance are complete. The
-corrective atom-identity and weight-evidence slice above is now implemented.
-User-facing visual acceptance and opening the replacement pull request remain
-separate release actions; no automatic merge is planned.
+corrective atom-identity and weight-evidence slice above is implemented. The
+feature branch was merged into `refactor/review-boundary`; user-facing visual
+acceptance and eventual integration into `master` remain separate release
+actions.
+
+## Approved post-refactor product target: Card Battler
+
+Status: approved future product and architecture target; not implemented and
+not part of refactor acceptance.
+
+After the refactor is accepted, ComfyReview is intended to become the proving
+ground for a bounded functional Card Battler. The binding scope, deterministic
+mechanics, content eligibility, stable identity and seven-phase delivery order
+are defined in the [Card Battler target](CARD_BATTLER_TARGET.md). The sequence
+starts with explicit manual image-to-card development and collection, then adds
+deterministic card functions, revisioned decks, local server-authoritative PvE,
+battle-driven development and visual evolution, the interactive interface and
+only finally Character Chronicles reuse.
+
+This target does not reopen completed refactor decisions. Card Battler state
+will use explicit versioned migrations and its own domain boundaries; it will
+not import Character Chronicles campaign, Champion, VN or social progression
+systems into ComfyReview.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the
@@ -596,6 +612,7 @@ final integration require a successful full `python scripts/quality.py` run.
 
 - a SPA rewrite;
 - cloud or multi-user deployment;
-- Character Chronicles gameplay;
+- implementing the approved Card Battler during refactor acceptance;
+- Character Chronicles campaign, Champion, VN, social or progression systems;
 - copying rebuildable legacy aggregate tables unchanged;
 - preserving obsolete path-based runtime architecture for compatibility.

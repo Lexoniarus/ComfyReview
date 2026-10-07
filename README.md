@@ -30,6 +30,12 @@ The current repository demonstrates a usable local review system with audited im
 
 It should not be treated as a polished packaged desktop application. The project is best understood as a practical tool and portfolio project that documents a real local AI workflow.
 
+A functional Card Battler is an approved future product target after the
+current refactor; it is not implemented or part of the current feature list.
+Its manual card-development, deterministic rules, deck, local PvE and
+battle-driven card-evolution boundaries are documented in the
+[Card Battler target](docs/CARD_BATTLER_TARGET.md).
+
 For a more detailed scope overview, see:
 
 ```text
@@ -278,9 +284,10 @@ revisions unchanged as the latest revisions. Recognizable historical variants
 become prior revisions of their real component; no generic remainder component
 is created.
 
-The active application schema is v14. Prompt Catalog revisions and Playground drafts expose
-ordered positive/negative atom rows with separate numeric weights. Rendered
-whole prompts remain exact provenance snapshots produced by the server; they
+The active application schema is v16. Prompt Catalog revisions and Playground
+drafts expose ordered positive/negative atom rows with separate numeric
+weights. Rendered whole prompts remain exact provenance snapshots produced by
+the server; they
 are not a second editable source of truth. Schema v8 stores typed workspace
 preferences, generation profiles and ordered LoRA stacks. Schema v9 adds
 ordered workspace content levels plus explicit generation canvas dimensions.
@@ -308,6 +315,13 @@ the browser does not reimplement that policy. Existing older databases require
 the explicit backed-up `canonical-db upgrade` command before startup.
 Settings may enable any non-empty subset of the five levels, including a view
 that excludes `Standard`; at least one level must remain enabled.
+
+Schema v15 adds deduplicated prompt candidates, exact per-generation prompt
+groups and append-only catalog promotions. Schema v16 adds the separate
+append-only manual-variant selection history. The current catalog standard is
+the newest promotion, while `latest_revision` remains historical numbering and
+`latest_manual_variant` remains available independently of generation, review
+or promotion.
 
 Generation profiles are no longer an active runtime or HTTP concept; their
 tables remain dormant only for migration compatibility. The Generator owns
