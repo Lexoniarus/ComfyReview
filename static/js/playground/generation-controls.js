@@ -1,4 +1,6 @@
 import { DualRangeControl } from "./dual-range-control.js";
+import { SamplerStateAdapter } from "./sampler-state-adapter.js";
+import { SamplerVariation } from "./sampler-variation.js";
 
 const renderParameters = [
   "checkpoint",
@@ -21,6 +23,7 @@ export class GenerationControls {
     this.cfg = null;
     this.rangeHints = new Map();
     this.abortController = new AbortController();
+    this.stateAdapter = new SamplerStateAdapter();
   }
 
   /** @param {Record<string, any>} capabilities */
@@ -137,7 +140,7 @@ export class GenerationControls {
     );
     runtimeGroup.body.append(
       this.#number("seed", "Gemeinsamer Seed", defaults.seed, "1"),
-      this.#number("batch_runs", "Batch", 1, "1"),
+      this.#number("variant_count", "Anzahl Varianten", 1, "1"),
     );
     this.root.append(
       renderGroup.element,
@@ -271,27 +274,23 @@ export class GenerationControls {
   /** Return reviewed values accepted by generation submission. */
   value() {
     const draft = this.draftValue();
-    const steps = this.steps?.value() || {
-      lower: draft.steps,
-      upper: draft.steps,
-    };
-    const cfg = this.cfg?.value() || { lower: draft.cfg, upper: draft.cfg };
+    const variation = this.#variationValue();
     return {
       checkpoint: draft.checkpoint,
       aspect_format: draft.aspect_format,
       resolution_class: draft.resolution_class,
       sampler: {
         seed: this.#integer("seed"),
-        steps: steps.lower,
-        cfg: cfg.lower,
+        steps: variation.stepsMin,
+        cfg: variation.cfgMin,
         sampler: draft.sampler,
         scheduler: draft.scheduler,
         denoise: draft.denoise,
-        batch_runs: this.#integer("batch_runs"),
+        batch_runs: variation.variantCount,
         randomize_seed: false,
-        steps_max: steps.upper,
-        cfg_max: cfg.upper,
-        cfg_step: this.#numberValue("cfg_step"),
+        steps_max: variation.stepsMax,
+        cfg_max: variation.cfgMax,
+        cfg_step: variation.cfgStep,
       },
     };
   }
@@ -300,7 +299,7 @@ export class GenerationControls {
   stateValue() {
     const value = this.value();
     const sampler = value.sampler;
-    return {
+    return this.stateAdapter.persist({
       checkpoint: value.checkpoint,
       sampler: sampler.sampler,
       scheduler: sampler.scheduler,
@@ -312,14 +311,15 @@ export class GenerationControls {
       cfg_max: sampler.cfg_max,
       cfg_step: sampler.cfg_step,
       denoise: sampler.denoise,
-      batch_runs: sampler.batch_runs,
+      variant_count: sampler.batch_runs,
       aspect_format: value.aspect_format,
       resolution_class: value.resolution_class,
-    };
+    });
   }
 
   /** Restore saved controls after native capabilities have rendered. @param {Record<string, any>} state */
   applyState(state) {
+    state = this.stateAdapter.restore(state);
     const rejected = [];
     for (const name of [
       "checkpoint",
@@ -333,7 +333,7 @@ export class GenerationControls {
       if (value === undefined || value === null || value === "") continue;
       if (!this.#setAvailable(name, value)) rejected.push(name);
     }
-    for (const name of ["seed", "cfg_step", "denoise", "batch_runs"]) {
+    for (const name of ["seed", "cfg_step", "denoise", "variant_count"]) {
       const value = state[name];
       if (value !== undefined && value !== null && value !== "")
         this.#set(name, value);
@@ -497,6 +497,20 @@ export class GenerationControls {
   /** @param {string} name */
   #numberValue(name) {
     return Number.parseFloat(this.#text(name));
+  }
+
+  #variationValue() {
+    const steps = this.steps?.value() || { lower: 1, upper: 1 };
+    const cfg = this.cfg?.value() || { lower: 1, upper: 1 };
+    return new SamplerVariation({
+      stepsMin: steps.lower,
+      stepsMax: steps.upper,
+      cfgMin: cfg.lower,
+      cfgMax: cfg.upper,
+      cfgStep: this.#numberValue("cfg_step"),
+      randomizeSeed: this.#text("seed_mode") === "random",
+      variantCount: this.#integer("variant_count"),
+    }).snapshot();
   }
 
   #releaseChildren() {
