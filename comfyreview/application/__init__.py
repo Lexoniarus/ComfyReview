@@ -287,6 +287,17 @@ from comfyreview.application.prompt_catalog import (
     prompt_composition_identity,
     prompt_revision_identity,
 )
+from comfyreview.application.prompt_variant_guidance import (
+    PromptCurrentStandard,
+    PromptVariantCoverage,
+    PromptVariantEvidenceRepository,
+    PromptVariantGuidance,
+    PromptVariantGuidanceService,
+    PromptVariantObservation,
+    PromptVariantRecipe,
+    PromptVariantRecommendation,
+    PromptVariantScore,
+)
 from comfyreview.application.ranking import (
     RankedImage,
     RankingQuery,
@@ -627,6 +638,15 @@ __all__ = [
     "PromptSnapshot",
     "PromptSetupHandoff",
     "PromptCompositionEvidence",
+    "PromptCurrentStandard",
+    "PromptVariantCoverage",
+    "PromptVariantEvidenceRepository",
+    "PromptVariantGuidance",
+    "PromptVariantGuidanceService",
+    "PromptVariantObservation",
+    "PromptVariantRecipe",
+    "PromptVariantRecommendation",
+    "PromptVariantScore",
     "RankedImage",
     "RankingQuery",
     "RankingRepository",

@@ -61,6 +61,9 @@ from comfyreview.repositories.sqlite.playground_evidence import (
 from comfyreview.repositories.sqlite.prompt_catalog import (
     SqlitePromptCatalogRepository,
 )
+from comfyreview.repositories.sqlite.prompt_variant_guidance import (
+    SqlitePromptVariantEvidenceRepository,
+)
 from comfyreview.repositories.sqlite.ranking import SqliteRankingRepository
 from comfyreview.repositories.sqlite.render_analytics import (
     SqliteRenderAnalyticsRepository,
@@ -91,6 +94,7 @@ __all__ = [
     "SqliteOutputImageRepository",
     "SqlitePlaygroundEvidenceRepository",
     "SqlitePromptCatalogRepository",
+    "SqlitePromptVariantEvidenceRepository",
     "SqliteArenaRepository",
     "SqliteCurationRepository",
     "SqliteGenerationRepository",

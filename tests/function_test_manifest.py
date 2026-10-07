@@ -69,6 +69,18 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_render_guidance.py::"
         "test_guidance_query_filters_server_side_and_validates_dimensions"
     ),
+    "comfyreview.application.prompt_variant_guidance:PromptVariantRecipe.key": (
+        "tests/test_prompt_variant_guidance.py::"
+        "test_guidance_breaks_observed_ties_deterministically"
+    ),
+    "comfyreview.application.prompt_variant_guidance:PromptVariantRecipe.structural_key": (
+        "tests/test_prompt_variant_guidance.py::"
+        "test_guidance_does_not_model_an_unsupported_weight_or_change_structure"
+    ),
+    "comfyreview.application.prompt_variant_guidance:PromptVariantGuidanceService.build": (
+        "tests/test_prompt_variant_guidance.py::"
+        "test_guidance_interpolates_only_between_supported_weight_anchors"
+    ),
     "comfyreview.application.generation_geometry:OutputTier.from_resolution_class": (
         "tests/test_image_geometry.py::"
         "test_output_tier_maps_to_resolution_classes"
