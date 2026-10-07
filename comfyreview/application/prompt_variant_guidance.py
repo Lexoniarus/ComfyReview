@@ -381,8 +381,7 @@ def _interpolated_domain(
             key=lambda item: item.weight_milli,
             default=None,
         )
-        if lower is None or upper is None:
-            continue
+        assert lower is not None and upper is not None
         fraction = (weight - lower.weight_milli) / (
             upper.weight_milli - lower.weight_milli
         )

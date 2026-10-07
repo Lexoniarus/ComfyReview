@@ -10,10 +10,12 @@ import pytest
 
 from comfyreview.application import (
     CreatePromptComponentCommand,
+    MaterializePromptCandidateCommand,
     NewPromptComponent,
     PromptCatalogService,
     PromptCatalogValidationError,
     PromptComponent,
+    PromptComponentCandidate,
     PromptCompositionMembership,
     PromptRevision,
     PromptRevisionDraft,
@@ -190,6 +192,38 @@ class _CatalogRepository:
     ) -> tuple[PromptComponent, ...]:
         del composition_uid
         return ()
+
+    def materialize_candidate(
+        self,
+        component_uid: str,
+        source_revision_uid: str,
+        candidate_type: str,
+        revision: PromptRevisionDraft,
+    ) -> PromptComponentCandidate:
+        return PromptComponentCandidate(
+            candidate_uid="candidate-fixed",
+            component_uid=component_uid,
+            source_revision_uid=source_revision_uid,
+            candidate_type=candidate_type,
+            content_hash=revision.content_hash,
+            positive_atoms=revision.positive_atoms,
+            negative_atoms=revision.negative_atoms,
+        )
+
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        if candidate_uid != "candidate-fixed":
+            raise KeyError(candidate_uid)
+        assert self.component is not None
+        revision = self.component.latest_revision
+        return PromptComponentCandidate(
+            candidate_uid=candidate_uid,
+            component_uid=self.component.component_uid,
+            source_revision_uid=revision.revision_uid,
+            candidate_type="manual",
+            content_hash=revision.content_hash,
+            positive_atoms=revision.positive_atoms,
+            negative_atoms=revision.negative_atoms,
+        )
 
 
 def _service() -> tuple[PromptCatalogService, _CatalogRepository]:
@@ -596,6 +630,84 @@ def test_catalog_candidate_failure_rolls_back_metadata(
     assert restored.name == created.name
     assert restored.tags == created.tags
     assert restored.pending_candidate is None
+
+
+def test_catalog_materializes_only_weight_changes_for_calculated_candidates(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    service = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(database_path),
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+
+    candidate = service.materialize_candidate(
+        MaterializePromptCandidateCommand(
+            component_uid=created.component_uid,
+            source_revision_uid=created.latest_revision.revision_uid,
+            candidate_type="calculated",
+            positive_atoms=(PromptAtomUsage("skyline", 1150),),
+            negative_atoms=created.latest_revision.negative_atoms,
+        )
+    )
+    repeated = service.materialize_candidate(
+        MaterializePromptCandidateCommand(
+            component_uid=created.component_uid,
+            source_revision_uid=created.latest_revision.revision_uid,
+            candidate_type="calculated",
+            positive_atoms=(PromptAtomUsage("skyline", 1150),),
+            negative_atoms=created.latest_revision.negative_atoms,
+        )
+    )
+
+    assert repeated == candidate
+    assert service.get_candidate(candidate.candidate_uid) == candidate
+    with pytest.raises(PromptCatalogValidationError, match="only change"):
+        service.materialize_candidate(
+            MaterializePromptCandidateCommand(
+                component_uid=created.component_uid,
+                source_revision_uid=created.latest_revision.revision_uid,
+                candidate_type="next_test",
+                positive_atoms=(PromptAtomUsage("different atom", 1000),),
+                negative_atoms=created.latest_revision.negative_atoms,
+            )
+        )
+    for command, message in (
+        (
+            MaterializePromptCandidateCommand(
+                component_uid=created.component_uid,
+                source_revision_uid=created.latest_revision.revision_uid,
+                candidate_type="unsupported",
+                positive_atoms=created.latest_revision.positive_atoms,
+                negative_atoms=created.latest_revision.negative_atoms,
+            ),
+            "invalid candidate_type",
+        ),
+        (
+            MaterializePromptCandidateCommand(
+                component_uid=created.component_uid,
+                source_revision_uid="revision-missing",
+                candidate_type="manual",
+                positive_atoms=created.latest_revision.positive_atoms,
+                negative_atoms=created.latest_revision.negative_atoms,
+            ),
+            "unknown source revision",
+        ),
+        (
+            MaterializePromptCandidateCommand(
+                component_uid="component-other",
+                source_revision_uid=created.latest_revision.revision_uid,
+                candidate_type="manual",
+                positive_atoms=created.latest_revision.positive_atoms,
+                negative_atoms=created.latest_revision.negative_atoms,
+            ),
+            "does not belong",
+        ),
+    ):
+        with pytest.raises(PromptCatalogValidationError, match=message):
+            service.materialize_candidate(command)
 
 
 def test_sqlite_prompt_catalog_reads_exact_revision_and_composition(

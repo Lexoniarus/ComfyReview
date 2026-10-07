@@ -29,7 +29,13 @@ _PROMPT_KINDS = {
     "modifier",
 }
 _PROMPT_MODES = {"fixed", "random", "off"}
-_SELECTION_KEYS = {"kind", "mode", "component_uid", "revision_uid"}
+_SELECTION_KEYS = {
+    "kind",
+    "mode",
+    "component_uid",
+    "revision_uid",
+    "candidate_uid",
+}
 _LORA_KEYS = {
     "lora_uid",
     "revision_uid",
@@ -68,6 +74,7 @@ class GeneratorPromptSelection:
     mode: PromptMode
     component_uid: str | None
     revision_uid: str | None
+    candidate_uid: str | None = None
 
 
 @dataclass(frozen=True)
@@ -161,6 +168,7 @@ class GeneratorStateSnapshot:
                     "mode": item.mode,
                     "component_uid": item.component_uid,
                     "revision_uid": item.revision_uid,
+                    "candidate_uid": item.candidate_uid,
                 }
                 for item in self.selections
             ],
@@ -226,7 +234,17 @@ def _prompt_selections(
     kinds: set[str] = set()
     for value in values:
         item = _mapping(value, "selection")
-        _require_exact_keys(item, _SELECTION_KEYS, "selection")
+        unknown = set(item) - _SELECTION_KEYS
+        required = _SELECTION_KEYS - {"candidate_uid"}
+        missing = required - set(item)
+        if unknown:
+            raise GeneratorStateValidationError(
+                "selection unknown: " + ", ".join(sorted(unknown))
+            )
+        if missing:
+            raise GeneratorStateValidationError(
+                "selection missing: " + ", ".join(sorted(missing))
+            )
         kind = _required_text(item.get("kind"), "selection kind")
         mode = _required_text(item.get("mode"), "selection mode")
         if kind not in _PROMPT_KINDS:
@@ -243,12 +261,15 @@ def _prompt_selections(
             )
         component_uid = _optional_text(item.get("component_uid"))
         revision_uid = _optional_text(item.get("revision_uid"))
+        candidate_uid = _optional_text(item.get("candidate_uid"))
         if mode == "fixed" and (component_uid is None or revision_uid is None):
             raise GeneratorStateValidationError(
                 f"fixed {kind} selection requires stable component and revision IDs"
             )
         if mode != "fixed" and (
-            component_uid is not None or revision_uid is not None
+            component_uid is not None
+            or revision_uid is not None
+            or candidate_uid is not None
         ):
             raise GeneratorStateValidationError(
                 f"{mode} {kind} selection cannot reference a component"
@@ -260,6 +281,7 @@ def _prompt_selections(
                 mode=cast(PromptMode, mode),
                 component_uid=component_uid,
                 revision_uid=revision_uid,
+                candidate_uid=candidate_uid,
             )
         )
     return tuple(selections)

@@ -232,6 +232,17 @@ def test_review_service_reports_failed_promotion_without_rolling_back() -> (
     assert fixture.scenario.events == ["resolve", "review_append", "promote"]
 
 
+def test_review_service_completes_successful_promotion_reconciliation() -> (
+    None
+):
+    fixture = _fixture(prompt_promotions=True)
+
+    result = fixture.service.submit(fixture.command())
+
+    assert result.promotion_pending is False
+    assert fixture.scenario.events == ["resolve", "review_append", "promote"]
+
+
 @pytest.mark.parametrize("rating", [None, 0, 11])
 def test_review_service_rejects_invalid_rating_before_resolution(
     rating: int | None,

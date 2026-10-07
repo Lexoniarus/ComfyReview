@@ -44,6 +44,7 @@ from comfyreview.application import (
     PlaygroundSubmissionBatch,
     PlaygroundSubmissionFailure,
     PromptComponent,
+    PromptComponentCandidate,
     PromptRenderer,
     PromptRevision,
     PromptSelection,
@@ -331,6 +332,7 @@ def _prompt_component(
 class _PromptCatalog:
     def __init__(self) -> None:
         self.component = _prompt_component()
+        self.candidate_command = None
 
     def list_components(self, *, include_archived=False):
         return (
@@ -381,6 +383,63 @@ class _PromptCatalog:
             self.get_component(component_uid), archived=archived
         )
         return self.component
+
+    def materialize_candidate(self, command):
+        self.candidate_command = command
+        return PromptComponentCandidate(
+            candidate_uid="candidate-a",
+            component_uid=command.component_uid,
+            source_revision_uid=command.source_revision_uid,
+            candidate_type=command.candidate_type,
+            content_hash="candidate-hash",
+            positive_atoms=command.positive_atoms,
+            negative_atoms=command.negative_atoms,
+        )
+
+
+class _PromptVariantGuidance:
+    def __init__(self) -> None:
+        self.request: tuple[object, object, object] | None = None
+
+    def build(self, component_uid, *, positive_atoms, negative_atoms):
+        self.request = (component_uid, positive_atoms, negative_atoms)
+        recipe = SimpleNamespace(
+            positive_atoms=positive_atoms,
+            negative_atoms=negative_atoms,
+        )
+        score = SimpleNamespace(
+            lower_bound=0.6,
+            expected_success_rate=0.8,
+            average_rating=8.5,
+            image_count=5,
+            review_count=6,
+            deleted_count=1,
+            standard_deviation=0.1,
+            sufficiently_observed=True,
+        )
+        recommendation = SimpleNamespace(
+            recipe=recipe,
+            score=score,
+            image_uids=("image-1",),
+            revision_uid="revision-character-a",
+            candidate_uid=None,
+        )
+        return SimpleNamespace(
+            model_version="prompt-guidance-v1",
+            current_provisional=False,
+            current_standard=recommendation,
+            best_observed=recommendation,
+            optimized=recommendation,
+            next_test=recommendation,
+            coverage=SimpleNamespace(
+                image_count=5,
+                review_count=6,
+                observed_variant_count=1,
+                stable_variant_count=1,
+                modeled_atom_count=1,
+                atom_count=1,
+            ),
+        )
 
 
 class _CatalogEvidence:
@@ -436,6 +495,26 @@ class _Playground:
                 character_revision,
                 revision_uid=character_revision_uid,
             )
+        character_candidate_uid = getattr(
+            command,
+            "character_candidate_uid",
+            None,
+        )
+        character_candidate = (
+            PromptComponentCandidate(
+                candidate_uid=character_candidate_uid,
+                component_uid=character.component_uid,
+                source_revision_uid=character_revision.revision_uid,
+                candidate_type="calculated",
+                content_hash="candidate-hash",
+                positive_atoms=prompt_atom_usages_from_text(
+                    "candidate positive"
+                ),
+                negative_atoms=(),
+            )
+            if character_candidate_uid
+            else None
+        )
         scene_revision = scene.latest_revision
         manual_selections = getattr(command, "manual_selections", ())
         if manual_selections:
@@ -446,7 +525,11 @@ class _Playground:
                     revision_uid=requested_revision_uid,
                 )
         selected = (
-            SelectedPromptComponent(character, character_revision),
+            SelectedPromptComponent(
+                character,
+                character_revision,
+                character_candidate,
+            ),
             SelectedPromptComponent(scene, scene_revision),
         )
         return PlaygroundDraft(
@@ -1274,6 +1357,7 @@ def test_v2_playground_generator_state_round_trips_strict_payload() -> None:
             "mode": "fixed",
             "component_uid": "character-a",
             "revision_uid": "revision-character-old",
+            "candidate_uid": None,
         }
     ]
     changed = {
@@ -1299,6 +1383,49 @@ def test_v2_playground_generator_state_round_trips_strict_payload() -> None:
     assert restored.json()["selections"] == selections
     assert container.playground_generator_settings.settings == changed
     assert invalid.status_code == 422
+
+
+def test_v2_playground_prompt_guidance_and_candidate_materialization() -> None:
+    client, container = _client()
+    atoms = [{"text": "positive character-a", "weight": 1.1}]
+
+    guidance = client.post(
+        "/api/v2/playground/prompt-guidance",
+        json={
+            "component_uid": "character-a",
+            "positive_atoms": atoms,
+            "negative_atoms": [],
+        },
+    )
+    candidate = client.post(
+        "/api/v2/playground/prompt-candidates",
+        json={
+            "component_uid": "character-a",
+            "source_revision_uid": "revision-character-a",
+            "candidate_type": "calculated",
+            "positive_atoms": atoms,
+            "negative_atoms": [],
+        },
+    )
+
+    assert guidance.status_code == 200
+    assert guidance.json()["optimized"]["positive_atoms"] == atoms
+    assert guidance.json()["optimized"]["score"] == {
+        "lower_bound": 0.6,
+        "expected_success_rate": 0.8,
+        "average_rating": 8.5,
+        "image_count": 5,
+        "review_count": 6,
+        "deleted_count": 1,
+        "standard_deviation": 0.1,
+        "sufficiently_observed": True,
+    }
+    assert candidate.status_code == 200
+    assert candidate.json()["candidate_uid"] == "candidate-a"
+    assert (
+        container.prompt_catalog_service.candidate_command.candidate_type
+        == "calculated"
+    )
 
 
 def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
@@ -1394,6 +1521,7 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
             "mode": "fixed",
             "component_uid": "character-a",
             "revision_uid": "revision-character-old",
+            "candidate_uid": "candidate-calculated",
         },
         {
             "kind": "scene",
@@ -1444,6 +1572,15 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
     assert response.json()["groups"][0]["revision_uid"] == (
         "revision-character-old"
     )
+    assert response.json()["groups"][0]["candidate_uid"] == (
+        "candidate-calculated"
+    )
+    assert response.json()["prompt_groups"][0]["candidate_uid"] == (
+        "candidate-calculated"
+    )
+    assert response.json()["prompt_groups"][0]["positive_atoms"] == [
+        {"text": "candidate positive", "weight": 1.0}
+    ]
     assert response.json()["groups"][1]["revision_uid"] == (
         "revision-scene-old"
     )
@@ -1456,6 +1593,9 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
     assert (
         container.playground_service.command.character_revision_uid
         == "revision-character-old"
+    )
+    assert container.playground_service.command.character_candidate_uid == (
+        "candidate-calculated"
     )
     assert container.playground_service.command.manual_selections[0] == (
         ManualPromptSelection("scene", "scene-a", "revision-scene-old")
@@ -1964,6 +2104,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         image_generator_handoffs=_ImageGeneratorHandoffs(),
         arena_service=_Arena(),
         prompt_catalog_service=_PromptCatalog(),
+        prompt_variant_guidance=_PromptVariantGuidance(),
         catalog_evidence=_CatalogEvidence(),
         playground_evidence=_PlaygroundEvidence(),
         prompt_renderer=PromptRenderer(),

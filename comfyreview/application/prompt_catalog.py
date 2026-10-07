@@ -122,6 +122,17 @@ class UpdatePromptComponentCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class MaterializePromptCandidateCommand:
+    """Explicitly retain one manual or calculated component recipe."""
+
+    component_uid: str
+    source_revision_uid: str
+    candidate_type: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class PromptRevisionDraft:
     """Carry normalized immutable revision content to persistence."""
 
@@ -192,6 +203,20 @@ class PromptCatalogRepository(Protocol):
         revision: PromptRevisionDraft,
     ) -> PromptComponent:
         """Update metadata and select changed content as a candidate."""
+        ...
+
+    def materialize_candidate(
+        self,
+        component_uid: str,
+        source_revision_uid: str,
+        candidate_type: str,
+        revision: PromptRevisionDraft,
+    ) -> PromptComponentCandidate:
+        """Persist or return one explicitly selected recipe candidate."""
+        ...
+
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        """Return one candidate by stable identity."""
         ...
 
     def get_component(self, component_uid: str) -> PromptComponent:
@@ -416,6 +441,54 @@ class PromptCatalogService:
         )
         return self._repository.update_component(metadata, revision)
 
+    def materialize_candidate(
+        self,
+        command: MaterializePromptCandidateCommand,
+    ) -> PromptComponentCandidate:
+        """Validate and persist one explicitly selected prompt candidate."""
+        component_uid = self._required(command.component_uid, "component_uid")
+        source_revision_uid = self._required(
+            command.source_revision_uid, "source_revision_uid"
+        )
+        candidate_type = self._required(
+            command.candidate_type, "candidate_type"
+        )
+        if candidate_type not in {"manual", "calculated", "next_test"}:
+            raise PromptCatalogValidationError("invalid candidate_type")
+        sources = self._repository.list_components_for_revisions(
+            (source_revision_uid,)
+        )
+        if len(sources) != 1:
+            raise PromptCatalogValidationError("unknown source revision")
+        source = sources[0]
+        if source.component_uid != component_uid:
+            raise PromptCatalogValidationError(
+                "source revision does not belong to component"
+            )
+        revision = self._revision(
+            component_uid,
+            command.positive_atoms,
+            command.negative_atoms,
+        )
+        if candidate_type != "manual" and self._structure(
+            source.latest_revision
+        ) != self._draft_structure(revision):
+            raise PromptCatalogValidationError(
+                "calculated candidates may only change atom weights"
+            )
+        return self._repository.materialize_candidate(
+            component_uid,
+            source_revision_uid,
+            candidate_type,
+            revision,
+        )
+
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        """Return one exact materialized prompt candidate."""
+        return self._repository.get_candidate(
+            self._required(candidate_uid, "candidate_uid")
+        )
+
     def get_component(self, component_uid: str) -> PromptComponent:
         """Return one component by stable identity."""
         return self._repository.get_component(
@@ -516,4 +589,30 @@ class PromptCatalogService:
             dict.fromkeys(
                 tag for raw_tag in tags if (tag := str(raw_tag or "").strip())
             )
+        )
+
+    @staticmethod
+    def _structure(
+        revision: PromptRevision,
+    ) -> tuple[tuple[str, int, str], ...]:
+        return tuple(
+            (scope, position, atom.text)
+            for scope, atoms in (
+                ("pos", revision.positive_atoms),
+                ("neg", revision.negative_atoms),
+            )
+            for position, atom in enumerate(atoms)
+        )
+
+    @staticmethod
+    def _draft_structure(
+        revision: PromptRevisionDraft,
+    ) -> tuple[tuple[str, int, str], ...]:
+        return tuple(
+            (scope, position, atom.text)
+            for scope, atoms in (
+                ("pos", revision.positive_atoms),
+                ("neg", revision.negative_atoms),
+            )
+            for position, atom in enumerate(atoms)
         )

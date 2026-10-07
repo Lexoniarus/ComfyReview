@@ -465,6 +465,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_prompt_catalog.py::"
         "test_prompt_catalog_service_updates_metadata_and_revision_atomically"
     ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.materialize_candidate": (
+        "tests/test_prompt_catalog.py::"
+        "test_catalog_materializes_only_weight_changes_for_calculated_candidates"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.get_candidate": (
+        "tests/test_prompt_catalog.py::"
+        "test_catalog_materializes_only_weight_changes_for_calculated_candidates"
+    ),
     "comfyreview.application.prompt_catalog:prompt_revision_identity": (
         "tests/test_prompt_catalog.py::"
         "test_prompt_revision_identity_is_content_and_component_stable"

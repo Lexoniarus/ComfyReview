@@ -3,9 +3,9 @@ import { promptKinds } from "./prompt-kind-contract.js";
 
 export { promptKinds } from "./prompt-kind-contract.js";
 
-/** @typedef {Readonly<{kind: string, mode: "fixed" | "random" | "off", componentUid: string | null, revisionUid: string | null}>} PromptSelectionState */
-/** @typedef {{mode?: string, componentUid?: string | null, revisionUid?: string | null}} PromptSelectionPatch */
-/** @typedef {{kind: string, mode: "fixed" | "random" | "off", component_uid: string | null, revision_uid: string | null}} PromptSelectionValue */
+/** @typedef {Readonly<{kind: string, mode: "fixed" | "random" | "off", componentUid: string | null, revisionUid: string | null, candidateUid: string | null}>} PromptSelectionState */
+/** @typedef {{mode?: string, componentUid?: string | null, revisionUid?: string | null, candidateUid?: string | null}} PromptSelectionPatch */
+/** @typedef {{kind: string, mode: "fixed" | "random" | "off", component_uid: string | null, revision_uid: string | null, candidate_uid?: string | null}} PromptSelectionValue */
 /** @typedef {{selections: PromptSelectionValue[], loras: Array<Record<string, any>>}} PromptModeEditorValue */
 /** @typedef {{lora_uid: string, revision_uid: string, model_strength: number, clip_strength: number}} GeneratorStateLora */
 
@@ -15,15 +15,19 @@ export class PromptModeEditor {
   #selectionState = new Map();
   /** @type {Map<string, string | null>} */
   #latestRevisionByComponent = new Map();
+  /** @type {Map<string, Record<string, any>>} */
+  #componentByUid = new Map();
 
-  /** @param {HTMLElement} root @param {() => void} [onChange] @param {{loadComponent?: (uid: string, signal: AbortSignal) => Promise<any>, onImageSelect?: (url: string) => void}} [evidence] */
+  /** @param {HTMLElement} root @param {() => void} [onChange] @param {{loadComponent?: (uid: string, signal: AbortSignal) => Promise<any>, loadGuidance?: (payload: Record<string, any>, signal: AbortSignal) => Promise<any>, materializeCandidate?: (payload: Record<string, any>, signal: AbortSignal) => Promise<any>, onImageSelect?: (url: string) => void}} [evidence] */
   constructor(root, onChange = () => {}, evidence = {}) {
     this.root = root;
     this.abortController = new AbortController();
     this.onChange = typeof onChange === "function" ? onChange : () => {};
     this.loadComponent = evidence.loadComponent || null;
+    this.loadGuidance = evidence.loadGuidance || null;
+    this.materializeCandidate = evidence.materializeCandidate || null;
     this.onImageSelect = evidence.onImageSelect || (() => {});
-    /** @type {Map<string, {mode: HTMLSelectElement, component: HTMLSelectElement, evidence: HTMLElement}>} */
+    /** @type {Map<string, {mode: HTMLSelectElement, component: HTMLSelectElement, variant: HTMLSelectElement, evidence: HTMLElement}>} */
     this.rows = new Map();
     /** @type {Map<string, any>} */
     this.cache = new Map();
@@ -41,11 +45,20 @@ export class PromptModeEditor {
     this.root.replaceChildren();
     this.rows.clear();
     this.#selectionState.clear();
+    this.#componentByUid = new Map(
+      components.map((component) => [
+        String(component.component_uid || ""),
+        component,
+      ]),
+    );
     this.#latestRevisionByComponent = new Map(
       components.map((component) => [
         String(component.component_uid || ""),
-        component.latest_revision?.revision_uid
-          ? String(component.latest_revision.revision_uid)
+        (component.current_revision || component.latest_revision)?.revision_uid
+          ? String(
+              (component.current_revision || component.latest_revision)
+                .revision_uid,
+            )
           : null,
       ]),
     );
@@ -98,6 +111,8 @@ export class PromptModeEditor {
             mode === "fixed" ? selection?.componentUid || null : null,
           revision_uid:
             mode === "fixed" ? selection?.revisionUid || null : null,
+          candidate_uid:
+            mode === "fixed" ? selection?.candidateUid || null : null,
         };
       }),
       loras: this.loras?.value() || [],
@@ -144,6 +159,11 @@ export class PromptModeEditor {
         selection.revision_uid.trim()
           ? selection.revision_uid.trim()
           : null;
+      const candidateUid =
+        typeof selection.candidate_uid === "string" &&
+        selection.candidate_uid.trim()
+          ? selection.candidate_uid.trim()
+          : null;
       if (
         mode === "fixed" &&
         ![...row.component.options].some(
@@ -159,6 +179,7 @@ export class PromptModeEditor {
           mode,
           componentUid: mode === "fixed" ? componentUid : undefined,
           revisionUid: mode === "fixed" ? revisionUid : null,
+          candidateUid: mode === "fixed" ? candidateUid : null,
         },
         {
           refresh: true,
@@ -199,6 +220,7 @@ export class PromptModeEditor {
     for (const row of this.rows.values()) {
       row.mode.disabled = busy;
       row.component.disabled = busy || row.mode.value !== "fixed";
+      row.variant.disabled = busy || row.mode.value !== "fixed";
     }
     this.loras?.setBusy(busy);
   }
@@ -211,6 +233,7 @@ export class PromptModeEditor {
     this.rows.clear();
     this.#selectionState.clear();
     this.#latestRevisionByComponent.clear();
+    this.#componentByUid.clear();
   }
 
   /** @param {string} kind @param {string} label @param {Array<Record<string, any>>} components */
@@ -235,6 +258,15 @@ export class PromptModeEditor {
       );
     }
     component.disabled = mode.value !== "fixed";
+    const variant = document.createElement("select");
+    variant.setAttribute("aria-label", `${label}: Prompt-Variante`);
+    variant.append(
+      option("stable", "Stabil"),
+      option("catalog_candidate", "Katalog-Test"),
+      option("calculated", "Rechnerisch"),
+      option("next_test", "Nächster Test"),
+    );
+    variant.disabled = mode.value !== "fixed";
     const evidence = document.createElement("div");
     evidence.className = "prompt-reference";
     mode.addEventListener(
@@ -255,8 +287,13 @@ export class PromptModeEditor {
       },
       { signal: this.abortController.signal },
     );
-    element.append(title, mode, component, evidence);
-    return { element, controls: { mode, component, evidence } };
+    variant.addEventListener(
+      "change",
+      () => void this.#chooseVariant(kind, variant.value),
+      { signal: this.abortController.signal },
+    );
+    element.append(title, mode, component, variant, evidence);
+    return { element, controls: { mode, component, variant, evidence } };
   }
 
   /**
@@ -283,6 +320,7 @@ export class PromptModeEditor {
       ? this.#latestRevisionByComponent.get(componentUid) || null
       : null;
     let revisionUid = null;
+    let candidateUid = null;
     if (mode === "fixed") {
       const requestedRevision =
         typeof patch.revisionUid === "string" ? patch.revisionUid.trim() : "";
@@ -291,13 +329,34 @@ export class PromptModeEditor {
         : componentChanged || enteredFixed || options.resetRevisionToLatest
           ? latestRevisionUid
           : previous?.revisionUid || latestRevisionUid;
+      candidateUid =
+        patch.candidateUid !== undefined
+          ? patch.candidateUid
+          : componentChanged
+            ? null
+            : previous?.candidateUid || null;
     }
     row.mode.value = mode;
     row.component.value = componentUid || "";
     row.component.disabled = this.isBusy || mode !== "fixed";
+    row.variant.disabled = this.isBusy || mode !== "fixed";
+    const pendingCandidateUid = componentUid
+      ? this.#componentByUid.get(componentUid)?.pending_candidate?.candidate_uid
+      : null;
+    row.variant.value = candidateUid
+      ? candidateUid === pendingCandidateUid
+        ? "catalog_candidate"
+        : "calculated"
+      : "stable";
     this.#selectionState.set(
       kind,
-      Object.freeze({ kind, mode, componentUid, revisionUid }),
+      Object.freeze({
+        kind,
+        mode,
+        componentUid,
+        revisionUid,
+        candidateUid,
+      }),
     );
     if (options.refresh !== false) void this.#refresh(kind);
     if (options.notify) this.onChange();
@@ -313,6 +372,121 @@ export class PromptModeEditor {
     if (row.mode.value === "random")
       return renderMessage(row.evidence, "Wird beim Entwurf ausgewählt");
     await this.#loadInto(kind, row.component.value);
+  }
+
+  /** @param {string} kind @param {string} variant */
+  async #chooseVariant(kind, variant) {
+    const row = this.rows.get(kind);
+    const selection = this.#selectionState.get(kind);
+    if (!row || !selection || selection.mode !== "fixed") return;
+    if (variant === "stable") {
+      this.#transition(kind, { candidateUid: null }, { notify: true });
+      return;
+    }
+    if (variant === "catalog_candidate") {
+      const pending = selection.componentUid
+        ? this.#componentByUid.get(selection.componentUid)?.pending_candidate
+        : null;
+      if (
+        pending?.candidate_uid &&
+        pending.source_revision_uid === selection.revisionUid
+      ) {
+        this.#transition(
+          kind,
+          { candidateUid: String(pending.candidate_uid) },
+          { notify: true, refresh: false },
+        );
+        row.variant.value = "catalog_candidate";
+        return renderMessage(row.evidence, "Katalog-Testkandidat ausgewählt");
+      }
+      row.variant.value = selection.candidateUid ? "calculated" : "stable";
+      return renderMessage(row.evidence, "Kein Katalog-Testkandidat verfügbar");
+    }
+    const component = selection.componentUid
+      ? this.#componentByUid.get(selection.componentUid)
+      : null;
+    const revision = component?.current_revision || component?.latest_revision;
+    if (
+      !component ||
+      !revision ||
+      !selection.revisionUid ||
+      String(revision.revision_uid || "") !== selection.revisionUid ||
+      !this.loadGuidance ||
+      !this.materializeCandidate
+    ) {
+      row.variant.value = selection.candidateUid ? "calculated" : "stable";
+      return renderMessage(row.evidence, "Prompt-Guidance nicht verfügbar");
+    }
+    this.requests.get(kind)?.abort();
+    const controller = new AbortController();
+    this.requests.set(kind, controller);
+    renderMessage(row.evidence, "Prompt-Guidance wird berechnet …");
+    try {
+      const request = {
+        component_uid: selection.componentUid,
+        positive_atoms: revision.positive_atoms || [],
+        negative_atoms: revision.negative_atoms || [],
+      };
+      const guidance = await this.loadGuidance(request, controller.signal);
+      const recommendation =
+        variant === "next_test" ? guidance.next_test : guidance.optimized;
+      if (!recommendation) {
+        row.variant.value = selection.candidateUid ? "calculated" : "stable";
+        return renderMessage(
+          row.evidence,
+          "Noch kein sinnvoller Test ableitbar",
+        );
+      }
+      if (
+        variant === "calculated" &&
+        JSON.stringify(recommendation.positive_atoms || []) ===
+          JSON.stringify(request.positive_atoms) &&
+        JSON.stringify(recommendation.negative_atoms || []) ===
+          JSON.stringify(request.negative_atoms)
+      ) {
+        this.#transition(
+          kind,
+          { candidateUid: null },
+          { notify: true, refresh: false },
+        );
+        row.variant.value = "stable";
+        return renderMessage(
+          row.evidence,
+          "Stabile Variante ist bereits das rechnerische Optimum",
+        );
+      }
+      const candidate = await this.materializeCandidate(
+        {
+          ...request,
+          source_revision_uid: selection.revisionUid,
+          candidate_type: variant === "next_test" ? "next_test" : "calculated",
+          positive_atoms: recommendation.positive_atoms || [],
+          negative_atoms: recommendation.negative_atoms || [],
+        },
+        controller.signal,
+      );
+      this.#transition(
+        kind,
+        { candidateUid: String(candidate.candidate_uid || "") || null },
+        { notify: true, refresh: false },
+      );
+      row.variant.value = variant;
+      renderMessage(
+        row.evidence,
+        variant === "next_test"
+          ? "Nächster Test ausgewählt"
+          : "Rechnerische Variante ausgewählt",
+      );
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        renderMessage(
+          row.evidence,
+          "Prompt-Guidance konnte nicht geladen werden",
+        );
+      row.variant.value = selection.candidateUid ? "calculated" : "stable";
+    } finally {
+      if (this.requests.get(kind) === controller) this.requests.delete(kind);
+    }
   }
 
   /** @param {string} kind @param {string} uid */

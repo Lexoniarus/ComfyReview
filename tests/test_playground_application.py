@@ -13,9 +13,13 @@ import pytest
 from comfyreview.application import (
     ConfirmPlaygroundDraftCommand,
     ContentLevel,
+    CreatePromptComponentCommand,
     ManualPromptSelection,
+    MaterializePromptCandidateCommand,
     PlaygroundService,
+    PromptCatalogService,
     PromptComponent,
+    PromptComponentCandidate,
     PromptContentPolicy,
     PromptDraftOverrides,
     PromptRenderer,
@@ -27,7 +31,7 @@ from comfyreview.application import (
     PromptSelectionPolicy,
     WorkspacePreferences,
 )
-from comfyreview.domain import prompt_atom_usages_from_text
+from comfyreview.domain import PromptAtomUsage, prompt_atom_usages_from_text
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqlitePromptCatalogRepository,
@@ -648,6 +652,108 @@ def test_playground_sqlite_defaults_to_promoted_revision_not_latest_history(
     assert current.standard_revision.revision_uid == "revision-character-a-v1"
 
 
+def test_playground_applies_one_exact_candidate_without_changing_other_groups(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+
+    class Identities:
+        next_uid = iter(("character-a", "scene-a"))
+
+        def new_component_uid(self) -> str:
+            return next(self.next_uid)
+
+    catalog = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(database_path),
+        identities=Identities(),
+    )
+    character = catalog.create_component(
+        CreatePromptComponentCommand(
+            kind="character",
+            component_key="aiko",
+            name="Aiko",
+            positive_atoms=(PromptAtomUsage("aiko", 1000),),
+        )
+    )
+    scene = catalog.create_component(
+        CreatePromptComponentCommand(
+            kind="scene",
+            component_key="rooftop",
+            name="Rooftop",
+            positive_atoms=(PromptAtomUsage("rooftop", 1000),),
+        )
+    )
+    candidate = catalog.materialize_candidate(
+        MaterializePromptCandidateCommand(
+            component_uid=character.component_uid,
+            source_revision_uid=character.latest_revision.revision_uid,
+            candidate_type="calculated",
+            positive_atoms=(PromptAtomUsage("aiko", 1150),),
+            negative_atoms=(),
+        )
+    )
+    playground = PlaygroundService(
+        catalog=catalog,
+        selection_policy=PromptSelectionPolicy(),
+        renderer=PromptRenderer(),
+        preferences=_Preferences(),
+        content_policy=PromptContentPolicy(),
+    )
+
+    draft = playground.prepare_draft(
+        PromptSelectionCommand(
+            character_component_uid=character.component_uid,
+            character_revision_uid=character.latest_revision.revision_uid,
+            character_candidate_uid=candidate.candidate_uid,
+            manual_selections=(
+                ManualPromptSelection(
+                    "scene",
+                    scene.component_uid,
+                    scene.latest_revision.revision_uid,
+                ),
+            ),
+            disabled_kinds=(
+                "outfit",
+                "pose",
+                "expression",
+                "lighting",
+                "modifier",
+            ),
+        )
+    )
+
+    assert draft.selection.components[0].candidate == candidate
+    assert draft.selection.components[1].candidate is None
+    assert draft.prompt.positive_atoms == (
+        PromptAtomUsage("aiko", 1150),
+        PromptAtomUsage("rooftop", 1000),
+    )
+
+    with pytest.raises(PromptSelectionError, match="does not match"):
+        playground.prepare_draft(
+            PromptSelectionCommand(
+                character_component_uid=character.component_uid,
+                character_revision_uid=character.latest_revision.revision_uid,
+                manual_selections=(
+                    ManualPromptSelection(
+                        "scene",
+                        scene.component_uid,
+                        scene.latest_revision.revision_uid,
+                        candidate.candidate_uid,
+                    ),
+                ),
+                disabled_kinds=(
+                    "outfit",
+                    "pose",
+                    "expression",
+                    "lighting",
+                    "modifier",
+                ),
+            )
+        )
+
+
 def test_prompt_selection_policy_supports_random_character_and_disabled_kinds() -> (
     None
 ):
@@ -1067,6 +1173,9 @@ class _CatalogService:
         if composition_uid != "composition-a":
             return ()
         return self.components[:2]
+
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        raise KeyError(candidate_uid)
 
 
 class _Preferences:

@@ -368,6 +368,68 @@ class SqlitePromptCatalogRepository:
         finally:
             connection.close()
 
+    def materialize_candidate(
+        self,
+        component_uid: str,
+        source_revision_uid: str,
+        candidate_type: str,
+        revision: PromptRevisionDraft,
+    ) -> PromptComponentCandidate:
+        """Persist or return one explicitly selected prompt candidate."""
+        connection = connect_existing(self._database_path, rows=True)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            source = connection.execute(
+                """
+                SELECT component.id AS component_id, revision.id AS revision_id
+                FROM prompt_components AS component
+                JOIN prompt_revisions AS revision
+                  ON revision.component_id = component.id
+                WHERE component.component_uid = ?
+                  AND revision.revision_uid = ?
+                """,
+                (component_uid, source_revision_uid),
+            ).fetchone()
+            if source is None:
+                raise KeyError(
+                    f"Unknown prompt source revision: {source_revision_uid}"
+                )
+            self._insert_candidate(
+                connection,
+                component_id=int(source["component_id"]),
+                source_revision_id=int(source["revision_id"]),
+                revision=revision,
+                candidate_type=candidate_type,
+            )
+            row = connection.execute(
+                _SELECT_CANDIDATE + " WHERE component.component_uid = ? "
+                "AND candidate.content_hash = ?",
+                (component_uid, revision.content_hash),
+            ).fetchone()
+            if row is None:  # pragma: no cover - protected by transaction
+                raise RuntimeError("Prompt candidate was not persisted")
+            connection.commit()
+            return self._candidate(row)
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        """Read one exact materialized prompt candidate."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            row = connection.execute(
+                _SELECT_CANDIDATE + " WHERE candidate.candidate_uid = ?",
+                (candidate_uid,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown prompt candidate: {candidate_uid}")
+            return self._candidate(row)
+        finally:
+            connection.close()
+
     def get_component(self, component_uid: str) -> PromptComponent:
         """Read one component by stable identity."""
         connection = connect_read_only(self._database_path, rows=True)

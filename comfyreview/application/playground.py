@@ -10,6 +10,7 @@ from typing import Protocol
 from comfyreview.application.image_queries import ImageContext
 from comfyreview.application.prompt_catalog import (
     PromptComponent,
+    PromptComponentCandidate,
     PromptRevision,
 )
 from comfyreview.application.workspace_settings import (
@@ -130,6 +131,10 @@ class PromptCatalogReader(Protocol):
         """Return the exact ordered revisions in one composition."""
         ...
 
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        """Return one exact materialized prompt candidate."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class ManualPromptSelection:
@@ -138,6 +143,7 @@ class ManualPromptSelection:
     kind: str
     component_uid: str
     revision_uid: str | None = None
+    candidate_uid: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +158,7 @@ class PromptSelectionCommand:
     seed: int | None = None
     max_attempts: int = 200
     character_revision_uid: str | None = None
+    character_candidate_uid: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +168,7 @@ class PromptRevisionSelection:
     kind: str
     component_uid: str
     revision_uid: str
+    candidate_uid: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +186,7 @@ class SelectedPromptComponent:
 
     component: PromptComponent
     revision: PromptRevision
+    candidate: PromptComponentCandidate | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -520,11 +529,16 @@ class PromptSelectionPolicy:
     def _effective_tags(selection: SelectedPromptComponent) -> set[str]:
         component = selection.component
         tags = {tag.strip().lower() for tag in component.tags if tag.strip()}
+        positive_text = (
+            render_prompt_atom_usages(selection.candidate.positive_atoms)
+            if selection.candidate is not None
+            else selection.revision.positive_text
+        )
         searchable = " ".join(
             (
                 component.component_key,
                 component.name,
-                selection.revision.positive_text,
+                positive_text,
                 component.notes,
             )
         ).lower()
@@ -559,12 +573,12 @@ class PromptRenderer:
         positive_atoms = tuple(
             atom
             for selected in selection.components
-            for atom in self._revision_atoms(selected.revision, positive=True)
+            for atom in self._selection_atoms(selected, positive=True)
         )
         negative_atoms = tuple(
             atom
             for selected in selection.components
-            for atom in self._revision_atoms(selected.revision, positive=False)
+            for atom in self._selection_atoms(selected, positive=False)
         )
         notes = " | ".join(
             selected.component.notes.strip()
@@ -640,6 +654,21 @@ class PromptRenderer:
         )
         return prompt_atom_usages_from_text(snapshot)
 
+    @classmethod
+    def _selection_atoms(
+        cls,
+        selected: SelectedPromptComponent,
+        *,
+        positive: bool,
+    ) -> tuple[PromptAtomUsage, ...]:
+        if selected.candidate is not None:
+            return (
+                selected.candidate.positive_atoms
+                if positive
+                else selected.candidate.negative_atoms
+            )
+        return cls._revision_atoms(selected.revision, positive=positive)
+
 
 class PlaygroundService:
     """Prepare catalog-backed drafts without submitting generations."""
@@ -714,10 +743,16 @@ class PlaygroundService:
                 "character",
                 command.character_component_uid,
                 command.character_revision_uid,
+                command.character_candidate_uid,
             )
         ]
         requests.extend(
-            (item.kind, item.component_uid, item.revision_uid)
+            (
+                item.kind,
+                item.component_uid,
+                item.revision_uid,
+                item.candidate_uid,
+            )
             for item in command.manual_selections
         )
         exact_requests = tuple(
@@ -725,13 +760,23 @@ class PlaygroundService:
                 kind,
                 str(component_uid or "").strip(),
                 str(revision_uid or "").strip(),
+                (
+                    str(candidate_uid or "").strip()
+                    if candidate_uid is not None
+                    else None
+                ),
             )
-            for kind, component_uid, revision_uid in requests
+            for kind, component_uid, revision_uid, candidate_uid in requests
             if revision_uid is not None
         )
         if not exact_requests:
             return ()
-        for kind, component_uid, revision_uid in exact_requests:
+        for (
+            kind,
+            component_uid,
+            revision_uid,
+            _candidate_uid,
+        ) in exact_requests:
             if not component_uid:
                 raise PromptSelectionError(
                     f"fixed {kind} revision requires component_uid"
@@ -742,8 +787,10 @@ class PlaygroundService:
                 )
         return self._resolve_revision_bindings(
             tuple(
-                PromptRevisionSelection(kind, component_uid, revision_uid)
-                for kind, component_uid, revision_uid in exact_requests
+                PromptRevisionSelection(
+                    kind, component_uid, revision_uid, candidate_uid
+                )
+                for kind, component_uid, revision_uid, candidate_uid in exact_requests
             )
         )
 
@@ -757,6 +804,9 @@ class PlaygroundService:
                 kind=str(binding.kind or "").strip(),
                 component_uid=str(binding.component_uid or "").strip(),
                 revision_uid=str(binding.revision_uid or "").strip(),
+                candidate_uid=(
+                    str(binding.candidate_uid or "").strip() or None
+                ),
             )
             for binding in bindings
         )
@@ -781,23 +831,47 @@ class PlaygroundService:
         selected_revisions = self._with_current_component_metadata(revisions)
         if len(selected_revisions) != len(normalized):
             raise PromptSelectionError("unknown prompt revision")
-        for binding, selected in zip(
+        for binding, resolved in zip(
             normalized,
             selected_revisions,
             strict=True,
         ):
-            if selected.revision.revision_uid != binding.revision_uid:
+            if resolved.revision.revision_uid != binding.revision_uid:
                 raise PromptSelectionError("prompt revisions do not match")
-            if selected.component.component_uid != binding.component_uid:
+            if resolved.component.component_uid != binding.component_uid:
                 raise PromptSelectionError(
                     "prompt revision does not belong to component "
                     f"{binding.component_uid}"
                 )
-            if selected.component.kind != binding.kind:
+            if resolved.component.kind != binding.kind:
                 raise PromptSelectionError(
                     f"prompt revision component is not {binding.kind}"
                 )
-        return selected_revisions
+        selections: list[SelectedPromptComponent] = []
+        for binding, current in zip(
+            normalized,
+            selected_revisions,
+            strict=True,
+        ):
+            if binding.candidate_uid is None:
+                selections.append(current)
+                continue
+            candidate = self._catalog.get_candidate(binding.candidate_uid)
+            if (
+                candidate.component_uid != binding.component_uid
+                or candidate.source_revision_uid != binding.revision_uid
+            ):
+                raise PromptSelectionError(
+                    "prompt candidate does not match source revision"
+                )
+            selections.append(
+                SelectedPromptComponent(
+                    current.component,
+                    current.revision,
+                    candidate,
+                )
+            )
+        return tuple(selections)
 
     def prepare_revision_draft(
         self,

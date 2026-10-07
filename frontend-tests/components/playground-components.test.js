@@ -52,12 +52,14 @@ describe("Playground browser components", () => {
             mode: "fixed",
             component_uid: "character-a",
             revision_uid: "revision-character-a-latest",
+            candidate_uid: null,
           },
           {
             kind: "scene",
             mode: "off",
             component_uid: null,
             revision_uid: null,
+            candidate_uid: null,
           },
         ],
         loras: [
@@ -131,12 +133,14 @@ describe("Playground browser components", () => {
             mode: "fixed",
             component_uid: "character-a",
             revision_uid: "revision-character-a-latest",
+            candidate_uid: null,
           },
           {
             kind: "scene",
             mode: "off",
             component_uid: null,
             revision_uid: null,
+            candidate_uid: null,
           },
         ]),
       }),
@@ -196,9 +200,175 @@ describe("Playground browser components", () => {
       mode: "fixed",
       component_uid: "character-a",
       revision_uid: "character-rev-1",
+      candidate_uid: null,
     });
 
     editor.dispose();
+  });
+
+  it("selects and reloads one concrete calculated candidate per group", async () => {
+    const root = document.createElement("div");
+    const loadGuidance = vi.fn(async () => ({
+      optimized: {
+        positive_atoms: [{ text: "aiko", weight: 1.15 }],
+        negative_atoms: [],
+      },
+      next_test: {
+        positive_atoms: [{ text: "aiko", weight: 0.9 }],
+        negative_atoms: [],
+      },
+    }));
+    const materializeCandidate = vi.fn(async (payload) => ({
+      candidate_uid:
+        payload.candidate_type === "next_test"
+          ? "candidate-next"
+          : "candidate-calculated",
+    }));
+    const editor = new PromptModeEditor(root, () => {}, {
+      loadGuidance,
+      materializeCandidate,
+    });
+    const character = {
+      ...component("character-a", "character", "Aiko"),
+      current_revision: {
+        revision_uid: "revision-character-a-current",
+        positive_atoms: [{ text: "aiko", weight: 1 }],
+        negative_atoms: [],
+      },
+      pending_candidate: {
+        candidate_uid: "candidate-catalog",
+        source_revision_uid: "revision-character-a-current",
+      },
+    };
+    editor.render([character, component("scene-a", "scene", "Scene")]);
+    const characterRow = root.querySelector(
+      '.prompt-mode-row[data-kind="character"]',
+    );
+    const variant = characterRow.querySelectorAll("select")[2];
+
+    variant.value = "catalog_candidate";
+    variant.dispatchEvent(new Event("change"));
+    expect(editor.value().selections[0].candidate_uid).toBe(
+      "candidate-catalog",
+    );
+    expect(materializeCandidate).not.toHaveBeenCalled();
+
+    variant.value = "calculated";
+    variant.dispatchEvent(new Event("change"));
+    await vi.waitFor(() =>
+      expect(editor.value().selections[0].candidate_uid).toBe(
+        "candidate-calculated",
+      ),
+    );
+
+    expect(loadGuidance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component_uid: "character-a",
+        positive_atoms: [{ text: "aiko", weight: 1 }],
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(materializeCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source_revision_uid: "revision-character-a-current",
+        candidate_type: "calculated",
+        positive_atoms: [{ text: "aiko", weight: 1.15 }],
+      }),
+      expect.any(AbortSignal),
+    );
+    expect(editor.value().selections[1].candidate_uid).toBeNull();
+
+    expect(
+      editor.applyState({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-a",
+            revision_uid: "revision-character-a-current",
+            candidate_uid: "candidate-saved",
+          },
+        ],
+      }),
+    ).toEqual([]);
+    expect(editor.value().selections[0].candidate_uid).toBe("candidate-saved");
+    expect(variant.value).toBe("calculated");
+
+    variant.value = "stable";
+    variant.dispatchEvent(new Event("change"));
+    expect(editor.value().selections[0].candidate_uid).toBeNull();
+    variant.value = "next_test";
+    variant.dispatchEvent(new Event("change"));
+    await vi.waitFor(() =>
+      expect(editor.value().selections[0].candidate_uid).toBe("candidate-next"),
+    );
+    editor.dispose();
+  });
+
+  it("keeps prompt variant empty and error states local to their group", async () => {
+    const currentCharacter = {
+      ...component("character-a", "character", "Aiko"),
+      current_revision: {
+        revision_uid: "revision-character-a-current",
+        positive_atoms: [{ text: "aiko", weight: 1 }],
+        negative_atoms: [],
+      },
+    };
+
+    const unavailableRoot = document.createElement("div");
+    const unavailable = new PromptModeEditor(unavailableRoot);
+    unavailable.render([
+      currentCharacter,
+      component("scene-a", "scene", "Scene"),
+    ]);
+    const unavailableCharacter = unavailableRoot.querySelector(
+      '.prompt-mode-row[data-kind="character"]',
+    );
+    const unavailableVariant =
+      unavailableCharacter.querySelectorAll("select")[2];
+    unavailableVariant.value = "catalog_candidate";
+    unavailableVariant.dispatchEvent(new Event("change"));
+    expect(unavailableCharacter.textContent).toContain(
+      "Kein Katalog-Testkandidat",
+    );
+    unavailableVariant.value = "calculated";
+    unavailableVariant.dispatchEvent(new Event("change"));
+    expect(unavailableCharacter.textContent).toContain(
+      "Prompt-Guidance nicht verfügbar",
+    );
+    const randomVariant = unavailableRoot.querySelector(
+      '.prompt-mode-row[data-kind="scene"] select:nth-of-type(3)',
+    );
+    randomVariant.dispatchEvent(new Event("change"));
+    unavailable.dispose();
+
+    for (const [loadGuidance, message] of [
+      [async () => ({ optimized: null }), "Noch kein sinnvoller Test"],
+      [
+        async () => ({
+          optimized: {
+            positive_atoms: [{ text: "aiko", weight: 1 }],
+            negative_atoms: [],
+          },
+        }),
+        "bereits das rechnerische Optimum",
+      ],
+      [async () => Promise.reject(new Error("failed")), "konnte nicht geladen"],
+    ]) {
+      const root = document.createElement("div");
+      const editor = new PromptModeEditor(root, () => {}, {
+        loadGuidance,
+        materializeCandidate: async () => ({ candidate_uid: "unused" }),
+      });
+      editor.render([currentCharacter]);
+      const row = root.querySelector('.prompt-mode-row[data-kind="character"]');
+      const variant = row.querySelectorAll("select")[2];
+      variant.value = "calculated";
+      variant.dispatchEvent(new Event("change"));
+      await vi.waitFor(() => expect(row.textContent).toContain(message));
+      expect(editor.value().selections[0].candidate_uid).toBeNull();
+      editor.dispose();
+    }
   });
 
   it("restores archived catalog components and labels them explicitly", () => {
@@ -282,24 +452,28 @@ describe("Playground browser components", () => {
           mode: "fixed",
           component_uid: "character-a",
           revision_uid: "character-historical",
+          candidate_uid: null,
         },
         {
           kind: "scene",
           mode: "fixed",
           component_uid: "scene-a",
           revision_uid: "scene-a-latest",
+          candidate_uid: null,
         },
         {
           kind: "outfit",
           mode: "fixed",
           component_uid: "outfit-a",
           revision_uid: "outfit-a-latest",
+          candidate_uid: null,
         },
         {
           kind: "pose",
           mode: "fixed",
           component_uid: "pose-a",
           revision_uid: "pose-historical",
+          candidate_uid: null,
         },
       ]),
       loras: [],
@@ -384,6 +558,7 @@ describe("Playground browser components", () => {
       mode: "fixed",
       component_uid: "character-b",
       revision_uid: "character-b-rev-3",
+      candidate_uid: null,
     });
 
     const sceneRow = root.querySelector('.prompt-mode-row[data-kind="scene"]');
@@ -403,6 +578,7 @@ describe("Playground browser components", () => {
       mode: "fixed",
       component_uid: "scene-a",
       revision_uid: "scene-rev-2",
+      candidate_uid: null,
     });
     sceneMode.value = "random";
     sceneMode.dispatchEvent(new Event("change"));
@@ -411,6 +587,7 @@ describe("Playground browser components", () => {
       mode: "random",
       component_uid: null,
       revision_uid: null,
+      candidate_uid: null,
     });
     sceneMode.value = "fixed";
     sceneMode.dispatchEvent(new Event("change"));
@@ -419,6 +596,7 @@ describe("Playground browser components", () => {
       mode: "fixed",
       component_uid: "scene-a",
       revision_uid: "scene-rev-2",
+      candidate_uid: null,
     });
 
     editor.applyState({
@@ -438,6 +616,7 @@ describe("Playground browser components", () => {
       mode: "off",
       component_uid: null,
       revision_uid: null,
+      candidate_uid: null,
     });
 
     editor.dispose();
@@ -1047,6 +1226,7 @@ describe("Playground browser components", () => {
           {
             component_uid: "character-a",
             revision_uid: "revision-character-old",
+            candidate_uid: "candidate-calculated",
             kind: "character",
             name: "Aiko",
             positive_atoms: [{ text: "positive", weight: 1 }],
@@ -1133,7 +1313,7 @@ describe("Playground browser components", () => {
             kind: "character",
             component_uid: "character-a",
             revision_uid: "revision-character-old",
-            candidate_uid: null,
+            candidate_uid: "candidate-calculated",
             positive_atoms: [{ text: "edited", weight: 1 }],
             negative_atoms: [{ text: "negative", weight: 1 }],
           },

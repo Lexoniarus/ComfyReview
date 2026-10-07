@@ -270,6 +270,7 @@ from comfyreview.application.playground_generation import (
 )
 from comfyreview.application.prompt_catalog import (
     CreatePromptComponentCommand,
+    MaterializePromptCandidateCommand,
     NewPromptComponent,
     PromptCatalogRepository,
     PromptCatalogService,
@@ -453,6 +454,7 @@ __all__ = [
     "ComfyUiTimeoutError",
     "ConfirmPlaygroundDraftCommand",
     "CreatePromptComponentCommand",
+    "MaterializePromptCandidateCommand",
     "CurationSummary",
     "DraftOverridePolicy",
     "CurationAssignment",

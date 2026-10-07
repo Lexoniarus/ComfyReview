@@ -115,8 +115,8 @@ class SqliteGeneratorStateRepository:
                 """
                 INSERT INTO playground_generator_prompt_selections(
                     singleton_id, position, kind, mode,
-                    component_id, revision_id
-                ) VALUES (1, ?, ?, ?, ?, ?)
+                    component_id, revision_id, candidate_id
+                ) VALUES (1, ?, ?, ?, ?, ?, ?)
                 """,
                 tuple(
                     (
@@ -125,11 +125,13 @@ class SqliteGeneratorStateRepository:
                         selection.mode,
                         component_id,
                         revision_id,
+                        candidate_id,
                     )
                     for position, (
                         selection,
                         component_id,
                         revision_id,
+                        candidate_id,
                     ) in enumerate(prompt_references)
                 ),
             )
@@ -171,24 +173,46 @@ class SqliteGeneratorStateRepository:
     def _prompt_reference(
         connection: sqlite3.Connection,
         selection: GeneratorPromptSelection,
-    ) -> tuple[GeneratorPromptSelection, int | None, int | None]:
+    ) -> tuple[
+        GeneratorPromptSelection,
+        int | None,
+        int | None,
+        int | None,
+    ]:
         if selection.mode != "fixed":
-            return selection, None, None
+            return selection, None, None, None
         row = connection.execute(
             """
-            SELECT component.id, revision.id
+            SELECT component.id, revision.id, candidate.id
             FROM prompt_components AS component
             JOIN prompt_revisions AS revision
               ON revision.component_id = component.id
+            LEFT JOIN prompt_component_candidates AS candidate
+              ON candidate.candidate_uid = ?
+             AND candidate.component_id = component.id
+             AND candidate.source_revision_id = revision.id
             WHERE component.component_uid = ? AND revision.revision_uid = ?
             """,
-            (selection.component_uid, selection.revision_uid),
+            (
+                selection.candidate_uid,
+                selection.component_uid,
+                selection.revision_uid,
+            ),
         ).fetchone()
         if row is None:
             raise GeneratorStateValidationError(
                 f"unknown prompt selection revision: {selection.revision_uid}"
             )
-        return selection, int(row[0]), int(row[1])
+        if selection.candidate_uid is not None and row[2] is None:
+            raise GeneratorStateValidationError(
+                f"unknown prompt candidate: {selection.candidate_uid}"
+            )
+        return (
+            selection,
+            int(row[0]),
+            int(row[1]),
+            int(row[2]) if row[2] is not None else None,
+        )
 
     @staticmethod
     def _lora_reference(
@@ -218,12 +242,15 @@ class SqliteGeneratorStateRepository:
         rows = connection.execute(
             """
             SELECT selection.kind, selection.mode,
-                   component.component_uid, revision.revision_uid
+                   component.component_uid, revision.revision_uid,
+                   candidate.candidate_uid
             FROM playground_generator_prompt_selections AS selection
             LEFT JOIN prompt_components AS component
               ON component.id = selection.component_id
             LEFT JOIN prompt_revisions AS revision
               ON revision.id = selection.revision_id
+            LEFT JOIN prompt_component_candidates AS candidate
+              ON candidate.id = selection.candidate_id
             WHERE selection.singleton_id = 1
             ORDER BY selection.position
             """
@@ -234,6 +261,7 @@ class SqliteGeneratorStateRepository:
                 mode=str(row[1]),  # type: ignore[arg-type]
                 component_uid=str(row[2]) if row[2] is not None else None,
                 revision_uid=str(row[3]) if row[3] is not None else None,
+                candidate_uid=str(row[4]) if row[4] is not None else None,
             )
             for row in rows
         )

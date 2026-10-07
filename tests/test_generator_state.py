@@ -27,12 +27,14 @@ def _payload() -> dict[str, object]:
                 "mode": "fixed",
                 "component_uid": "character-a",
                 "revision_uid": "revision-a",
+                "candidate_uid": "candidate-a",
             },
             {
                 "kind": "scene",
                 "mode": "random",
                 "component_uid": None,
                 "revision_uid": None,
+                "candidate_uid": None,
             },
         ],
         "loras": [
@@ -79,6 +81,18 @@ def _repository(tmp_path: Path) -> SqliteGeneratorStateRepository:
             ) VALUES ('revision-a', ?, 1, 'hero', '', 'prompt-hash')
             """,
             (component_id,),
+        )
+        revision_id = connection.execute(
+            "SELECT id FROM prompt_revisions WHERE revision_uid = 'revision-a'"
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO prompt_component_candidates(
+                candidate_uid, component_id, source_revision_id,
+                candidate_type, content_hash
+            ) VALUES ('candidate-a', ?, ?, 'calculated', 'candidate-hash')
+            """,
+            (component_id, revision_id),
         )
         definition_id = connection.execute(
             """
@@ -148,6 +162,26 @@ def test_generator_state_snapshot_validates_complete_fixed_references() -> (
     ]
 
     with pytest.raises(GeneratorStateValidationError, match="stable"):
+        GeneratorStateSnapshot.from_mapping(payload)
+
+
+def test_generator_state_reports_missing_and_unknown_lora_keys_together() -> (
+    None
+):
+    payload = _payload()
+    payload["loras"] = [
+        {
+            "lora_uid": "lora-a",
+            "revision_uid": "lora-revision-a",
+            "model_strength": 1,
+            "legacy": True,
+        }
+    ]
+
+    with pytest.raises(
+        GeneratorStateValidationError,
+        match=r"missing: clip_strength; unknown: legacy",
+    ):
         GeneratorStateSnapshot.from_mapping(payload)
 
 

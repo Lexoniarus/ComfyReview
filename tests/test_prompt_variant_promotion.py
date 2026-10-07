@@ -132,6 +132,29 @@ def test_promotion_policy_requires_stability_and_hysteresis() -> None:
     ).should_promote
 
 
+def test_promotion_policy_replaces_an_unsupported_current_standard() -> None:
+    current_recipe = PromptVariantRecipe((PromptAtomUsage("aiko", 1000),), ())
+    candidate_recipe = PromptVariantRecipe(
+        (PromptAtomUsage("aiko", 1100),), ()
+    )
+    current = PromptVariantRecommendation(
+        recipe=current_recipe,
+        score=_score(0.50, image_count=4, sufficiently_observed=False),
+        revision_uid="revision-current",
+    )
+    decision = PromptPromotionPolicy().evaluate(
+        "component",
+        _guidance(
+            current=current,
+            best=_recommendation(candidate_recipe, 0.51),
+            provisional=False,
+        ),
+    )
+
+    assert decision.should_promote is True
+    assert decision.reason == "unsupported_standard_replaced"
+
+
 class _Guidance:
     def __init__(self, by_component: dict[str, PromptVariantGuidance]) -> None:
         self.by_component = by_component

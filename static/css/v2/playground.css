@@ -273,7 +273,7 @@
 
 .prompt-mode-row {
   display: grid;
-  grid-template-columns: 6.5rem 6rem minmax(0, 1fr);
+  grid-template-columns: 6.5rem 6rem minmax(0, 1fr) minmax(8rem, 0.7fr);
   gap: var(--space-2);
   align-items: center;
   padding: var(--space-2);

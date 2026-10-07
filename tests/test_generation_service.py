@@ -34,6 +34,7 @@ from comfyreview.application import (
     WorkflowLoraChainBinding,
     WorkflowOutputBinding,
 )
+from comfyreview.domain import PromptAtomUsage
 
 
 def _blueprint() -> WorkflowBlueprint:
@@ -461,6 +462,91 @@ def test_generation_service_validates_before_dependencies(
             events=events,
         ).submit(generation_request)
     assert events == []
+
+
+@pytest.mark.parametrize(
+    ("group", "positive_atoms", "negative_atoms", "message"),
+    (
+        (
+            GenerationPromptGroup("", "component-a", "revision-a", 0),
+            (),
+            (),
+            "prompt group kind",
+        ),
+        (
+            GenerationPromptGroup("character", "", "revision-a", 0),
+            (),
+            (),
+            "component_uid",
+        ),
+        (
+            GenerationPromptGroup("character", "component-a", "", 0),
+            (),
+            (),
+            "revision_uid",
+        ),
+        (
+            GenerationPromptGroup(
+                "character",
+                "component-a",
+                "revision-a",
+                0,
+                candidate_uid="",
+            ),
+            (),
+            (),
+            "candidate_uid",
+        ),
+        (
+            GenerationPromptGroup(
+                "character",
+                "component-a",
+                "revision-a",
+                0,
+                positive_atoms=(PromptAtomUsage("other", 1000),),
+            ),
+            (PromptAtomUsage("hero", 1000),),
+            (),
+            "rendered prompt atoms",
+        ),
+        (
+            GenerationPromptGroup(
+                "character",
+                "component-a",
+                "revision-a",
+                0,
+                negative_atoms=(PromptAtomUsage("other", 1000),),
+            ),
+            (),
+            (PromptAtomUsage("blur", 1000),),
+            "rendered prompt atoms",
+        ),
+    ),
+)
+def test_generation_service_validates_exact_prompt_group_contract(
+    group: GenerationPromptGroup,
+    positive_atoms: tuple[PromptAtomUsage, ...],
+    negative_atoms: tuple[PromptAtomUsage, ...],
+    message: str,
+) -> None:
+    request = replace(
+        _request(),
+        prompt=GenerationPromptSnapshot(
+            "hero",
+            "blur",
+            ("revision-a",),
+            positive_atoms,
+            negative_atoms,
+            (group,),
+        ),
+    )
+
+    with pytest.raises(GenerationValidationError, match=message):
+        _service(
+            generations=_Generations([]),
+            comfyui=_ComfyUi([]),
+            events=[],
+        ).submit(request)
 
 
 def test_generation_service_rejects_unavailable_and_duplicate_loras() -> None:

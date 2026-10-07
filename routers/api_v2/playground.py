@@ -1,6 +1,7 @@
 """Catalog-backed Playground draft V2 HTTP adapters."""
 
 import secrets
+from collections.abc import Callable
 from typing import Literal
 from uuid import uuid4
 
@@ -16,14 +17,18 @@ from comfyreview.application import (
     GeneratorStateValidationError,
     ImageContextNotFoundError,
     ManualPromptSelection,
+    MaterializePromptCandidateCommand,
     PlaygroundEvidenceQuery,
     PromptCatalogValidationError,
     PromptDraftOverrides,
     PromptSelectionCommand,
     PromptSelectionError,
+    PromptVariantRecommendation,
     RenderSettings,
     ResolutionClass,
+    SelectedPromptComponent,
 )
+from comfyreview.domain import PromptAtomUsage
 from routers.api_v2.catalog import (
     PromptAtomRequest,
     atom_response,
@@ -46,6 +51,7 @@ class PlaygroundSelectionIntent(BaseModel):
     mode: Literal["fixed", "random", "off"]
     component_uid: str | None = None
     revision_uid: str | None = None
+    candidate_uid: str | None = None
 
 
 class PlaygroundDraftRequest(BaseModel):
@@ -136,6 +142,21 @@ class PlaygroundRenderGuidanceRequest(BaseModel):
     steps: int = Field(ge=1, le=100)
     cfg: float = Field(gt=0, le=30)
     denoise: float = Field(ge=0, le=1)
+
+
+class PlaygroundPromptGuidanceRequest(BaseModel):
+    """Evaluate one component and the currently loaded ordered atom list."""
+
+    component_uid: str
+    positive_atoms: list[PromptAtomRequest]
+    negative_atoms: list[PromptAtomRequest]
+
+
+class PlaygroundPromptCandidateRequest(PlaygroundPromptGuidanceRequest):
+    """Explicitly materialize one selected prompt recipe."""
+
+    source_revision_uid: str
+    candidate_type: Literal["manual", "calculated", "next_test"]
 
 
 class PlaygroundGeneratorSettingsPayload(BaseModel):
@@ -297,6 +318,88 @@ def playground_render_guidance(
         request
     ).playground_render_guidance.build(settings)
     return JSONResponse(guidance_response(guidance))
+
+
+@router.post("/playground/prompt-guidance")
+def playground_prompt_guidance(
+    request: Request,
+    payload: PlaygroundPromptGuidanceRequest,
+) -> JSONResponse:
+    """Return stable, observed, Weight-only, and discovery guidance."""
+    try:
+        container = get_application_container(request)
+        guidance = container.prompt_variant_guidance.build(
+            payload.component_uid,
+            positive_atoms=atom_usages(payload.positive_atoms),
+            negative_atoms=atom_usages(payload.negative_atoms),
+        )
+    except (KeyError, ValueError) as error:
+        return error_response(400, "invalid_prompt_guidance", str(error))
+    return JSONResponse(
+        {
+            "component_uid": payload.component_uid,
+            "model_version": guidance.model_version,
+            "current_provisional": guidance.current_provisional,
+            "current_standard": prompt_recommendation_response(
+                guidance.current_standard,
+                container.image_responses.image_url,
+            ),
+            "best_observed": prompt_recommendation_response(
+                guidance.best_observed,
+                container.image_responses.image_url,
+            ),
+            "optimized": prompt_recommendation_response(
+                guidance.optimized,
+                container.image_responses.image_url,
+            ),
+            "next_test": prompt_recommendation_response(
+                guidance.next_test,
+                container.image_responses.image_url,
+            ),
+            "coverage": {
+                "image_count": guidance.coverage.image_count,
+                "review_count": guidance.coverage.review_count,
+                "observed_variant_count": (
+                    guidance.coverage.observed_variant_count
+                ),
+                "stable_variant_count": guidance.coverage.stable_variant_count,
+                "modeled_atom_count": guidance.coverage.modeled_atom_count,
+                "atom_count": guidance.coverage.atom_count,
+            },
+        }
+    )
+
+
+@router.post("/playground/prompt-candidates")
+def materialize_playground_prompt_candidate(
+    request: Request,
+    payload: PlaygroundPromptCandidateRequest,
+) -> JSONResponse:
+    """Persist one calculated or manually accepted recipe on explicit choice."""
+    try:
+        candidate = get_application_container(
+            request
+        ).prompt_catalog_service.materialize_candidate(
+            MaterializePromptCandidateCommand(
+                component_uid=payload.component_uid,
+                source_revision_uid=payload.source_revision_uid,
+                candidate_type=payload.candidate_type,
+                positive_atoms=atom_usages(payload.positive_atoms),
+                negative_atoms=atom_usages(payload.negative_atoms),
+            )
+        )
+    except (KeyError, PromptCatalogValidationError, ValueError) as error:
+        return error_response(400, "invalid_prompt_candidate", str(error))
+    return JSONResponse(
+        {
+            "candidate_uid": candidate.candidate_uid,
+            "component_uid": candidate.component_uid,
+            "source_revision_uid": candidate.source_revision_uid,
+            "candidate_type": candidate.candidate_type,
+            "positive_atoms": atom_response(candidate.positive_atoms),
+            "negative_atoms": atom_response(candidate.negative_atoms),
+        }
+    )
 
 
 @router.post("/playground/drafts")
@@ -480,13 +583,18 @@ def prepare_playground_draft(
                     {
                         "component_uid": selected.component.component_uid,
                         "revision_uid": selected.revision.revision_uid,
+                        "candidate_uid": (
+                            selected.candidate.candidate_uid
+                            if selected.candidate is not None
+                            else None
+                        ),
                         "kind": selected.component.kind,
                         "name": selected.component.name,
                         "positive_atoms": atom_response(
-                            selected.revision.positive_atoms
+                            selection_atoms(selected, positive=True)
                         ),
                         "negative_atoms": atom_response(
-                            selected.revision.negative_atoms
+                            selection_atoms(selected, positive=False)
                         ),
                     }
                     for selected in draft.selection.components
@@ -517,14 +625,18 @@ def prepare_playground_draft(
                 {
                     "component_uid": selected.component.component_uid,
                     "revision_uid": selected.revision.revision_uid,
-                    "candidate_uid": None,
+                    "candidate_uid": (
+                        selected.candidate.candidate_uid
+                        if selected.candidate is not None
+                        else None
+                    ),
                     "kind": selected.component.kind,
                     "name": selected.component.name,
                     "positive_atoms": atom_response(
-                        selected.revision.positive_atoms
+                        selection_atoms(selected, positive=True)
                     ),
                     "negative_atoms": atom_response(
-                        selected.revision.negative_atoms
+                        selection_atoms(selected, positive=False)
                     ),
                 }
                 for selected in draft.selection.components
@@ -656,6 +768,55 @@ def playground_evidence(
     )
 
 
+def prompt_recommendation_response(
+    recommendation: PromptVariantRecommendation | None,
+    image_url: Callable[[str], str],
+) -> dict[str, object] | None:
+    """Map one prompt recommendation without leaking persistence details."""
+    if recommendation is None:
+        return None
+    score = recommendation.score
+    return {
+        "revision_uid": recommendation.revision_uid,
+        "candidate_uid": recommendation.candidate_uid,
+        "positive_atoms": atom_response(recommendation.recipe.positive_atoms),
+        "negative_atoms": atom_response(recommendation.recipe.negative_atoms),
+        "score": {
+            "lower_bound": score.lower_bound,
+            "expected_success_rate": score.expected_success_rate,
+            "average_rating": score.average_rating,
+            "image_count": score.image_count,
+            "review_count": score.review_count,
+            "deleted_count": score.deleted_count,
+            "standard_deviation": score.standard_deviation,
+            "sufficiently_observed": score.sufficiently_observed,
+        },
+        "example_images": [
+            {"image_uid": uid, "image_url": image_url(uid)}
+            for uid in recommendation.image_uids
+        ],
+    }
+
+
+def selection_atoms(
+    selection: SelectedPromptComponent,
+    *,
+    positive: bool,
+) -> tuple[PromptAtomUsage, ...]:
+    """Return candidate atoms or the exact source revision atoms."""
+    if selection.candidate is not None:
+        return (
+            selection.candidate.positive_atoms
+            if positive
+            else selection.candidate.negative_atoms
+        )
+    return (
+        selection.revision.positive_atoms
+        if positive
+        else selection.revision.negative_atoms
+    )
+
+
 def selection_command(
     payload: PlaygroundDraftRequest,
     concrete_seed: int,
@@ -681,6 +842,7 @@ def selection_command(
     disabled: list[str] = []
     character_uid = ""
     character_revision_uid: str | None = None
+    character_candidate_uid: str | None = None
     for kind in expected:
         selection = by_kind[kind]
         component_uid = str(selection.component_uid or "").strip()
@@ -689,9 +851,16 @@ def selection_command(
             if selection.revision_uid is not None
             else None
         )
-        if selection.mode != "fixed" and revision_uid is not None:
+        candidate_uid = (
+            str(selection.candidate_uid).strip()
+            if selection.candidate_uid is not None
+            else None
+        )
+        if selection.mode != "fixed" and (
+            revision_uid is not None or candidate_uid is not None
+        ):
             raise PromptSelectionError(
-                f"{selection.mode} {kind} selection cannot include revision_uid"
+                f"{selection.mode} {kind} selection cannot include prompt IDs"
             )
         if selection.mode == "off":
             if kind == "character":
@@ -704,15 +873,21 @@ def selection_command(
                 raise PromptSelectionError(
                     f"fixed {kind} selection requires component_uid"
                 )
+            if candidate_uid is not None and revision_uid is None:
+                raise PromptSelectionError(
+                    f"fixed {kind} candidate requires revision_uid"
+                )
             if kind == "character":
                 character_uid = component_uid
                 character_revision_uid = revision_uid
+                character_candidate_uid = candidate_uid
             else:
                 manual.append(
                     ManualPromptSelection(
                         kind,
                         component_uid,
                         revision_uid,
+                        candidate_uid,
                     )
                 )
     return PromptSelectionCommand(
@@ -722,6 +897,7 @@ def selection_command(
         seed=concrete_seed,
         max_attempts=payload.max_attempts,
         character_revision_uid=character_revision_uid,
+        character_candidate_uid=character_candidate_uid,
     )
 
 

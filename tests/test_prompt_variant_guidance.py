@@ -123,6 +123,22 @@ def test_guidance_requires_five_independent_images_not_repeated_reviews() -> (
     assert five.best_observed.score.sufficiently_observed is True
 
 
+def test_guidance_binds_an_observed_current_recipe_to_current_revision() -> (
+    None
+):
+    recipe = _recipe(1000)
+
+    result = _guidance(
+        recipe,
+        (
+            _observation("image-a", recipe, revision_uid="revision-a"),
+            _observation("image-b", recipe, revision_uid="revision-b"),
+        ),
+    )
+
+    assert result.current_standard.revision_uid == "revision-current"
+
+
 def test_guidance_keeps_delete_evidence_and_conservative_observed_order() -> (
     None
 ):
@@ -191,6 +207,25 @@ def test_guidance_does_not_model_an_unsupported_weight_or_change_structure() -> 
     assert result.optimized.recipe == current
     assert result.next_test is None
     assert result.coverage.modeled_atom_count == 0
+
+
+def test_guidance_omits_discovery_when_only_current_and_optimum_exist() -> (
+    None
+):
+    current = _recipe(900, texts=("eyes",))
+    optimized = _recipe(950, texts=("eyes",))
+    observations = tuple(
+        _observation(f"current-{index}", current, success=1, failure=1)
+        for index in range(3)
+    ) + tuple(
+        _observation(f"optimized-{index}", optimized, success=1)
+        for index in range(3)
+    )
+
+    result = _guidance(current, observations)
+
+    assert result.optimized.recipe == optimized
+    assert result.next_test is None
 
 
 def test_guidance_normalizes_combined_effects_for_longer_atom_lists() -> None:

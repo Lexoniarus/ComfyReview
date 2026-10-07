@@ -60,6 +60,10 @@ if (root instanceof HTMLElement) {
       {
         loadComponent: (uid, signal) =>
           api.get(`catalog/components/${encodeURIComponent(uid)}`, { signal }),
+        loadGuidance: (payload, signal) =>
+          api.post("playground/prompt-guidance", payload, { signal }),
+        materializeCandidate: (payload, signal) =>
+          api.post("playground/prompt-candidates", payload, { signal }),
         onImageSelect: (url) => viewer.open(url),
       },
     );
