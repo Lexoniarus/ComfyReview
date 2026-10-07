@@ -45,7 +45,7 @@ describe("Playground browser components", () => {
     expect(rows).toHaveLength(7);
     expect(rows[0].querySelector("select")?.value).toBe("fixed");
     expect(
-      editor.applyState({
+      await editor.applyState({
         selections: [
           {
             kind: "character",
@@ -80,7 +80,7 @@ describe("Playground browser components", () => {
       }),
     ]);
     expect(
-      editor.applyState({
+      await editor.applyState({
         selections: [
           { kind: "character", mode: "off", component_uid: null },
           { kind: "scene", mode: "fixed", component_uid: "missing" },
@@ -90,7 +90,7 @@ describe("Playground browser components", () => {
       }),
     ).toEqual(["character", "scene", "loras"]);
     expect(
-      editor.applyState({
+      await editor.applyState({
         selections: [],
         loras: [
           {
@@ -170,17 +170,32 @@ describe("Playground browser components", () => {
     defaultEditor.dispose();
   });
 
-  it("keeps a restored historical fixed revision without catalog history", () => {
+  it("resolves historical atoms and rejects a missing exact revision", async () => {
     const root = document.createElement("div");
-    const editor = new PromptModeEditor(root);
+    const loadRevisions = vi.fn(async () => ({
+      revisions: [
+        {
+          revision_uid: "character-rev-1",
+          revision_number: 1,
+          positive_atoms: [{ text: "historical aiko", weight: 1.2 }],
+          negative_atoms: [{ text: "historical negative", weight: 0.8 }],
+        },
+      ],
+    }));
+    const editor = new PromptModeEditor(root, () => {}, { loadRevisions });
     const character = {
       ...component("character-a", "character", "Aiko"),
-      latest_revision: { revision_uid: "character-rev-2", revision_number: 2 },
+      latest_revision: {
+        revision_uid: "character-rev-2",
+        revision_number: 2,
+        positive_atoms: [{ text: "current aiko", weight: 1 }],
+        negative_atoms: [],
+      },
     };
 
     editor.render([character]);
     expect(
-      editor.applyState({
+      await editor.applyState({
         selections: [
           {
             kind: "character",
@@ -191,10 +206,21 @@ describe("Playground browser components", () => {
         ],
       }),
     ).toEqual([]);
+    expect(loadRevisions).toHaveBeenCalledWith(
+      "character-a",
+      expect.any(AbortSignal),
+    );
 
+    const row = root.querySelector('.prompt-mode-row[data-kind="character"]');
+    expect(row.querySelector("select:nth-of-type(2)").value).toBe(
+      "character-a",
+    );
     expect(
-      root.querySelector(".prompt-mode-row select:nth-of-type(2)").value,
-    ).toBe("character-a");
+      row.querySelector("select:nth-of-type(3)").selectedOptions[0].textContent,
+    ).toBe("Historisch · R1");
+    expect(
+      [...row.querySelectorAll("[data-atom-text]")].map((input) => input.value),
+    ).toEqual(["historical aiko", "historical negative"]);
     expect(editor.value().selections[0]).toEqual({
       kind: "character",
       mode: "fixed",
@@ -202,8 +228,59 @@ describe("Playground browser components", () => {
       revision_uid: "character-rev-1",
       candidate_uid: null,
     });
+    expect(
+      await editor.applyState({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-a",
+            revision_uid: "character-rev-missing",
+          },
+        ],
+      }),
+    ).toEqual(["character"]);
+    expect(editor.value().selections[0].revision_uid).toBe("character-rev-1");
 
     editor.dispose();
+
+    const unavailable = new PromptModeEditor(
+      document.createElement("div"),
+      () => {},
+      {
+        loadRevisions: async () => Promise.reject(new Error("unavailable")),
+      },
+    );
+    unavailable.render([character]);
+    expect(
+      await unavailable.applyState({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-a",
+            revision_uid: "character-rev-1",
+          },
+        ],
+      }),
+    ).toEqual(["character"]);
+    unavailable.dispose();
+
+    const withoutLoader = new PromptModeEditor(document.createElement("div"));
+    withoutLoader.render([character]);
+    expect(
+      await withoutLoader.applyState({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-a",
+            revision_uid: "character-rev-1",
+          },
+        ],
+      }),
+    ).toEqual(["character"]);
+    withoutLoader.dispose();
 
     const empty = new PromptModeEditor(document.createElement("div"));
     empty.render([]);
@@ -381,7 +458,7 @@ describe("Playground browser components", () => {
     expect(editor.value().selections[1].candidate_uid).toBeNull();
 
     expect(
-      editor.applyState({
+      await editor.applyState({
         selections: [
           {
             kind: "character",
@@ -478,7 +555,7 @@ describe("Playground browser components", () => {
     }
   });
 
-  it("restores archived catalog components and labels them explicitly", () => {
+  it("restores archived catalog components and labels them explicitly", async () => {
     const root = document.createElement("div");
     const editor = new PromptModeEditor(root);
     const archivedScene = {
@@ -488,7 +565,7 @@ describe("Playground browser components", () => {
 
     editor.render([components[0], archivedScene]);
     expect(
-      editor.applyState({
+      await editor.applyState({
         selections: [
           {
             kind: "character",
@@ -513,9 +590,23 @@ describe("Playground browser components", () => {
     editor.dispose();
   });
 
-  it("applies a Combination patch with latest revisions and preserves other roles", () => {
+  it("applies a Combination patch with latest revisions and preserves other roles", async () => {
     const root = document.createElement("div");
-    const editor = new PromptModeEditor(root);
+    const editor = new PromptModeEditor(root, () => {}, {
+      loadRevisions: async (uid) => ({
+        revisions: [
+          {
+            revision_uid:
+              uid === "character-a"
+                ? "character-historical"
+                : "pose-historical",
+            revision_number: 1,
+            positive_atoms: [],
+            negative_atoms: [],
+          },
+        ],
+      }),
+    });
     const catalog = components.map((item) => ({
       ...item,
       latest_revision: {
@@ -525,7 +616,7 @@ describe("Playground browser components", () => {
     }));
     editor.render(catalog);
     expect(
-      editor.applyState({
+      await editor.applyState({
         selections: [
           {
             kind: "character",
@@ -545,7 +636,7 @@ describe("Playground browser components", () => {
     ).toEqual([]);
 
     expect(
-      editor.applyState(
+      await editor.applyState(
         combinationPromptPatch([
           { kind: "scene", component_uid: "scene-a" },
           { kind: "outfit", component_uid: "outfit-a" },
@@ -614,9 +705,21 @@ describe("Playground browser components", () => {
     editor.dispose();
   });
 
-  it("uses latest after a manual component change or leaving fixed mode", () => {
+  it("uses latest after a manual component change or leaving fixed mode", async () => {
     const root = document.createElement("div");
-    const editor = new PromptModeEditor(root);
+    const editor = new PromptModeEditor(root, () => {}, {
+      loadRevisions: async (uid) => ({
+        revisions: [
+          {
+            revision_uid:
+              uid === "character-a" ? "character-rev-1" : "scene-rev-1",
+            revision_number: 1,
+            positive_atoms: [],
+            negative_atoms: [],
+          },
+        ],
+      }),
+    });
     const catalog = [
       {
         ...component("character-a", "character", "Aiko"),
@@ -638,7 +741,7 @@ describe("Playground browser components", () => {
       },
     ];
     editor.render(catalog);
-    editor.applyState({
+    await editor.applyState({
       selections: [
         {
           kind: "character",
@@ -671,7 +774,7 @@ describe("Playground browser components", () => {
 
     const sceneRow = root.querySelector('.prompt-mode-row[data-kind="scene"]');
     const sceneMode = sceneRow.querySelector("select");
-    editor.applyState({
+    await editor.applyState({
       selections: [
         {
           kind: "scene",
@@ -707,7 +810,7 @@ describe("Playground browser components", () => {
       candidate_uid: null,
     });
 
-    editor.applyState({
+    await editor.applyState({
       selections: [
         {
           kind: "scene",

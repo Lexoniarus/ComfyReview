@@ -215,6 +215,75 @@ describe("Playground variant workspace", () => {
     defaults.dispose();
   });
 
+  it("submits image snapshots without competing groups before and after inspection", () => {
+    const snapshot = {
+      ...variant("snapshot-draft"),
+      source_image_uid: "image-source",
+      positive_atoms: [
+        { text: "aiko", weight: 1 },
+        { text: "detail trigger", weight: 1 },
+      ],
+      loras: [
+        {
+          lora_uid: "lora-detail",
+          revision_uid: "lora-detail-revision-1",
+          provider_name: "character-detail.safetensors",
+          model_strength: 0.8,
+          clip_strength: 0.6,
+        },
+        {
+          lora_uid: "lora-style",
+          revision_uid: "lora-style-revision-3",
+          provider_name: "style.safetensors",
+          model_strength: 0.5,
+          clip_strength: 0.4,
+        },
+      ],
+    };
+
+    expect(variantGenerationPayload(snapshot)).toEqual(
+      expect.objectContaining({
+        source_image_uid: "image-source",
+        prompt_groups: [],
+        prompt_selections: snapshot.prompt_selections,
+        positive_atoms: snapshot.positive_atoms,
+        loras: [
+          expect.objectContaining({
+            revision_uid: "lora-detail-revision-1",
+            model_strength: 0.8,
+            clip_strength: 0.6,
+          }),
+          expect.objectContaining({
+            revision_uid: "lora-style-revision-3",
+            model_strength: 0.5,
+            clip_strength: 0.4,
+          }),
+        ],
+      }),
+    );
+
+    const root = document.createElement("div");
+    const inspector = new VariantInspector(
+      root,
+      document.createElement("span"),
+    );
+    inspector.render(snapshot);
+    const input = root.querySelector("[data-atom-text]");
+    input.value = "inspector snapshot edit";
+    input.dispatchEvent(new Event("input"));
+    expect(inspector.generationPayload()).toEqual(
+      expect.objectContaining({
+        source_image_uid: "image-source",
+        prompt_groups: [],
+        positive_atoms: [
+          expect.objectContaining({ text: "inspector snapshot edit" }),
+          { text: "detail trigger", weight: 1 },
+        ],
+      }),
+    );
+    inspector.dispose();
+  });
+
   it("owns Setup and Varianten navigation with one listener lifecycle", () => {
     const root = document.createElement("div");
     const setupButton = stepButton("setup");

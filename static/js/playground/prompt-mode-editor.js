@@ -18,13 +18,16 @@ export class PromptModeEditor {
   #stableRevisionByComponent = new Map();
   /** @type {Map<string, Record<string, any>>} */
   #componentByUid = new Map();
+  /** @type {Map<string, Record<string, any>>} */
+  #revisionByIdentity = new Map();
 
-  /** @param {HTMLElement} root @param {() => void} [onChange] @param {{loadComponent?: (uid: string, signal: AbortSignal) => Promise<any>, loadGuidance?: (payload: Record<string, any>, signal: AbortSignal) => Promise<any>, materializeCandidate?: (payload: Record<string, any>, signal: AbortSignal) => Promise<any>, onImageSelect?: (url: string) => void}} [evidence] */
+  /** @param {HTMLElement} root @param {() => void} [onChange] @param {{loadComponent?: (uid: string, signal: AbortSignal) => Promise<any>, loadRevisions?: (uid: string, signal: AbortSignal) => Promise<any>, loadGuidance?: (payload: Record<string, any>, signal: AbortSignal) => Promise<any>, materializeCandidate?: (payload: Record<string, any>, signal: AbortSignal) => Promise<any>, onImageSelect?: (url: string) => void}} [evidence] */
   constructor(root, onChange = () => {}, evidence = {}) {
     this.root = root;
     this.abortController = new AbortController();
     this.onChange = typeof onChange === "function" ? onChange : () => {};
     this.loadComponent = evidence.loadComponent || null;
+    this.loadRevisions = evidence.loadRevisions || null;
     this.loadGuidance = evidence.loadGuidance || null;
     this.materializeCandidate = evidence.materializeCandidate || null;
     this.onImageSelect = evidence.onImageSelect || (() => {});
@@ -38,6 +41,8 @@ export class PromptModeEditor {
     this.cache = new Map();
     /** @type {Map<string, AbortController>} */
     this.requests = new Map();
+    /** @type {AbortController | null} */
+    this.stateRequest = null;
     this.loras = null;
     this.isBusy = false;
     /** @type {Array<Record<string, any>>} */
@@ -57,6 +62,21 @@ export class PromptModeEditor {
         component,
       ]),
     );
+    this.#revisionByIdentity.clear();
+    for (const component of components) {
+      const componentUid = String(component.component_uid || "");
+      for (const revision of [
+        component.current_revision,
+        component.latest_revision,
+      ]) {
+        const revisionUid = String(revision?.revision_uid || "");
+        if (componentUid && revisionUid)
+          this.#revisionByIdentity.set(
+            revisionIdentity(componentUid, revisionUid),
+            revision,
+          );
+      }
+    }
     this.#stableRevisionByComponent = new Map(
       components.map((component) => [
         String(component.component_uid || ""),
@@ -145,11 +165,36 @@ export class PromptModeEditor {
   /**
    * Restore saved selections after the allowed catalog has rendered.
    * @param {{selections?: PromptSelectionValue[], loras?: Array<Record<string, any>>}} state
-   * @returns {string[]} Kinds rejected because their mode or component is unavailable.
+   * @returns {Promise<string[]>} Kinds rejected because their mode, component or exact revision is unavailable.
    */
-  applyState(state) {
+  async applyState(state) {
     const rejected = [];
     const selections = Array.isArray(state.selections) ? state.selections : [];
+    this.stateRequest?.abort();
+    const controller = new AbortController();
+    this.stateRequest = controller;
+    const resolvedSelections = new Set();
+    await Promise.all(
+      selections.map(async (selection) => {
+        const kind = String(selection.kind || "");
+        const mode = String(selection.mode || "");
+        const componentUid = String(selection.component_uid || "");
+        const revisionUid = String(selection.revision_uid || "").trim();
+        if (mode !== "fixed" || !componentUid || !revisionUid) return;
+        try {
+          const revision = await this.#resolveRevision(
+            componentUid,
+            revisionUid,
+            controller.signal,
+          );
+          if (revision) resolvedSelections.add(selection);
+          else rejected.push(kind);
+        } catch {
+          rejected.push(kind);
+        }
+      }),
+    );
+    if (this.stateRequest === controller) this.stateRequest = null;
     for (const selection of selections) {
       const kind = String(selection.kind || "");
       const row = this.rows.get(kind);
@@ -173,6 +218,8 @@ export class PromptModeEditor {
         selection.candidate_uid.trim()
           ? selection.candidate_uid.trim()
           : null;
+      if (mode === "fixed" && revisionUid && !resolvedSelections.has(selection))
+        continue;
       if (
         mode === "fixed" &&
         ![...row.component.options].some(
@@ -237,6 +284,8 @@ export class PromptModeEditor {
 
   dispose() {
     this.abortController.abort();
+    this.stateRequest?.abort();
+    this.stateRequest = null;
     this.#cancelRequests();
     this.loras?.dispose();
     this.loras = null;
@@ -245,6 +294,7 @@ export class PromptModeEditor {
     this.#selectionState.clear();
     this.#stableRevisionByComponent.clear();
     this.#componentByUid.clear();
+    this.#revisionByIdentity.clear();
   }
 
   /** @param {string} kind @param {string} label @param {Array<Record<string, any>>} components */
@@ -368,12 +418,36 @@ export class PromptModeEditor {
     if (manualOption)
       manualOption.disabled =
         !manualCandidateUid && selectedCandidate?.candidate_type !== "manual";
-    row.variant.value = candidateUid
-      ? candidateUid === manualCandidateUid ||
+    const existingHistorical = [...row.variant.options].find(
+      (item) => item.dataset.historicalRevision === "true",
+    );
+    existingHistorical?.remove();
+    if (candidateUid) {
+      row.variant.value =
+        candidateUid === manualCandidateUid ||
         selectedCandidate?.candidate_type === "manual"
-        ? "catalog_candidate"
-        : "calculated"
-      : "stable";
+          ? "catalog_candidate"
+          : "calculated";
+    } else if (revisionUid && revisionUid !== stableRevisionUid) {
+      const historicalRevision = componentUid
+        ? this.#revisionByIdentity.get(
+            revisionIdentity(componentUid, revisionUid),
+          )
+        : null;
+      const revisionNumber = Number(historicalRevision?.revision_number || 0);
+      const historicalOption = option(
+        "historical",
+        revisionNumber > 0
+          ? `Historisch · R${revisionNumber}`
+          : "Historische Revision",
+      );
+      historicalOption.dataset.historicalRevision = "true";
+      historicalOption.disabled = true;
+      row.variant.append(historicalOption);
+      row.variant.value = "historical";
+    } else {
+      row.variant.value = "stable";
+    }
     this.#selectionState.set(
       kind,
       Object.freeze({
@@ -583,6 +657,27 @@ export class PromptModeEditor {
     this.requests.clear();
   }
 
+  /** @param {string} componentUid @param {string} revisionUid @param {AbortSignal} signal */
+  async #resolveRevision(componentUid, revisionUid, signal) {
+    const identity = revisionIdentity(componentUid, revisionUid);
+    const cached = this.#revisionByIdentity.get(identity);
+    if (cached) return cached;
+    if (!this.loadRevisions) return null;
+    const payload = await this.loadRevisions(componentUid, signal);
+    const revisions = Array.isArray(payload?.revisions)
+      ? payload.revisions
+      : [];
+    for (const revision of revisions) {
+      const loadedRevisionUid = String(revision.revision_uid || "");
+      if (loadedRevisionUid)
+        this.#revisionByIdentity.set(
+          revisionIdentity(componentUid, loadedRevisionUid),
+          revision,
+        );
+    }
+    return this.#revisionByIdentity.get(identity) || null;
+  }
+
   /** @param {string} kind */
   #syncComposer(kind) {
     const row = this.rows.get(kind);
@@ -596,9 +691,16 @@ export class PromptModeEditor {
       ? this.#componentByUid.get(selection.componentUid)
       : null;
     const stable = component?.current_revision || component?.latest_revision;
+    const selectedRevision =
+      selection.componentUid && selection.revisionUid
+        ? this.#revisionByIdentity.get(
+            revisionIdentity(selection.componentUid, selection.revisionUid),
+          )
+        : null;
     if (
       !component ||
       !stable ||
+      !selectedRevision ||
       !selection.componentUid ||
       !selection.revisionUid
     )
@@ -616,8 +718,10 @@ export class PromptModeEditor {
       componentUid: selection.componentUid,
       revisionUid: selection.revisionUid,
       candidateUid: selection.candidateUid,
-      positiveAtoms: candidate?.positive_atoms || stable.positive_atoms || [],
-      negativeAtoms: candidate?.negative_atoms || stable.negative_atoms || [],
+      positiveAtoms:
+        candidate?.positive_atoms || selectedRevision.positive_atoms || [],
+      negativeAtoms:
+        candidate?.negative_atoms || selectedRevision.negative_atoms || [],
       onChange: () => this.onChange(),
       onReset: () =>
         this.#transition(
@@ -672,4 +776,9 @@ function option(value, label) {
 /** @param {string} value @returns {value is "fixed" | "random" | "off"} */
 function isPromptMode(value) {
   return value === "fixed" || value === "random" || value === "off";
+}
+
+/** @param {string} componentUid @param {string} revisionUid */
+function revisionIdentity(componentUid, revisionUid) {
+  return `${componentUid}\u0000${revisionUid}`;
 }

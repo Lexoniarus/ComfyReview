@@ -1,4 +1,4 @@
-import { DraftPreview } from "./draft-preview.js";
+import { DraftPreview, generationPromptGroups } from "./draft-preview.js";
 
 /** Own focused inspection and local atom editing for one concrete variant. */
 export class VariantInspector {
@@ -68,7 +68,10 @@ export function variantGenerationPayload(variant) {
   return {
     draft_uid: String(variant.draft_uid || ""),
     prompt_selections: promptSelections.map(promptSelection),
-    prompt_groups: promptGroups.map(promptGroup),
+    prompt_groups: generationPromptGroups(
+      variant.source_image_uid,
+      promptGroups.map(promptGroup),
+    ),
     source_image_uid: variant.source_image_uid || null,
     positive_atoms: atomValues(variant.positive_atoms),
     negative_atoms: atomValues(variant.negative_atoms),

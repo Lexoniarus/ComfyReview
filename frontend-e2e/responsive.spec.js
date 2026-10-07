@@ -231,6 +231,13 @@ test("historical image handoff restores archived scopes and LoRA", async ({
     "component-scene-01",
   );
   await expect(sceneRow).toContainText("Testszene 01 · Archiv");
+  await expect(sceneRow.locator("select").nth(2)).toHaveValue("historical");
+  await expect(sceneRow.locator("select").nth(2)).toContainText(
+    "Historisch · R1",
+  );
+  await expect(sceneRow.locator("[data-atom-text]").first()).toHaveValue(
+    "test scene 01",
+  );
   for (const kind of ["outfit", "pose"]) {
     await expect(
       page.locator(`.prompt-mode-row[data-kind="${kind}"] select`).first(),
@@ -243,6 +250,58 @@ test("historical image handoff restores archived scopes and LoRA", async ({
   }
   await expect(page.locator(".prompt-lora-layer")).toContainText(
     "Character Detail",
+  );
+  await page.getByLabel("Anzahl Varianten").fill("1");
+  await page.getByLabel("Anzahl Varianten").dispatchEvent("change");
+  await page.getByRole("button", { name: "Varianten vorbereiten" }).click();
+  await expect(page.locator(".variant-card")).toHaveCount(1);
+  const generationRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      request.url().endsWith("/api/v2/generations/batch"),
+  );
+  await page.getByRole("button", { name: "Auswahl generieren" }).click();
+  const submittedPayload = (await generationRequest).postDataJSON();
+  expect(submittedPayload.variants).toHaveLength(1);
+  for (const submittedVariant of submittedPayload.variants) {
+    expect(submittedVariant.source_image_uid).toBe("image-e2e-01");
+    expect(submittedVariant.prompt_groups).toEqual([]);
+    expect(submittedVariant.prompt_selections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "scene",
+          revision_uid: "revision-component-scene-01",
+        }),
+      ]),
+    );
+    expect(
+      submittedVariant.positive_atoms.filter(
+        (atom) => atom.text === "detail trigger",
+      ),
+    ).toHaveLength(1);
+  }
+  await expect(page.locator("[data-generation-result]")).toContainText(
+    "submitted",
+  );
+  await expect(page.locator("[data-generation-result]")).not.toContainText(
+    "Fehler:",
+  );
+  const submission = await page.evaluate(async () =>
+    fetch("/_e2e/submissions").then((response) => response.json()),
+  );
+  expect(submission.loras).toEqual([
+    ["character-detail.safetensors", 800, 600],
+  ]);
+  const loraNode = submission.prompt.prompt["cr:lora:000"];
+  expect(loraNode.inputs.lora_name).toBe("character-detail.safetensors");
+  expect(loraNode.inputs.strength_model).toBe(0.8);
+  expect(loraNode.inputs.strength_clip).toBe(0.6);
+  expect(
+    JSON.stringify(submission.prompt.prompt).match(/detail trigger/g),
+  ).toHaveLength(1);
+  expect(JSON.stringify(submission.prompt.prompt)).toContain("test scene 01");
+  expect(JSON.stringify(submission.prompt.prompt)).not.toContain(
+    "current test scene 01",
   );
   expect(errors).toEqual([]);
 });

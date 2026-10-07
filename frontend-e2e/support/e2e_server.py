@@ -124,6 +124,13 @@ class BrowserTestRuntime:
                     negative_prompt_id=negative_prompt_id,
                     first_sequence=sequence,
                 )
+            self._append_component_revision(
+                connection,
+                component_uid="component-scene-01",
+                revision_uid="revision-component-scene-01-current",
+                revision_number=2,
+                positive_text="current test scene 01",
+            )
             connection.commit()
         finally:
             connection.close()
@@ -408,6 +415,85 @@ class BrowserTestRuntime:
         return revision_id
 
     @staticmethod
+    def _append_component_revision(
+        connection: sqlite3.Connection,
+        *,
+        component_uid: str,
+        revision_uid: str,
+        revision_number: int,
+        positive_text: str,
+    ) -> int:
+        row = connection.execute(
+            "SELECT id FROM prompt_components WHERE component_uid = ?",
+            (component_uid,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("prompt component does not exist")
+        component_id = int(row[0])
+        current = connection.execute(
+            """
+            SELECT revision_id
+            FROM prompt_component_promotions
+            WHERE component_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (component_id,),
+        ).fetchone()
+        if current is None:
+            raise RuntimeError("prompt component has no promoted revision")
+        revision_id = BrowserTestRuntime._last_row_id(
+            connection.execute(
+                """
+                INSERT INTO prompt_revisions(
+                    revision_uid, component_id, revision_number,
+                    positive_text, negative_text, content_hash
+                ) VALUES (?, ?, ?, ?, '', ?)
+                """,
+                (
+                    revision_uid,
+                    component_id,
+                    revision_number,
+                    positive_text,
+                    BrowserTestRuntime._digest(positive_text),
+                ),
+            )
+        )
+        atom_id = BrowserTestRuntime._insert_atom(connection, positive_text)
+        connection.execute(
+            """
+            INSERT INTO prompt_revision_atom_usages(
+                revision_id, atom_id, scope, position, weight_milli
+            ) VALUES (?, ?, 'pos', 0, 1000)
+            """,
+            (revision_id, atom_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_component_promotions(
+                promotion_uid, component_id, revision_id,
+                previous_revision_id, policy_version, review_frontier,
+                independent_image_count, review_count, deleted_count,
+                lower_bound_score, expected_score, average_rating,
+                reason, provisional
+            ) VALUES (
+                ?, ?, ?, ?, 'prompt-guidance-v1',
+                COALESCE((
+                    SELECT value FROM review_clock WHERE singleton_id = 1
+                ), 0),
+                0, 0, 0, NULL, NULL, NULL, 'evidence', 0
+            )
+            """,
+            (
+                f"prompt-promotion-e2e-{revision_uid}",
+                component_id,
+                revision_id,
+                int(current[0]),
+            ),
+        )
+        return revision_id
+
+    @staticmethod
     def _insert_prompt(
         connection: sqlite3.Connection, scope: str, text: str
     ) -> int:
@@ -511,7 +597,7 @@ class BrowserTestRuntime:
         @application.post("/_fake_comfyui/prompt")
         def submit_prompt(payload: dict[str, Any]) -> dict[str, str]:
             self.submitted_prompts.append(payload)
-            return {"prompt_id": "e2e-prompt-1"}
+            return {"prompt_id": f"e2e-prompt-{len(self.submitted_prompts)}"}
 
         @application.get("/_e2e/submissions")
         def submissions() -> dict[str, Any]:

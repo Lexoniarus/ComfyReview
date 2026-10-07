@@ -4,7 +4,7 @@ import {
 } from "../playground/variant-inspector.js";
 
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
-/** @typedef {{render: (components: any[], loras?: any[]) => void, applyState: (state: Record<string, any>) => string[] | void, value: () => {selections: any[], loras?: any[], component_overrides?: any[]}, stateValue: () => {selections: any[], loras: any[]}, setBusy: (busy: boolean) => void, dispose: () => void}} ModesBoundary */
+/** @typedef {{render: (components: any[], loras?: any[]) => void, applyState: (state: Record<string, any>) => Promise<string[]>, value: () => {selections: any[], loras?: any[], component_overrides?: any[]}, stateValue: () => {selections: any[], loras: any[]}, setBusy: (busy: boolean) => void, dispose: () => void}} ModesBoundary */
 /** @typedef {{render: (capabilities: any) => void, applyState: (state: Record<string, any>) => string[] | void, stateValue: () => Record<string, any>, variantValue: () => {variant_count: number, generation: Record<string, any>}, renderSettings: () => any, renderGuidance: (payload: any, basis: "observed" | "predicted") => void, applyRenderSettings: (settings: Record<string, any>) => string[], applyParameter: (parameter: string, value: unknown) => boolean, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
 /** @typedef {{render: (variant: any) => void, clear: () => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: () => any, dispose: () => void}} InspectorBoundary */
 /** @typedef {{snapshot: () => any, activeVariant: () => any, selectedVariants: () => any[], inspected?: string, inspect: (uid: string) => boolean, select: (uid: string, selected: boolean) => boolean, review: (uid: string, payload: Record<string, any>) => boolean, reviewedPayload: (uid: string) => Record<string, any> | null, markStale: () => void, prepare: (operation: (signal: AbortSignal) => Promise<Record<string, any>>) => Promise<Record<string, any>>, submit: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, readonly hasVariants: boolean, readonly canSubmit: boolean, dispose: () => void}} VariantSessionBoundary */
@@ -74,7 +74,7 @@ export class PlaygroundController {
       );
       this.controls.render(capabilities);
       const stateRejected = [
-        ...(this.modes.applyState(savedState) || []),
+        ...((await this.modes.applyState(savedState)) || []),
         ...(this.controls.applyState(savedState) || []),
       ];
       const handoff = await this.handoffApplier.apply(this.intent);

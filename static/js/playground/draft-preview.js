@@ -84,8 +84,8 @@ export class DraftPreview {
   promptPayload() {
     if (!this.editors.length) return null;
     return {
-      positive_atoms: this.#atoms("positive"),
-      negative_atoms: this.#atoms("negative"),
+      positive_atoms: this.#reviewedAtoms("positive"),
+      negative_atoms: this.#reviewedAtoms("negative"),
       loras: Array.isArray(this.draft?.loras)
         ? this.draft.loras.map(generationLoraPayload)
         : [],
@@ -160,10 +160,13 @@ export class DraftPreview {
         component_uid: selection.component_uid,
         revision_uid: selection.revision_uid,
       })),
-      prompt_groups: this.#promptGroups(),
+      prompt_groups: generationPromptGroups(
+        this.draft.source_image_uid,
+        this.#promptGroups(),
+      ),
       source_image_uid: this.draft.source_image_uid || null,
-      positive_atoms: this.#atoms("positive"),
-      negative_atoms: this.#atoms("negative"),
+      positive_atoms: this.#reviewedAtoms("positive"),
+      negative_atoms: this.#reviewedAtoms("negative"),
       checkpoint: settings.checkpoint,
       aspect_format: settings.aspect_format,
       resolution_class: settings.resolution_class,
@@ -233,12 +236,25 @@ export class DraftPreview {
     );
   }
 
+  /** Retain authoritative snapshot atoms that are not represented by editable component groups. @param {"positive" | "negative"} scope */
+  #reviewedAtoms(scope) {
+    const edited = this.#atoms(scope);
+    if (!this.draft?.source_image_uid) return edited;
+    const original = Array.isArray(this.draft[`${scope}_atoms`])
+      ? this.draft[`${scope}_atoms`]
+      : [];
+    const represented = this.groupEditors.flatMap(({ source }) =>
+      Array.isArray(source[`${scope}_atoms`]) ? source[`${scope}_atoms`] : [],
+    );
+    return [...edited, ...atomDifference(original, represented)];
+  }
+
   #isEdited() {
     const draft = this.draft || {};
     return (
-      JSON.stringify(this.#atoms("positive")) !==
+      JSON.stringify(this.#reviewedAtoms("positive")) !==
         JSON.stringify(draft.positive_atoms || []) ||
-      JSON.stringify(this.#atoms("negative")) !==
+      JSON.stringify(this.#reviewedAtoms("negative")) !==
         JSON.stringify(draft.negative_atoms || [])
     );
   }
@@ -313,4 +329,35 @@ function generationLoraPayload(lora) {
     model_strength: Number(lora.model_strength ?? 1),
     clip_strength: Number(lora.clip_strength ?? 1),
   };
+}
+
+/** Keep catalog groups for ordinary variants and suppress them for authoritative image snapshots. @param {unknown} sourceImageUid @param {Array<Record<string, any>>} promptGroups */
+export function generationPromptGroups(sourceImageUid, promptGroups) {
+  return sourceImageUid ? [] : promptGroups;
+}
+
+/** @param {Array<Record<string, any>>} values @param {Array<Record<string, any>>} represented */
+function atomDifference(values, represented) {
+  const counts = new Map();
+  for (const atom of represented) {
+    const identity = atomIdentity(atom);
+    counts.set(identity, (counts.get(identity) || 0) + 1);
+  }
+  return values
+    .filter((atom) => {
+      const identity = atomIdentity(atom);
+      const count = counts.get(identity) || 0;
+      if (!count) return true;
+      counts.set(identity, count - 1);
+      return false;
+    })
+    .map((atom) => ({
+      text: String(atom.text || ""),
+      weight: Number(atom.weight ?? 1),
+    }));
+}
+
+/** @param {Record<string, any>} atom */
+function atomIdentity(atom) {
+  return `${String(atom.text || "")}\u0000${Number(atom.weight ?? 1)}`;
 }

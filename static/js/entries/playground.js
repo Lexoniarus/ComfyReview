@@ -79,6 +79,10 @@ if (root instanceof HTMLElement) {
       {
         loadComponent: (uid, signal) =>
           api.get(`catalog/components/${encodeURIComponent(uid)}`, { signal }),
+        loadRevisions: (uid, signal) =>
+          api.get(`catalog/components/${encodeURIComponent(uid)}/revisions`, {
+            signal,
+          }),
         loadGuidance: (payload, signal) =>
           api.post("playground/prompt-guidance", payload, { signal }),
         materializeCandidate: (payload, signal) =>

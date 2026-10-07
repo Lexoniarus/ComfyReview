@@ -7,7 +7,7 @@ import {
 
 /** Own loading, atomic application, persistence and cleanup of one handoff. */
 export class GeneratorHandoffApplier {
-  /** @param {{api: {get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>}, modes: {value: () => Record<string, any>, applyState: (state: Record<string, any>) => string[] | void}, controls: {stateValue: () => Record<string, any>, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void}, persistence: {save: () => Promise<any>}, urlCleaner: {removeHandoff: () => boolean}, requests: {run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>}}} dependencies */
+  /** @param {{api: {get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>}, modes: {value: () => Record<string, any>, applyState: (state: Record<string, any>) => Promise<string[]>}, controls: {stateValue: () => Record<string, any>, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void}, persistence: {save: () => Promise<any>}, urlCleaner: {removeHandoff: () => boolean}, requests: {run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>}}} dependencies */
   constructor(dependencies) {
     this.api = dependencies.api;
     this.modes = dependencies.modes;
@@ -51,7 +51,7 @@ export class GeneratorHandoffApplier {
       const rejected = [...(this.controls.applyIntent(projectedIntent) || [])];
       if (typedSource) {
         const promptState = await this.#promptState(typedSource, promptHandoff);
-        rejected.push(...(this.modes.applyState(promptState) || []));
+        rejected.push(...((await this.modes.applyState(promptState)) || []));
       }
       if (rejected.length) {
         throw new HandoffRejectedError(rejected);
@@ -78,7 +78,9 @@ export class GeneratorHandoffApplier {
     } catch (error) {
       const restoreIssues = [];
       try {
-        restoreIssues.push(...(this.modes.applyState(previousPrompt) || []));
+        restoreIssues.push(
+          ...((await this.modes.applyState(previousPrompt)) || []),
+        );
       } catch (restoreError) {
         restoreIssues.push(errorMessage(restoreError));
       }

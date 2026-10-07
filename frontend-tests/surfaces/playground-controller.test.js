@@ -386,8 +386,49 @@ describe("PlaygroundController", () => {
         clip_effective: false,
       },
     ];
+    const preparedSnapshot = {
+      ...variant("draft-1", 17),
+      source_image_uid: "image-prompt",
+      prompt_selections: promptSelectionState.selections
+        .filter((selection) => selection.mode === "fixed")
+        .map((selection) => ({
+          kind: selection.kind,
+          component_uid: selection.component_uid,
+          revision_uid: selection.revision_uid,
+        })),
+      prompt_groups: [
+        {
+          kind: "character",
+          component_uid: "character-a",
+          revision_uid: "character-rev-1",
+          positive_atoms: [{ text: "aiko", weight: 1 }],
+          negative_atoms: [],
+        },
+      ],
+      positive_atoms: [
+        { text: "aiko", weight: 1 },
+        { text: "detail trigger", weight: 1 },
+      ],
+      loras: handoffLoras,
+    };
+    const reviewedSnapshot = {
+      ...generationPayload("draft-1"),
+      source_image_uid: "image-prompt",
+      prompt_selections: preparedSnapshot.prompt_selections,
+      prompt_groups: [],
+      positive_atoms: preparedSnapshot.positive_atoms,
+      loras: handoffLoras.map((lora) => ({
+        name: lora.provider_name,
+        lora_uid: lora.lora_uid,
+        revision_uid: lora.revision_uid,
+        model_strength: lora.model_strength,
+        clip_strength: lora.clip_strength,
+      })),
+    };
     const fixture = createFixture({
       intent: { promptImageUid: "image-prompt" },
+      preparedVariant: preparedSnapshot,
+      inspectorPayload: reviewedSnapshot,
       savedState: {
         selections: [
           {
@@ -457,6 +498,12 @@ describe("PlaygroundController", () => {
         generation: expect.any(Object),
         variant_count: 1,
       }),
+      expect.any(Object),
+    );
+    await fixture.controller.submit();
+    expect(fixture.api.post).toHaveBeenCalledWith(
+      "generations/batch",
+      { variants: [reviewedSnapshot] },
       expect.any(Object),
     );
     fixture.controller.promptSettingsChanged();
@@ -1516,7 +1563,7 @@ function createFixture(options = {}) {
   const selectionSnapshots = new WeakSet();
   const modes = disposable({
     render: vi.fn(),
-    applyState: vi.fn((state) => {
+    applyState: vi.fn(async (state) => {
       const error = options.modeStateError?.(state);
       if (error) throw error;
       if (selectionSnapshots.has(state)) {
@@ -1623,7 +1670,9 @@ function createFixture(options = {}) {
     renderSnapshots: vi.fn(),
     renderEvidence: vi.fn(),
     generationPayload: vi.fn(() =>
-      options.emptyPayload ? null : generationPayload("draft-1"),
+      options.emptyPayload
+        ? null
+        : options.inspectorPayload || generationPayload("draft-1"),
     ),
   });
   const board = disposable({ render: vi.fn() });
@@ -1689,7 +1738,7 @@ function createFixture(options = {}) {
               notice: null,
               variants: options.batch
                 ? [variant("draft-1", 17), variant("draft-2", 18)]
-                : [variant("draft-1", 17)],
+                : [options.preparedVariant || variant("draft-1", 17)],
             });
       }
       if (path === "playground/render-preview") {
