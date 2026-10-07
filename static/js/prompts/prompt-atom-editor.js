@@ -51,7 +51,10 @@ export class PromptAtomEditor {
     });
     actions.append(summary, add, bulkImport, reset);
     headingRow.append(heading, actions);
-    this.importPanel = this.#buildImportPanel();
+    const importer = this.#buildImportPanel();
+    this.importPanel = importer.panel;
+    this.importInput = importer.input;
+    this.importStatus = importer.status;
     this.element.append(headingRow, this.importPanel, this.list);
     this.list.addEventListener("dragover", (event) => this.#dragOver(event), {
       signal: this.abortController.signal,
@@ -145,9 +148,7 @@ export class PromptAtomEditor {
     actions.append(replace, append, cancel);
     panel.append(label, status, actions);
 
-    this.importInput = input;
-    this.importStatus = status;
-    return panel;
+    return { panel, input, status };
   }
 
   /** @param {boolean} open */

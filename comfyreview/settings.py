@@ -28,6 +28,7 @@ class Settings:
     trash_root: Path
     data_directory: Path
     canonical_database_path: Path
+    card_battler_model_database_path: Path
     templates_directory: Path
     pool_limit: int
     minimum_runs: int
@@ -143,6 +144,11 @@ def load_settings(
         "COMFYREVIEW_DATABASE",
         data_directory / "comfyreview.sqlite3",
     )
+    card_battler_model_database_path = _path(
+        values,
+        "COMFYREVIEW_CARD_BATTLER_MODEL_DATABASE",
+        data_directory / "card_battler.sqlite3",
+    )
     workflows_directory = _path(
         values,
         "COMFYREVIEW_WORKFLOWS_DIR",
@@ -156,6 +162,7 @@ def load_settings(
         trash_root=output_root / "_trash",
         data_directory=data_directory,
         canonical_database_path=canonical_database_path,
+        card_battler_model_database_path=card_battler_model_database_path,
         templates_directory=base / "templates",
         pool_limit=_integer(values, "COMFYREVIEW_POOL_LIMIT", 128),
         minimum_runs=_integer(values, "COMFYREVIEW_MIN_RUNS", 3),

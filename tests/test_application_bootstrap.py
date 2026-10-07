@@ -15,6 +15,7 @@ from comfyreview.application import (
     AnalyticsService,
     ArenaService,
     CanonicalSchemaReport,
+    CardBattlerModelRepository,
     CatalogEvidenceService,
     CurationImage,
     CurationService,
@@ -56,7 +57,10 @@ from comfyreview.providers import (
     CanonicalOutputImageCatalog,
     OutputFileUrlMapper,
 )
-from comfyreview.repositories.sqlite import CanonicalSchemaManager
+from comfyreview.repositories.sqlite import (
+    CanonicalSchemaManager,
+    SqliteCardBattlerModelRepository,
+)
 from comfyreview.settings import Settings, load_settings
 from services.analytics_page_service import AnalyticsPageService
 from services.playground_discovery_service import PlaygroundDiscoveryService
@@ -136,6 +140,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     return ApplicationContainer(
         settings=settings,
         canonical_schema=_RecordingCanonicalSchema(settings, events),
+        card_battler_model=cast(CardBattlerModelRepository, object()),
         output_images=_EmptyOutputImageCatalog(),
         file_urls=OutputFileUrlMapper(settings.output_root),
         image_contexts=cast(ImageContextQueryService, object()),
@@ -265,6 +270,12 @@ def test_default_container_wires_canonical_review_runtime(
 
     container = build_application_container(settings)
 
+    assert not settings.card_battler_model_database_path.exists()
+    assert isinstance(
+        container.card_battler_model,
+        SqliteCardBattlerModelRepository,
+    )
+    assert not settings.card_battler_model_database_path.exists()
     assert isinstance(
         container.output_images,
         CanonicalOutputImageCatalog,

@@ -17,6 +17,7 @@ from comfyreview.application import (
     AnalyticsService,
     ArenaService,
     CanonicalSchemaLifecycle,
+    CardBattlerModelRepository,
     CatalogEvidenceService,
     CompiledLoraGraphPolicy,
     CompositionAnalyticsService,
@@ -92,6 +93,7 @@ from comfyreview.repositories.sqlite import (
     SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
+    SqliteCardBattlerModelRepository,
     SqliteCatalogEvidenceRepository,
     SqliteCompositionAnalyticsRepository,
     SqliteCurationRepository,
@@ -144,6 +146,7 @@ class ApplicationContainer:
 
     settings: Settings
     canonical_schema: CanonicalSchemaLifecycle
+    card_battler_model: CardBattlerModelRepository
     output_images: OutputImageCatalog
     file_urls: OutputFileUrlMapper
     image_contexts: ImageContextQueryService
@@ -344,6 +347,9 @@ def build_application_container(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
             configured.canonical_database_path
+        ),
+        card_battler_model=SqliteCardBattlerModelRepository(
+            configured.card_battler_model_database_path
         ),
         output_images=output_images,
         file_urls=file_urls,

@@ -12,6 +12,9 @@ from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
 )
+from comfyreview.repositories.sqlite.card_battler_model import (
+    SqliteCardBattlerModelRepository,
+)
 from comfyreview.repositories.sqlite.catalog_evidence import (
     SqliteCatalogEvidenceRepository,
 )
@@ -92,6 +95,7 @@ __all__ = [
     "SqliteRenderEvidenceRepository",
     "CanonicalSchemaManager",
     "CanonicalSchemaValidationError",
+    "SqliteCardBattlerModelRepository",
     "SqliteCatalogEvidenceRepository",
     "LegacySchemaManager",
     "SqliteOutputImageRepository",

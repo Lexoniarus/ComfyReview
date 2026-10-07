@@ -22,6 +22,18 @@ describe("Prompt block import", () => {
       { text: "hair with red, gold tips", weight: 1.25 },
       { text: "friendly expression", weight: 1.2 },
     ]);
+    expect(parsePromptBlock("(), (:1.2)")).toEqual([]);
+  });
+
+  it("normalizes incomplete initial usages to safe defaults", () => {
+    const editor = new PromptAtomEditor("Positive Atome", [{}]);
+    document.body.append(editor.element);
+
+    expect(editor.value()).toEqual([]);
+    const row = editor.element.querySelector(".prompt-atom-row");
+    expect(row.querySelector("[data-atom-text]").value).toBe("");
+    expect(row.querySelector("[data-atom-weight]").value).toBe("1");
+    editor.dispose();
   });
 
   it("replaces or appends atoms from one pasted prompt block", () => {
@@ -76,6 +88,38 @@ describe("Prompt block import", () => {
     expect(
       editor.element.querySelector("[data-prompt-block-status]").textContent,
     ).toContain("Keine gültigen");
+    expect(onChange).not.toHaveBeenCalled();
+    editor.dispose();
+  });
+
+  it("cancels the importer without changing atoms or notifying changes", () => {
+    const onChange = vi.fn();
+    const editor = new PromptAtomEditor(
+      "Positive Atome",
+      [{ text: "keep me", weight: 1.2 }],
+      onChange,
+    );
+    document.body.append(editor.element);
+
+    button(editor.element, "Prompt-Block einfügen").click();
+    const panel = editor.element.querySelector(".prompt-block-import");
+    const status = editor.element.querySelector("[data-prompt-block-status]");
+    const input = editor.element.querySelector("[data-prompt-block-input]");
+    if (
+      !(panel instanceof HTMLElement) ||
+      !(status instanceof HTMLElement) ||
+      !(input instanceof HTMLTextAreaElement)
+    ) {
+      throw new Error("Prompt block importer did not render");
+    }
+
+    input.value = "temporary value";
+    status.textContent = "temporary status";
+    button(editor.element, "Abbrechen").click();
+
+    expect(panel.hidden).toBe(true);
+    expect(status.textContent).toBe("");
+    expect(editor.value()).toEqual([{ text: "keep me", weight: 1.2 }]);
     expect(onChange).not.toHaveBeenCalled();
     editor.dispose();
   });
