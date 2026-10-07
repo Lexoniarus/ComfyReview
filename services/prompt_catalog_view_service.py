@@ -127,10 +127,11 @@ class PromptCatalogViewService:
         normalized_scope = str(scope or "").strip().lower()
         if normalized_scope not in {"pos", "neg"}:
             raise ValueError("scope must be pos or neg")
+        revision = component.standard_revision
         usages = (
-            component.latest_revision.positive_atoms
+            revision.positive_atoms
             if normalized_scope == "pos"
-            else component.latest_revision.negative_atoms
+            else revision.negative_atoms
         )
         return [usage.text for usage in usages]
 
@@ -155,15 +156,16 @@ class PromptCatalogViewService:
 
     @staticmethod
     def _view(component: PromptComponent) -> dict[str, object]:
+        revision = component.standard_revision
         return {
             "id": component.component_uid,
             "kind": component.kind,
             "name": component.name,
             "key": component.component_key,
             "tags": ", ".join(component.tags),
-            "pos": component.latest_revision.positive_text,
-            "neg": component.latest_revision.negative_text,
+            "pos": revision.positive_text,
+            "neg": revision.negative_text,
             "notes": component.notes,
             "archived": component.archived,
-            "revision_uid": component.latest_revision.revision_uid,
+            "revision_uid": revision.revision_uid,
         }

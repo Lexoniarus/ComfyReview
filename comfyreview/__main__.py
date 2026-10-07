@@ -15,6 +15,8 @@ from comfyreview.application import (
     ImageGeometryProjectionService,
     LegacySchemaReport,
     LegacySchemaValidationError,
+    PromptPromotionCoordinator,
+    PromptVariantGuidanceService,
 )
 from comfyreview.importers import (
     ContentLevelAuditor,
@@ -48,6 +50,8 @@ from comfyreview.repositories.sqlite import (
     CanonicalSchemaValidationError,
     LegacySchemaManager,
     SqliteImageGeometryRepository,
+    SqlitePromptPromotionRepository,
+    SqlitePromptVariantEvidenceRepository,
 )
 from comfyreview.repositories.sqlite.legacy_output_import import (
     SqliteLegacyOutputImportRepository,
@@ -185,7 +189,52 @@ def _parser() -> argparse.ArgumentParser:
     generation_reconcile = generation_actions.add_parser("reconcile")
     generation_reconcile.add_argument("generation_uid")
     generation_reconcile.add_argument("--prompt-id")
+    prompt_promotions = commands.add_parser("prompt-promotions")
+    promotion_actions = prompt_promotions.add_subparsers(
+        dest="action", required=True
+    )
+    for action_name in ("audit", "reconcile"):
+        action = promotion_actions.add_parser(action_name)
+        action.add_argument("--database", type=Path)
     return parser
+
+
+def _run_prompt_promotions(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    database_path = options.database or settings.canonical_database_path
+    coordinator = PromptPromotionCoordinator(
+        guidance=PromptVariantGuidanceService(
+            SqlitePromptVariantEvidenceRepository(database_path)
+        ),
+        repository=SqlitePromptPromotionRepository(database_path),
+    )
+    if options.action == "audit":
+        decisions = coordinator.audit()
+        payload = {
+            "database": str(database_path),
+            "evaluated": len(decisions),
+            "eligible": sum(item.should_promote for item in decisions),
+            "decisions": [
+                {
+                    "component_uid": item.component_uid,
+                    "should_promote": item.should_promote,
+                    "reason": item.reason,
+                    "previous_revision_uid": item.previous_revision_uid,
+                }
+                for item in decisions
+            ],
+        }
+    else:
+        result = coordinator.reconcile_all()
+        payload = {
+            "database": str(database_path),
+            "evaluated": result.evaluated,
+            "eligible": result.eligible,
+            "promoted": result.promoted,
+            "promotion_uids": [item.promotion_uid for item in result.results],
+        }
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
 
 
 def _render_legacy(report: LegacySchemaReport) -> str:
@@ -591,6 +640,8 @@ def main(arguments: list[str] | None = None) -> int:
             return _run_legacy_provenance(options)
         if options.command == "generation":
             return _run_generation(options)
+        if options.command == "prompt-promotions":
+            return _run_prompt_promotions(options)
         if options.command == "content-levels":
             return _run_content_levels(options)
         return _run_legacy_output(options)

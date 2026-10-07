@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from comfyreview.application.prompt_variant_promotion import (
+    PromptPromotionTrigger,
+)
+
 
 class ReviewValidationError(ValueError):
     """Reject a review command before any mutation starts."""
@@ -110,6 +114,7 @@ class ReviewResult:
     review_id: int
     run: int
     deleted: bool
+    promotion_pending: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,11 +184,13 @@ class ReviewService:
         reviews: ReviewRepository,
         deletions: OutputDeletionManager,
         preserve_deleted_files: bool,
+        prompt_promotions: PromptPromotionTrigger | None = None,
     ) -> None:
         self._image_resolver = image_resolver
         self._reviews = reviews
         self._deletions = deletions
         self._preserve_deleted_files = preserve_deleted_files
+        self._prompt_promotions = prompt_promotions
         self._logger = logging.getLogger("comfyreview.review")
 
     def submit(self, command: SubmitReviewCommand) -> ReviewResult:
@@ -216,12 +223,27 @@ class ReviewService:
         if staged is not None:
             self._finalize_delete(staged)
 
+        promotion_pending = self._reconcile_prompt_promotions(image.image_uid)
         self._logger.info("review.submission_completed")
         return ReviewResult(
             review_id=stored.review_id,
             run=stored.run,
             deleted=command.delete,
+            promotion_pending=promotion_pending,
         )
+
+    def _reconcile_prompt_promotions(self, image_uid: str) -> bool:
+        if self._prompt_promotions is None:
+            return False
+        try:
+            self._prompt_promotions.reconcile_image(image_uid)
+        except Exception:
+            self._logger.exception(
+                "review.prompt_promotion_pending",
+                extra={"image_uid": image_uid},
+            )
+            return True
+        return False
 
     @staticmethod
     def _validate(command: SubmitReviewCommand) -> int | None:

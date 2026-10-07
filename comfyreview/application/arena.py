@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -9,6 +10,9 @@ from comfyreview.application.image_queries import (
     ImageContext,
     ImageContextQueryService,
     ImageQuery,
+)
+from comfyreview.application.prompt_variant_promotion import (
+    PromptPromotionTrigger,
 )
 
 
@@ -85,6 +89,7 @@ class ArenaResult:
     winner_image_uid: str
     winner_rating: int
     loser_rating: int
+    promotion_pending: bool = False
 
 
 class ArenaRepository(Protocol):
@@ -159,10 +164,13 @@ class ArenaService:
         images: ImageContextQueryService,
         repository: ArenaRepository,
         pairing: FairArenaPairingPolicy | None = None,
+        prompt_promotions: PromptPromotionTrigger | None = None,
     ) -> None:
         self._images = images
         self._repository = repository
         self._pairing = pairing or FairArenaPairingPolicy()
+        self._prompt_promotions = prompt_promotions
+        self._logger = logging.getLogger("comfyreview.arena")
 
     def next_pair(self, query: ArenaQuery) -> ArenaPair | None:
         """Return the next unplayed directed pair from the ranked pool."""
@@ -199,7 +207,34 @@ class ArenaService:
             winner_rating=self._clamp_rating(high + 2.0),
             loser_rating=self._clamp_rating(low - 2.0),
         )
-        return self._repository.save_decision(decision)
+        result = self._repository.save_decision(decision)
+        pending_by_image = tuple(
+            self._reconcile_prompt_promotions(image_uid)
+            for image_uid in (left_uid, right_uid)
+        )
+        pending = any(pending_by_image)
+        if not pending:
+            return result
+        return ArenaResult(
+            match_uid=result.match_uid,
+            winner_image_uid=result.winner_image_uid,
+            winner_rating=result.winner_rating,
+            loser_rating=result.loser_rating,
+            promotion_pending=True,
+        )
+
+    def _reconcile_prompt_promotions(self, image_uid: str) -> bool:
+        if self._prompt_promotions is None:
+            return False
+        try:
+            self._prompt_promotions.reconcile_image(image_uid)
+        except Exception:
+            self._logger.exception(
+                "arena.prompt_promotion_pending",
+                extra={"image_uid": image_uid},
+            )
+            return True
+        return False
 
     @staticmethod
     def _clamp_rating(value: float) -> int:

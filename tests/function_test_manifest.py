@@ -81,6 +81,22 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_prompt_variant_guidance.py::"
         "test_guidance_interpolates_only_between_supported_weight_anchors"
     ),
+    "comfyreview.application.prompt_variant_promotion:PromptPromotionPolicy.evaluate": (
+        "tests/test_prompt_variant_promotion.py::"
+        "test_promotion_policy_requires_stability_and_hysteresis"
+    ),
+    "comfyreview.application.prompt_variant_promotion:PromptPromotionCoordinator.audit": (
+        "tests/test_prompt_variant_promotion.py::"
+        "test_promotion_coordinator_audits_and_reconciles_bounded_components"
+    ),
+    "comfyreview.application.prompt_variant_promotion:PromptPromotionCoordinator.reconcile_image": (
+        "tests/test_prompt_variant_promotion.py::"
+        "test_promotion_coordinator_audits_and_reconciles_bounded_components"
+    ),
+    "comfyreview.application.prompt_variant_promotion:PromptPromotionCoordinator.reconcile_all": (
+        "tests/test_prompt_variant_promotion.py::"
+        "test_promotion_coordinator_audits_and_reconciles_bounded_components"
+    ),
     "comfyreview.application.generation_geometry:OutputTier.from_resolution_class": (
         "tests/test_image_geometry.py::"
         "test_output_tier_maps_to_resolution_classes"
@@ -295,7 +311,7 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     ),
     "comfyreview.application.playground:PlaygroundService.prepare_draft": (
         "tests/test_playground_application.py::"
-        "test_playground_sqlite_fixed_revision_is_exact_without_changing_latest"
+        "test_playground_sqlite_defaults_to_promoted_revision_not_latest_history"
     ),
     "comfyreview.application.playground:PlaygroundService.prepare_image_snapshot": (
         "tests/test_playground_application.py::"
@@ -452,6 +468,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     "comfyreview.application.prompt_catalog:prompt_revision_identity": (
         "tests/test_prompt_catalog.py::"
         "test_prompt_revision_identity_is_content_and_component_stable"
+    ),
+    "comfyreview.application.prompt_catalog:PromptComponent.standard_revision": (
+        "tests/test_prompt_catalog.py::"
+        "test_sqlite_prompt_catalog_preserves_revisions_and_archive_state"
+    ),
+    "comfyreview.application.prompt_catalog:prompt_candidate_identity": (
+        "tests/test_prompt_catalog.py::"
+        "test_sqlite_prompt_catalog_preserves_revisions_and_archive_state"
     ),
     "comfyreview.application.prompt_catalog:prompt_composition_identity": (
         "tests/test_prompt_catalog.py::"

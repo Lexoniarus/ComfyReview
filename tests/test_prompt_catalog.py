@@ -483,7 +483,15 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
             negative_atoms=prompt_atom_usages_from_text("blur"),
         )
     )
-    assert updated.latest_revision.revision_number == 3
+    assert updated.latest_revision.revision_number == 2
+    assert updated.current_revision == created.latest_revision
+    assert updated.pending_candidate is not None
+    assert updated.pending_candidate.source_revision_uid == (
+        created.latest_revision.revision_uid
+    )
+    assert updated.pending_candidate.positive_atoms == (
+        prompt_atom_usages_from_text("skyline, storm")
+    )
     assert service.get_component(created.component_uid) == updated
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -491,7 +499,103 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM prompt_revisions"
-        ).fetchone() == (3,)
+        ).fetchone() == (2,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_candidates"
+        ).fetchone() == (1,)
+
+
+def test_catalog_content_edits_deduplicate_candidates_and_atom_identity(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    service = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(database_path),
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+    weight_only = UpdatePromptComponentCommand(
+        component_uid=created.component_uid,
+        name=created.name,
+        tags=created.tags,
+        notes=created.notes,
+        positive_atoms=(PromptAtomUsage("skyline", 1200),),
+        negative_atoms=created.latest_revision.negative_atoms,
+    )
+
+    first = service.update_component(weight_only)
+    repeated = service.update_component(weight_only)
+    changed_text = service.update_component(
+        UpdatePromptComponentCommand(
+            component_uid=created.component_uid,
+            name=created.name,
+            tags=created.tags,
+            notes=created.notes,
+            positive_atoms=(PromptAtomUsage("city skyline", 1200),),
+            negative_atoms=created.latest_revision.negative_atoms,
+        )
+    )
+
+    assert first.pending_candidate == repeated.pending_candidate
+    assert changed_text.pending_candidate != first.pending_candidate
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_candidates"
+        ).fetchone() == (2,)
+        skyline_ids = connection.execute(
+            """
+            SELECT DISTINCT atom.id
+            FROM prompt_atoms AS atom
+            LEFT JOIN prompt_revision_atom_usages AS revision_usage
+              ON revision_usage.atom_id = atom.id
+            LEFT JOIN prompt_candidate_atom_usages AS candidate_usage
+              ON candidate_usage.atom_id = atom.id
+            WHERE atom.canonical_text = 'skyline'
+              AND revision_usage.atom_id IS NOT NULL
+              AND candidate_usage.atom_id IS NOT NULL
+            """
+        ).fetchall()
+        assert len(skyline_ids) == 1
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_atoms "
+            "WHERE canonical_text = 'city skyline'"
+        ).fetchone() == (1,)
+
+
+def test_catalog_candidate_failure_rolls_back_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    repository = SqlitePromptCatalogRepository(database_path)
+    service = PromptCatalogService(
+        repository=repository,
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+
+    def fail_candidate(*_args, **_kwargs) -> int:
+        raise RuntimeError("candidate write failed")
+
+    monkeypatch.setattr(repository, "_insert_candidate", fail_candidate)
+    with pytest.raises(RuntimeError, match="candidate write failed"):
+        service.update_component(
+            UpdatePromptComponentCommand(
+                component_uid=created.component_uid,
+                name="Should Roll Back",
+                tags=("changed",),
+                notes="changed",
+                positive_atoms=(PromptAtomUsage("changed", 1000),),
+                negative_atoms=(),
+            )
+        )
+
+    restored = service.get_component(created.component_uid)
+    assert restored.name == created.name
+    assert restored.tags == created.tags
+    assert restored.pending_candidate is None
 
 
 def test_sqlite_prompt_catalog_reads_exact_revision_and_composition(

@@ -46,8 +46,10 @@ from comfyreview.application import (
     PlaygroundSubmissionService,
     PromptCatalogService,
     PromptContentPolicy,
+    PromptPromotionCoordinator,
     PromptRenderer,
     PromptSelectionPolicy,
+    PromptVariantGuidanceService,
     RenderAnalyticsService,
     RenderGuidanceService,
     ReviewCandidateService,
@@ -102,6 +104,8 @@ from comfyreview.repositories.sqlite import (
     SqliteOutputImageRepository,
     SqlitePlaygroundEvidenceRepository,
     SqlitePromptCatalogRepository,
+    SqlitePromptPromotionRepository,
+    SqlitePromptVariantEvidenceRepository,
     SqliteRenderAnalyticsRepository,
     SqliteRenderEvidenceRepository,
     SqliteReviewCandidateRepository,
@@ -156,6 +160,8 @@ class ApplicationContainer:
     generation_queries: GenerationQueryService
     generation_reconciliation: GenerationReconciliationService
     prompt_catalog_service: PromptCatalogService
+    prompt_variant_guidance: PromptVariantGuidanceService
+    prompt_promotions: PromptPromotionCoordinator
     catalog_evidence: CatalogEvidenceService
     prompt_renderer: PromptRenderer
     prompt_catalog_views: PromptCatalogViewService
@@ -216,6 +222,17 @@ def build_application_container(
         SqliteImageContextRepository(configured.canonical_database_path),
         draft_overrides,
     )
+    prompt_variant_guidance = PromptVariantGuidanceService(
+        SqlitePromptVariantEvidenceRepository(
+            configured.canonical_database_path
+        )
+    )
+    prompt_promotions = PromptPromotionCoordinator(
+        guidance=prompt_variant_guidance,
+        repository=SqlitePromptPromotionRepository(
+            configured.canonical_database_path
+        ),
+    )
     review_service = ReviewService(
         image_resolver=output_images,
         reviews=SqliteReviewRepository(configured.canonical_database_path),
@@ -224,6 +241,7 @@ def build_application_container(
             trash_root=configured.trash_root,
         ),
         preserve_deleted_files=configured.soft_delete_to_trash,
+        prompt_promotions=prompt_promotions,
     )
     prompt_catalog_service = PromptCatalogService(
         repository=SqlitePromptCatalogRepository(
@@ -367,6 +385,8 @@ def build_application_container(
         ),
         generation_reconciliation=generation_reconciliation,
         prompt_catalog_service=prompt_catalog_service,
+        prompt_variant_guidance=prompt_variant_guidance,
+        prompt_promotions=prompt_promotions,
         catalog_evidence=CatalogEvidenceService(
             SqliteCatalogEvidenceRepository(configured.canonical_database_path)
         ),
@@ -404,6 +424,7 @@ def build_application_container(
             repository=SqliteArenaRepository(
                 configured.canonical_database_path
             ),
+            prompt_promotions=prompt_promotions,
         ),
         curation_service=CurationService(
             repository=SqliteCurationRepository(

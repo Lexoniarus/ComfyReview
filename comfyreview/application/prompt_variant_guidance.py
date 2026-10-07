@@ -60,6 +60,7 @@ class PromptVariantObservation:
     review_count: int
     revision_uid: str
     candidate_uid: str | None = None
+    deleted_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +84,7 @@ class PromptVariantScore:
     review_count: int
     standard_deviation: float
     sufficiently_observed: bool
+    deleted_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +147,7 @@ class _Aggregate:
     failure: int
     rating_sum: float
     rating_weight: int
+    deleted_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -486,6 +489,7 @@ def _predicted_recommendation(
             review_count=0,
             standard_deviation=standard_deviation,
             sufficiently_observed=False,
+            deleted_count=0,
         ),
     )
 
@@ -531,6 +535,7 @@ def _aggregate(
         failure=sum(item.failure_weight for item in observations),
         rating_sum=sum(item.rating_sum for item in observations),
         rating_weight=sum(item.rating_weight for item in observations),
+        deleted_count=sum(item.deleted_count for item in observations),
     )
 
 
@@ -550,11 +555,12 @@ def _observed_score(aggregate: _Aggregate) -> PromptVariantScore:
         review_count=aggregate.review_count,
         standard_deviation=_posterior_standard_deviation(aggregate),
         sufficiently_observed=(aggregate.image_count >= STABILITY_IMAGE_FLOOR),
+        deleted_count=aggregate.deleted_count,
     )
 
 
 def _empty_score() -> PromptVariantScore:
-    return PromptVariantScore(None, 0.5, None, 0, 0, 0.5, False)
+    return PromptVariantScore(None, 0.5, None, 0, 0, 0.5, False, 0)
 
 
 def _posterior_probability(aggregate: _Aggregate) -> float:

@@ -20,6 +20,7 @@ from comfyreview.application import (
     ArenaValidationError,
     ImageContextQueryService,
     ImageQuery,
+    PromptPromotionReconcileResult,
     RankedImage,
     RankingQuery,
     RankingService,
@@ -123,6 +124,19 @@ class _ImageContexts:
             (),
             {"entries": self.images, "query": query},
         )()
+
+
+class _FailingPromptPromotions:
+    def __init__(self) -> None:
+        self.image_uids: list[str] = []
+
+    def reconcile_image(
+        self, image_uid: str
+    ) -> PromptPromotionReconcileResult:
+        self.image_uids.append(image_uid)
+        if image_uid == "left":
+            raise RuntimeError("promotion failed")
+        return PromptPromotionReconcileResult(0, 0, 0, ())
 
 
 def _arena_service(
@@ -257,6 +271,25 @@ def test_arena_service_records_clamped_target_ratings() -> None:
     assert result.winner_rating == 10
     assert result.loser_rating == 1
     assert repository.saved is not None
+
+
+def test_arena_reports_failed_promotion_after_atomic_decision() -> None:
+    repository = _ArenaRepository()
+    promotions = _FailingPromptPromotions()
+    service = ArenaService(
+        images=cast(ImageContextQueryService, _ImageContexts(())),
+        repository=repository,
+        prompt_promotions=promotions,
+    )
+
+    result = service.record_decision(
+        RecordArenaDecisionCommand("left", "right", "left")
+    )
+
+    assert result.promotion_pending is True
+    assert result.match_uid == "match"
+    assert repository.saved is not None
+    assert promotions.image_uids == ["left", "right"]
 
 
 @pytest.mark.parametrize(

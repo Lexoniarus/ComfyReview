@@ -102,6 +102,7 @@ def submit_review(request: Request, payload: ReviewRequest) -> JSONResponse:
             "review_id": result.review_id,
             "run": result.run,
             "deleted": result.deleted,
+            "promotion_pending": result.promotion_pending,
         }
     )
 
@@ -129,5 +130,6 @@ def delete_image(request: Request, image_uid: str) -> JSONResponse:
             "review_id": result.review_id,
             "run": result.run,
             "deleted": result.deleted,
+            "promotion_pending": result.promotion_pending,
         }
     )

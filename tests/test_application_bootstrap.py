@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -164,6 +164,8 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
             object(),
         ),
         prompt_catalog_service=cast(PromptCatalogService, object()),
+        prompt_variant_guidance=cast(Any, object()),
+        prompt_promotions=cast(Any, object()),
         catalog_evidence=cast(CatalogEvidenceService, object()),
         prompt_renderer=PromptRenderer(),
         prompt_catalog_views=cast(PromptCatalogViewService, object()),

@@ -74,7 +74,7 @@ class PromptLabelService:
     ) -> dict[str, tuple[PromptLabel, ...]]:
         grouped: dict[str, list[PromptLabel]] = {}
         for component in components:
-            positive_text = component.latest_revision.positive_text.strip()
+            positive_text = component.standard_revision.positive_text.strip()
             if not positive_text:
                 continue
             grouped.setdefault(component.kind, []).append(

@@ -544,7 +544,7 @@ class PromptSelectionPolicy:
     def _latest_selection(
         component: PromptComponent,
     ) -> SelectedPromptComponent:
-        return SelectedPromptComponent(component, component.latest_revision)
+        return SelectedPromptComponent(component, component.standard_revision)
 
 
 class PromptRenderer:

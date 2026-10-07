@@ -524,7 +524,7 @@ def test_playground_exact_revision_does_not_bypass_content_policy() -> None:
         )
 
 
-def test_playground_sqlite_fixed_revision_is_exact_without_changing_latest(
+def test_playground_sqlite_defaults_to_promoted_revision_not_latest_history(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "comfyreview.sqlite3"
@@ -628,22 +628,24 @@ def test_playground_sqlite_fixed_revision_is_exact_without_changing_latest(
     assert (
         fixed_old_selection.revision.revision_uid == "revision-character-a-v1"
     )
-    assert fixed_latest.prompt.revision_uids == ("revision-character-a-v2",)
-    assert fixed_latest.prompt.positive_text == "latest atoms"
+    assert fixed_latest.prompt.revision_uids == ("revision-character-a-v1",)
+    assert fixed_latest.prompt.positive_text == "older atoms"
     fixed_latest_selection = fixed_latest.selection.components[0]
     assert (
-        fixed_latest_selection.component.latest_revision
+        fixed_latest_selection.component.standard_revision
         == fixed_latest_selection.revision
     )
     assert random_character.prompt.revision_uids == (
-        "revision-character-a-v2",
+        "revision-character-a-v1",
     )
     random_selection = random_character.selection.components[0]
     assert (
-        random_selection.revision == random_selection.component.latest_revision
+        random_selection.revision
+        == random_selection.component.standard_revision
     )
     [current] = catalog.list_components(include_archived=False)
     assert current.latest_revision.revision_uid == "revision-character-a-v2"
+    assert current.standard_revision.revision_uid == "revision-character-a-v1"
 
 
 def test_prompt_selection_policy_supports_random_character_and_disabled_kinds() -> (

@@ -350,6 +350,8 @@ def archive_catalog_component(
 
 def component_response(component: PromptComponent) -> dict[str, object]:
     """Map one canonical prompt component to its V2 response."""
+    current = component.standard_revision
+    candidate = component.pending_candidate
     return {
         "component_uid": component.component_uid,
         "kind": component.kind,
@@ -359,18 +361,22 @@ def component_response(component: PromptComponent) -> dict[str, object]:
         "content_level": component.content_level.value,
         "notes": component.notes,
         "archived": component.archived,
-        "latest_revision": {
-            "revision_uid": component.latest_revision.revision_uid,
-            "revision_number": component.latest_revision.revision_number,
-            "positive_text": component.latest_revision.positive_text,
-            "negative_text": component.latest_revision.negative_text,
-            "positive_atoms": atom_response(
-                component.latest_revision.positive_atoms
-            ),
-            "negative_atoms": atom_response(
-                component.latest_revision.negative_atoms
-            ),
-        },
+        "current_revision": component_revision_response(current),
+        "latest_revision": component_revision_response(
+            component.latest_revision
+        ),
+        "pending_candidate": (
+            {
+                "candidate_uid": candidate.candidate_uid,
+                "source_revision_uid": candidate.source_revision_uid,
+                "candidate_type": candidate.candidate_type,
+                "content_hash": candidate.content_hash,
+                "positive_atoms": atom_response(candidate.positive_atoms),
+                "negative_atoms": atom_response(candidate.negative_atoms),
+            }
+            if candidate is not None
+            else None
+        ),
     }
 
 
@@ -385,6 +391,15 @@ def revision_response(revision: PromptRevision) -> dict[str, object]:
         "positive_atoms": atom_response(revision.positive_atoms),
         "negative_atoms": atom_response(revision.negative_atoms),
     }
+
+
+def component_revision_response(
+    revision: PromptRevision,
+) -> dict[str, object]:
+    """Map the compact revision shape embedded in a component response."""
+    payload = revision_response(revision)
+    payload.pop("content_hash")
+    return payload
 
 
 def lora_response(definition: LoraDefinition) -> dict[str, object]:

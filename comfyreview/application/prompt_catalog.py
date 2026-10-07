@@ -41,7 +41,7 @@ class PromptCompositionMembership:
 
 @dataclass(frozen=True, slots=True)
 class PromptComponent:
-    """Represent mutable catalog metadata and its latest revision."""
+    """Represent catalog metadata, history, standard, and pending content."""
 
     component_uid: str
     kind: str
@@ -52,6 +52,26 @@ class PromptComponent:
     archived: bool
     latest_revision: PromptRevision
     content_level: ContentLevel = ContentLevel.STANDARD
+    current_revision: PromptRevision | None = None
+    pending_candidate: PromptComponentCandidate | None = None
+
+    @property
+    def standard_revision(self) -> PromptRevision:
+        """Return the revision selected by the newest promotion fact."""
+        return self.current_revision or self.latest_revision
+
+
+@dataclass(frozen=True, slots=True)
+class PromptComponentCandidate:
+    """Represent one explicitly selected, not-yet-promoted component recipe."""
+
+    candidate_uid: str
+    component_uid: str
+    source_revision_uid: str
+    candidate_type: str
+    content_hash: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,7 +191,7 @@ class PromptCatalogRepository(Protocol):
         metadata: UpdatePromptComponentMetadataCommand,
         revision: PromptRevisionDraft,
     ) -> PromptComponent:
-        """Update metadata and append content in one transaction."""
+        """Update metadata and select changed content as a candidate."""
         ...
 
     def get_component(self, component_uid: str) -> PromptComponent:
@@ -220,6 +240,17 @@ def prompt_revision_identity(
         f"{component_uid}\0{content_hash}".encode()
     ).hexdigest()
     return f"prompt-revision-{revision_hash}", content_hash
+
+
+def prompt_candidate_identity(
+    component_uid: str,
+    content_hash: str,
+) -> str:
+    """Return a stable identity for one component recipe candidate."""
+    digest = hashlib.sha256(
+        f"{component_uid}\0{content_hash}".encode()
+    ).hexdigest()
+    return f"prompt-candidate-{digest}"
 
 
 def prompt_composition_identity(
@@ -366,7 +397,7 @@ class PromptCatalogService:
         self,
         command: UpdatePromptComponentCommand,
     ) -> PromptComponent:
-        """Persist metadata and content changes as one atomic catalog edit."""
+        """Persist metadata immediately and content as an explicit candidate."""
         component_uid = self._required(
             command.component_uid,
             "component_uid",

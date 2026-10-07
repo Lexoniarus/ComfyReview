@@ -232,6 +232,9 @@ class SqlitePromptVariantEvidenceRepository:
             review_count=len(item.events),
             revision_uid=item.revision_uid,
             candidate_uid=item.candidate_uid,
+            deleted_count=sum(
+                deleted for _run, _rating, deleted in item.events.values()
+            ),
         )
 
     @staticmethod
