@@ -1,11 +1,11 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v14 is implemented. Images, reviews, Arena, Curation,
-revisioned prompts and native generation outputs are on the active refactor
-branch, 2026-10-07. Catalog
-authoring and Playground drafts use structured prompt atoms; workspace
-preferences, content levels and LoRA usage are canonical; profile tables are
-dormant migration compatibility only.
+Status: canonical schema v16 is implemented and integrated on
+`refactor/review-boundary`, 2026-10-07. Images, reviews, Arena, Curation,
+revisioned prompts, prompt-variant evidence and native generation outputs use
+the canonical database. Catalog authoring and Playground drafts use structured
+prompt atoms; workspace preferences, content levels and LoRA usage are
+canonical; profile tables are dormant migration compatibility only.
 
 ## 1. Source-of-truth rule
 
@@ -23,13 +23,13 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v14
+## 2. Canonical schema v16
 
 The canonical database uses explicit schema metadata and foreign keys. Schema
-v14 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
+v16 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
 output provenance, v7 normalized prompt-revision atom usages, v8 workspace
 settings/generation profiles, v9 content/canvas settings and v10 output/content
-classification facts:
+classification facts together with the v11-to-v16 additions listed below:
 
 - `generations` and normalized generation provenance;
 - `images` with stable UID, output role, content hash, current paths and
@@ -65,12 +65,18 @@ classification facts:
   dimensions, format, resolution class, target match and classifier version;
 - singleton `playground_generator_state`, prompt-role selection rows and
   ordered revision-pinned `playground_generator_loras`;
+- deduplicated `prompt_component_candidates` with ordered atom usages;
+- exact prompt groups and atom usages for each attributed generation;
+- append-only `prompt_component_promotions`, whose newest event selects the
+  current standard revision;
+- append-only `prompt_component_manual_variants`, which preserves the latest
+  authored catalog-test selection independently of promotion;
 - rebuildable current-state and aggregate views.
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
 a v3-to-v4, v4-to-v5, v5-to-v6, v6-to-v7, v7-to-v8, v8-to-v9, v9-to-v10,
-v10-to-v11, v11-to-v12, v12-to-v13 or v13-to-v14 migration. The explicit,
-backed-up command is:
+v10-to-v11, v11-to-v12, v12-to-v13, v13-to-v14, v14-to-v15 or v15-to-v16
+migration. The explicit, backed-up command is:
 
 ```text
 python -m comfyreview canonical-db upgrade --output PATH [--backup-dir PATH] \
@@ -209,10 +215,11 @@ sufficiently supported. Evidence is global to the component rather than split
 by checkpoint or surrounding prompt groups.
 
 Calculated guidance may change only the weights of the promotion-selected
-stable ordered atom list. Each atom uses observed supported weights plus `0.05` intermediate values
-within supported bounds; extrapolation, atom substitution, insertion, removal
-and reordering are forbidden. An anchor needs three independent images and
-interpolation needs two supported anchors. Effects are shrunk against the
+stable ordered atom list. Each atom uses observed supported weights plus `0.05`
+intermediate values within supported bounds; extrapolation, atom substitution,
+insertion, removal and reordering are forbidden. An anchor needs three
+independent images and interpolation needs two supported anchors. Effects are
+shrunk against the
 component baseline and combined as a mean logit effect. The next test uses
 `mean + 1.645 * standard_deviation`, may alter several weights, differs from the
 current and optimized recipes, and is found without persisting a Cartesian
@@ -575,7 +582,7 @@ added content/canvas settings. That verified live database's `user_version` is 9
 `integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
 pre-v7 backup remains schema v6 with all 729 revisions.
 
-The application requires schema v14. No older database is silently changed at
+The application requires schema v16. No older database is silently changed at
 startup. `canonical-db upgrade` first migrates and validates a new database
 file and preserves the source; installation of the validated output is a
 separate controlled step.
@@ -628,5 +635,7 @@ Prompt combinations are identified by canonical `prompt_composition_id` and
 remain distinct from render discovery. No runtime path reparses legacy
 `combo_key` values or materializes possible prompt/render cross-products.
 
-Character Chronicles may later reuse or extend this foundation, but its
-descriptions, embeddings, RAG and gameplay state remain separate concerns.
+The approved [Card Battler target](CARD_BATTLER_TARGET.md) may later reuse this
+identity, migration and provider foundation through its own domain boundaries.
+Character Chronicles descriptions, embeddings, RAG and wider gameplay state
+remain separate concerns.

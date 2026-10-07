@@ -1,16 +1,26 @@
 # ComfyReview Architecture
 
 Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, schema-v14 application support and Frontend V2
-including Settings are implemented on the active feature branch, 2026-10-07.
-Final user acceptance and integration review remain open.
+analytics, native Generation, schema-v16 application support and Frontend V2
+including Settings are implemented and integrated on
+`refactor/review-boundary`, 2026-10-07. Final user acceptance and eventual
+integration into `master` remain open.
 
 ## 1. Product boundary
 
 ComfyReview is a local-first application for discovering ComfyUI outputs,
 reviewing and comparing images, assigning curated sets, analysing review data
 and handing reproducible settings back to ComfyUI. Character Chronicles
-gameplay, embeddings and RAG are outside this refactor unless added explicitly.
+campaign, Champion, VN, social, embeddings and RAG systems are outside this
+refactor.
+
+A functional Card Battler prototype is an approved post-refactor ComfyReview
+product target, not current runtime behaviour or a refactor acceptance
+requirement. Its manual card-development, deterministic-rules, deck,
+server-authoritative PvE and battle-driven evolution boundaries are defined in
+the [Card Battler target](CARD_BATTLER_TARGET.md). Character Chronicles may
+later reuse that bounded implementation without becoming a runtime dependency
+of ComfyReview.
 
 ## 2. Layering and composition
 
@@ -41,7 +51,7 @@ only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v14 is the active
+The canonical database has an explicit schema version. Schema v16 is the active
 shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
 catalog, records v6 native output roles/content hashes, normalizes ordered
 prompt-revision atom usages in v7 and adds workspace preferences, generation
@@ -77,6 +87,11 @@ be graph-effective on Model or CLIP and have at least one exact trigger in the
 matching final prompt scope. The former definition-level content field is
 dormant migration compatibility, not an application or HTTP truth.
 
+Schema v15 adds prompt candidates, exact generation prompt groups and
+append-only promotion facts. Schema v16 adds append-only manual-variant
+selection facts without changing candidate recipe identity. Sections 10.2 and
+10.3 describe the active guidance and analytics boundaries.
+
 Canonical v4 facts include:
 
 - images and generation provenance;
@@ -92,14 +107,14 @@ weights part of authored revision truth. This is correct for an immutable
 catalog revision because it represents one exact stable standard recipe. Weight
 does not become part of atom identity: Playground experiments with another
 weight remain draft or generation observations until an exact observed recipe
-is promoted as a new component revision. The missing architecture is the
-evidence-based choice and promotion of the current stable revision plus a
-separate calculated optimized Generator candidate. Rendered whole-prompt
-columns remain derived immutable snapshots, not writable API inputs.
+is promoted as a new component revision. Evidence-based promotion now selects
+the current stable revision, while the Generator keeps latest-manual,
+calculated and next-test variants separate. Rendered whole-prompt columns
+remain derived immutable snapshots, not writable API inputs.
 
 Schema v8 introduced workspace preferences and generation profiles. The
 profile tables and generation profile columns remain dormant migration
-compatibility in v14, but no active container service, V2 endpoint, Settings
+compatibility in v16, but no active container service, V2 endpoint, Settings
 surface or Playground flow reads them. Generations still record the exact
 LoRAs they actually used. A loader is normalized only when a non-zero model or
 CLIP branch reaches a consumed sampler input. Historical `loras_json` and raw
@@ -113,7 +128,7 @@ read model. Services and browser surfaces do not duplicate OR/AND or content
 visibility semantics, and no path, prompt substring or image inspection is
 used to infer a missing level at runtime.
 
-Schema v10 separates automatic and manual classification. In the current v14
+Schema v10 separates automatic and manual classification. In the current v16
 runtime, automatic generation classification is the strictest level from
 authored prompt-component tags and the content-level snapshots of
 graph-effective, trigger-evidenced LoRA revisions. A current image override,

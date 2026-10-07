@@ -3,15 +3,15 @@
 ## Summary
 
 ComfyReview is a local-first FastAPI workflow tool for reviewing, comparing,
-curating, analysing and reproducibly regenerating ComfyUI outputs. The active
-refactor branch uses one canonical writable SQLite database and a native
-ES-module Frontend V2.
+curating, analysing and reproducibly regenerating ComfyUI outputs. The
+integrated refactor base uses one canonical writable SQLite database and a
+native ES-module Frontend V2.
 
 ## Implemented state
 
-- canonical schema v14 with stable image/generation identity, rebuildable PNG
-  geometry classification, immutable content-bearing LoRA trigger revisions
-  and normalized Generator state;
+- canonical schema v16 with stable image/generation identity, rebuildable PNG
+  geometry classification, immutable content-bearing LoRA trigger revisions,
+  normalized Generator state and evidence-backed prompt variants;
 - append-only Review events and rebuildable current-state/ranking views;
 - UID-based Arena with history-derived fair rotation, and UID-based Curation;
 - audited, idempotent historical Output, Prompt, Feature and Composition
@@ -43,6 +43,21 @@ ES-module Frontend V2.
   historical reclassification and audited image overrides;
 - shared Python/frontend quality gate with architecture tests, coverage and
   Playwright browser acceptance.
+
+## Approved future product direction
+
+A functional Card Battler prototype is approved as a post-refactor product
+target. It is not implemented and is not part of current refactor acceptance.
+ComfyReview will first prove the bounded Card Battler before Character
+Chronicles may reuse it.
+
+The target progresses from explicit manual image-to-card development and a
+card collection through deterministic card functions, deck construction, a
+server-authoritative local PvE game, anti-farm battle experience, revisioned
+card evolution and its interactive board. Character Chronicles-specific
+campaign, Champion, VN and social progression systems are excluded. The full
+contract is documented in the
+[Card Battler target](CARD_BATTLER_TARGET.md).
 
 ## Runtime rules
 
@@ -167,6 +182,13 @@ their raw graphs remain unchanged. All 393 active images produce a complete
 editable Prompt handoff when their content levels are visible. The validated
 runtime contains 803 catalog components and is served on LAN port 8002.
 
+Schema v16 was promoted on 2026-10-07 through a separately created and
+validated output database. The v15 source remained unchanged until the
+explicit replacement, the pre-promotion v15 database remains available as a
+named backup, and both files passed `integrity_check`. The v15 source contained
+no prompt candidates, so the v16 manual-variant backfill correctly created no
+invented manual selections.
+
 The live ComfyUI acceptance submitted and completed one generation with one
 LoRA and one generation with two ordered LoRAs. Both produced exact 720×720
 outputs through Blueprint v4. Their stored graphs, revision UIDs and strengths
@@ -174,12 +196,12 @@ confirmed the complete Checkpoint Model/CLIP -> ordered LoraLoader chain ->
 KSampler and both CLIP encoders. The generation lifecycle worker collected
 both outputs canonically.
 
-## Remaining acceptance
+## Acceptance and integration state
 
-The implementation slice is complete on the active refactor branch. The full
-shared quality gate is green: 638 Python tests, 159 frontend tests and 12
-Playwright acceptance tests pass, with 100% Python-Core and frontend statement
-coverage.
+The implementation slices are integrated on `refactor/review-boundary`. The
+latest full shared quality gate is green: 681 Python tests, 162 frontend tests
+and 14 Playwright acceptance tests pass, with 100% Python-Core and frontend
+statement, function and line coverage.
 On 2026-10-05 the live v10 database was backed up, upgraded to v11 and
 rebuilt without diagnostics: all 377 active images received geometry
 projections. Real Blueprint-v4 ComfyUI smoke generations also completed for
@@ -194,9 +216,9 @@ character membership, and no ambiguous prompt slot remained.
 
 The final Generator dead-path usage audit is complete; the obsolete browser
 staging path, file-backed Generator state and unreferenced legacy Generator
-services are removed. Remaining work before integration is user-facing visual
-acceptance and integration review. The branch is intentionally not merged
-automatically.
+services are removed. The former feature branches contain no unique commits
+outside the refactor base. User-facing visual acceptance and the later decision
+to integrate `refactor/review-boundary` into `master` remain open.
 
 ## Scope and limitations
 
