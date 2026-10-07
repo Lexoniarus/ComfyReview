@@ -501,27 +501,35 @@ class _Playground:
 
     def confirm_draft(self, command):
         self.confirm_command = command
-        if "missing" in command.component_uids:
+        if any(
+            selection.component_uid == "missing"
+            for selection in command.prompt_selections
+        ):
             raise KeyError("missing")
         components = (
             _prompt_component(),
             _prompt_component("scene-a", "scene"),
         )
+        components_by_uid = {
+            component.component_uid: component for component in components
+        }
+        selected = tuple(
+            SelectedPromptComponent(
+                components_by_uid[selection.component_uid],
+                replace(
+                    components_by_uid[selection.component_uid].latest_revision,
+                    revision_uid=selection.revision_uid,
+                ),
+            )
+            for selection in command.prompt_selections
+        )
         return PlaygroundDraft(
-            PromptSelection(
-                tuple(
-                    SelectedPromptComponent(
-                        component,
-                        component.latest_revision,
-                    )
-                    for component in components
-                )
-            ),
+            PromptSelection(selected),
             RenderedPrompt(
                 render_prompt_atom_usages(command.positive_atoms),
                 render_prompt_atom_usages(command.negative_atoms),
                 "notes",
-                ("revision-character-a", "revision-scene-a"),
+                tuple(item.revision.revision_uid for item in selected),
                 render_prompt_atom_usages(command.positive_atoms)
                 != "rendered positive",
                 command.positive_atoms,
@@ -1417,6 +1425,18 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         "revision-character-old",
         "revision-scene-old",
     ]
+    assert response.json()["prompt_selections"] == [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-old",
+        },
+        {
+            "kind": "scene",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-old",
+        },
+    ]
     assert (
         response.json()["components"][0]["latest_revision"]["revision_uid"]
         == "revision-character-a"
@@ -1654,7 +1674,18 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
     client, container = _client()
     payload = {
         "draft_uid": "draft-1",
-        "component_uids": ["character-a", "scene-a"],
+        "prompt_selections": [
+            {
+                "kind": "character",
+                "component_uid": "character-a",
+                "revision_uid": "revision-character-old",
+            },
+            {
+                "kind": "scene",
+                "component_uid": "scene-a",
+                "revision_uid": "revision-scene-old",
+            },
+        ],
         "positive_atoms": [{"text": "edited positive", "weight": 1.0}],
         "negative_atoms": [{"text": "edited negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
@@ -1688,16 +1719,25 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
     draft = container.playground_submission_service.draft
     assert draft.prompt.positive_text == "edited positive"
     assert draft.prompt.revision_uids == (
-        "revision-character-a",
-        "revision-scene-a",
+        "revision-character-old",
+        "revision-scene-old",
     )
     assert draft.output_subdirectory == "playground/character-a-key"
     assert draft.aspect_format.value == "2:3"
     assert draft.resolution_class.value == "1080"
     assert draft.blueprint_version == 4
-    assert container.playground_service.confirm_command.component_uids == (
-        "character-a",
-        "scene-a",
+    assert tuple(
+        (
+            selection.kind,
+            selection.component_uid,
+            selection.revision_uid,
+        )
+        for selection in (
+            container.playground_service.confirm_command.prompt_selections
+        )
+    ) == (
+        ("character", "character-a", "revision-character-old"),
+        ("scene", "scene-a", "revision-scene-old"),
     )
 
 
@@ -1707,7 +1747,13 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     client, container = _client()
     payload: dict[str, Any] = {
         "draft_uid": "draft-1",
-        "component_uids": ["missing"],
+        "prompt_selections": [
+            {
+                "kind": "character",
+                "component_uid": "missing",
+                "revision_uid": "revision-missing",
+            }
+        ],
         "positive_atoms": [{"text": "positive", "weight": 1.0}],
         "negative_atoms": [{"text": "negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
@@ -1724,7 +1770,19 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     }
 
     invalid = client.post("/api/v2/generations", json=payload)
-    payload["component_uids"] = ["character-a", "scene-a"]
+    assert container.playground_submission_service.draft is None
+    payload["prompt_selections"] = [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-a",
+        },
+        {
+            "kind": "scene",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-a",
+        },
+    ]
     bad_sweep = {
         **payload,
         "sampler": {**payload["sampler"], "steps_max": 20},
@@ -1736,6 +1794,8 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     graph_payload = dict(payload)
     graph_payload["workflow_graph"] = {"42": {"class_type": "SaveImage"}}
     graph = client.post("/api/v2/generations", json=graph_payload)
+    legacy_payload = {**payload, "component_uids": ["character-a"]}
+    legacy = client.post("/api/v2/generations", json=legacy_payload)
 
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "invalid_generation"
@@ -1743,6 +1803,7 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     assert failed.status_code == 500
     assert failed.json()["error"]["code"] == "generation_failed"
     assert graph.status_code == 422
+    assert legacy.status_code == 422
 
 
 def _draft_generation(seed: int | None = 17) -> dict[str, object]:

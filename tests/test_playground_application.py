@@ -20,6 +20,7 @@ from comfyreview.application import (
     PromptDraftOverrides,
     PromptRenderer,
     PromptRevision,
+    PromptRevisionSelection,
     PromptSelection,
     PromptSelectionCommand,
     PromptSelectionError,
@@ -1217,31 +1218,236 @@ def test_playground_service_prepares_draft_without_generation_submission() -> (
     )
 
 
-def test_playground_service_revalidates_confirmed_draft_and_derives_revisions() -> (
+def test_playground_service_confirms_exact_historical_and_archived_revisions() -> (
     None
 ):
+    character = _component("character-a", "character", positive="person")
+    scene = _component("scene-night", "scene", positive="current city")
+    historical_scene = replace(
+        scene,
+        latest_revision=replace(
+            scene.latest_revision,
+            revision_uid="revision-scene-night-old",
+            positive_text="historic city",
+            positive_atoms=prompt_atom_usages_from_text("historic city"),
+        ),
+    )
+    legacy_lighting = _component(
+        "lighting-legacy",
+        "lighting",
+        positive="dim ambient background",
+        archived=True,
+    )
     catalog = _CatalogService(
-        tuple(component for component in _catalog() if not component.archived)
+        (character, scene, legacy_lighting),
+        exact_revisions=(historical_scene,),
     )
     service = _service(catalog)
 
     draft = service.confirm_draft(
         ConfirmPlaygroundDraftCommand(
-            component_uids=("character-a", "scene-night"),
-            positive_atoms=prompt_atom_usages_from_text(
-                "person, city, manual emphasis"
+            prompt_selections=(
+                PromptRevisionSelection(
+                    "character",
+                    "character-a",
+                    "revision-character-a",
+                ),
+                PromptRevisionSelection(
+                    "scene",
+                    "scene-night",
+                    "revision-scene-night-old",
+                ),
+                PromptRevisionSelection(
+                    "lighting",
+                    "lighting-legacy",
+                    "revision-lighting-legacy",
+                ),
             ),
-            negative_atoms=prompt_atom_usages_from_text("bad anatomy"),
+            positive_atoms=prompt_atom_usages_from_text(
+                "person, historic city, dim ambient background, manual emphasis"
+            ),
+            negative_atoms=(),
         )
     )
 
     assert draft.prompt.revision_uids == (
         "revision-character-a",
+        "revision-scene-night-old",
+        "revision-lighting-legacy",
+    )
+    assert tuple(
+        selected.component.archived for selected in draft.selection.components
+    ) == (False, False, True)
+    assert draft.prompt.positive_text == (
+        "person, historic city, dim ambient background, manual emphasis"
+    )
+    assert draft.prompt.draft_overridden is True
+    assert catalog.calls == [True]
+
+
+def test_playground_service_rejects_invalid_exact_confirmation_bindings() -> (
+    None
+):
+    service = _service(_CatalogService(_catalog()))
+    character = PromptRevisionSelection(
+        "character",
+        "character-a",
+        "revision-character-a",
+    )
+    scene = PromptRevisionSelection(
+        "scene",
+        "scene-night",
         "revision-scene-night",
     )
-    assert draft.prompt.positive_text == "person, city, manual emphasis"
-    assert draft.prompt.draft_overridden is True
-    assert catalog.calls == [False]
+
+    def confirm(*selections: PromptRevisionSelection) -> None:
+        service.confirm_draft(
+            ConfirmPlaygroundDraftCommand(
+                prompt_selections=selections,
+                positive_atoms=(),
+                negative_atoms=(),
+            )
+        )
+
+    with pytest.raises(PromptSelectionError, match="prompt_selections"):
+        confirm()
+    with pytest.raises(PromptSelectionError, match="kind is required"):
+        confirm(replace(character, kind=""))
+    with pytest.raises(
+        PromptSelectionError, match="component_uid is required"
+    ):
+        confirm(replace(character, component_uid=""))
+    with pytest.raises(PromptSelectionError, match="revision_uid is required"):
+        confirm(replace(character, revision_uid=""))
+    with pytest.raises(
+        PromptSelectionError, match="duplicate prompt component"
+    ):
+        confirm(character, replace(character, revision_uid="revision-other"))
+    with pytest.raises(PromptSelectionError, match="unknown prompt revision"):
+        confirm(
+            PromptRevisionSelection(
+                "character",
+                "character-a",
+                "revision-missing",
+            )
+        )
+    with pytest.raises(PromptSelectionError, match="does not belong"):
+        confirm(
+            PromptRevisionSelection(
+                "character",
+                "scene-night",
+                "revision-character-a",
+            )
+        )
+    with pytest.raises(PromptSelectionError, match="is not scene"):
+        confirm(
+            PromptRevisionSelection(
+                "scene",
+                "character-a",
+                "revision-character-a",
+            )
+        )
+    with pytest.raises(
+        PromptSelectionError, match="duplicate prompt revision"
+    ):
+        confirm(
+            character,
+            replace(character, kind="scene", component_uid="scene-night"),
+        )
+    with pytest.raises(PromptSelectionError, match="character revision"):
+        confirm(scene)
+    with pytest.raises(
+        PromptSelectionError, match="duplicate prompt component kind"
+    ):
+        confirm(
+            character,
+            scene,
+            PromptRevisionSelection(
+                "scene",
+                "scene-archived",
+                "revision-scene-archived",
+            ),
+        )
+
+
+def test_playground_service_rejects_repository_revision_order_mismatch() -> (
+    None
+):
+    character = _component("character-a", "character", positive="person")
+    mismatched_projection = replace(
+        character,
+        latest_revision=replace(
+            character.latest_revision,
+            revision_uid="revision-returned",
+        ),
+    )
+
+    class _MismatchedConfirmationCatalog(_CatalogService):
+        def list_components_for_revisions(
+            self,
+            revision_uids: tuple[str, ...],
+        ) -> tuple[PromptComponent, ...]:
+            return (mismatched_projection,)
+
+    service = _service(_MismatchedConfirmationCatalog((character,)))
+
+    with pytest.raises(PromptSelectionError, match="do not match"):
+        service.confirm_draft(
+            ConfirmPlaygroundDraftCommand(
+                prompt_selections=(
+                    PromptRevisionSelection(
+                        "character",
+                        "character-a",
+                        "revision-requested",
+                    ),
+                ),
+                positive_atoms=(),
+                negative_atoms=(),
+            )
+        )
+
+
+def test_playground_service_rechecks_content_level_for_exact_confirmation() -> (
+    None
+):
+    character = _component("character-a", "character", positive="person")
+    lewd_pose = _component(
+        "pose-lewd",
+        "pose",
+        positive="explicit pose",
+        content_level=ContentLevel.LEWD,
+    )
+    service = PlaygroundService(
+        catalog=_CatalogService((character, lewd_pose)),
+        selection_policy=PromptSelectionPolicy(),
+        renderer=PromptRenderer(),
+        preferences=_Preferences(
+            WorkspacePreferences(
+                enabled_content_levels=(ContentLevel.STANDARD,)
+            )
+        ),
+        content_policy=PromptContentPolicy(),
+    )
+
+    with pytest.raises(PromptSelectionError, match="disabled content level"):
+        service.confirm_draft(
+            ConfirmPlaygroundDraftCommand(
+                prompt_selections=(
+                    PromptRevisionSelection(
+                        "character",
+                        "character-a",
+                        "revision-character-a",
+                    ),
+                    PromptRevisionSelection(
+                        "pose",
+                        "pose-lewd",
+                        "revision-pose-lewd",
+                    ),
+                ),
+                positive_atoms=(),
+                negative_atoms=(),
+            )
+        )
 
 
 def test_playground_service_restores_exact_revisions_and_compositions() -> (

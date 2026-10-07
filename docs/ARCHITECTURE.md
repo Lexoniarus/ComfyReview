@@ -263,6 +263,12 @@ therefore remains exact without redefining `latest_revision`. Compatibility
 checks and draft response groups use the selected revision's immutable content,
 while random and revision-unspecified fixed selections use the current latest
 revision.
+Draft responses publish ordered `prompt_selections` containing kind, stable
+component UID and exact immutable revision UID. Generation submission returns
+that typed selection to `PlaygroundService.confirm_draft`; it never reduces a
+reviewed draft to component IDs or resolves it through `latest_revision` again.
+An archived component remains excluded from new/random selection but its exact
+historical revision remains reproducible when explicitly bound by a draft.
 Submission uses the native `GenerationService`; there is no interim generation
 facade or dual-write.
 

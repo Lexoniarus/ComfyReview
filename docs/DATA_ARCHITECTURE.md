@@ -217,7 +217,11 @@ SQLite and stable-ID generation remain technical adapters. Playground preview
 selection and rendering now consume exact catalog revisions and retain their
 UIDs in each draft. A manual draft edit changes only its structured copy. It
 does not create or mutate a revision. Preview and submission use the same
-server-side renderer. Playground submission uses the native
+server-side renderer. The reviewed browser payload carries ordered typed
+component/revision bindings; confirmation reloads those exact immutable
+revisions, including explicitly selected archived history, and rechecks the
+current content policy before persistence. It never upgrades an older revision
+to the component's latest revision. Playground submission uses the native
 `GenerationService`, preserves flattened structured usages, exact rendered
 snapshots and selected revision IDs, and does not dual-write legacy generation
 state. The missing authoritative mapping from each edited generation usage to

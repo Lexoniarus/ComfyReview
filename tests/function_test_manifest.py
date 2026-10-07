@@ -315,7 +315,7 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     ),
     "comfyreview.application.playground:PlaygroundService.confirm_draft": (
         "tests/test_playground_application.py::"
-        "test_playground_service_revalidates_confirmed_draft_and_derives_revisions"
+        "test_playground_service_confirms_exact_historical_and_archived_revisions"
     ),
     "comfyreview.application.playground_generation:PlaygroundGenerationPolicy.build_request": (
         "tests/test_playground_generation.py::"

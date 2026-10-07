@@ -155,10 +155,19 @@ class PromptSelectionCommand:
 
 
 @dataclass(frozen=True, slots=True)
+class PromptRevisionSelection:
+    """Bind one prompt kind to an exact immutable catalog revision."""
+
+    kind: str
+    component_uid: str
+    revision_uid: str
+
+
+@dataclass(frozen=True, slots=True)
 class ConfirmPlaygroundDraftCommand:
     """Confirm exact catalog components and reviewed prompt snapshots."""
 
-    component_uids: tuple[str, ...]
+    prompt_selections: tuple[PromptRevisionSelection, ...]
     positive_atoms: tuple[PromptAtomUsage, ...]
     negative_atoms: tuple[PromptAtomUsage, ...]
 
@@ -731,48 +740,64 @@ class PlaygroundService:
                 raise PromptSelectionError(
                     f"fixed {kind} revision requires revision_uid"
                 )
-        revisions = self._catalog.list_components_for_revisions(
-            tuple(revision_uid for _, _, revision_uid in exact_requests)
-        )
-        self._require_allowed(revisions)
-        revisions_by_uid = {
-            component.latest_revision.revision_uid: component
-            for component in revisions
-        }
-        current_by_uid = {
-            component.component_uid: component
-            for component in self._catalog.list_components(
-                include_archived=True
+        return self._resolve_revision_bindings(
+            tuple(
+                PromptRevisionSelection(kind, component_uid, revision_uid)
+                for kind, component_uid, revision_uid in exact_requests
             )
-        }
-        selected_revisions: list[SelectedPromptComponent] = []
-        for kind, component_uid, revision_uid in exact_requests:
-            exact_component = revisions_by_uid.get(revision_uid)
-            if exact_component is None:
-                raise PromptSelectionError(
-                    f"unknown prompt revision: {revision_uid}"
-                )
-            if exact_component.component_uid != component_uid:
+        )
+
+    def _resolve_revision_bindings(
+        self,
+        bindings: tuple[PromptRevisionSelection, ...],
+    ) -> tuple[SelectedPromptComponent, ...]:
+        """Resolve ordered component/revision bindings without latest rebinding."""
+        normalized = tuple(
+            PromptRevisionSelection(
+                kind=str(binding.kind or "").strip(),
+                component_uid=str(binding.component_uid or "").strip(),
+                revision_uid=str(binding.revision_uid or "").strip(),
+            )
+            for binding in bindings
+        )
+        if any(not binding.kind for binding in normalized):
+            raise PromptSelectionError("prompt selection kind is required")
+        if any(not binding.component_uid for binding in normalized):
+            raise PromptSelectionError(
+                "prompt selection component_uid is required"
+            )
+        if any(not binding.revision_uid for binding in normalized):
+            raise PromptSelectionError(
+                "prompt selection revision_uid is required"
+            )
+        component_uids = tuple(binding.component_uid for binding in normalized)
+        revision_uids = tuple(binding.revision_uid for binding in normalized)
+        if len(set(component_uids)) != len(component_uids):
+            raise PromptSelectionError("duplicate prompt component")
+        if len(set(revision_uids)) != len(revision_uids):
+            raise PromptSelectionError("duplicate prompt revision")
+        revisions = self._catalog.list_components_for_revisions(revision_uids)
+        self._require_allowed(revisions)
+        selected_revisions = self._with_current_component_metadata(revisions)
+        if len(selected_revisions) != len(normalized):
+            raise PromptSelectionError("unknown prompt revision")
+        for binding, selected in zip(
+            normalized,
+            selected_revisions,
+            strict=True,
+        ):
+            if selected.revision.revision_uid != binding.revision_uid:
+                raise PromptSelectionError("prompt revisions do not match")
+            if selected.component.component_uid != binding.component_uid:
                 raise PromptSelectionError(
                     "prompt revision does not belong to component "
-                    f"{component_uid}"
+                    f"{binding.component_uid}"
                 )
-            current_component = current_by_uid.get(component_uid)
-            if current_component is None:
+            if selected.component.kind != binding.kind:
                 raise PromptSelectionError(
-                    f"unknown prompt component: {component_uid}"
+                    f"prompt revision component is not {binding.kind}"
                 )
-            if exact_component.kind != kind:
-                raise PromptSelectionError(
-                    f"prompt revision component is not {kind}"
-                )
-            selected_revisions.append(
-                SelectedPromptComponent(
-                    current_component,
-                    exact_component.latest_revision,
-                )
-            )
-        return tuple(selected_revisions)
+        return selected_revisions
 
     def prepare_revision_draft(
         self,
@@ -877,10 +902,14 @@ class PlaygroundService:
         command: ConfirmPlaygroundDraftCommand,
     ) -> PlaygroundDraft:
         """Revalidate a reviewed draft against current canonical revisions."""
-        components = self.list_available_components()
-        selection = self._selection_policy.confirm(
-            components,
-            command.component_uids,
+        if not command.prompt_selections:
+            raise PromptSelectionError("prompt_selections are required")
+        selected = self._resolve_revision_bindings(command.prompt_selections)
+        selection = self._exact_selection(
+            selected,
+            tuple(
+                binding.revision_uid for binding in command.prompt_selections
+            ),
         )
         canonical = self._renderer.render(selection)
         positive_override = (

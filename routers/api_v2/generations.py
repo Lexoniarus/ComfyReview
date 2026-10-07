@@ -23,6 +23,7 @@ from comfyreview.application import (
     PlaygroundGenerationSweep,
     PromptCatalogValidationError,
     PromptDraftOverrides,
+    PromptRevisionSelection,
     PromptSelectionError,
     ResolutionClass,
 )
@@ -62,13 +63,25 @@ class GenerationLoraRequest(BaseModel):
     clip_strength: float = 1.0
 
 
+class PromptRevisionSelectionRequest(BaseModel):
+    """Carry one exact prompt component revision selected in the draft."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    component_uid: str
+    revision_uid: str
+
+
 class PlaygroundGenerationRequest(BaseModel):
     """Submit reviewed domain intent without workflow graph semantics."""
 
     model_config = ConfigDict(extra="forbid")
 
     draft_uid: str
-    component_uids: list[str] = Field(default_factory=list)
+    prompt_selections: list[PromptRevisionSelectionRequest] = Field(
+        default_factory=list
+    )
     source_image_uid: str | None = None
     positive_atoms: list[PromptAtomRequest]
     negative_atoms: list[PromptAtomRequest]
@@ -195,7 +208,14 @@ def submit_generation(
         else:
             confirmed = container.playground_service.confirm_draft(
                 ConfirmPlaygroundDraftCommand(
-                    component_uids=tuple(payload.component_uids),
+                    prompt_selections=tuple(
+                        PromptRevisionSelection(
+                            kind=selection.kind,
+                            component_uid=selection.component_uid,
+                            revision_uid=selection.revision_uid,
+                        )
+                        for selection in payload.prompt_selections
+                    ),
                     positive_atoms=positive_atoms,
                     negative_atoms=negative_atoms,
                 )

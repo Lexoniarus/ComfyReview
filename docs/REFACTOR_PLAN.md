@@ -191,6 +191,10 @@ Runtime imports and their reports/backups are deliberately outside Git.
 - `GenerationPort` is implemented by the canonical `GenerationService`;
 - preview drafts now use canonical revisions while preserving their existing
   persisted UI shape and legacy numeric form inputs during transition;
+- draft responses and generation requests exchange ordered typed
+  component/revision bindings, so confirmation preserves historical revisions
+  and accepts an explicitly bound archived revision without restoring it to
+  active/random selection;
 - draft overrides remain non-persisting snapshots and never rewrite catalog
   revisions;
 - the obsolete `PlaygroundGenerator` facade and its helper modules were

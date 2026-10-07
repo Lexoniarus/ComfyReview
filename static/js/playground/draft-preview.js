@@ -138,8 +138,8 @@ export class DraftPreview {
   /** @param {Record<string, any>} settings */
   generationPayload(settings) {
     if (!this.draft || !this.editors.length) return null;
-    const components = Array.isArray(this.draft.components)
-      ? this.draft.components
+    const promptSelections = Array.isArray(this.draft.prompt_selections)
+      ? this.draft.prompt_selections
       : [];
     const loras = Array.isArray(this.draft.loras)
       ? this.draft.loras
@@ -148,12 +148,16 @@ export class DraftPreview {
         : [];
     if (
       !this.draft.source_image_uid &&
-      !components.some((component) => component.kind === "character")
+      !promptSelections.some((selection) => selection.kind === "character")
     )
       return null;
     return {
       draft_uid: this.draftUid,
-      component_uids: components.map((component) => component.component_uid),
+      prompt_selections: promptSelections.map((selection) => ({
+        kind: selection.kind,
+        component_uid: selection.component_uid,
+        revision_uid: selection.revision_uid,
+      })),
       source_image_uid: this.draft.source_image_uid || null,
       positive_atoms: this.#atoms("positive"),
       negative_atoms: this.#atoms("negative"),

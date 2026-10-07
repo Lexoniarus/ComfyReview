@@ -450,6 +450,14 @@ def prepare_playground_draft(
                 component_response(selected.component)
                 for selected in draft.selection.components
             ],
+            "prompt_selections": [
+                {
+                    "kind": selected.component.kind,
+                    "component_uid": selected.component.component_uid,
+                    "revision_uid": selected.revision.revision_uid,
+                }
+                for selected in draft.selection.components
+            ],
             "positive_prompt": positive_prompt,
             "negative_prompt": negative_prompt,
             "positive_atoms": atom_response(positive_atoms),

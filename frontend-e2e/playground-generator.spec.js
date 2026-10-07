@@ -91,7 +91,23 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   ).toBeEnabled();
   await expect(page.getByLabel("Gemeinsamer Seed")).not.toHaveValue("");
 
+  const generationRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" &&
+      request.url().endsWith("/api/v2/generations"),
+  );
   await page.getByRole("button", { name: "An ComfyUI senden" }).click();
+  const submittedPayload = (await generationRequest).postDataJSON();
+  expect(submittedPayload.component_uids).toBeUndefined();
+  expect(submittedPayload.prompt_selections).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        kind: "character",
+        component_uid: expect.any(String),
+        revision_uid: expect.any(String),
+      }),
+    ]),
+  );
   await expect(page.locator("[data-generation-result]")).toContainText(
     "submitted",
   );

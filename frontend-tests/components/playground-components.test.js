@@ -1032,6 +1032,13 @@ describe("Playground browser components", () => {
     preview.render(
       {
         components,
+        prompt_selections: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "revision-character-old",
+          },
+        ],
         positive_prompt: "positive",
         negative_prompt: "negative",
         positive_atoms: [{ text: "positive", weight: 1 }],
@@ -1102,18 +1109,23 @@ describe("Playground browser components", () => {
     root.querySelector(".evidence-carousel-image").click();
     expect(onImageSelect).toHaveBeenCalledWith("/prompt.png");
 
-    expect(
-      preview.generationPayload({
-        checkpoint: "model.safetensors",
-        aspect_format: "2:3",
-        resolution_class: "1080",
-        sampler: { seed: 1 },
-        loras: [{ name: "style.safetensors" }],
-      }),
-    ).toEqual(
+    const generationPayload = preview.generationPayload({
+      checkpoint: "model.safetensors",
+      aspect_format: "2:3",
+      resolution_class: "1080",
+      sampler: { seed: 1 },
+      loras: [{ name: "style.safetensors" }],
+    });
+    expect(generationPayload).toEqual(
       expect.objectContaining({
         draft_uid: "draft-1",
-        component_uids: components.map((item) => item.component_uid),
+        prompt_selections: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "revision-character-old",
+          },
+        ],
         positive_atoms: [{ text: "edited", weight: 1 }],
         loras: [
           {
@@ -1126,10 +1138,18 @@ describe("Playground browser components", () => {
         ],
       }),
     );
+    expect(generationPayload).not.toHaveProperty("component_uids");
 
     preview.render(
       {
         components: [component("scene-a", "scene", "Scene")],
+        prompt_selections: [
+          {
+            kind: "scene",
+            component_uid: "scene-a",
+            revision_uid: "revision-scene-a",
+          },
+        ],
         positive_prompt: "positive",
         negative_prompt: "negative",
         positive_atoms: [{ text: "positive", weight: 1 }],
@@ -1224,6 +1244,29 @@ describe("Playground browser components", () => {
     );
     expect(sceneOnly.generationPayload({})).toBeNull();
     sceneOnly.dispose();
+
+    const componentOnly = new DraftPreview(
+      document.createElement("div"),
+      document.createElement("span"),
+    );
+    componentOnly.render(
+      {
+        components: [component("character-a", "character", "Aiko")],
+        positive_atoms: [{ text: "person", weight: 1 }],
+        negative_atoms: [],
+        groups: [
+          {
+            kind: "character",
+            name: "Aiko",
+            positive_atoms: [{ text: "person", weight: 1 }],
+            negative_atoms: [],
+          },
+        ],
+      },
+      "draft-component-only",
+    );
+    expect(componentOnly.generationPayload({})).toBeNull();
+    componentOnly.dispose();
   });
 
   it("normalizes server draft LoRAs for generation submission", () => {
@@ -1232,6 +1275,13 @@ describe("Playground browser components", () => {
     preview.render(
       {
         components: [component("character-a", "character", "Aiko")],
+        prompt_selections: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "revision-character-a",
+          },
+        ],
         positive_atoms: [{ text: "positive", weight: 1 }],
         negative_atoms: [],
         groups: [

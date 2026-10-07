@@ -142,7 +142,10 @@ replace only render settings, and neither creates a draft. There is no
 tab-local tray, global staging event or duplicate toast owner.
 Exact image handoffs also restore archived historical component revisions into
 the ordinary editable slots. They are labelled as archived and remain excluded
-from random selection. Top/Worst cards and inspectors show normalized,
+from random selection. Draft and generation contracts retain the ordered kind,
+component UID and immutable revision UID through final confirmation; unchanged
+historical slots are no longer rebound to current revisions. Top/Worst cards
+and inspectors show normalized,
 trigger-evidenced LoRA usages alongside component scopes. Content preferences
 accept every non-empty subset of the five levels, including exclusion of
 Standard, and the tablet scope rail is dismissible by its close action or an
