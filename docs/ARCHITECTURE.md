@@ -525,17 +525,15 @@ revision. The legacy HTML form adapter may parse the supported combined-string
 grammar at its explicit compatibility boundary; it does not reintroduce a
 whole-string application contract.
 
-#### Planned prompt-variant guidance and evidence-based promotion
+#### Prompt-variant guidance and evidence-based promotion
 
-The current boundary correctly reuses one `prompt_atoms` identity when only a
-weight changes. Catalog revisions also correctly include weights because each
-revision is the exact standard recipe that was valid at that point in catalog
-history. The current implementation, however, treats the numerically latest
-revision as current and still relies on manual catalog edits; it has no policy
-that selects the strongest sufficiently supported observed variant.
+The boundary reuses one `prompt_atoms` identity when only a weight changes.
+Catalog revisions include weights because each revision is the exact standard
+recipe that was valid at that point in catalog history. The active standard is
+selected by the newest append-only promotion rather than revision number.
 
-The planned guidance boundary parallels render guidance while keeping three
-independent choices for every loaded prompt component:
+`PromptVariantGuidanceService` parallels render guidance while keeping three
+independent results for every loaded prompt component:
 
 1. the stable observed variant is the revision selected by the newest promotion
    event. Revision 1 starts as a provisional standard and remains selectable
@@ -577,16 +575,26 @@ modeled logit effects so longer atom lists gain no structural advantage. The
 next test maximizes `mean + 1.645 * standard_deviation`, may change several
 weights, and is selected without materializing a Cartesian product.
 
-Schema v15 is planned to add normalized component candidates, exact per-
-generation prompt groups and atom usages, and append-only promotion facts. Draft
-and generation contracts must carry concrete source revisions and optional
-candidate identities per group; the server validates ownership and exact prompt
-partitioning before atomically persisting them. A manual content edit creates a
-candidate rather than immediately changing the standard. Historical flattened
-usages are attributed to components only when their partition is provable;
-ambiguous records remain unknown and are excluded from component guidance.
-Derived summaries remain rebuildable and whole-image ratings remain contextual
-evidence, not causal proof for one atom.
+Schema v15 stores normalized component candidates, exact per-generation prompt
+groups and atom usages, and append-only promotion facts. Draft and generation
+contracts carry concrete source revisions and optional candidate identities per
+group; the application service validates ownership and exact prompt rendering
+before the repository commits all generation facts atomically. A manual content
+edit creates a candidate rather than immediately changing the standard.
+Historical flattened usages are attributed to components only when their
+partition is provable; ambiguous records remain unknown and are excluded from
+component guidance. Derived summaries remain rebuildable and whole-image
+ratings remain contextual evidence, not causal proof for one atom.
+
+`POST /api/v2/playground/prompt-guidance` is the route translation boundary for
+the read service. `POST /api/v2/playground/prompt-candidates` materializes a
+calculated or manually accepted result only on explicit selection. The browser
+stores the concrete candidate identity alongside the source revision and loads
+only that component's atoms into the normal editor. Review, Delete and Arena
+services invoke an injected `PromptPromotionCoordinator` after their canonical
+write has committed. Reconciliation uses its own short transaction; failures
+are logged and surfaced as `promotion_pending`. The offline
+`prompt-promotions audit|reconcile` command uses the same idempotent coordinator.
 
 ### 10.3 Canonical analytics boundaries
 

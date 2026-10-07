@@ -469,20 +469,19 @@ constants.
 - the closing shared gate passed 638 Python tests, 159 frontend tests and 12
   Playwright scenarios with 100% Python-Core and frontend statement coverage.
 
-### Prompt variant guidance and evidence-based catalog promotion (planned)
+### Prompt variant guidance and evidence-based catalog promotion (implemented)
 
-Status: high-priority follow-up documented on 2026-10-07; not yet implemented
-or validated.
+Status: implemented on `feature/lora-catalog-handoff` on 2026-10-07. Schema,
+generation facts, guidance, promotion, Generator integration and recovery are
+split into independently reviewed commits.
 
-The structured-prompt slice correctly separated atom identity from usage weight
-and made each immutable catalog revision an exact weighted standard recipe.
-Generation and review facts also retain the observations needed for learning.
-The remaining gap is a product loop: the current revision is still selected by
-revision order/manual editing, while no service exposes a calculated optimized
-prompt variant or promotes a sufficiently stable observed recipe by an explicit
-evidence policy.
+The structured-prompt boundary separates atom identity from usage weight and
+makes each immutable catalog revision an exact weighted standard recipe. Schema
+v15 closes the feedback loop with explicit candidates, exact generation prompt
+groups and append-only promotions. `current_revision` now follows the newest
+promotion while `latest_revision` remains historical revision-number state.
 
-The slice must establish these invariants:
+The completed slice establishes these invariants:
 
 - normalized semantic content identifies an atom; using another weight does not
   create another atom, while changed semantic content does;
@@ -508,7 +507,7 @@ The slice must establish these invariants:
 - whole-image ratings provide contextual evidence rather than causal proof for
   one atom, and ambiguous legacy source attribution is never invented.
 
-The policy decisions are fixed for implementation: `prompt-guidance-v1` uses
+The implemented `prompt-guidance-v1` policy uses
 the Render Guidance evidence semantics, a five-independent-image stability
 floor, repeated-review weighting without support inflation, negative delete
 evidence and conservative lower-bound ordering. Automatic promotion requires a
@@ -520,22 +519,36 @@ effects as a mean logit effect. Discovery maximizes
 `mean + 1.645 * standard_deviation`, may alter several weights and never
 materializes the Cartesian product.
 
-Schema v15 will add explicit candidates, exact generation prompt groups and
+Schema v15 adds explicit candidates, exact generation prompt groups and
 append-only promotions. The newest promotion defines `current_revision`, while
 `latest_revision` remains the highest historical revision. New revision 1 and
 v14 migration baselines are provisional. Manual catalog-content changes create
 candidates; metadata changes remain immediate. Historical groups are backfilled
-only when exact partitioning is provable. Any schema change must use the
-backup/new-output/validation workflow and preserve canonical facts. Completion
-requires behavior, rollback, migration, architecture and analytics tests plus
-the complete shared quality gate.
+only when exact partitioning is provable. Draft and submission services validate
+component, source revision, candidate and rendered prompt before atomic
+persistence.
+
+The Generator exposes stable, visible catalog-test, calculated and next-test
+choices independently per group. Guidance is read-only until an explicit
+selection materializes a deduplicated candidate, and its atoms enter the same
+editable `PromptAtomEditor` as every other workflow. Review, Delete and Arena
+invoke an injected promotion coordinator after their own transaction. Failures
+leave feedback committed, surface `promotion_pending` and are recoverable with
+the idempotent `prompt-promotions audit|reconcile` command.
+
+The closing shared gate on 2026-10-07 ended with `quality gate passed`: 677
+Python tests, 162 frontend tests and 14 Playwright scenarios passed. Python Core
+and frontend statements, functions and lines retained 100% coverage; formatting,
+linting, strict typing, architecture checks and the function-to-test manifest
+also passed.
 
 ## Final acceptance remaining
 
 The previously completed implementation slices and their automated integration
-gates remain valid for their stated scope, but the project is not at final
-architectural acceptance while prompt-variant guidance and evidence-based
-catalog promotion remain planned. The live database upgrade/rebuild and real
+gates remain valid for their stated scope. Prompt-variant guidance and
+evidence-based catalog promotion and its shared quality gate are complete. The
+local v14-to-v15 backup/new-output/validation/promotion workflow remains an
+explicit operator action outside repository state. The real
 Blueprint-v4 Portrait/Landscape ComfyUI
 smokes were completed successfully on 2026-10-05. On 2026-10-06 the owned
 lifecycle worker completed the newest retained ComfyUI job, and the four jobs
@@ -549,10 +562,10 @@ The acceptance audit additionally repaired 165 historical generation snapshots
 for the already-classified Explicit `example-lora-2.safetensors` LoRA
 through the existing revision-checked preview/apply service. No name-based LoRA
 heuristic or unreviewed bulk reclassification was introduced.
-The generator dead-path audit and its automated acceptance are complete. In
-addition to user-facing visual acceptance and opening the replacement pull
-request, final integration now requires the corrective atom-identity and
-weight-evidence slice above. No automatic merge is planned.
+The generator dead-path audit and its automated acceptance are complete. The
+corrective atom-identity and weight-evidence slice above is now implemented.
+User-facing visual acceptance and opening the replacement pull request remain
+separate release actions; no automatic merge is planned.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the

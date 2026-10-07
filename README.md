@@ -490,7 +490,23 @@ The Playground Generator is designed to carry values back into ComfyUI in a repr
 `/playground` is the evidence overview for Top-2/Top-3 combinations;
 `/playground/generator` creates a server-identified draft with one concrete
 shared seed, grouped editable prompt atoms and separate prompt/sampler image
-evidence. Fixed Prompt selections show their best visible catalog reference.
+evidence. Each fixed prompt group keeps its concrete source revision and may
+also keep a concrete candidate. Its variant control independently offers the
+promoted stable/provisional catalog recipe, a visible catalog test candidate,
+the calculated weight-only optimum and the next useful weight test. Calculated
+guidance is materialized only after the user selects it; applying any variant
+replaces only that group's atoms in the ordinary editable `PromptAtomEditor`.
+Draft and generation payloads retain the exact group, source revision,
+candidate and rendered atom usages.
+
+`POST /api/v2/playground/prompt-guidance` returns the current catalog recipe,
+best observed recipe, calculated optimum, discovery test, support, uncertainty,
+example images and coverage for one loaded component. Explicitly selected
+calculated recipes are deduplicated by
+`POST /api/v2/playground/prompt-candidates`. The catalog API exposes both the
+promotion-selected `current_revision` and the numerically highest historical
+`latest_revision`.
+
 The Render/Sampler controls offer four explicit evidence modes: observed or
 predicted, each for a complete setup or individual values. Applying one changes
 only Checkpoint, Sampler, Scheduler, Steps, CFG and Denoise; LoRAs and output
@@ -519,6 +535,13 @@ keep the prior state and display the error in the Generator. LoRA revision
 triggers enter the matching positive or negative prompt exactly once. Removing
 every trigger of a selected LoRA blocks preview and submission before
 persistence.
+
+Successful Review, Delete and Arena writes trigger best-effort prompt promotion
+reconciliation in a separate short transaction. A reconciliation failure never
+rolls back the stored feedback: the response marks `promotion_pending`, and
+`python -m comfyreview prompt-promotions audit|reconcile --database <path>`
+provides the explicit idempotent recovery path. Startup performs no silent
+schema upgrade or promotion.
 
 </details>
 

@@ -153,7 +153,7 @@ of whether it has already produced an image. A stable prompt component owns
 immutable prompt revisions. Each revision owns ordered positive and negative
 atom usages.
 
-### Missing feedback loop: stable catalog standard and calculated candidate
+### Stable catalog standard and calculated candidate
 
 An immutable component revision represents one exact catalog recipe, including
 its ordered positive and negative atoms and their standard weights. Keeping
@@ -177,7 +177,7 @@ that complete recipe, including its weights, then appends a promotion event.
 Earlier revisions remain bound to their historical images. Display name, tags
 and notes remain mutable metadata and continue to take effect immediately.
 
-The planned product model distinguishes four results:
+The product model distinguishes four results:
 
 - the current stable or provisional catalog variant selected by promotion;
 - the best observed variant: the strongest exact recipe in the recorded data,
@@ -188,15 +188,16 @@ The planned product model distinguishes four results:
 - the next useful test: a candidate selected to reduce uncertainty rather than
   merely maximize the estimated score.
 
-The Generator must offer `Stable`, `Calculated` and `Next test` independently
-for Character, Outfit, Scene, Modifier and every other prompt group. Each
-selection replaces only that group's atoms in the ordinary editable Generator
-state. A calculated candidate remains derived guidance until explicitly
-materialized and then generated. Promotion is initiated automatically after a
-successful Review, Delete or Arena transaction, but remains explicit as an
-append-only fact recording the previous revision, evidence frontier,
-policy/model version and reason. Promotion failure does not undo the canonical
-review; it is logged and remains idempotently reconcilable.
+The Generator offers `Stable`, `Catalog test`, `Calculated` and `Next test`
+independently for Character, Outfit, Scene, Modifier and every other prompt
+group. Each selection replaces only that group's atoms in the ordinary editable
+Generator state. A calculated candidate remains derived guidance until
+explicitly materialized and then generated. Promotion is initiated
+automatically after a successful Review, Delete or Arena transaction, but
+remains explicit as an append-only fact recording the previous revision,
+evidence frontier, policy/model version and reason. Promotion failure does not
+undo the canonical review; it is logged, returned as `promotion_pending` and
+remains idempotently reconcilable.
 
 The `prompt-guidance-v1` policy requires five independent images for a stable
 exact variant. Repeated reviews contribute evidence but never increase image
@@ -230,6 +231,23 @@ partitioned exactly into the final rendered prompt. Ambiguous legacy records
 remain unknown and do not contribute component guidance. The v15 transition
 uses the normal backup/new-output/validation workflow and preserves images,
 rendered prompt snapshots, reviews and stable identities.
+
+The v15 runtime tables are canonical facts rather than a score cache:
+
+- `prompt_component_candidates` and candidate atom usages retain explicitly
+  selected manual or calculated recipes without turning them into revisions;
+- generation prompt groups and atom usages retain the exact component, source
+  revision, optional candidate, role, order and weight submitted for each
+  generation;
+- `prompt_component_promotions` is append-only and makes the newest event's
+  revision the current catalog standard while preserving the prior revision,
+  evidence frontier, policy version, reason and measurements.
+
+The read repository derives observed variants and atom-weight evidence from
+these facts. Guidance candidates are not persisted until explicitly selected,
+and no Cartesian product or mutable score authority is stored. The explicit
+`prompt-promotions audit|reconcile` maintenance command repairs pending
+promotion work; runtime startup never upgrades or reconciles silently.
 
 Display name, tags and notes remain mutable catalog metadata.
 
