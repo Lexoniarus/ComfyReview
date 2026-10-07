@@ -171,6 +171,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         prompt_catalog_views=cast(PromptCatalogViewService, object()),
         prompt_labels=cast(PromptLabelService, object()),
         playground_service=cast(PlaygroundService, object()),
+        playground_variant_preparation=cast(Any, object()),
         playground_submission_service=cast(
             PlaygroundSubmissionService,
             object(),

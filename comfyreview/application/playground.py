@@ -202,6 +202,32 @@ class PromptDraftOverrides:
 
     positive_atoms: tuple[PromptAtomUsage, ...] | None = None
     negative_atoms: tuple[PromptAtomUsage, ...] | None = None
+    component_overrides: tuple[PromptComponentDraftOverride, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PromptComponentDraftOverride:
+    """Override one exact selected prompt source inside an experiment."""
+
+    kind: str
+    component_uid: str
+    revision_uid: str
+    candidate_uid: str | None
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedPromptGroup:
+    """Keep one concrete prompt group's exact editable atom snapshot."""
+
+    kind: str
+    component_uid: str
+    revision_uid: str
+    candidate_uid: str | None
+    name: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +241,7 @@ class RenderedPrompt:
     draft_overridden: bool
     positive_atoms: tuple[PromptAtomUsage, ...] = ()
     negative_atoms: tuple[PromptAtomUsage, ...] = ()
+    component_groups: tuple[RenderedPromptGroup, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -570,15 +597,12 @@ class PromptRenderer:
         overrides: PromptDraftOverrides | None = None,
     ) -> RenderedPrompt:
         """Return exact positive/negative snapshots without catalog writes."""
+        component_groups = self._component_groups(selection, overrides)
         positive_atoms = tuple(
-            atom
-            for selected in selection.components
-            for atom in self._selection_atoms(selected, positive=True)
+            atom for group in component_groups for atom in group.positive_atoms
         )
         negative_atoms = tuple(
-            atom
-            for selected in selection.components
-            for atom in self._selection_atoms(selected, positive=False)
+            atom for group in component_groups for atom in group.negative_atoms
         )
         notes = " | ".join(
             selected.component.notes.strip()
@@ -603,10 +627,88 @@ class PromptRenderer:
             and (
                 overrides.positive_atoms is not None
                 or overrides.negative_atoms is not None
+                or bool(overrides.component_overrides)
             ),
             positive_atoms=positive_atoms,
             negative_atoms=negative_atoms,
+            component_groups=component_groups,
         )
+
+    @classmethod
+    def _component_groups(
+        cls,
+        selection: PromptSelection,
+        overrides: PromptDraftOverrides | None,
+    ) -> tuple[RenderedPromptGroup, ...]:
+        requested = tuple(overrides.component_overrides) if overrides else ()
+        by_identity: dict[
+            tuple[str, str, str, str | None], PromptComponentDraftOverride
+        ] = {}
+        for item in requested:
+            identity = cls._override_identity(item)
+            if identity in by_identity:
+                raise PromptSelectionError(
+                    "duplicate prompt component override"
+                )
+            by_identity[identity] = item
+
+        groups: list[RenderedPromptGroup] = []
+        matched: set[tuple[str, str, str, str | None]] = set()
+        for selected in selection.components:
+            candidate_uid = (
+                selected.candidate.candidate_uid
+                if selected.candidate is not None
+                else None
+            )
+            identity = (
+                selected.component.kind,
+                selected.component.component_uid,
+                selected.revision.revision_uid,
+                candidate_uid,
+            )
+            override = by_identity.get(identity)
+            if override is not None:
+                matched.add(identity)
+            groups.append(
+                RenderedPromptGroup(
+                    kind=selected.component.kind,
+                    component_uid=selected.component.component_uid,
+                    revision_uid=selected.revision.revision_uid,
+                    candidate_uid=candidate_uid,
+                    name=selected.component.name,
+                    positive_atoms=(
+                        override.positive_atoms
+                        if override is not None
+                        else cls._selection_atoms(selected, positive=True)
+                    ),
+                    negative_atoms=(
+                        override.negative_atoms
+                        if override is not None
+                        else cls._selection_atoms(selected, positive=False)
+                    ),
+                )
+            )
+        if matched != set(by_identity):
+            raise PromptSelectionError(
+                "prompt component override does not match selected revision"
+            )
+        return tuple(groups)
+
+    @staticmethod
+    def _override_identity(
+        override: PromptComponentDraftOverride,
+    ) -> tuple[str, str, str, str | None]:
+        identity = (
+            str(override.kind or "").strip(),
+            str(override.component_uid or "").strip(),
+            str(override.revision_uid or "").strip(),
+            str(override.candidate_uid or "").strip() or None,
+        )
+        if not all(identity[:3]):
+            raise PromptSelectionError(
+                "prompt component override identity is incomplete"
+            )
+        return identity
 
     def render_atoms(
         self,

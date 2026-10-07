@@ -20,6 +20,7 @@ from comfyreview.application import (
     PromptCatalogService,
     PromptComponent,
     PromptComponentCandidate,
+    PromptComponentDraftOverride,
     PromptContentPolicy,
     PromptDraftOverrides,
     PromptRenderer,
@@ -1198,6 +1199,97 @@ def _service(catalog: _CatalogService) -> PlaygroundService:
         preferences=_Preferences(),
         content_policy=PromptContentPolicy(),
     )
+
+
+def test_playground_component_override_changes_only_exact_prompt_group() -> (
+    None
+):
+    service = _service(_CatalogService(_catalog()))
+    override = PromptComponentDraftOverride(
+        kind="character",
+        component_uid="character-a",
+        revision_uid="revision-character-a",
+        candidate_uid=None,
+        positive_atoms=(PromptAtomUsage("edited person", 1200),),
+        negative_atoms=(PromptAtomUsage("edited anatomy", 800),),
+    )
+
+    draft = service.prepare_draft(
+        PromptSelectionCommand(
+            character_component_uid="character-a",
+            character_revision_uid="revision-character-a",
+            seed=17,
+        ),
+        overrides=PromptDraftOverrides(component_overrides=(override,)),
+    )
+
+    character = next(
+        group
+        for group in draft.prompt.component_groups
+        if group.kind == "character"
+    )
+    scene = next(
+        group
+        for group in draft.prompt.component_groups
+        if group.kind == "scene"
+    )
+    assert character.positive_atoms == override.positive_atoms
+    assert character.negative_atoms == override.negative_atoms
+    assert scene.positive_atoms == prompt_atom_usages_from_text("city")
+    assert "(edited person:1.2)" in draft.prompt.positive_text
+    assert draft.prompt.draft_overridden
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    (
+        (
+            PromptComponentDraftOverride(
+                "scene",
+                "missing",
+                "revision-missing",
+                None,
+                (),
+                (),
+            ),
+        ),
+        (
+            PromptComponentDraftOverride(
+                "character",
+                "character-a",
+                "revision-character-a",
+                None,
+                (),
+                (),
+            ),
+        )
+        * 2,
+        (
+            PromptComponentDraftOverride(
+                "",
+                "character-a",
+                "revision-character-a",
+                None,
+                (),
+                (),
+            ),
+        ),
+    ),
+)
+def test_playground_component_overrides_require_unique_exact_bindings(
+    overrides: tuple[PromptComponentDraftOverride, ...],
+) -> None:
+    service = _service(_CatalogService(_catalog()))
+
+    with pytest.raises(PromptSelectionError, match="component override"):
+        service.prepare_draft(
+            PromptSelectionCommand(
+                character_component_uid="character-a",
+                character_revision_uid="revision-character-a",
+                seed=17,
+            ),
+            overrides=PromptDraftOverrides(component_overrides=overrides),
+        )
 
 
 def test_revision_draft_rejects_mismatched_repository_revision() -> None:

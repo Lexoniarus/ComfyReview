@@ -345,6 +345,26 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_application.py::"
         "test_playground_service_confirms_exact_historical_and_archived_revisions"
     ),
+    "comfyreview.application.playground_variants:PlaygroundVariantDiversityPolicy.signature": (
+        "tests/test_playground_variants.py::"
+        "test_variant_diversity_signature_ignores_transient_draft_identity"
+    ),
+    "comfyreview.application.playground_variants:PlaygroundVariantPreparationService.prepare": (
+        "tests/test_playground_variants.py::"
+        "test_variant_preparation_separates_selection_entropy_from_fixed_seed"
+    ),
+    "comfyreview.application.playground_variants:PlaygroundVariantPreparationService.prepare_static": (
+        "tests/test_playground_variants.py::"
+        "test_variant_preparation_varies_a_static_prompt_without_reselection"
+    ),
+    "comfyreview.application.playground_variants:SecurePlaygroundVariantEntropySource.next_seed": (
+        "tests/test_playground_variants.py::"
+        "test_default_variant_sources_return_bounded_opaque_values"
+    ),
+    "comfyreview.application.playground_variants:UuidPlaygroundVariantIdentitySource.new_draft_uid": (
+        "tests/test_playground_variants.py::"
+        "test_default_variant_sources_return_bounded_opaque_values"
+    ),
     "comfyreview.application.playground_generation:PlaygroundGenerationPolicy.build_request": (
         "tests/test_playground_generation.py::"
         "test_playground_generation_policy_builds_reproducible_request"

@@ -14,12 +14,17 @@ from comfyreview.application import (
     AspectFormat,
     ContentClassificationError,
     GenerationLoraSelection,
+    GenerationValidationError,
     GeneratorStateValidationError,
     ImageContextNotFoundError,
     ManualPromptSelection,
     MaterializePromptCandidateCommand,
+    PlaygroundDraft,
     PlaygroundEvidenceQuery,
+    PlaygroundVariantSpecification,
+    PreparedPlaygroundVariant,
     PromptCatalogValidationError,
+    PromptComponentDraftOverride,
     PromptDraftOverrides,
     PromptGuidanceRevisionConflict,
     PromptSelectionCommand,
@@ -65,6 +70,9 @@ class PlaygroundDraftRequest(BaseModel):
     generation: "PlaygroundDraftGenerationSettings"
     positive_atoms: list[PromptAtomRequest] | None = None
     negative_atoms: list[PromptAtomRequest] | None = None
+    component_overrides: list["PlaygroundComponentOverrideRequest"] = Field(
+        default_factory=list
+    )
     prompt_source: "PlaygroundPromptSource | None" = None
     loras: list["PlaygroundDraftLora"] = Field(default_factory=list)
 
@@ -82,6 +90,19 @@ class PlaygroundPromptSource(BaseModel):
     revision_uids: list[str] = Field(default_factory=list)
     composition_uid: str | None = None
     image_uid: str | None = None
+
+
+class PlaygroundComponentOverrideRequest(BaseModel):
+    """Override one exact fixed prompt source for this experiment only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: PromptKind
+    component_uid: str
+    revision_uid: str
+    candidate_uid: str | None = None
+    positive_atoms: list[PromptAtomRequest] = Field(default_factory=list)
+    negative_atoms: list[PromptAtomRequest] = Field(default_factory=list)
 
 
 class PlaygroundDraftLora(BaseModel):
@@ -117,6 +138,32 @@ class PlaygroundDraftGenerationSettings(BaseModel):
     denoise: float
     aspect_format: AspectFormat
     resolution_class: ResolutionClass
+
+
+class PlaygroundVariantGenerationSettings(PlaygroundDraftGenerationSettings):
+    """Carry bounded sampler variation used while preparing variants."""
+
+    steps_max: int = Field(ge=1, le=100)
+    cfg_max: float = Field(gt=0, le=30)
+    cfg_step: float = Field(gt=0, le=30)
+
+
+class PlaygroundVariantBatchRequest(BaseModel):
+    """Request a bounded transient batch of concrete Playground drafts."""
+
+    selections: list[PlaygroundSelectionIntent] = Field(default_factory=list)
+    revision_uids: list[str] = Field(default_factory=list)
+    composition_uid: str | None = None
+    max_attempts: int = 200
+    positive_atoms: list[PromptAtomRequest] | None = None
+    negative_atoms: list[PromptAtomRequest] | None = None
+    component_overrides: list[PlaygroundComponentOverrideRequest] = Field(
+        default_factory=list
+    )
+    prompt_source: PlaygroundPromptSource | None = None
+    loras: list[PlaygroundDraftLora] = Field(default_factory=list)
+    variant_count: int = Field(default=4, ge=1, le=12)
+    generation: PlaygroundVariantGenerationSettings
 
 
 class PromptRenderPreviewRequest(BaseModel):
@@ -520,7 +567,9 @@ def prepare_playground_draft(
         )
         positive_atoms = draft.prompt.positive_atoms
         negative_atoms = draft.prompt.negative_atoms
-        if source_mode != "image_snapshot" and overrides is None:
+        if source_mode != "image_snapshot" and not whole_draft_overridden(
+            overrides
+        ):
             positive_atoms += tuple(
                 atom
                 for group in lora_groups
@@ -584,23 +633,7 @@ def prepare_playground_draft(
                 ]
                 if source_mode == "image_snapshot"
                 else [
-                    {
-                        "component_uid": selected.component.component_uid,
-                        "revision_uid": selected.revision.revision_uid,
-                        "candidate_uid": (
-                            selected.candidate.candidate_uid
-                            if selected.candidate is not None
-                            else None
-                        ),
-                        "kind": selected.component.kind,
-                        "name": selected.component.name,
-                        "positive_atoms": atom_response(
-                            selection_atoms(selected, positive=True)
-                        ),
-                        "negative_atoms": atom_response(
-                            selection_atoms(selected, positive=False)
-                        ),
-                    }
+                    prompt_group_response(draft, selected)
                     for selected in draft.selection.components
                 ]
                 + [
@@ -626,23 +659,7 @@ def prepare_playground_draft(
                 ]
             ),
             "prompt_groups": [
-                {
-                    "component_uid": selected.component.component_uid,
-                    "revision_uid": selected.revision.revision_uid,
-                    "candidate_uid": (
-                        selected.candidate.candidate_uid
-                        if selected.candidate is not None
-                        else None
-                    ),
-                    "kind": selected.component.kind,
-                    "name": selected.component.name,
-                    "positive_atoms": atom_response(
-                        selection_atoms(selected, positive=True)
-                    ),
-                    "negative_atoms": atom_response(
-                        selection_atoms(selected, positive=False)
-                    ),
-                }
+                prompt_group_response(draft, selected)
                 for selected in draft.selection.components
             ],
             "loras": (
@@ -677,6 +694,251 @@ def prepare_playground_draft(
                     for group in lora_groups
                 ]
             ),
+        }
+    )
+
+
+@router.post("/playground/variant-batches")
+def prepare_playground_variant_batch(
+    request: Request,
+    payload: PlaygroundVariantBatchRequest,
+) -> JSONResponse:
+    """Prepare concrete, preferably diverse, transient Playground drafts."""
+    try:
+        overrides = draft_overrides(payload)
+        container = get_application_container(request)
+        source_mode = (
+            payload.prompt_source.mode
+            if payload.prompt_source is not None
+            else "composition"
+            if payload.composition_uid
+            else "revisions"
+            if payload.revision_uids
+            else "selection"
+        )
+        source_revisions = (
+            payload.prompt_source.revision_uids
+            if payload.prompt_source is not None
+            else payload.revision_uids
+        )
+        source_composition = (
+            payload.prompt_source.composition_uid
+            if payload.prompt_source is not None
+            else payload.composition_uid
+        )
+        source_handoff = None
+        static_draft = None
+        if source_mode == "image_snapshot":
+            if payload.selections or source_revisions or source_composition:
+                raise PromptSelectionError(
+                    "image snapshot cannot include another prompt source"
+                )
+            image_uid = (
+                payload.prompt_source.image_uid
+                if payload.prompt_source is not None
+                else None
+            )
+            if not image_uid:
+                raise PromptSelectionError("image_uid is required")
+            source_handoff = container.image_generator_handoffs.get(image_uid)
+            static_draft = container.playground_service.prepare_image_snapshot(
+                container.image_contexts.get_image(image_uid),
+                overrides=overrides,
+            )
+        elif source_mode == "composition":
+            if not source_composition:
+                raise PromptSelectionError("composition_uid is required")
+            if payload.selections or source_revisions or overrides:
+                raise PromptSelectionError(
+                    "composition handoff cannot include draft selections"
+                )
+            static_draft = (
+                container.playground_service.prepare_composition_draft(
+                    source_composition
+                )
+            )
+        elif source_mode == "revisions":
+            if not source_revisions:
+                raise PromptSelectionError("revision_uids are required")
+            if payload.selections or overrides:
+                raise PromptSelectionError(
+                    "revision handoff cannot include draft selections"
+                )
+            static_draft = container.playground_service.prepare_revision_draft(
+                tuple(source_revisions)
+            )
+        elif source_mode == "image_adapted":
+            if source_revisions or source_composition:
+                raise PromptSelectionError(
+                    "adapted image cannot include another prompt source"
+                )
+            image_uid = (
+                payload.prompt_source.image_uid
+                if payload.prompt_source is not None
+                else None
+            )
+            if not image_uid:
+                raise PromptSelectionError("image_uid is required")
+            source_handoff = container.image_generator_handoffs.get(image_uid)
+            if source_handoff.prompt_setup.availability != "complete":
+                raise PromptSelectionError(
+                    "source image prompt attribution is incomplete"
+                )
+
+        generation = payload.generation
+        specification = PlaygroundVariantSpecification(
+            variant_count=payload.variant_count,
+            generation_seed=(
+                generation.seed if generation.seed is not None else 0
+            ),
+            randomize_seed=generation.randomize_seed,
+            steps_min=generation.steps,
+            steps_max=generation.steps_max,
+            cfg_min=generation.cfg,
+            cfg_max=generation.cfg_max,
+            cfg_step=generation.cfg_step,
+        )
+        batch = (
+            container.playground_variant_preparation.prepare_static(
+                static_draft,
+                specification,
+            )
+            if static_draft is not None
+            else container.playground_variant_preparation.prepare(
+                selection_command(payload, 0),
+                specification,
+                overrides=overrides,
+            )
+        )
+        lora_groups = (
+            container.lora_drafts.resolve(
+                tuple(
+                    GenerationLoraSelection(
+                        name="",
+                        model_strength_milli=round(item.model_strength * 1000),
+                        clip_strength_milli=round(item.clip_strength * 1000),
+                        position=position,
+                        lora_uid=item.lora_uid,
+                        revision_uid=item.revision_uid,
+                    )
+                    for position, item in enumerate(payload.loras)
+                )
+            )
+            if payload.loras and source_mode != "image_snapshot"
+            else ()
+        )
+        loras: list[dict[str, object]] = (
+            [
+                {
+                    "lora_uid": item.lora_uid,
+                    "revision_uid": item.revision_uid,
+                    "provider_name": item.provider_name,
+                    "display_name": item.provider_name,
+                    "position": item.position,
+                    "model_strength": item.model_strength_milli / 1000,
+                    "clip_strength": item.clip_strength_milli / 1000,
+                }
+                for item in source_handoff.prompt_setup.loras
+            ]
+            if source_handoff is not None and source_mode == "image_snapshot"
+            else [
+                {
+                    "lora_uid": group.selection.lora_uid,
+                    "revision_uid": group.revision.revision_uid,
+                    "provider_name": group.selection.name,
+                    "display_name": group.display_name,
+                    "position": group.selection.position,
+                    "model_strength": (
+                        group.selection.model_strength_milli / 1000
+                    ),
+                    "clip_strength": (
+                        group.selection.clip_strength_milli / 1000
+                    ),
+                }
+                for group in lora_groups
+            ]
+        )
+        lora_prompt_groups: list[dict[str, object]] = [
+            {
+                "component_uid": group.selection.lora_uid,
+                "revision_uid": group.revision.revision_uid,
+                "kind": "lora",
+                "name": group.display_name,
+                "positive_atoms": atom_response(group.revision.positive_atoms),
+                "negative_atoms": atom_response(group.revision.negative_atoms),
+                "model_strength": (
+                    group.selection.model_strength_milli / 1000
+                ),
+                "clip_strength": (group.selection.clip_strength_milli / 1000),
+            }
+            for group in lora_groups
+        ]
+        variants = []
+        for variant in batch.variants:
+            positive_atoms = variant.draft.prompt.positive_atoms
+            negative_atoms = variant.draft.prompt.negative_atoms
+            if source_mode != "image_snapshot" and not whole_draft_overridden(
+                overrides
+            ):
+                positive_atoms += tuple(
+                    atom
+                    for group in lora_groups
+                    for atom in group.revision.positive_atoms
+                )
+                negative_atoms += tuple(
+                    atom
+                    for group in lora_groups
+                    for atom in group.revision.negative_atoms
+                )
+            positive_prompt, negative_prompt = (
+                container.prompt_renderer.render_atoms(
+                    positive_atoms, negative_atoms
+                )
+            )
+            variants.append(
+                prepared_variant_response(
+                    variant,
+                    positive_atoms=positive_atoms,
+                    negative_atoms=negative_atoms,
+                    positive_prompt=positive_prompt,
+                    negative_prompt=negative_prompt,
+                    checkpoint=generation.checkpoint,
+                    sampler=generation.sampler,
+                    scheduler=generation.scheduler,
+                    denoise=generation.denoise,
+                    aspect_format=generation.aspect_format,
+                    resolution_class=generation.resolution_class,
+                    loras=loras,
+                    lora_prompt_groups=lora_prompt_groups,
+                    source_image_uid=(
+                        payload.prompt_source.image_uid
+                        if payload.prompt_source is not None
+                        and source_mode == "image_snapshot"
+                        else None
+                    ),
+                )
+            )
+    except (
+        ContentClassificationError,
+        GenerationValidationError,
+        ImageContextNotFoundError,
+        PromptSelectionError,
+        PromptCatalogValidationError,
+    ) as error:
+        return error_response(400, "invalid_playground_variants", str(error))
+    return JSONResponse(
+        {
+            "requested_count": payload.variant_count,
+            "unique_count": batch.unique_count,
+            "repeated_count": batch.repeated_count,
+            "diversity_exhausted": batch.diversity_exhausted,
+            "notice": (
+                "Der verfügbare Auswahlraum ist ausgeschöpft; "
+                "einige Varianten wiederholen sich."
+                if batch.diversity_exhausted
+                else None
+            ),
+            "variants": variants,
         }
     )
 
@@ -821,8 +1083,117 @@ def selection_atoms(
     )
 
 
+def prompt_group_response(
+    draft: PlaygroundDraft,
+    selection: SelectedPromptComponent,
+) -> dict[str, object]:
+    """Serialize one exact editable prompt group from a prepared draft."""
+    candidate_uid = (
+        selection.candidate.candidate_uid
+        if selection.candidate is not None
+        else None
+    )
+    group = next(
+        (
+            item
+            for item in draft.prompt.component_groups
+            if item.component_uid == selection.component.component_uid
+            and item.revision_uid == selection.revision.revision_uid
+            and item.candidate_uid == candidate_uid
+        ),
+        None,
+    )
+    return {
+        "component_uid": selection.component.component_uid,
+        "revision_uid": selection.revision.revision_uid,
+        "candidate_uid": candidate_uid,
+        "kind": selection.component.kind,
+        "name": selection.component.name,
+        "positive_atoms": atom_response(
+            group.positive_atoms
+            if group is not None
+            else selection_atoms(selection, positive=True)
+        ),
+        "negative_atoms": atom_response(
+            group.negative_atoms
+            if group is not None
+            else selection_atoms(selection, positive=False)
+        ),
+    }
+
+
+def whole_draft_overridden(overrides: PromptDraftOverrides | None) -> bool:
+    """Return whether flat atoms replace the complete rendered prompt."""
+    return overrides is not None and (
+        overrides.positive_atoms is not None
+        or overrides.negative_atoms is not None
+    )
+
+
+def prepared_variant_response(
+    variant: PreparedPlaygroundVariant,
+    *,
+    positive_atoms: tuple[PromptAtomUsage, ...],
+    negative_atoms: tuple[PromptAtomUsage, ...],
+    positive_prompt: str,
+    negative_prompt: str,
+    checkpoint: str,
+    sampler: str,
+    scheduler: str,
+    denoise: float,
+    aspect_format: AspectFormat,
+    resolution_class: ResolutionClass,
+    loras: list[dict[str, object]],
+    lora_prompt_groups: list[dict[str, object]],
+    source_image_uid: str | None,
+) -> dict[str, object]:
+    """Serialize one concrete variant without leaking workflow semantics."""
+    draft = variant.draft
+    prompt_groups = [
+        prompt_group_response(draft, selected)
+        for selected in draft.selection.components
+    ]
+    return {
+        "draft_uid": variant.draft_uid,
+        "source_image_uid": source_image_uid,
+        "seed": variant.seed,
+        "generation": {
+            "checkpoint": checkpoint,
+            "sampler": sampler,
+            "scheduler": scheduler,
+            "seed": variant.seed,
+            "steps": variant.steps,
+            "cfg": variant.cfg,
+            "denoise": denoise,
+            "aspect_format": aspect_format,
+            "resolution_class": resolution_class,
+        },
+        "components": [
+            component_response(selected.component)
+            for selected in draft.selection.components
+        ],
+        "prompt_selections": [
+            {
+                "kind": selected.component.kind,
+                "component_uid": selected.component.component_uid,
+                "revision_uid": selected.revision.revision_uid,
+            }
+            for selected in draft.selection.components
+        ],
+        "positive_prompt": positive_prompt,
+        "negative_prompt": negative_prompt,
+        "positive_atoms": atom_response(positive_atoms),
+        "negative_atoms": atom_response(negative_atoms),
+        "revision_uids": draft.prompt.revision_uids,
+        "draft_overridden": draft.prompt.draft_overridden,
+        "groups": [*prompt_groups, *lora_prompt_groups],
+        "prompt_groups": prompt_groups,
+        "loras": loras,
+    }
+
+
 def selection_command(
-    payload: PlaygroundDraftRequest,
+    payload: PlaygroundDraftRequest | PlaygroundVariantBatchRequest,
     concrete_seed: int,
 ) -> PromptSelectionCommand:
     """Translate complete V2 mode intent into a selection command."""
@@ -906,10 +1277,57 @@ def selection_command(
 
 
 def draft_overrides(
-    payload: PlaygroundDraftRequest,
+    payload: PlaygroundDraftRequest | PlaygroundVariantBatchRequest,
 ) -> PromptDraftOverrides | None:
     """Translate optional draft text without mutating catalog revisions."""
-    if payload.positive_atoms is None and payload.negative_atoms is None:
+    if payload.component_overrides and (
+        payload.positive_atoms is not None
+        or payload.negative_atoms is not None
+    ):
+        raise PromptSelectionError(
+            "component overrides cannot be combined with whole-draft overrides"
+        )
+    fixed_identities = {
+        (
+            selection.kind,
+            str(selection.component_uid or "").strip(),
+            str(selection.revision_uid or "").strip(),
+            str(selection.candidate_uid or "").strip() or None,
+        )
+        for selection in payload.selections
+        if selection.mode == "fixed" and selection.revision_uid is not None
+    }
+    component_overrides = tuple(
+        PromptComponentDraftOverride(
+            kind=item.kind,
+            component_uid=item.component_uid,
+            revision_uid=item.revision_uid,
+            candidate_uid=item.candidate_uid,
+            positive_atoms=atom_usages(item.positive_atoms),
+            negative_atoms=atom_usages(item.negative_atoms),
+        )
+        for item in payload.component_overrides
+    )
+    override_identities = {
+        (
+            item.kind,
+            item.component_uid.strip(),
+            item.revision_uid.strip(),
+            str(item.candidate_uid or "").strip() or None,
+        )
+        for item in component_overrides
+    }
+    if len(override_identities) != len(component_overrides):
+        raise PromptSelectionError("duplicate prompt component override")
+    if not override_identities <= fixed_identities:
+        raise PromptSelectionError(
+            "prompt component overrides require an exact fixed selection"
+        )
+    if (
+        payload.positive_atoms is None
+        and payload.negative_atoms is None
+        and not component_overrides
+    ):
         return None
     return PromptDraftOverrides(
         positive_atoms=(
@@ -922,4 +1340,5 @@ def draft_overrides(
             if payload.negative_atoms is not None
             else None
         ),
+        component_overrides=component_overrides,
     )

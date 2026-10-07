@@ -44,6 +44,8 @@ from comfyreview.application import (
     PlaygroundGenerationSweepPolicy,
     PlaygroundService,
     PlaygroundSubmissionService,
+    PlaygroundVariantDiversityPolicy,
+    PlaygroundVariantPreparationService,
     PromptCatalogService,
     PromptContentPolicy,
     PromptPromotionCoordinator,
@@ -58,6 +60,8 @@ from comfyreview.application import (
     RuntimeConfigurationSnapshot,
     RuntimeDiagnosticsService,
     ScopeFacetService,
+    SecurePlaygroundVariantEntropySource,
+    UuidPlaygroundVariantIdentitySource,
     WorkflowCompiler,
     WorkflowDefaultsService,
     WorkspacePreferencesService,
@@ -167,6 +171,7 @@ class ApplicationContainer:
     prompt_catalog_views: PromptCatalogViewService
     prompt_labels: PromptLabelService
     playground_service: PlaygroundService
+    playground_variant_preparation: PlaygroundVariantPreparationService
     playground_submission_service: PlaygroundSubmissionService
     playground_generation_sweeps: PlaygroundGenerationSweepPolicy
     playground_evidence: PlaygroundEvidenceService
@@ -328,6 +333,13 @@ def build_application_container(
         comfyui_provider,
         capability_cache,
     )
+    playground_service = PlaygroundService(
+        catalog=prompt_catalog_service,
+        selection_policy=PromptSelectionPolicy(),
+        renderer=prompt_renderer,
+        preferences=preferences_repository,
+        content_policy=PromptContentPolicy(),
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -393,12 +405,12 @@ def build_application_container(
         prompt_renderer=prompt_renderer,
         prompt_catalog_views=PromptCatalogViewService(prompt_catalog_service),
         prompt_labels=PromptLabelService(prompt_catalog_service),
-        playground_service=PlaygroundService(
-            catalog=prompt_catalog_service,
-            selection_policy=PromptSelectionPolicy(),
-            renderer=prompt_renderer,
-            preferences=preferences_repository,
-            content_policy=PromptContentPolicy(),
+        playground_service=playground_service,
+        playground_variant_preparation=PlaygroundVariantPreparationService(
+            playground=playground_service,
+            diversity=PlaygroundVariantDiversityPolicy(),
+            entropy=SecurePlaygroundVariantEntropySource(),
+            identities=UuidPlaygroundVariantIdentitySource(),
         ),
         playground_submission_service=PlaygroundSubmissionService(
             generation=generation_service,

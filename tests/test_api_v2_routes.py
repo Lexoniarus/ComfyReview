@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -43,6 +43,8 @@ from comfyreview.application import (
     PlaygroundGenerationSweepPolicy,
     PlaygroundSubmissionBatch,
     PlaygroundSubmissionFailure,
+    PlaygroundVariantDiversityPolicy,
+    PlaygroundVariantPreparationService,
     PromptComponent,
     PromptComponentCandidate,
     PromptGuidanceRevisionConflict,
@@ -536,6 +538,11 @@ class _Playground:
             ),
             SelectedPromptComponent(scene, scene_revision),
         )
+        if overrides and overrides.component_overrides:
+            return PlaygroundDraft(
+                PromptSelection(selected),
+                PromptRenderer().render(PromptSelection(selected), overrides),
+            )
         return PlaygroundDraft(
             PromptSelection(selected),
             RenderedPrompt(
@@ -639,6 +646,20 @@ class _PlaygroundSubmission:
             (GenerationSubmission("generation-1", "submitted", "prompt-1"),),
             (),
         )
+
+
+class _VariantEntropy:
+    def next_seed(self):
+        return 9127
+
+
+class _VariantIdentities:
+    def __init__(self):
+        self.value = 0
+
+    def new_draft_uid(self):
+        self.value += 1
+        return f"variant-draft-{self.value}"
 
 
 class _GenerationQueries:
@@ -1678,6 +1699,92 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
     )
 
 
+def test_v2_playground_prepares_variant_batch_with_local_component_override() -> (
+    None
+):
+    client, _container = _client()
+    selections = [
+        {
+            "kind": "character",
+            "mode": "fixed",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-old",
+        },
+        {
+            "kind": "scene",
+            "mode": "fixed",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-old",
+        },
+        {"kind": "outfit", "mode": "random"},
+        {"kind": "pose", "mode": "off"},
+        {"kind": "expression", "mode": "random"},
+        {"kind": "lighting", "mode": "off"},
+        {"kind": "modifier", "mode": "random"},
+    ]
+    generation = {
+        **_draft_generation(seed=42),
+        "steps_max": 24,
+        "cfg_max": 6.5,
+        "cfg_step": 0.1,
+    }
+
+    response = client.post(
+        "/api/v2/playground/variant-batches",
+        json={
+            "selections": selections,
+            "variant_count": 4,
+            "generation": generation,
+            "component_overrides": [
+                {
+                    "kind": "character",
+                    "component_uid": "character-a",
+                    "revision_uid": "revision-character-old",
+                    "positive_atoms": [
+                        {"text": "edited character", "weight": 1.2}
+                    ],
+                    "negative_atoms": [],
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["requested_count"] == 4
+    assert payload["unique_count"] == 1
+    assert payload["repeated_count"] == 3
+    assert payload["diversity_exhausted"] is True
+    assert len(payload["variants"]) == 4
+    assert len({item["draft_uid"] for item in payload["variants"]}) == 4
+    first = payload["variants"][0]
+    assert first["generation"]["seed"] == 42
+    assert first["prompt_groups"][0]["positive_atoms"] == [
+        {"text": "edited character", "weight": 1.2}
+    ]
+    assert first["positive_prompt"].startswith("(edited character:1.2)")
+
+    rejected = client.post(
+        "/api/v2/playground/variant-batches",
+        json={
+            "selections": selections,
+            "variant_count": 4,
+            "generation": generation,
+            "component_overrides": [
+                {
+                    "kind": "outfit",
+                    "component_uid": "outfit-random",
+                    "revision_uid": "revision-outfit-random",
+                    "positive_atoms": [],
+                    "negative_atoms": [],
+                }
+            ],
+        },
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["error"]["code"] == "invalid_playground_variants"
+
+
 def test_v2_playground_draft_appends_selected_lora_triggers() -> None:
     client, _container = _client()
 
@@ -2102,6 +2209,7 @@ def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() ->
 
 def _client() -> tuple[TestClient, SimpleNamespace]:
     render_guidance = _RenderGuidance()
+    playground = _Playground()
     container = SimpleNamespace(
         settings=SimpleNamespace(
             minimum_runs=2,
@@ -2123,7 +2231,13 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         catalog_evidence=_CatalogEvidence(),
         playground_evidence=_PlaygroundEvidence(),
         prompt_renderer=PromptRenderer(),
-        playground_service=_Playground(),
+        playground_service=playground,
+        playground_variant_preparation=PlaygroundVariantPreparationService(
+            playground=cast(Any, playground),
+            diversity=PlaygroundVariantDiversityPolicy(),
+            entropy=_VariantEntropy(),
+            identities=_VariantIdentities(),
+        ),
         playground_submission_service=_PlaygroundSubmission(),
         playground_generation_sweeps=PlaygroundGenerationSweepPolicy(),
         generation_queries=_GenerationQueries(),

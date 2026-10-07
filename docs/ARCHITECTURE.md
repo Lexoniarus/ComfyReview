@@ -273,6 +273,14 @@ not remove unused catalog content.
 Playground preview preparation reads this catalog through `PlaygroundService`,
 applies `PromptSelectionPolicy` and renders concrete revision snapshots through
 `PromptRenderer`. Draft prompt overrides do not mutate catalog revisions.
+Component-scoped overrides bind kind, component UID, revision UID and optional
+candidate UID to an exact fixed selection. They alter only the transient
+rendered group and are rejected when the binding is missing, duplicated or no
+longer selected. `PlaygroundVariantPreparationService` prepares up to twelve
+transient drafts with selection entropy independent from the concrete image
+seed. `PlaygroundVariantDiversityPolicy` prefers unique resolved prompt and
+sampler signatures, reports exhausted diversity explicitly and never persists
+the prepared batch.
 Each selection pairs the unchanged current `PromptComponent` metadata with an
 explicit `SelectedPromptComponent.revision`; a historical fixed selection
 therefore remains exact without redefining `latest_revision`. Compatibility
