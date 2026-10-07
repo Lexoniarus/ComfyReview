@@ -41,6 +41,7 @@ describe("PlaygroundController", () => {
     );
     fixture.controller.inspectVariant("missing");
     fixture.controller.inspectVariant("draft-1");
+    expect(fixture.workspace.openInspector).toHaveBeenCalledOnce();
     fixture.controller.selectVariant("missing", true);
     fixture.controller.selectVariant("draft-1", false);
     fixture.controller.selectVariant("draft-1", true);
@@ -1629,6 +1630,7 @@ function createFixture(options = {}) {
   const workspace = disposable({
     setVariantsAvailable: vi.fn(),
     show: vi.fn(() => true),
+    openInspector: vi.fn(),
   });
   const api = {
     get: vi.fn((path) => {

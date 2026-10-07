@@ -9,7 +9,7 @@ import {
 /** @typedef {{render: (variant: any) => void, clear: () => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: () => any, dispose: () => void}} InspectorBoundary */
 /** @typedef {{snapshot: () => any, activeVariant: () => any, selectedVariants: () => any[], inspected?: string, inspect: (uid: string) => boolean, select: (uid: string, selected: boolean) => boolean, review: (uid: string, payload: Record<string, any>) => boolean, reviewedPayload: (uid: string) => Record<string, any> | null, markStale: () => void, prepare: (operation: (signal: AbortSignal) => Promise<Record<string, any>>) => Promise<Record<string, any>>, submit: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, readonly hasVariants: boolean, readonly canSubmit: boolean, dispose: () => void}} VariantSessionBoundary */
 /** @typedef {{render: (state: any) => void, dispose: () => void}} BoardBoundary */
-/** @typedef {{setVariantsAvailable: (available: boolean) => void, show: (step: string) => boolean, dispose: () => void}} WorkspaceBoundary */
+/** @typedef {{setVariantsAvailable: (available: boolean) => void, show: (step: string) => boolean, openInspector: () => void, dispose: () => void}} WorkspaceBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, cancelRequests?: () => void, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (payload: any) => void, renderLoading: (message?: string) => void, dispose: () => void}} GuidanceBoundary */
 /** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, inspector: InspectorBoundary, board: BoardBoundary, workspace: WorkspaceBoundary, session: VariantSessionBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, persistence: {load: () => Promise<any>, schedule: () => void, flush: () => Promise<any>, dispose: () => void}, handoffApplier: {apply: (intent: Record<string, any>) => Promise<{applied: boolean, rejected: string[], promptSourceImageUid: string | null}>}, prepareButton: HTMLButtonElement, refreshButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, variantSummary: HTMLElement, selectedCount: HTMLElement, intent?: Record<string, any>}} PlaygroundDependencies */
@@ -163,6 +163,7 @@ export class PlaygroundController {
     this.#reviewActiveVariant();
     if (!this.session.inspect(draftUid)) return;
     this.#renderSession(true);
+    this.workspace.openInspector();
     void this.refreshEvidence();
   }
 

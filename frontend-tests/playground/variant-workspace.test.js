@@ -221,7 +221,19 @@ describe("Playground variant workspace", () => {
     const variantsButton = stepButton("variants");
     const setup = panel("setup");
     const variants = panel("variants");
-    root.append(setupButton, variantsButton, setup, variants);
+    const boardButton = viewButton("board");
+    const inspectorButton = viewButton("inspector");
+    const closeInspector = document.createElement("button");
+    closeInspector.dataset.closeVariantInspector = "";
+    root.append(
+      setupButton,
+      variantsButton,
+      boardButton,
+      inspectorButton,
+      closeInspector,
+      setup,
+      variants,
+    );
     const onChange = vi.fn();
     const workspace = new PlaygroundWorkspace(root, onChange);
     expect(setup.hidden).toBe(false);
@@ -232,6 +244,16 @@ describe("Playground variant workspace", () => {
     expect(variants.hidden).toBe(false);
     expect(setup.hidden).toBe(true);
     expect(onChange).toHaveBeenCalled();
+    inspectorButton.click();
+    expect(root.dataset.variantView).toBe("inspector");
+    expect(root.dataset.inspectorOpen).toBe("true");
+    expect(inspectorButton.getAttribute("aria-selected")).toBe("true");
+    closeInspector.click();
+    expect(root.dataset.variantView).toBe("board");
+    workspace.openInspector();
+    expect(root.dataset.inspectorOpen).toBe("true");
+    workspace.closeInspector(false);
+    expect(root.dataset.inspectorOpen).toBe("false");
     workspace.setVariantsAvailable(false);
     expect(setup.hidden).toBe(false);
     expect(workspace.show("unknown")).toBe(true);
@@ -339,6 +361,12 @@ function click(root, label) {
 function stepButton(step) {
   const button = document.createElement("button");
   button.dataset.workspaceStep = step;
+  return button;
+}
+
+function viewButton(view) {
+  const button = document.createElement("button");
+  button.dataset.variantView = view;
   return button;
 }
 

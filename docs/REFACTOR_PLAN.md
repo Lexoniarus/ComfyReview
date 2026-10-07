@@ -451,6 +451,9 @@ constants.
   submission and owns cancellation, selection and reviewed payload state;
 - the batch generation boundary submits each selected concrete draft exactly
   once and returns ordered partial results keyed by draft UID;
+- responsive acceptance covers side-by-side desktop review, the dismissible
+  laptop Inspector drawer and explicit tablet board/Inspector tabs, including
+  focus visibility, coarse-pointer targets and reduced motion;
 - no draft table, schema migration or eager prompt-combination materialization
   was introduced, and legacy single/sweep contracts remain available.
 

@@ -469,7 +469,10 @@ The canonical cutover is intentionally not the end of the wider refactor.
   persisted draft record. `VariantSession` is the browser owner for request
   cancellation, active/selected draft UIDs, reviewed payloads and stale state.
   `VariantBoard` and `VariantInspector` render that state; the controller only
-  orchestrates API and view transitions.
+  orchestrates API and view transitions. `PlaygroundWorkspace` owns both the
+  primary Setup/Varianten navigation and the responsive presentation state:
+  paired desktop panes, a laptop Inspector drawer and tablet board/Inspector
+  tabs. It also owns and disposes every listener for those transitions.
   The reviewed batch submission boundary accepts no more than twelve concrete
   one-job payloads. It invokes the existing submission service per variant,
   outside an open SQLite transaction, and returns ordered successes and

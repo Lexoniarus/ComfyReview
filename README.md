@@ -519,6 +519,10 @@ keep the old cards visible but mark them stale and block submission until they
 are refreshed. Every selected reviewed card submits exactly one generation
 through the batch boundary; partial failures stay associated with their draft
 UID. Preparing variants does not persist drafts and adds no database schema.
+On wide desktops, cards and Inspector remain visible together. Laptop widths
+open the Inspector as a dismissible drawer; tablet widths use explicit Karten
+and Inspector tabs. All three layouts keep the generation action in the normal
+document flow, remain keyboard-operable and honor reduced-motion preferences.
 
 Each fixed prompt group keeps its concrete source revision and may also keep a
 concrete candidate. Its variant control independently offers the

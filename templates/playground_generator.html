@@ -2,7 +2,7 @@
 {% set active_nav = "playground" %} {% block styles %}
 <link
   rel="stylesheet"
-  href="/static/css/v2/playground.css?v=20261007-workspace1"
+  href="/static/css/v2/playground.css?v=20261007-polish1"
 />
 {% endblock %} {% block content %}
 <main class="playground-shell" data-v2-surface="playground">
@@ -109,28 +109,71 @@
           >Noch kein Varianten-Batch</span
         >
       </header>
+      <nav
+        class="variant-view-switcher"
+        aria-label="Variantenansicht"
+        role="tablist"
+      >
+        <button
+          type="button"
+          role="tab"
+          data-variant-view="board"
+          aria-controls="playground-variant-board"
+        >
+          Karten
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-variant-view="inspector"
+          aria-controls="playground-variant-inspector"
+        >
+          Inspector
+        </button>
+      </nav>
       <div class="playground-variant-workspace">
         <section
+          id="playground-variant-board"
           class="v2-panel playground-variant-board"
           aria-label="Varianten"
+          data-variant-region="board"
         >
           <div data-variant-board></div>
         </section>
         <aside
+          id="playground-variant-inspector"
           class="v2-panel playground-variant-inspector"
           aria-labelledby="variant-inspector-title"
+          data-variant-region="inspector"
         >
           <div class="playground-section-heading">
             <div>
               <p class="playground-kicker">Aktive Variante</p>
               <h2 id="variant-inspector-title">Inspector</h2>
             </div>
-            <span class="draft-state" data-variant-state>Keine Variante</span>
+            <div class="variant-inspector-heading-actions">
+              <span class="draft-state" data-variant-state>Keine Variante</span>
+              <button
+                class="icon-button variant-inspector-close"
+                type="button"
+                data-close-variant-inspector
+                aria-label="Inspector schließen"
+              >
+                ×
+              </button>
+            </div>
           </div>
           <div data-variant-inspector>
             <p class="playground-empty">Wähle eine Variante zur Prüfung.</p>
           </div>
         </aside>
+        <button
+          class="variant-inspector-scrim"
+          type="button"
+          data-close-variant-inspector
+          aria-label="Inspector schließen"
+          tabindex="-1"
+        ></button>
       </div>
       <footer class="playground-action-bar playground-variant-actions">
         <div>
@@ -173,6 +216,6 @@
 {% endblock %} {% block scripts %}
 <script
   type="module"
-  src="/static/js/entries/playground.js?v=20261007-workspace1"
+  src="/static/js/entries/playground.js?v=20261007-polish1"
 ></script>
 {% endblock %}

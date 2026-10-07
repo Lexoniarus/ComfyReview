@@ -98,6 +98,9 @@ def test_playground_generator_url_renders_the_canonical_v2_shell() -> None:
     assert 'data-workspace-step="variants"' in response.text
     assert "data-variant-board" in response.text
     assert "data-variant-inspector" in response.text
+    assert 'data-variant-view="board"' in response.text
+    assert 'data-variant-view="inspector"' in response.text
+    assert "data-close-variant-inspector" in response.text
     assert "Varianten vorbereiten" in response.text
     assert "Auswahl generieren" in response.text
     assert "/api/v2" not in response.text

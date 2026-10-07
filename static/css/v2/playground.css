@@ -114,6 +114,12 @@
   margin: 0;
 }
 
+.variant-view-switcher,
+.variant-inspector-close,
+.variant-inspector-scrim {
+  display: none;
+}
+
 .variant-summary {
   color: var(--color-text-muted);
   font-size: var(--font-size-control);
@@ -130,6 +136,12 @@
 .playground-variant-inspector {
   min-width: 0;
   padding: var(--space-4);
+}
+
+.variant-inspector-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .playground-variant-inspector {
@@ -258,6 +270,11 @@
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-control);
+}
+
+.playground-shell :is(button, input, select, textarea, summary):focus-visible {
+  outline: 0.1875rem solid var(--color-accent-border);
+  outline-offset: 0.125rem;
 }
 
 .playground-variant-actions > div,
@@ -1178,9 +1195,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .playground-generation,
-  .playground-variant-inspector {
+  .playground-generation {
     position: static;
+    grid-column: auto;
     max-height: none;
   }
 
@@ -1188,12 +1205,100 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .playground-generation {
-    grid-column: auto;
-  }
-
   .generation-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width > 67.5rem) and (width <= 85.375rem) {
+  .playground-variant-inspector {
+    position: fixed;
+    z-index: 24;
+    top: calc(var(--app-bar-height) + var(--space-3));
+    right: var(--space-3);
+    bottom: var(--space-3);
+    width: min(38rem, calc(100vw - (2 * var(--space-4))));
+    max-height: none;
+    overflow: auto;
+    transform: translateX(calc(100% + (2 * var(--space-4))));
+    visibility: hidden;
+    box-shadow: var(--shadow-panel);
+    transition:
+      transform 180ms ease,
+      visibility 180ms step-end;
+  }
+
+  .playground-workflow[data-inspector-open="true"]
+    .playground-variant-inspector {
+    transform: translateX(0);
+    visibility: visible;
+    transition:
+      transform 180ms ease,
+      visibility 0ms step-start;
+  }
+
+  .variant-inspector-close {
+    display: inline-grid;
+  }
+
+  .variant-inspector-scrim {
+    position: fixed;
+    z-index: 23;
+    inset: var(--app-bar-height) 0 0;
+    border: 0;
+    background: rgb(14 18 24 / 42%);
+    cursor: pointer;
+  }
+
+  .playground-workflow[data-inspector-open="true"] .variant-inspector-scrim {
+    display: block;
+  }
+}
+
+@media (width <= 67.5rem) {
+  .variant-view-switcher {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-1);
+    padding: var(--space-1);
+    border: 0.0625rem solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface-subtle);
+  }
+
+  .variant-view-switcher button {
+    min-height: 2.75rem;
+    border: 0;
+    border-radius: var(--radius-control);
+    color: var(--color-text-muted);
+    background: transparent;
+    cursor: pointer;
+    font-weight: 750;
+  }
+
+  .variant-view-switcher button[data-active="true"] {
+    color: var(--color-accent-strong);
+    background: var(--color-accent-soft);
+  }
+
+  .playground-workflow[data-variant-view="board"]
+    [data-variant-region="inspector"],
+  .playground-workflow[data-variant-view="inspector"]
+    [data-variant-region="board"] {
+    display: none;
+  }
+
+  .playground-variant-inspector {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .playground-shell :is(button, input, select, summary),
+  .prompt-atom-row button,
+  .prompt-atom-row input {
+    min-height: 2.75rem;
   }
 }
 
@@ -1248,5 +1353,12 @@
   .prompt-composer-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playground-variant-inspector {
+    scroll-behavior: auto;
+    transition: none;
   }
 }

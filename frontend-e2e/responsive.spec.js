@@ -3,8 +3,7 @@ import { expect, test } from "@playwright/test";
 const VIEWPORTS = [
   { width: 3840, height: 2160 },
   { width: 1920, height: 1080 },
-  { width: 1366, height: 1024 },
-  { width: 1180, height: 820 },
+  { width: 1080, height: 810 },
   { width: 820, height: 1180 },
 ];
 
@@ -76,6 +75,76 @@ for (const viewport of VIEWPORTS) {
     expect(errors).toEqual([]);
   });
 }
+
+test("Playground uses desktop inspector, laptop drawer and tablet tabs", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+
+  for (const viewport of [
+    { width: 1920, height: 1080, mode: "desktop" },
+    { width: 1180, height: 820, mode: "drawer" },
+    { width: 1080, height: 810, mode: "tabs" },
+    { width: 820, height: 1180, mode: "tabs" },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/playground/generator");
+    for (const label of [
+      "Outfit: Modus",
+      "Pose: Modus",
+      "Ausdruck: Modus",
+      "Licht: Modus",
+      "Modifier: Modus",
+    ]) {
+      await page.getByLabel(label).selectOption("off");
+    }
+    await page.getByLabel("Anzahl Varianten").fill("4");
+    await page.getByRole("button", { name: "Varianten vorbereiten" }).click();
+    await expect(page.locator(".variant-card")).toHaveCount(4);
+    await assertContained(page, viewport.width);
+
+    const board = page.locator("[data-variant-region='board']");
+    const inspector = page.locator("[data-variant-region='inspector']");
+    const viewSwitcher = page.locator(".variant-view-switcher");
+    if (viewport.mode === "desktop") {
+      await expect(board).toBeVisible();
+      await expect(inspector).toBeVisible();
+      await expect(viewSwitcher).toBeHidden();
+    } else {
+      await expect(board).toBeVisible();
+      await expect(inspector).toBeHidden();
+      await page
+        .getByRole("button", { name: "Prüfen & bearbeiten" })
+        .nth(1)
+        .click();
+      await expect(inspector).toBeVisible();
+      if (viewport.mode === "drawer") {
+        await expect(viewSwitcher).toBeHidden();
+        await page
+          .getByRole("button", { name: "Inspector schließen" })
+          .first()
+          .click();
+        await expect(inspector).toBeHidden();
+        await expect(board).toBeVisible();
+      } else {
+        await expect(viewSwitcher).toBeVisible();
+        await expect(board).toBeHidden();
+        await page.getByRole("tab", { name: "Karten" }).click();
+        await expect(board).toBeVisible();
+        await expect(inspector).toBeHidden();
+      }
+    }
+
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await assertActionBarDoesNotCoverContent(page);
+    await assertContained(page, viewport.width);
+  }
+  expect(errors).toEqual([]);
+});
 
 test("Top/Worst inspector closes and scrolls as an iPad drawer", async ({
   page,
@@ -229,6 +298,33 @@ async function assertContained(page, expectedWidth) {
     dimensions.content,
     JSON.stringify(dimensions.offenders),
   ).toBeLessThanOrEqual(expectedWidth);
+}
+
+async function assertActionBarDoesNotCoverContent(page) {
+  const layout = await page.evaluate(() => {
+    const actionBar = document.querySelector(".playground-variant-actions");
+    const visibleRegion = [
+      ...document.querySelectorAll("[data-variant-region]"),
+    ]
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        return style.display !== "none" && style.visibility !== "hidden";
+      })
+      .at(-1);
+    if (
+      !(actionBar instanceof HTMLElement) ||
+      !(visibleRegion instanceof HTMLElement)
+    )
+      return null;
+    const actionRectangle = actionBar.getBoundingClientRect();
+    const regionRectangle = visibleRegion.getBoundingClientRect();
+    return {
+      actionTop: Math.round(actionRectangle.top),
+      regionBottom: Math.round(regionRectangle.bottom),
+    };
+  });
+  expect(layout).not.toBeNull();
+  expect(layout.regionBottom).toBeLessThanOrEqual(layout.actionTop);
 }
 
 async function assertThreeColumns(page, selector) {
