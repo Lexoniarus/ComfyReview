@@ -269,6 +269,8 @@ from comfyreview.application.playground_generation import (
     PlaygroundSubmissionBatch,
     PlaygroundSubmissionFailure,
     PlaygroundSubmissionService,
+    PlaygroundVariantSubmission,
+    PlaygroundVariantSubmissionBatch,
 )
 from comfyreview.application.playground_variants import (
     PlaygroundVariantBatch,
@@ -612,6 +614,8 @@ __all__ = [
     "PlaygroundSubmissionBatch",
     "PlaygroundSubmissionFailure",
     "PlaygroundSubmissionService",
+    "PlaygroundVariantSubmission",
+    "PlaygroundVariantSubmissionBatch",
     "PlaygroundVariantBatch",
     "PlaygroundVariantDiversityPolicy",
     "PlaygroundVariantEntropySource",

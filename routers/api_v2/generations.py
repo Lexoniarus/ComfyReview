@@ -1,5 +1,7 @@
 """Canonical generation-intent V2 HTTP adapter."""
 
+from typing import Any
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -104,6 +106,17 @@ class PlaygroundGenerationRequest(BaseModel):
     loras: list[GenerationLoraRequest] = Field(default_factory=list)
 
 
+class PlaygroundGenerationBatchRequest(BaseModel):
+    """Carry a bounded set of concrete, reviewed Playground variants."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    variants: list[PlaygroundGenerationRequest] = Field(
+        min_length=1,
+        max_length=12,
+    )
+
+
 class GenerationReconcileRequest(BaseModel):
     """Supply an optional externally recovered ComfyUI prompt identity."""
 
@@ -182,6 +195,146 @@ def reconcile_generation(
     )
 
 
+def generation_draft(
+    container: Any,
+    payload: PlaygroundGenerationRequest,
+) -> PlaygroundGenerationDraft:
+    """Translate one reviewed HTTP payload into a concrete domain draft."""
+    positive_atoms = atom_usages(payload.positive_atoms)
+    negative_atoms = atom_usages(payload.negative_atoms)
+    prompt_groups = tuple(
+        GenerationPromptGroup(
+            kind=group.kind,
+            component_uid=group.component_uid,
+            revision_uid=group.revision_uid,
+            candidate_uid=group.candidate_uid,
+            position=position,
+            positive_atoms=atom_usages(group.positive_atoms),
+            negative_atoms=atom_usages(group.negative_atoms),
+        )
+        for position, group in enumerate(payload.prompt_groups)
+    )
+    source_loras: tuple[GenerationLoraSelection, ...] | None = None
+    if payload.source_image_uid:
+        if prompt_groups:
+            raise PromptSelectionError(
+                "historical image snapshots cannot include prompt_groups"
+            )
+        handoff = container.image_generator_handoffs.get(
+            payload.source_image_uid
+        )
+        confirmed = container.playground_service.prepare_image_snapshot(
+            container.image_contexts.get_image(payload.source_image_uid),
+            overrides=PromptDraftOverrides(
+                positive_atoms=positive_atoms,
+                negative_atoms=negative_atoms,
+            ),
+        )
+        source_loras = tuple(
+            GenerationLoraSelection(
+                name=item.provider_name,
+                model_strength_milli=item.model_strength_milli,
+                clip_strength_milli=item.clip_strength_milli,
+                position=position,
+                lora_uid=item.lora_uid,
+                revision_uid=item.revision_uid,
+                content_level=item.content_level,
+                retain_null_revision=item.revision_uid is None,
+            )
+            for position, item in enumerate(handoff.prompt_setup.loras)
+        )
+    else:
+        expected_groups = tuple(
+            (item.kind, item.component_uid, item.revision_uid)
+            for item in payload.prompt_selections
+        )
+        actual_groups = tuple(
+            (item.kind, item.component_uid, item.revision_uid)
+            for item in prompt_groups
+        )
+        if actual_groups != expected_groups:
+            raise PromptSelectionError(
+                "prompt_groups must match prompt_selections exactly"
+            )
+        for scope, complete in (
+            ("positive_atoms", positive_atoms),
+            ("negative_atoms", negative_atoms),
+        ):
+            grouped = tuple(
+                atom
+                for group in prompt_groups
+                for atom in getattr(group, scope)
+            )
+            if complete[: len(grouped)] != grouped:
+                raise PromptSelectionError(
+                    "prompt_groups do not match the rendered prompt"
+                )
+        confirmed = container.playground_service.confirm_draft(
+            ConfirmPlaygroundDraftCommand(
+                prompt_selections=tuple(
+                    PromptRevisionSelection(
+                        kind=selection.kind,
+                        component_uid=selection.component_uid,
+                        revision_uid=selection.revision_uid,
+                    )
+                    for selection in payload.prompt_selections
+                ),
+                positive_atoms=positive_atoms,
+                negative_atoms=negative_atoms,
+            )
+        )
+    character = next(
+        (
+            component
+            for component in confirmed.selection.components
+            if component.component.kind == "character"
+        ),
+        None,
+    )
+    character_name = character.component.name if character else "historical"
+    character_key = (
+        character.component.component_key
+        if character
+        else "historical-snapshot"
+    )
+    return PlaygroundGenerationDraft(
+        draft_uid=payload.draft_uid,
+        character_name=character_name,
+        prompt=confirmed.prompt,
+        checkpoint=payload.checkpoint,
+        blueprint_uid="default-character",
+        blueprint_version=4,
+        aspect_format=payload.aspect_format,
+        resolution_class=payload.resolution_class,
+        sampler=GenerationSamplerSettings(
+            role="base_sampler",
+            seed=payload.sampler.seed,
+            steps=payload.sampler.steps,
+            cfg=payload.sampler.cfg,
+            sampler=payload.sampler.sampler,
+            scheduler=payload.sampler.scheduler,
+            denoise=payload.sampler.denoise,
+        ),
+        output_subdirectory=f"playground/{character_key}",
+        loras=(
+            source_loras
+            if source_loras is not None
+            else tuple(
+                GenerationLoraSelection(
+                    name=item.name,
+                    model_strength_milli=round(item.model_strength * 1000),
+                    clip_strength_milli=round(item.clip_strength * 1000),
+                    position=position,
+                    lora_uid=item.lora_uid,
+                    revision_uid=item.revision_uid,
+                )
+                for position, item in enumerate(payload.loras)
+            )
+        ),
+        prompt_groups=prompt_groups,
+    )
+
+
 @router.post("/generations")
 def submit_generation(
     request: Request,
@@ -190,141 +343,7 @@ def submit_generation(
     """Submit one reviewed Playground draft through GenerationService."""
     container = get_application_container(request)
     try:
-        positive_atoms = atom_usages(payload.positive_atoms)
-        negative_atoms = atom_usages(payload.negative_atoms)
-        prompt_groups = tuple(
-            GenerationPromptGroup(
-                kind=group.kind,
-                component_uid=group.component_uid,
-                revision_uid=group.revision_uid,
-                candidate_uid=group.candidate_uid,
-                position=position,
-                positive_atoms=atom_usages(group.positive_atoms),
-                negative_atoms=atom_usages(group.negative_atoms),
-            )
-            for position, group in enumerate(payload.prompt_groups)
-        )
-        source_loras: tuple[GenerationLoraSelection, ...] | None = None
-        if payload.source_image_uid:
-            if prompt_groups:
-                raise PromptSelectionError(
-                    "historical image snapshots cannot include prompt_groups"
-                )
-            handoff = container.image_generator_handoffs.get(
-                payload.source_image_uid
-            )
-            confirmed = container.playground_service.prepare_image_snapshot(
-                container.image_contexts.get_image(payload.source_image_uid),
-                overrides=PromptDraftOverrides(
-                    positive_atoms=positive_atoms,
-                    negative_atoms=negative_atoms,
-                ),
-            )
-            source_loras = tuple(
-                GenerationLoraSelection(
-                    name=item.provider_name,
-                    model_strength_milli=item.model_strength_milli,
-                    clip_strength_milli=item.clip_strength_milli,
-                    position=position,
-                    lora_uid=item.lora_uid,
-                    revision_uid=item.revision_uid,
-                    content_level=item.content_level,
-                    retain_null_revision=item.revision_uid is None,
-                )
-                for position, item in enumerate(handoff.prompt_setup.loras)
-            )
-        else:
-            expected_groups = tuple(
-                (item.kind, item.component_uid, item.revision_uid)
-                for item in payload.prompt_selections
-            )
-            actual_groups = tuple(
-                (item.kind, item.component_uid, item.revision_uid)
-                for item in prompt_groups
-            )
-            if actual_groups != expected_groups:
-                raise PromptSelectionError(
-                    "prompt_groups must match prompt_selections exactly"
-                )
-            for scope, complete in (
-                ("positive_atoms", positive_atoms),
-                ("negative_atoms", negative_atoms),
-            ):
-                grouped = tuple(
-                    atom
-                    for group in prompt_groups
-                    for atom in getattr(group, scope)
-                )
-                if complete[: len(grouped)] != grouped:
-                    raise PromptSelectionError(
-                        "prompt_groups do not match the rendered prompt"
-                    )
-            confirmed = container.playground_service.confirm_draft(
-                ConfirmPlaygroundDraftCommand(
-                    prompt_selections=tuple(
-                        PromptRevisionSelection(
-                            kind=selection.kind,
-                            component_uid=selection.component_uid,
-                            revision_uid=selection.revision_uid,
-                        )
-                        for selection in payload.prompt_selections
-                    ),
-                    positive_atoms=positive_atoms,
-                    negative_atoms=negative_atoms,
-                )
-            )
-        character = next(
-            (
-                component
-                for component in confirmed.selection.components
-                if component.component.kind == "character"
-            ),
-            None,
-        )
-        character_name = (
-            character.component.name if character else "historical"
-        )
-        character_key = (
-            character.component.component_key
-            if character
-            else "historical-snapshot"
-        )
-        draft = PlaygroundGenerationDraft(
-            draft_uid=payload.draft_uid,
-            character_name=character_name,
-            prompt=confirmed.prompt,
-            checkpoint=payload.checkpoint,
-            blueprint_uid="default-character",
-            blueprint_version=4,
-            aspect_format=payload.aspect_format,
-            resolution_class=payload.resolution_class,
-            sampler=GenerationSamplerSettings(
-                role="base_sampler",
-                seed=payload.sampler.seed,
-                steps=payload.sampler.steps,
-                cfg=payload.sampler.cfg,
-                sampler=payload.sampler.sampler,
-                scheduler=payload.sampler.scheduler,
-                denoise=payload.sampler.denoise,
-            ),
-            output_subdirectory=f"playground/{character_key}",
-            loras=(
-                source_loras
-                if source_loras is not None
-                else tuple(
-                    GenerationLoraSelection(
-                        name=item.name,
-                        model_strength_milli=round(item.model_strength * 1000),
-                        clip_strength_milli=round(item.clip_strength * 1000),
-                        position=position,
-                        lora_uid=item.lora_uid,
-                        revision_uid=item.revision_uid,
-                    )
-                    for position, item in enumerate(payload.loras)
-                )
-            ),
-            prompt_groups=prompt_groups,
-        )
+        draft = generation_draft(container, payload)
         drafts = container.playground_generation_sweeps.expand(
             draft,
             PlaygroundGenerationSweep(
@@ -378,6 +397,87 @@ def submit_generation(
         },
         status_code=202,
     )
+
+
+@router.post("/generations/batch")
+def submit_generation_batch(
+    request: Request,
+    payload: PlaygroundGenerationBatchRequest,
+) -> JSONResponse:
+    """Submit concrete reviewed variants with ordered partial results."""
+    draft_uids = tuple(item.draft_uid for item in payload.variants)
+    if len(set(draft_uids)) != len(draft_uids):
+        return error_response(
+            400,
+            "invalid_generation_batch",
+            "variant batch draft_uid values must be unique",
+        )
+
+    container = get_application_container(request)
+    drafts: list[PlaygroundGenerationDraft] = []
+    failures: list[dict[str, str]] = []
+    for item in payload.variants:
+        try:
+            require_concrete_variant(item)
+            drafts.append(generation_draft(container, item))
+        except (
+            GenerationValidationError,
+            ContentClassificationError,
+            ImageContextNotFoundError,
+            LookupError,
+            PromptSelectionError,
+            PromptCatalogValidationError,
+            StopIteration,
+        ) as error:
+            failures.append(
+                {"draft_uid": item.draft_uid, "message": str(error)}
+            )
+
+    successful: list[dict[str, str | None]] = []
+    if drafts:
+        result = container.playground_submission_service.submit_variants(
+            tuple(drafts)
+        )
+        successful = [
+            {
+                "draft_uid": item.draft_uid,
+                "generation_uid": item.submission.generation_uid,
+                "status": item.submission.status,
+                "prompt_id": item.submission.prompt_id,
+            }
+            for item in result.submissions
+        ]
+        failures.extend(
+            {
+                "draft_uid": item.draft_uid,
+                "message": item.message,
+            }
+            for item in result.failures
+        )
+
+    positions = {
+        draft_uid: index for index, draft_uid in enumerate(draft_uids)
+    }
+    successful.sort(key=lambda item: positions[str(item["draft_uid"])])
+    failures.sort(key=lambda item: positions[item["draft_uid"]])
+    return JSONResponse(
+        {"submissions": successful, "failures": failures},
+        status_code=202,
+    )
+
+
+def require_concrete_variant(payload: PlaygroundGenerationRequest) -> None:
+    """Reject legacy sweep settings at the reviewed-variant boundary."""
+    sampler = payload.sampler
+    if (
+        sampler.batch_runs != 1
+        or sampler.randomize_seed
+        or sampler.steps_max not in (None, sampler.steps)
+        or sampler.cfg_max not in (None, sampler.cfg)
+    ):
+        raise GenerationValidationError(
+            "reviewed variants must contain one concrete sampler setup"
+        )
 
 
 def summary_response(generation: GenerationSummary) -> dict[str, object]:

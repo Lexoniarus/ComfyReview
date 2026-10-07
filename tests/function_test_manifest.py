@@ -377,6 +377,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_generation.py::"
         "test_playground_submission_service_uses_real_generation_port"
     ),
+    "comfyreview.application.playground_generation:PlaygroundSubmissionService.submit_variants": (
+        "tests/test_playground_generation.py::"
+        "test_variant_submission_preserves_success_and_failure_order"
+    ),
     "comfyreview.application.generation:GenerationService.submit": (
         "tests/test_generation_service.py::"
         "test_generation_service_submits_without_open_external_transaction"

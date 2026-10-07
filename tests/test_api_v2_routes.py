@@ -45,6 +45,8 @@ from comfyreview.application import (
     PlaygroundSubmissionFailure,
     PlaygroundVariantDiversityPolicy,
     PlaygroundVariantPreparationService,
+    PlaygroundVariantSubmission,
+    PlaygroundVariantSubmissionBatch,
     PromptComponent,
     PromptComponentCandidate,
     PromptGuidanceRevisionConflict,
@@ -636,6 +638,10 @@ class _PlaygroundSubmission:
     draft = None
     fail = False
 
+    def __init__(self) -> None:
+        self.variant_drafts = ()
+        self.fail_variant_uids: set[str] = set()
+
     def submit(self, drafts):
         self.draft = drafts[0]
         if self.fail:
@@ -645,6 +651,34 @@ class _PlaygroundSubmission:
         return PlaygroundSubmissionBatch(
             (GenerationSubmission("generation-1", "submitted", "prompt-1"),),
             (),
+        )
+
+    def submit_variants(self, drafts):
+        self.variant_drafts = drafts
+        submissions = []
+        failures = []
+        for index, draft in enumerate(drafts, start=1):
+            if draft.draft_uid in self.fail_variant_uids:
+                failures.append(
+                    PlaygroundSubmissionFailure(
+                        draft.draft_uid,
+                        f"failed {draft.draft_uid}",
+                    )
+                )
+            else:
+                submissions.append(
+                    PlaygroundVariantSubmission(
+                        draft.draft_uid,
+                        GenerationSubmission(
+                            f"generation-{index}",
+                            "submitted",
+                            f"prompt-{index}",
+                        ),
+                    )
+                )
+        return PlaygroundVariantSubmissionBatch(
+            tuple(submissions),
+            tuple(failures),
         )
 
 
@@ -2107,6 +2141,128 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     assert failed.json()["error"]["code"] == "generation_failed"
     assert graph.status_code == 422
     assert legacy.status_code == 422
+
+
+def test_v2_generation_batch_preserves_order_and_reports_partial_failures() -> (
+    None
+):
+    client, container = _client()
+    first = _reviewed_generation_payload("draft-1")
+    invalid = _reviewed_generation_payload("draft-2")
+    invalid["prompt_selections"][0]["component_uid"] = "missing"
+    invalid["prompt_groups"][0]["component_uid"] = "missing"
+    final = _reviewed_generation_payload("draft-3")
+    container.playground_submission_service.fail_variant_uids = {"draft-3"}
+
+    response = client.post(
+        "/api/v2/generations/batch",
+        json={"variants": [first, invalid, final]},
+    )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "submissions": [
+            {
+                "draft_uid": "draft-1",
+                "generation_uid": "generation-1",
+                "status": "submitted",
+                "prompt_id": "prompt-1",
+            }
+        ],
+        "failures": [
+            {"draft_uid": "draft-2", "message": "'missing'"},
+            {"draft_uid": "draft-3", "message": "failed draft-3"},
+        ],
+    }
+    assert tuple(
+        draft.draft_uid
+        for draft in container.playground_submission_service.variant_drafts
+    ) == ("draft-1", "draft-3")
+
+
+def test_v2_generation_batch_rejects_ambiguous_or_swept_variants() -> None:
+    client, _container = _client()
+    concrete = _reviewed_generation_payload("draft-1")
+    swept = _reviewed_generation_payload("draft-swept")
+    swept["sampler"]["batch_runs"] = 2
+
+    partial = client.post(
+        "/api/v2/generations/batch",
+        json={"variants": [concrete, swept]},
+    )
+    duplicate = client.post(
+        "/api/v2/generations/batch",
+        json={"variants": [concrete, concrete]},
+    )
+    oversized = client.post(
+        "/api/v2/generations/batch",
+        json={
+            "variants": [
+                _reviewed_generation_payload(f"draft-{index}")
+                for index in range(13)
+            ]
+        },
+    )
+
+    assert partial.status_code == 202
+    assert partial.json()["failures"] == [
+        {
+            "draft_uid": "draft-swept",
+            "message": (
+                "reviewed variants must contain one concrete sampler setup"
+            ),
+        }
+    ]
+    assert duplicate.status_code == 400
+    assert duplicate.json()["error"]["code"] == "invalid_generation_batch"
+    assert oversized.status_code == 422
+
+
+def _reviewed_generation_payload(draft_uid: str) -> dict[str, Any]:
+    return {
+        "draft_uid": draft_uid,
+        "prompt_selections": [
+            {
+                "kind": "character",
+                "component_uid": "character-a",
+                "revision_uid": "revision-character-a",
+            },
+            {
+                "kind": "scene",
+                "component_uid": "scene-a",
+                "revision_uid": "revision-scene-a",
+            },
+        ],
+        "prompt_groups": [
+            {
+                "kind": "character",
+                "component_uid": "character-a",
+                "revision_uid": "revision-character-a",
+                "positive_atoms": [{"text": "positive", "weight": 1.0}],
+                "negative_atoms": [{"text": "negative", "weight": 1.0}],
+            },
+            {
+                "kind": "scene",
+                "component_uid": "scene-a",
+                "revision_uid": "revision-scene-a",
+                "positive_atoms": [],
+                "negative_atoms": [],
+            },
+        ],
+        "positive_atoms": [{"text": "positive", "weight": 1.0}],
+        "negative_atoms": [{"text": "negative", "weight": 1.0}],
+        "checkpoint": "model.safetensors",
+        "aspect_format": "2:3",
+        "resolution_class": "1080",
+        "sampler": {
+            "seed": 42,
+            "steps": 24,
+            "cfg": 6.5,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "denoise": 1.0,
+        },
+    }
 
 
 def _draft_generation(seed: int | None = 17) -> dict[str, object]:

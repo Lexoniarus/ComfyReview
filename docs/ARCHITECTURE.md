@@ -296,6 +296,14 @@ historical revision remains reproducible when explicitly bound by a draft.
 Submission uses the native `GenerationService`; there is no interim generation
 facade or dual-write.
 
+Reviewed variant batches cross a separate typed submission boundary. The V2
+adapter accepts at most twelve concrete sampler setups and rejects legacy sweep
+controls there. `PlaygroundSubmissionService.submit_variants` invokes the
+existing generation boundary once per draft, preserves request order and
+associates every success or failure with the originating draft UID. Partial
+provider failures therefore remain an inspectable batch result; no database
+transaction spans multiple provider submissions.
+
 Historical generation relationships are completed only through the explicit
 `legacy-compositions audit/import` tool. The audit reads both databases in
 SQLite read-only mode, binds them by SHA-256 and recognizes complete canonical

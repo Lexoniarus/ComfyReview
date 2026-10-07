@@ -63,6 +63,22 @@ class PlaygroundSubmissionBatch:
 
 
 @dataclass(frozen=True, slots=True)
+class PlaygroundVariantSubmission:
+    """Associate one successful submission with its reviewed draft."""
+
+    draft_uid: str
+    submission: GenerationSubmission
+
+
+@dataclass(frozen=True, slots=True)
+class PlaygroundVariantSubmissionBatch:
+    """Return ordered reviewed-variant submissions and partial failures."""
+
+    submissions: tuple[PlaygroundVariantSubmission, ...]
+    failures: tuple[PlaygroundSubmissionFailure, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class PlaygroundGenerationSweep:
     """Describe bounded variation across one reviewed Playground draft."""
 
@@ -342,3 +358,36 @@ class PlaygroundSubmissionService:
                     )
                 )
         return PlaygroundSubmissionBatch(tuple(submissions), tuple(failures))
+
+    def submit_variants(
+        self,
+        drafts: tuple[PlaygroundGenerationDraft, ...],
+    ) -> PlaygroundVariantSubmissionBatch:
+        """Submit at most twelve concrete variants exactly once each."""
+        if not 1 <= len(drafts) <= 12:
+            raise GenerationValidationError(
+                "variant batch must contain between 1 and 12 drafts"
+            )
+        draft_uids = tuple(draft.draft_uid for draft in drafts)
+        if len(set(draft_uids)) != len(draft_uids):
+            raise GenerationValidationError(
+                "variant batch draft_uid values must be unique"
+            )
+
+        submissions: list[PlaygroundVariantSubmission] = []
+        failures: list[PlaygroundSubmissionFailure] = []
+        for draft in drafts:
+            result = self.submit((draft,))
+            if result.submissions:
+                submissions.append(
+                    PlaygroundVariantSubmission(
+                        draft_uid=draft.draft_uid,
+                        submission=result.submissions[0],
+                    )
+                )
+            else:
+                failures.extend(result.failures)
+        return PlaygroundVariantSubmissionBatch(
+            tuple(submissions),
+            tuple(failures),
+        )

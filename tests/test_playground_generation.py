@@ -153,6 +153,53 @@ def test_playground_submission_service_uses_real_generation_port() -> None:
     assert result.failures[0].message == "rejected"
 
 
+def test_variant_submission_preserves_success_and_failure_order() -> None:
+    generation = _Generation()
+    service = PlaygroundSubmissionService(
+        generation=generation,
+        policy=_policy(),
+    )
+    rejected = replace(
+        _draft(),
+        draft_uid="draft-2",
+        prompt=replace(_draft().prompt, positive_text="bad"),
+    )
+    final = replace(_draft(), draft_uid="draft-3")
+
+    result = service.submit_variants((_draft(), rejected, final))
+
+    assert tuple(item.draft_uid for item in result.submissions) == (
+        "draft 1",
+        "draft-3",
+    )
+    assert tuple(
+        item.submission.generation_uid for item in result.submissions
+    ) == ("generation-1", "generation-3")
+    assert tuple(item.draft_uid for item in result.failures) == ("draft-2",)
+    assert len(generation.requests) == 3
+
+
+@pytest.mark.parametrize(
+    ("drafts", "message"),
+    (
+        ((), "between 1 and 12"),
+        (tuple(_draft() for _ in range(13)), "between 1 and 12"),
+        ((_draft(), _draft()), "unique"),
+    ),
+)
+def test_variant_submission_rejects_invalid_batch_contracts(
+    drafts,
+    message,
+) -> None:
+    service = PlaygroundSubmissionService(
+        generation=_Generation(),
+        policy=_policy(),
+    )
+
+    with pytest.raises(GenerationValidationError, match=message):
+        service.submit_variants(drafts)
+
+
 def test_generation_sweep_expands_ranges_and_random_seeds_deterministically() -> (
     None
 ):
