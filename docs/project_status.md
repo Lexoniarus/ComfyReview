@@ -9,8 +9,9 @@ ES-module Frontend V2.
 
 ## Implemented state
 
-- canonical schema v12 with stable image/generation identity, rebuildable PNG
-  geometry classification and immutable LoRA functional revisions;
+- canonical schema v13 with stable image/generation identity, rebuildable PNG
+  geometry classification, immutable LoRA functional revisions and normalized
+  Generator state;
 - append-only Review events and rebuildable current-state/ranking views;
 - UID-based Arena with history-derived fair rotation, and UID-based Curation;
 - audited, idempotent historical Output, Prompt, Feature and Composition
@@ -133,14 +134,22 @@ manual. Guidance is derived on request and adds no schema or migration.
 
 Prompt selections show visible catalog references, Draft and Analytics evidence
 use large cyclic image carousels, and Steps/CFG use one accessible two-handle
-track. Analytics stages prompt and render selections in a tab-local tray; the
-user opens the Generator explicitly after reviewing the merged intent.
+track. Every source action navigates directly through one typed handoff owner.
+Prompt/LoRA handoffs replace visible “01 Auswahl” controls, render handoffs
+replace only render settings, and neither creates a draft. There is no
+tab-local tray, global staging event or duplicate toast owner.
 
 Schema v12 was promoted to the live runtime database on 2026-10-06 through a
 separately created and validated output database. The previous schema-v11
 runtime database remains unchanged as a named backup. All 12 existing LoRA
 definitions received one immutable basis revision; historical generation
 usages retained nullable revision provenance where it could not be proved.
+
+Schema v13 is implemented on `feature/lora-catalog-handoff`. Its explicit copy
+migration preserves v12, optionally imports a strictly validated
+`generator_v2` JSON snapshot and is never run by startup. Promotion of a live
+v13 output remains an operator action; this status does not claim that the
+currently configured local runtime database has been promoted.
 
 The live ComfyUI acceptance submitted and completed one generation with one
 LoRA and one generation with two ordered LoRAs. Both produced exact 720×720
@@ -152,8 +161,9 @@ both outputs canonically.
 ## Remaining acceptance
 
 The implementation slice is complete on `feature/lora-catalog-handoff`. The
-full shared quality gate is green: 561 Python tests, 121 frontend tests and 12
-Playwright acceptance tests pass, with 100% Python-Core statement coverage.
+full shared quality gate is green: 632 Python tests, 159 frontend tests and 12
+Playwright acceptance tests pass, with 100% Python-Core and frontend statement
+coverage.
 On 2026-10-05 the live v10 database was backed up, upgraded to v11 and
 rebuilt without diagnostics: all 377 active images received geometry
 projections. Real Blueprint-v4 ComfyUI smoke generations also completed for
@@ -166,9 +176,11 @@ the separate output database and 324 generations were relinked. The existing
 latest revisions remained latest, all 377 active-image generations had a
 character membership, and no ambiguous prompt slot remained.
 
-Remaining work before integration is user-facing visual acceptance, the final
-dead-path usage audit and integration review. The branch is intentionally not
-merged automatically.
+The final Generator dead-path usage audit is complete; the obsolete browser
+staging path, file-backed Generator state and unreferenced legacy Generator
+services are removed. Remaining work before integration is user-facing visual
+acceptance and integration review. The branch is intentionally not merged
+automatically.
 
 ## Scope and limitations
 

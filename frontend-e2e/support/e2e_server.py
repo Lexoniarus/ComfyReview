@@ -44,6 +44,7 @@ class BrowserTestRuntime:
         self.data_directory = self.root / "data"
         self.output_root = self.root / "output"
         self.database_path = self.data_directory / "canonical.sqlite3"
+        self.submitted_prompts: list[dict[str, Any]] = []
 
     def create_application(self) -> FastAPI:
         """Build and seed one isolated application with fake ComfyUI routes."""
@@ -324,8 +325,9 @@ class BrowserTestRuntime:
         content_hash = BrowserTestRuntime._digest(
             "\0".join(("1000", "1000", "", ""))
         )
-        connection.execute(
-            """
+        revision_id = BrowserTestRuntime._last_row_id(
+            connection.execute(
+                """
             INSERT INTO lora_revisions(
                 revision_uid, lora_definition_id, revision_number,
                 default_model_strength_milli,
@@ -334,7 +336,17 @@ class BrowserTestRuntime:
                 'lora-revision-e2e-detail', ?, 1, 1000, 1000, ?
             )
             """,
-            (definition_id, content_hash),
+                (definition_id, content_hash),
+            )
+        )
+        atom_id = BrowserTestRuntime._insert_atom(connection, "detail trigger")
+        connection.execute(
+            """
+            INSERT INTO lora_revision_atom_usages(
+                revision_id, atom_id, scope, position, weight_milli
+            ) VALUES (?, ?, 'pos', 0, 1000)
+            """,
+            (revision_id, atom_id),
         )
 
     @staticmethod
@@ -384,8 +396,7 @@ class BrowserTestRuntime:
             raise RuntimeError("SQLite insert did not return a row id")
         return int(value)
 
-    @staticmethod
-    def _add_test_routes(application: FastAPI) -> None:
+    def _add_test_routes(self, application: FastAPI) -> None:
         @application.get("/_e2e/health")
         def health() -> dict[str, str]:
             return {"status": "ok"}
@@ -440,8 +451,30 @@ class BrowserTestRuntime:
             }
 
         @application.post("/_fake_comfyui/prompt")
-        def submit_prompt() -> dict[str, str]:
+        def submit_prompt(payload: dict[str, Any]) -> dict[str, str]:
+            self.submitted_prompts.append(payload)
             return {"prompt_id": "e2e-prompt-1"}
+
+        @application.get("/_e2e/submissions")
+        def submissions() -> dict[str, Any]:
+            with sqlite3.connect(self.database_path) as connection:
+                loras = connection.execute(
+                    """
+                    SELECT lora_name, model_strength_milli,
+                           clip_strength_milli
+                    FROM generation_loras
+                    WHERE generation_id = (
+                        SELECT MAX(id) FROM generations
+                    )
+                    ORDER BY position
+                    """
+                ).fetchall()
+            return {
+                "prompt": self.submitted_prompts[-1]
+                if self.submitted_prompts
+                else None,
+                "loras": [list(item) for item in loras],
+            }
 
 
 runtime = BrowserTestRuntime()

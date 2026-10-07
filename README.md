@@ -217,8 +217,9 @@ Validate or explicitly upgrade the canonical database:
 ```bash
 python -m comfyreview canonical-db validate
 python -m comfyreview canonical-db upgrade \
-  --output data/comfyreview-v12.sqlite3 \
-  --backup-dir data/backups/canonical
+  --output data/comfyreview-v13.sqlite3 \
+  --backup-dir data/backups/canonical \
+  --generator-state data/ui_state/playground_generator_last.json
 python -m comfyreview canonical-db rebuild-image-geometry
 ```
 
@@ -275,7 +276,7 @@ validates the completed output database and leaves existing current catalog
 revisions unchanged as the latest revisions. Recovered one-off components are
 archived rather than added to the active catalog.
 
-The active application schema is v12. Prompt Catalog revisions and Playground drafts expose
+The active application schema is v13. Prompt Catalog revisions and Playground drafts expose
 ordered positive/negative atom rows with separate numeric weights. Rendered
 whole prompts remain exact provenance snapshots produced by the server; they
 are not a second editable source of truth. Schema v8 stores typed workspace
@@ -289,7 +290,12 @@ rebuild command reads actual PNG header dimensions outside a transaction and
 atomically replaces the projection. Schema v12 turns stable LoRA definitions
 into a first-class catalog with immutable default/trigger revisions and stores
 the selected LoRA revision on new generation usage; historical usages remain
-nullable rather than being assigned invented current triggers. Standard content visibility is enforced by canonical repository queries across
+nullable rather than being assigned invented current triggers. Schema v13
+stores the Generator's render/seed singleton, prompt-role selections and
+ordered revision-pinned LoRAs in the same canonical database. The optional
+`--generator-state` input imports a validated legacy `generator_v2` snapshot
+only during the explicit copy migration. Standard content visibility is
+enforced by canonical repository queries across
 Top/Worst, Review, Arena, Scopes, Analytics, Catalog evidence and Playground;
 the browser does not reimplement that policy. Existing older databases require
 the explicit backed-up `canonical-db upgrade` command before startup.
@@ -488,12 +494,15 @@ submissions are never automatically sent twice. If ComfyUI history has expired,
 the explicit reconcile action can accept only an exact, unambiguous output from
 the generation's persisted directory and filename prefix.
 
-Analytics uses the same `render-guidance-v1` calculation. Actions stage prompt
-and render values in a tab-local tray; they navigate only after “Generator
-öffnen”. Image prompt handoffs stage their linked canonical prompt components
-and show them in the Generator's “01 Auswahl” controls instead of silently
-using a historical prompt snapshot. Scores and discovery candidates are derived
-from canonical facts and are not persisted, so schema v11 is unchanged.
+Analytics uses the same `render-guidance-v1` calculation. Every Review,
+Top/Worst, Arena, Analytics, Catalog, Generations and Playground evidence
+action navigates directly through the shared Generator handoff codec.
+Prompt/LoRA handoffs replace the visible “01 Auswahl” state while render-only
+handoffs leave it untouched. There is no tray, toast event or hidden prompt
+snapshot, and no draft exists until “Entwurf erstellen” is pressed. Successful
+handoffs clean their URL parameters; rejected handoffs keep the prior state
+and display the error in the Generator. LoRA revision triggers enter the
+positive prompt exactly once.
 
 </details>
 

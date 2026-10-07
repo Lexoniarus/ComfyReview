@@ -177,12 +177,12 @@ requests a fresh server assessment. Color is relative within a parameter/list
 and is always accompanied by score, image count, review count, provenance and
 confidence text.
 
-Analytics uses the same four-mode matrix. Its actions stage typed
-`PlaygroundIntent` values in a versioned, tab-local `sessionStorage` store.
-Specific toasts and a visible tray show the merged prompt/render intent;
-navigation occurs only through “Generator öffnen”, which consumes the staged
-intent once. Each store, tray, toast, carousel, viewer and request owner has an
-explicit disposal lifecycle.
+Analytics uses the same four-mode matrix. Every source action delegates a
+typed handoff to `GeneratorHandoffNavigator` and navigates directly to the
+Generator. `GeneratorHandoffApplier` loads, projects and applies the intent
+atomically to the visible controls, then removes the handoff parameters with
+`history.replaceState`. There is no tab-local staging store, tray or duplicate
+toast owner.
 
 Drafts are server-identified and group positive and negative atoms by their
 canonical component order. Atom edits are draft overrides only; preview and
@@ -199,11 +199,12 @@ classification as `Nicht eingestuft` instead of visually defaulting them to
 Standard.
 
 All image-bearing surfaces share `ImageGeneratorActions`. A compact card menu
-and prominent inspector buttons stage Prompt-Setup and Render-Setup separately
-in the single version-2 `PlaygroundIntentStore`. Evidence carousels therefore
-inherit the same behavior in Analytics, Catalog, Playground overview and Draft
-as Top/Worst, Review, Arena and generation details. Failed or unavailable
-values stay in the global tray with an explanation until resolved.
+and prominent inspector buttons send Prompt-Setup and Render-Setup separately
+through the same navigator. Evidence carousels therefore inherit the same
+wording and direct-navigation behavior in Analytics, Catalog, Playground and
+Draft as Top/Worst, Review, Arena and generation details. A failed handoff
+leaves the previous Generator controls untouched and reports the error on the
+target page.
 
 ## Responsive contract
 

@@ -1,8 +1,8 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v12 is implemented. Images, reviews, Arena, Curation,
+Status: canonical schema v13 is implemented. Images, reviews, Arena, Curation,
 revisioned prompts and native generation outputs are on the active refactor
-branch, 2026-10-05. Catalog
+branch, 2026-10-07. Catalog
 authoring and Playground drafts use structured prompt atoms; workspace
 preferences, content levels and LoRA usage are canonical; profile tables are
 dormant migration compatibility only.
@@ -23,10 +23,10 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v12
+## 2. Canonical schema v13
 
 The canonical database uses explicit schema metadata and foreign keys. Schema
-v12 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
+v13 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
 output provenance, v7 normalized prompt-revision atom usages, v8 workspace
 settings/generation profiles, v9 content/canvas settings and v10 output/content
 classification facts:
@@ -61,15 +61,18 @@ classification facts:
   `image_content_level_state` for manual overrides;
 - rebuildable `image_geometry_projection` keyed by image ID with actual
   dimensions, format, resolution class, target match and classifier version;
+- singleton `playground_generator_state`, prompt-role selection rows and
+  ordered revision-pinned `playground_generator_loras`;
 - rebuildable current-state and aggregate views.
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
 a v3-to-v4, v4-to-v5, v5-to-v6, v6-to-v7, v7-to-v8, v8-to-v9, v9-to-v10,
-v10-to-v11 or v11-to-v12 migration. The explicit,
+v10-to-v11, v11-to-v12 or v12-to-v13 migration. The explicit,
 backed-up command is:
 
 ```text
-python -m comfyreview canonical-db upgrade --output PATH [--backup-dir PATH]
+python -m comfyreview canonical-db upgrade --output PATH [--backup-dir PATH] \
+  [--generator-state PATH]
 ```
 
 ## 3. Review history and current state
@@ -261,7 +264,7 @@ constants.
 Schema v8 stores one typed workspace-preference row plus an ordered list of
 visible Curation sets. Preferences affect presentation/session defaults; they
 do not rewrite review or curation facts. Generation-profile rows and their
-ordered LoRA relations remain dormant migration compatibility in v12. They are
+ordered LoRA relations remain dormant migration compatibility in v13. They are
 not read by the active runtime, Settings, Playground or V2 API.
 
 New generations persist the concrete LoRA stack used after validation and
@@ -297,6 +300,14 @@ triggers or default strengths appends a revision; display name, tags and notes
 remain mutable metadata. Generation requests carry stable LoRA and revision
 UIDs, while the server resolves the provider filename. Historical usage
 without proof of a revision remains `NULL` and uses its stored prompt snapshot.
+
+Schema v13 moves the current Generator controls into normalized canonical
+relations. Scalar render/seed settings have one singleton owner; prompt rows
+store role, mode and exact component/revision references; ordered LoRA rows
+store exact definition/revision references and milli-unit strengths. Saves
+replace all three parts in one transaction. The previous JSON state is not a
+runtime fallback and can be read only by the explicit v12-to-v13 copy
+migration after strict `generator_v2` validation.
 
 Historical reclassification is a separate two-step operation: preview returns
 the affected generation/image counts and catalog revision, and apply requires
@@ -425,7 +436,7 @@ added content/canvas settings. That verified live database's `user_version` is 9
 `integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
 pre-v7 backup remains schema v6 with all 729 revisions.
 
-The application requires schema v12. No older database is silently changed at
+The application requires schema v13. No older database is silently changed at
 startup. `canonical-db upgrade` first migrates and validates a new database
 file and preserves the source; installation of the validated output is a
 separate controlled step.

@@ -1,8 +1,8 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover, structured prompt catalog, schema-v12
+Status: the canonical backend cutover, structured prompt catalog, schema-v13
 data migration and Frontend V2 overhaul are implemented on
-`refactor/review-boundary`, 2026-10-03. Analytics collections are bounded,
+`feature/lora-catalog-handoff`, 2026-10-07. Analytics collections are bounded,
 Playground handoffs are explicit, generation profiles are dormant migration
 compatibility, Settings is a complete product surface, the Inspector is
 composed from focused views and Playwright covers the browser acceptance
@@ -375,8 +375,8 @@ constants.
 - Analytics Overview reports coverage only, Prompt Combinations remains
   prompt-only, and Render Analytics exposes the same four modes and confidence
   vocabulary as the Generator;
-- Analytics handoffs are tab-local staged `PlaygroundIntent` values with toast,
-  tray, reset and explicit one-time navigation instead of immediate redirects;
+- Analytics handoffs use the shared typed direct-navigation owner and are
+  applied visibly in the Generator without staging UI or implicit drafts;
 - one shared evidence carousel and the full-size image viewer are connected to
   Prompt references, Draft evidence and Analytics cards;
 - the legacy `/api/v2/analytics/parameters` endpoint and the render branch of
@@ -419,8 +419,26 @@ constants.
   Render packages for visible image UIDs, including snapshot-only legacy and
   non-applicable multi-stage diagnostics;
 - all card, carousel, viewer and inspector image surfaces reuse one
-  `ImageGeneratorActions` owner and the version-2 tab-local intent store;
+  `ImageGeneratorActions` owner and direct typed navigation;
 - Settings remains a status surface; Catalog is the only LoRA editor.
+
+### Generator handoff and lifecycle acceptance (implemented feature slice)
+
+- `GeneratorHandoffNavigator` is the single outgoing owner; the target-side
+  `GeneratorHandoffApplier` loads, projects, applies, persists, rolls back and
+  cleans URL parameters atomically;
+- `DraftSession` owns cancellation, revision rejection and the
+  idle/preparing/ready/submitting state machine; editor changes immediately
+  clear stale draft output;
+- `GeneratorStatePersistence` serializes latest-write-wins saves and flushes
+  the newest snapshot on navigation;
+- schema v13 stores normalized Generator state in canonical SQLite and the
+  explicit v12-to-v13 copy migration can import one validated legacy JSON
+  snapshot without changing its source database;
+- the Generator POST/preview routes, file repository, helper services,
+  tab-local tray and duplicate toast/event paths were removed;
+- Playwright proves exact LoRA weights through reload, draft, generation row,
+  compiled loader and Fake-ComfyUI submission, with one trigger atom.
 
 ## Final acceptance remaining
 
@@ -438,9 +456,9 @@ The acceptance audit additionally repaired 165 historical generation snapshots
 for the already-classified Explicit `example-lora-2.safetensors` LoRA
 through the existing revision-checked preview/apply service. No name-based LoRA
 heuristic or unreviewed bulk reclassification was introduced.
-Remaining integration work is limited to user-facing visual acceptance, the
-final dead-path usage audit and opening the replacement pull request. No
-automatic merge is planned.
+The generator dead-path audit and automated acceptance are complete. Remaining
+integration work is limited to user-facing visual acceptance and opening the
+replacement pull request. No automatic merge is planned.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the

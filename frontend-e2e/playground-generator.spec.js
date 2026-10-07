@@ -50,6 +50,8 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   await expect(page.getByLabel("LoRA")).toHaveValue(
     "character-detail.safetensors",
   );
+  await page.getByLabel("Model").fill("0.8");
+  await page.getByLabel("CLIP").fill("0.65");
   const stateSaved = page.waitForResponse(
     (response) =>
       response.request().method() === "PUT" &&
@@ -65,6 +67,8 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   await expect(page.getByLabel("LoRA")).toHaveValue(
     "character-detail.safetensors",
   );
+  await expect(page.getByLabel("Model")).toHaveValue("0.8");
+  await expect(page.getByLabel("CLIP")).toHaveValue("0.65");
   await page.getByRole("button", { name: "Entwurf erstellen" }).click();
 
   await expect(page.locator("[data-draft-state]")).toHaveText(
@@ -72,7 +76,13 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   );
   await expect(
     page.locator("[data-draft-preview] [data-atom-text]"),
-  ).toHaveCount(3);
+  ).toHaveCount(4);
+  const atomValues = await page
+    .locator("[data-draft-preview] [data-atom-text]")
+    .evaluateAll((elements) => elements.map((element) => element.value));
+  expect(atomValues.filter((value) => value === "detail trigger")).toHaveLength(
+    1,
+  );
   await expect(
     page.getByRole("button", { name: "An ComfyUI senden" }),
   ).toBeEnabled();
@@ -82,4 +92,17 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   await expect(page.locator("[data-generation-result]")).toContainText(
     "submitted",
   );
+  const submission = await page.evaluate(async () =>
+    fetch("/_e2e/submissions").then((response) => response.json()),
+  );
+  expect(submission.loras).toEqual([
+    ["character-detail.safetensors", 800, 650],
+  ]);
+  const loraNode = submission.prompt.prompt["cr:lora:000"];
+  expect(loraNode.inputs.lora_name).toBe("character-detail.safetensors");
+  expect(loraNode.inputs.strength_model).toBe(0.8);
+  expect(loraNode.inputs.strength_clip).toBe(0.65);
+  expect(
+    JSON.stringify(submission.prompt.prompt).match(/detail trigger/g),
+  ).toHaveLength(1);
 });

@@ -183,7 +183,8 @@ Routes call services. They do not execute SQL or external provider calls.
 - Canonical version changes use the explicit, backed-up
   `python -m comfyreview canonical-db upgrade --output PATH` command. The
   source is not overwritten; startup validates but never performs a version
-  cutover.
+  cutover. Optional legacy UI-state import is an explicit migration input, not
+  a runtime fallback.
 
 ## 7. Canonical data vs derived data
 

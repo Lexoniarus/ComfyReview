@@ -1,8 +1,8 @@
 # ComfyReview Architecture
 
 Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, schema-v12 application support and Frontend V2
-including Settings are implemented on the active feature branch, 2026-10-06.
+analytics, native Generation, schema-v13 application support and Frontend V2
+including Settings are implemented on the active feature branch, 2026-10-07.
 Final user acceptance and integration review remain open.
 
 ## 1. Product boundary
@@ -41,7 +41,7 @@ only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v12 is the active
+The canonical database has an explicit schema version. Schema v13 is the active
 shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
 catalog, records v6 native output roles/content hashes, normalizes ordered
 prompt-revision atom usages in v7 and adds workspace preferences, generation
@@ -65,6 +65,12 @@ plus normalized positive/negative trigger atom usages. New
 stay `NULL` when no historic revision can be proven. Mutable display metadata
 does not create a revision.
 
+Schema v13 adds the normalized Playground Generator state. One render/seed
+singleton owns scalar controls, prompt-selection rows own each role and mode,
+and ordered LoRA rows reference exact stable definitions and immutable
+revisions with Model/CLIP strengths in milli-units. The old UI JSON is an
+optional explicit migration source, never a runtime repository.
+
 Canonical v4 facts include:
 
 - images and generation provenance;
@@ -81,7 +87,7 @@ derived immutable snapshots, not writable API inputs.
 
 Schema v8 introduced workspace preferences and generation profiles. The
 profile tables and generation profile columns remain dormant migration
-compatibility in v12, but no active container service, V2 endpoint, Settings
+compatibility in v13, but no active container service, V2 endpoint, Settings
 surface or Playground flow reads them. Generations still record the exact
 LoRAs they actually used. A loader is normalized only when a non-zero model or
 CLIP branch reaches a consumed sampler input. Historical `loras_json` and raw
@@ -315,7 +321,7 @@ validated before persistence or submission.
 ## 9. Schema lifecycle
 
 Runtime startup validates only the supported canonical schema; it never
-upgrades an unsupported database silently. Canonical v3 through v12
+upgrades an unsupported database silently. Canonical v3 through v13
 changes are available only through `python -m comfyreview canonical-db
 upgrade --output PATH` and are backed up. The v3-to-v4 step migrates writable legacy review
 state into events, projects delete tombstones and replaces old tables with
@@ -340,6 +346,12 @@ The v11-to-v12 step copies the source to a separate output database, creates
 base revision 1 for every existing definition, preserves historical usage with
 a nullable revision link, validates integrity and verifies that the source hash
 did not change. Promotion of that output remains an explicit operator action.
+
+The v12-to-v13 step creates the normalized Generator tables in that new output
+database. `--generator-state PATH` may import one strictly validated
+`generator_v2` snapshot; missing stable Prompt/LoRA revisions or any invalid
+field abort the output migration. The v12 source remains byte-identical and
+runtime startup refuses it until an operator promotes the validated v13 copy.
 
 `CompiledLoraGraphPolicy` runs after semantic v4 compilation and before any
 generation row or ComfyUI submission. It requires one ordered loader per
@@ -370,28 +382,26 @@ The canonical cutover is intentionally not the end of the wider refactor.
   requests and focused view/controller classes. Playwright verifies bounded
   rendering and all required desktop/tablet viewports.
 - Playground V2 loads and saves one complete generator-control snapshot through
-  `/api/v2/playground/generator-state`. The injected settings service preserves
-  the existing server-owned UI-state file, migrates legacy render values on
-  first read and keeps explicit cross-surface handoffs as the final override.
+  `/api/v2/playground/generator-state`. The injected application service uses
+  only the normalized SQLite repository; the route owns JSON translation and
+  contains no persistence rule.
   `PromptModeEditor` owns each prompt kind's mode, component UID and optional
   immutable revision UID. Fixed selections persist and submit that exact UID;
   old states without one and deliberate component changes use the catalog's
   current latest revision. The browser treats restored revision UIDs as opaque
   bindings because its catalog contains only latest revisions; authoritative
   existence and component ownership validation remains in the Application
-  layer. Random/off choices carry no revision binding. Browser prompt
-  handoffs no longer have a direct draft-reference path: every supported Image,
-  Scope, Composition and Top Combination source is applied to the ordinary
-  Generator state before explicit draft creation. Image prompt actions stage
-  only the source image UID;
-  the controller reloads typed prompt selections and effective LoRAs from the
-  image handoff, applies them as a complete editor-state replacement, and
-  persists the ordinary generator snapshot before clearing only that prompt
-  source. Rejected or unpersisted applications restore the prior prompt state
-  and retain the staged source. A separately staged render image is not cleared
-  by prompt cleanup, and applying this handoff does not create a draft.
-  Analytics Scope actions stage only a typed component/revision source and
-  patch that prompt kind; Analytics Composition actions stage only the
+  layer. Random/off choices carry no revision binding. Browser prompt handoffs
+  have no direct draft-reference path: every supported Image, Scope,
+  Composition and Top Combination action navigates directly to the Generator
+  and applies to the ordinary visible state before explicit draft creation.
+  The controller reloads typed prompt selections and canonical ordered LoRAs
+  from an image handoff, applies them atomically as a complete editor-state
+  replacement and persists the ordinary snapshot before removing the handoff
+  URL parameters. Rejected or unpersisted applications restore the prior state
+  and retain those parameters. Applying a handoff does not create a draft.
+  Analytics Scope actions carry only a typed component/revision source and
+  patch that prompt kind; Analytics Composition actions carry only the
   composition UID, resolve its exact ordered revisions through one
   Application `PromptSelection` operation, and replace the complete prompt
   selection. The Composition draft renderer and API handoff project this same
@@ -401,16 +411,17 @@ The canonical cutover is intentionally not the end of the wider refactor.
   before editor rendering, saved-state restore, handoff, persistence or
   cleanup. Both single-source Scope and Composition actions apply through the
   shared rollback/persist operation and clear only their typed source after the
-  normal generator state is saved. Top Combinations stages a typed
+  normal generator state is saved. Top Combinations carries a typed
   `promptCombination` source containing only kind/component/revision selections.
   Its producer validates exact member counts and maps the known ordered
   `two_component` and `three_component` response shapes to Character/Scene and
   Character/Scene/Outfit; the stateless projector applies only those kinds as
   a partial patch, leaving all other selections and LoRAs unchanged. After
   successful apply and generator-state persistence, only that typed source is
-  removed from tab-local staging and the current URL. The injected URL cleanup
-  preserves independent render and unrelated query parameters, and failed or
-  ambiguous handoffs leave both source transports untouched. Legacy
+  removed from the current URL. The injected URL cleanup preserves unrelated
+  query parameters; failed or ambiguous handoffs leave the source URL
+  untouched. There is no tab-local intent store, global staging event, tray or
+  duplicate toast owner. Legacy
   component/revision/composition/image browser intent fields and Store-v1
   prompt handoffs are no longer consumed; direct draft-source compatibility
   remains isolated at the HTTP API boundary.
