@@ -469,54 +469,74 @@ constants.
 - the closing shared gate passed 638 Python tests, 159 frontend tests and 12
   Playwright scenarios with 100% Python-Core and frontend statement coverage.
 
-### Urgent corrective slice: atom identity and weight evidence (planned)
+### Prompt variant guidance and evidence-based catalog promotion (planned)
 
-Status: required as soon as possible; documented on 2026-10-07, not yet
-implemented or validated.
+Status: high-priority follow-up documented on 2026-10-07; not yet implemented
+or validated.
 
-The structured-prompt slice made atom text and numeric weight separate columns,
-but it incorrectly made both values part of immutable component-revision
-truth. That conflates a stable atom with an experimental Playground usage and
-fragments component history when only a weight changes. The existing
-`atom_learning_stats` projection also lacks Character/component, component
-revision and composition context, while edited prompt groups are flattened
-before generation persistence and lose authoritative per-atom source
-attribution.
+The structured-prompt slice correctly separated atom identity from usage weight
+and made each immutable catalog revision an exact weighted standard recipe.
+Generation and review facts also retain the observations needed for learning.
+The remaining gap is a product loop: the current revision is still selected by
+revision order/manual editing, while no service exposes a calculated optimized
+prompt variant or promotes a sufficiently stable observed recipe by an explicit
+evidence policy.
 
-The corrective slice must establish these invariants:
+The slice must establish these invariants:
 
-- normalized semantic content identifies an atom; changed content creates a
-  different atom;
-- component revisions change for structural atom membership, role or order,
-  not for a per-generation weight experiment;
-- every new generation persists actual atom weight plus explicit source layer,
-  component and revision context where applicable;
-- review/delete events produce rebuildable contextual atom-weight evidence and
-  never mutate catalog facts;
-- calculated recommendations expose support and uncertainty and do not claim
-  causal proof from whole-image ratings;
-- observed contexts are queried or projected from real generations without a
-  precomputed Cartesian product;
-- legacy source attribution is preserved only when provable and otherwise
-  remains explicitly unknown;
-- the schema migration writes and validates a new database, preserves images,
-  generations, rendered prompt snapshots, reviews and stable identities, and
-  never overwrites the source database in place.
+- normalized semantic content identifies an atom; using another weight does not
+  create another atom, while changed semantic content does;
+- the current catalog revision is the strongest sufficiently supported exact
+  observed variant under a versioned stability policy, not simply the latest
+  edit or the highest raw average;
+- a calculated optimized variant is derived guidance and may combine promising
+  atom weights that have not yet been observed together;
+- the Generator exposes stable observed and calculated optimized variants as
+  separate choices alongside a next useful test, all independently selectable
+  per prompt group and loaded into the ordinary editable state;
+- generation and rating turn an optimized candidate into an observed exact
+  recipe; only an observed recipe with sufficient independent-image evidence
+  can be promoted;
+- automatic reconciliation after Review, Delete or Arena reuses or appends an
+  immutable weighted component revision and records the previous standard,
+  evidence frontier, policy/model version and reason; it never rewrites earlier
+  revisions, historical image bindings or a successfully stored review;
+- best observed, stable observed, predicted optimum and next useful test remain
+  distinct results with visible support and uncertainty;
+- derived evidence is rebuildable from canonical generation, image, prompt and
+  review facts without a precomputed Cartesian product;
+- whole-image ratings provide contextual evidence rather than causal proof for
+  one atom, and ambiguous legacy source attribution is never invented.
 
-Before implementation, the slice requires an explicit domain contract and
-migration design covering catalog-authored defaults or constraints, duplicate
-atoms across selected components, LoRA trigger sources, draft additions and
-removals, historical overridden prompts and the context dimensions allowed in
-the estimator. Completion requires behavior, rollback, migration, architecture
-and analytics tests plus the complete shared quality gate.
+The policy decisions are fixed for implementation: `prompt-guidance-v1` uses
+the Render Guidance evidence semantics, a five-independent-image stability
+floor, repeated-review weighting without support inflation, negative delete
+evidence and conservative lower-bound ordering. Automatic promotion requires a
+`0.02` lower-bound lead except for a provisional or unsupported current
+standard. Evidence is component-global. The calculated result is weight-only,
+uses supported observed weights plus in-range `0.05` interpolation, requires
+three images per anchor and two anchors for interpolation, and combines shrunk
+effects as a mean logit effect. Discovery maximizes
+`mean + 1.645 * standard_deviation`, may alter several weights and never
+materializes the Cartesian product.
+
+Schema v15 will add explicit candidates, exact generation prompt groups and
+append-only promotions. The newest promotion defines `current_revision`, while
+`latest_revision` remains the highest historical revision. New revision 1 and
+v14 migration baselines are provisional. Manual catalog-content changes create
+candidates; metadata changes remain immediate. Historical groups are backfilled
+only when exact partitioning is provable. Any schema change must use the
+backup/new-output/validation workflow and preserve canonical facts. Completion
+requires behavior, rollback, migration, architecture and analytics tests plus
+the complete shared quality gate.
 
 ## Final acceptance remaining
 
 The previously completed implementation slices and their automated integration
 gates remain valid for their stated scope, but the project is not at final
-architectural acceptance while the urgent atom identity/weight correction
-above remains planned. The live database upgrade/rebuild and real Blueprint-v4
-Portrait/Landscape ComfyUI
+architectural acceptance while prompt-variant guidance and evidence-based
+catalog promotion remain planned. The live database upgrade/rebuild and real
+Blueprint-v4 Portrait/Landscape ComfyUI
 smokes were completed successfully on 2026-10-05. On 2026-10-06 the owned
 lifecycle worker completed the newest retained ComfyUI job, and the four jobs
 whose history had expired were recovered through the explicit strict output

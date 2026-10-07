@@ -2,12 +2,13 @@
 
 Status: implemented on `refactor/review-boundary`, 2026-10-02.
 
-Correction notice, 2026-10-07: this work order successfully introduced
-structured atom usages, but its treatment of weight as immutable
-component-revision content is now a known semantic defect. This document
-records the implemented historical slice; it is not the target for future
-atom learning. The required correction is defined in `DATA_ARCHITECTURE.md`
-and tracked as an urgent planned slice in `REFACTOR_PLAN.md`.
+Clarification, 2026-10-07: this work order correctly separated atom identity
+from usage weight and made each immutable component revision an exact weighted
+standard recipe. Experimental Playground variants remain drafts or generation
+observations until an exact observed recipe is promoted. Evidence-based choice
+of the stable standard, calculated optimized variants and promotion were
+explicitly outside this historical slice and are tracked in
+`REFACTOR_PLAN.md`.
 
 ## Purpose
 
@@ -61,12 +62,12 @@ PromptAtomUsage
 ```
 
 Canonical atom text and the weight of a particular usage are distinct values.
-The implemented slice assigned weight to an occurrence in a revision or draft;
-it correctly kept weight out of canonical atom identity, but incorrectly made
-revision weight part of immutable component history. The corrected target
-assigns an experimental Playground weight to the concrete generation usage.
-Consequently, the same atom may be observed with different weights without
-creating a different atom or a different structural component revision.
+Weight belongs to an occurrence in a revision, draft or generation, never to
+canonical atom identity. The same atom may therefore be tested and observed at
+different weights without creating another atom. A draft experiment does not
+create a catalog revision. If an exact observed variant is later promoted as
+the component's stable standard, the complete weighted recipe becomes a new
+immutable revision.
 
 Replacing text in a draft must not globally mutate a canonical atom that may be
 shared by other components or revisions. It creates or selects the appropriate
@@ -78,10 +79,9 @@ atom usage is the required level of structure.
 
 ## Authoritative data and rendering
 
-- Ordered positive and negative atom membership is authoritative editable
-  structural content of every new prompt revision. The implemented inclusion
-  of experimental weight in that revision content is superseded by the
-  2026-10-07 correction notice above.
+- Ordered positive and negative atom usages, including their standard weights,
+  are the authoritative editable content from which every catalog revision is
+  created. Once created, the revision is immutable.
 - A dedicated renderer produces deterministic positive and negative prompt
   strings from the ordered usages.
 - The renderer owns weight syntax and escaping/formatting decisions. Frontend
@@ -212,8 +212,9 @@ work must not be discarded.
   negative atom usages with separate text and numeric weight.
 - Creating a component and appending a revision never require callers to build
   weighted prompt strings.
-- Changing only a weight produces a new draft/revision value while retaining
-  the atom text and leaving the source revision unchanged.
+- Changing only a Playground weight produces a new draft value while retaining
+  the atom text and leaving the source revision unchanged. Saving a deliberately
+  chosen weighted recipe as the new catalog standard appends a revision.
 - Changing only atom text leaves weight, scope and order intact unless the user
   explicitly changes them.
 - Add, remove and reorder operations have deterministic rendered results.
@@ -249,7 +250,11 @@ work must not be discarded.
 - materializing every possible prompt combination.
 
 Those capabilities may build on the structured representation later, but they
-must not enlarge this work order.
+must not enlarge this historical work order. Prompt-variant guidance and
+evidence-based promotion are now tracked as a separate schema-v15 slice in
+`REFACTOR_PLAN.md`. That follow-up treats text changes as new atom identity,
+weight changes as use of the same atom, manual component recipes as candidates,
+and the newest auditable promotion as the catalog standard.
 
 ## Implemented result
 

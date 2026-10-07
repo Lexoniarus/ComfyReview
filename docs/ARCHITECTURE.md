@@ -88,13 +88,14 @@ Canonical v5 additionally includes stable prompt components, immutable prompt
 revisions, explicit compositions and source mappings for audited legacy
 imports. Catalog metadata can change without rewriting revision content.
 Schema v7 makes ordered positive/negative atom usages with separate numeric
-weights part of authored revision truth. That weight/revision coupling is now
-a known semantic defect, not the target architecture: experimental Playground
-weights belong to concrete generation usages and derived evidence rather than
-to structural component identity. The urgent correction is specified in
-`DATA_ARCHITECTURE.md` and tracked in `REFACTOR_PLAN.md`; it is not yet
-implemented. Rendered whole-prompt columns remain derived immutable snapshots,
-not writable API inputs.
+weights part of authored revision truth. This is correct for an immutable
+catalog revision because it represents one exact stable standard recipe. Weight
+does not become part of atom identity: Playground experiments with another
+weight remain draft or generation observations until an exact observed recipe
+is promoted as a new component revision. The missing architecture is the
+evidence-based choice and promotion of the current stable revision plus a
+separate calculated optimized Generator candidate. Rendered whole-prompt
+columns remain derived immutable snapshots, not writable API inputs.
 
 Schema v8 introduced workspace preferences and generation profiles. The
 profile tables and generation profile columns remain dormant migration
@@ -524,36 +525,68 @@ revision. The legacy HTML form adapter may parse the supported combined-string
 grammar at its explicit compatibility boundary; it does not reintroduce a
 whole-string application contract.
 
-#### Known critical correction: source-aware atom-weight observations
+#### Planned prompt-variant guidance and evidence-based promotion
 
 The current boundary correctly reuses one `prompt_atoms` identity when only a
-weight changes, but it does not carry that distinction through the complete
-catalog and learning model. Catalog revision hashes still include weights, and
-the Generator flattens edited Character, Outfit, Scene and other prompt groups
-into positive/negative arrays before persistence. The selected revision list
-therefore identifies the chosen structural sources, while the actual edited
-atom usages no longer identify which source group contributed each usage.
+weight changes. Catalog revisions also correctly include weights because each
+revision is the exact standard recipe that was valid at that point in catalog
+history. The current implementation, however, treats the numerically latest
+revision as current and still relies on manual catalog edits; it has no policy
+that selects the strongest sufficiently supported observed variant.
 
-The target boundary must keep three concepts separate:
+The planned guidance boundary parallels render guidance while keeping three
+independent choices for every loaded prompt component:
 
-1. stable atom identity for normalized semantic content;
-2. structural component revisions for atom membership, role and order;
-3. immutable generation atom usages for the actual weight and explicit source
-   context used by one generation.
+1. the stable observed variant is the revision selected by the newest promotion
+   event. Revision 1 starts as a provisional standard and remains selectable
+   before enough evidence exists;
+2. the calculated optimized variant is a derived, weight-only estimate for the
+   currently loaded ordered atom list and may not yet have been observed as one
+   exact recipe;
+3. the next useful test is a bounded discovery candidate selected by uncertainty
+   as well as expected result and differs from both the current and optimized
+   recipes.
 
-Changing an atom's semantic content creates a new atom and, where it changes a
-component membership, a new component revision. Adjusting the same atom's
-weight in the Playground creates only a generation observation. Reviews feed a
-rebuildable, context-aware estimator; they do not revise catalog facts.
+Every choice loads only into that component's ordinary editable atom group in
+the Generator. Generating and rating a candidate turns it into an observed exact
+recipe. After successful Review, Delete or Arena persistence, an injected
+coordinator automatically reconciles affected components in a separate short
+transaction. It may reuse an identical immutable revision or append one and
+then appends a promotion event with the previous standard, evidence frontier,
+policy version and reason. Older revisions and their historical generation
+bindings remain unchanged. A failed reconciliation never rolls back the review;
+it is reported as pending and can be repeated idempotently by an explicit audit
+command.
 
-The present `atom_learning_stats` projection is insufficient because its key
-contains atom, positive/negative scope, model branch and weight only. The
-replacement or successor projection must be derivable from canonical
-generation/review facts and support Character/component scope plus relevant
-recorded generation context without eagerly materializing a Cartesian product.
-Historical facts with ambiguous atom-source attribution remain explicitly
-unknown rather than being guessed. This correction is required before atom
-weight recommendations are treated as product behavior.
+`prompt-guidance-v1` uses the Render Guidance evidence semantics. Stability
+requires five independent images for an exact recipe; repeated reviews change
+evidence weight but not image support, and deletes remain negative evidence.
+Observed recipes are ordered conservatively by lower-bound score before
+expectation, average and support. A supported challenger replaces the current
+standard only with at least `0.02` lower-bound advantage, except when the
+current standard is provisional or no longer sufficiently supported. Evidence
+is component-global rather than checkpoint-, character- or scene-specific.
+
+Calculated guidance never changes text, membership, role or order. For each
+loaded atom it considers supported observed weights and `0.05` intermediate
+values inside the supported minimum/maximum range, never extrapolation. An
+observed weight anchor requires three independent images and interpolation
+requires two supported anchors; otherwise the current weight is retained.
+Effects are shrunk against the component baseline and combined as the mean of
+modeled logit effects so longer atom lists gain no structural advantage. The
+next test maximizes `mean + 1.645 * standard_deviation`, may change several
+weights, and is selected without materializing a Cartesian product.
+
+Schema v15 is planned to add normalized component candidates, exact per-
+generation prompt groups and atom usages, and append-only promotion facts. Draft
+and generation contracts must carry concrete source revisions and optional
+candidate identities per group; the server validates ownership and exact prompt
+partitioning before atomically persisting them. A manual content edit creates a
+candidate rather than immediately changing the standard. Historical flattened
+usages are attributed to components only when their partition is provable;
+ambiguous records remain unknown and are excluded from component guidance.
+Derived summaries remain rebuildable and whole-image ratings remain contextual
+evidence, not causal proof for one atom.
 
 ### 10.3 Canonical analytics boundaries
 

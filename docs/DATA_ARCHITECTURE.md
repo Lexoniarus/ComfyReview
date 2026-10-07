@@ -153,51 +153,83 @@ of whether it has already produced an image. A stable prompt component owns
 immutable prompt revisions. Each revision owns ordered positive and negative
 atom usages.
 
-### Known critical semantic defect: atom identity and experimental weight
+### Missing feedback loop: stable catalog standard and calculated candidate
 
-The current schema and catalog write path incorrectly treat an atom's numeric
-weight as authored prompt-revision truth. Consequently, changing only a weight
-can append a component revision even though the atom and the component's
-structural content are unchanged. This behavior must not be extended or used
-as the basis for future atom recommendations. Correcting it is a high-priority
-data-architecture slice and is not yet implemented.
+An immutable component revision represents one exact catalog recipe, including
+its ordered positive and negative atoms and their standard weights. Keeping
+weight on that revision is therefore correct. Weight is nevertheless not part
+of atom identity: the same atom used at `0.8`, `1.0` and `1.2` remains one atom.
+Changing an atom's semantic content creates a different atom.
 
-The required target semantics are:
+The current catalog is intended to expose exactly one global standard for each
+stable component identity. It is the revision referenced by the newest
+append-only promotion event, not necessarily the numerically latest revision.
+Revision 1 of a new component is promoted as a provisional initial standard;
+the v14-to-v15 upgrade promotes each existing component's highest revision as a
+provisional `migration_baseline`. APIs therefore expose both `current_revision`
+and the historically highest `latest_revision`.
 
-- a prompt atom has stable identity based on its normalized semantic content;
-  changing that content creates a different atom;
-- a component revision records structural authored truth: atom membership,
-  positive/negative role, order and explicit structural constraints;
-- changing an atom membership or replacing one atom with another creates a
-  component revision, while changing a weight for one Playground experiment
-  does not;
-- every generation records the actual atom usage, including atom identity,
-  weight, scope, position and the source component/revision or other explicit
-  source layer;
-- reviews contribute rebuildable evidence about an atom-weight observation in
-  its recorded context. They never mutate the atom, component or revision;
-- recommendations are calculated estimates with support and uncertainty, not
-  new catalog facts and not proof that one atom caused an image rating.
+A temporary Playground or catalog-content change is a candidate and, after
+generation, an observation. It does not immediately change the catalog. If an
+exact observed variant later satisfies the versioned stability and promotion
+policy, automatic reconciliation reuses or appends the immutable revision for
+that complete recipe, including its weights, then appends a promotion event.
+Earlier revisions remain bound to their historical images. Display name, tags
+and notes remain mutable metadata and continue to take effect immediately.
 
-For example, Aiko using the same atom at weights `0.8`, `1.0` and `1.2` is one
-atom and one unchanged structural Character revision with three observed
-generation usages. Replacing that atom's text creates a new atom and, because
-the Character's membership changed, a new Character revision.
+The planned product model distinguishes four results:
 
-`prompt_atoms` already separates canonical atom text from weights stored on
-usage relations, and generated prompt memberships already retain actual
-weights. However, `prompt_revision_atom_usages` still includes weight in
-revision content, and `atom_learning_stats` is keyed only by atom, prompt
-scope, model branch and weight. It does not preserve Character/component,
-component revision, composition or other Playground context. Edited Playground
-groups are also flattened into final positive/negative atom arrays at
-submission, so an edited usage no longer has authoritative per-atom source
-attribution. These partial mechanisms are insufficient for the target model.
+- the current stable or provisional catalog variant selected by promotion;
+- the best observed variant: the strongest exact recipe in the recorded data,
+  which may not yet be stable enough to become the catalog standard;
+- a calculated optimized variant: a derived candidate assembled from the
+  available atom-weight evidence and allowed to be unobserved as an exact
+  combination;
+- the next useful test: a candidate selected to reduce uncertainty rather than
+  merely maximize the estimated score.
 
-The corrective slice must preserve existing images, rendered prompt snapshots,
-reviews and provenance. Any schema transition must use the normal explicit
-backup/new-output/validation workflow; it must not rewrite the active database
-in place or invent source attribution for ambiguous history.
+The Generator must offer `Stable`, `Calculated` and `Next test` independently
+for Character, Outfit, Scene, Modifier and every other prompt group. Each
+selection replaces only that group's atoms in the ordinary editable Generator
+state. A calculated candidate remains derived guidance until explicitly
+materialized and then generated. Promotion is initiated automatically after a
+successful Review, Delete or Arena transaction, but remains explicit as an
+append-only fact recording the previous revision, evidence frontier,
+policy/model version and reason. Promotion failure does not undo the canonical
+review; it is logged and remains idempotently reconcilable.
+
+The `prompt-guidance-v1` policy requires five independent images for a stable
+exact variant. Repeated reviews contribute evidence but never increase image
+support, and deletes remain negative evidence. Conservative lower-bound score
+precedes expectation, average and support. A challenger needs a `0.02`
+lower-bound advantage unless the current standard is provisional or no longer
+sufficiently supported. Evidence is global to the component rather than split
+by checkpoint or surrounding prompt groups.
+
+Calculated guidance may change only the weights of the supplied ordered atom
+list. Each atom uses observed supported weights plus `0.05` intermediate values
+within supported bounds; extrapolation, atom substitution, insertion, removal
+and reordering are forbidden. An anchor needs three independent images and
+interpolation needs two supported anchors. Effects are shrunk against the
+component baseline and combined as a mean logit effect. The next test uses
+`mean + 1.645 * standard_deviation`, may alter several weights, differs from the
+current and optimized recipes, and is found without persisting a Cartesian
+product.
+
+Schema v15 adds normalized `prompt_component_candidates` and their atom usages,
+exact prompt groups and atom usages per generation, and append-only
+`prompt_component_promotions`. Each generation group records its component,
+source revision and optional candidate. Draft and submission validation proves
+that those groups render to the submitted total prompt before all generation
+facts are committed atomically. The present `atom_learning_stats` projection
+and token analytics remain insufficient by themselves; any new score projection
+is derived and rebuildable, and no full prompt Cartesian product is stored.
+
+Historical source attribution is recovered only when stored revisions can be
+partitioned exactly into the final rendered prompt. Ambiguous legacy records
+remain unknown and do not contribute component guidance. The v15 transition
+uses the normal backup/new-output/validation workflow and preserves images,
+rendered prompt snapshots, reviews and stable identities.
 
 Display name, tags and notes remain mutable catalog metadata.
 
@@ -224,8 +256,10 @@ current content policy before persistence. It never upgrades an older revision
 to the component's latest revision. Playground submission uses the native
 `GenerationService`, preserves flattened structured usages, exact rendered
 snapshots and selected revision IDs, and does not dual-write legacy generation
-state. The missing authoritative mapping from each edited generation usage to
-its source component/revision is part of the critical corrective slice above.
+state. Those facts support exact generation provenance and broad
+component-scoped evidence. A future per-component promotion flow must preserve
+an explicit candidate source binding when simultaneous group edits would make
+that binding ambiguous.
 
 Legacy prompt migration is explicit:
 
