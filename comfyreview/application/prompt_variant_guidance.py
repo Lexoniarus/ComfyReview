@@ -18,6 +18,10 @@ WEIGHT_INTERPOLATION_STEP = 50
 DISCOVERY_Z_SCORE = 1.645
 
 
+class PromptGuidanceRevisionConflict(ValueError):
+    """Reject guidance requested for a no-longer-current standard."""
+
+
 @dataclass(frozen=True, slots=True)
 class PromptVariantRecipe:
     """Describe one exact ordered positive/negative component recipe."""
@@ -168,19 +172,18 @@ class PromptVariantGuidanceService:
         self,
         component_uid: str,
         *,
-        positive_atoms: tuple[PromptAtomUsage, ...] | None = None,
-        negative_atoms: tuple[PromptAtomUsage, ...] | None = None,
+        expected_revision_uid: str | None = None,
     ) -> PromptVariantGuidance:
-        """Evaluate the current or explicitly loaded ordered atom list."""
+        """Evaluate only the promotion-selected stable atom list."""
         current = self._repository.get_current_standard(component_uid)
-        recipe = PromptVariantRecipe(
-            current.recipe.positive_atoms
-            if positive_atoms is None
-            else tuple(positive_atoms),
-            current.recipe.negative_atoms
-            if negative_atoms is None
-            else tuple(negative_atoms),
-        )
+        if (
+            expected_revision_uid is not None
+            and current.revision_uid != str(expected_revision_uid).strip()
+        ):
+            raise PromptGuidanceRevisionConflict(
+                "prompt standard changed; reload the catalog component"
+            )
+        recipe = current.recipe
         observations = self._repository.list_observations(component_uid)
         observed = _observed_recommendations(observations)
         current_observed = next(

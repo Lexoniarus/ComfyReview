@@ -14,7 +14,7 @@ export class PromptModeEditor {
   /** @type {Map<string, PromptSelectionState>} */
   #selectionState = new Map();
   /** @type {Map<string, string | null>} */
-  #latestRevisionByComponent = new Map();
+  #stableRevisionByComponent = new Map();
   /** @type {Map<string, Record<string, any>>} */
   #componentByUid = new Map();
 
@@ -51,7 +51,7 @@ export class PromptModeEditor {
         component,
       ]),
     );
-    this.#latestRevisionByComponent = new Map(
+    this.#stableRevisionByComponent = new Map(
       components.map((component) => [
         String(component.component_uid || ""),
         (component.current_revision || component.latest_revision)?.revision_uid
@@ -232,7 +232,7 @@ export class PromptModeEditor {
     this.loras = null;
     this.rows.clear();
     this.#selectionState.clear();
-    this.#latestRevisionByComponent.clear();
+    this.#stableRevisionByComponent.clear();
     this.#componentByUid.clear();
   }
 
@@ -316,8 +316,8 @@ export class PromptModeEditor {
         : previous?.componentUid || row.component.value || null;
     const componentChanged = componentUid !== (previous?.componentUid || null);
     const enteredFixed = mode === "fixed" && previous?.mode !== "fixed";
-    const latestRevisionUid = componentUid
-      ? this.#latestRevisionByComponent.get(componentUid) || null
+    const stableRevisionUid = componentUid
+      ? this.#stableRevisionByComponent.get(componentUid) || null
       : null;
     let revisionUid = null;
     let candidateUid = null;
@@ -327,8 +327,8 @@ export class PromptModeEditor {
       revisionUid = requestedRevision
         ? requestedRevision
         : componentChanged || enteredFixed || options.resetRevisionToLatest
-          ? latestRevisionUid
-          : previous?.revisionUid || latestRevisionUid;
+          ? stableRevisionUid
+          : previous?.revisionUid || stableRevisionUid;
       candidateUid =
         patch.candidateUid !== undefined
           ? patch.candidateUid
@@ -340,11 +340,16 @@ export class PromptModeEditor {
     row.component.value = componentUid || "";
     row.component.disabled = this.isBusy || mode !== "fixed";
     row.variant.disabled = this.isBusy || mode !== "fixed";
-    const pendingCandidateUid = componentUid
-      ? this.#componentByUid.get(componentUid)?.pending_candidate?.candidate_uid
+    const manualVariant = componentUid
+      ? this.#componentByUid.get(componentUid)?.latest_manual_variant
       : null;
+    const manualCandidateUid = manualVariant?.candidate_uid || null;
+    const manualOption = [...row.variant.options].find(
+      (item) => item.value === "catalog_candidate",
+    );
+    if (manualOption) manualOption.disabled = !manualCandidateUid;
     row.variant.value = candidateUid
-      ? candidateUid === pendingCandidateUid
+      ? candidateUid === manualCandidateUid
         ? "catalog_candidate"
         : "calculated"
       : "stable";
@@ -379,21 +384,29 @@ export class PromptModeEditor {
     const row = this.rows.get(kind);
     const selection = this.#selectionState.get(kind);
     if (!row || !selection || selection.mode !== "fixed") return;
+    const component = selection.componentUid
+      ? this.#componentByUid.get(selection.componentUid)
+      : null;
+    const stableRevision =
+      component?.current_revision || component?.latest_revision;
+    const stableRevisionUid = String(stableRevision?.revision_uid || "");
     if (variant === "stable") {
-      this.#transition(kind, { candidateUid: null }, { notify: true });
+      this.#transition(
+        kind,
+        { revisionUid: stableRevisionUid, candidateUid: null },
+        { notify: true },
+      );
       return;
     }
     if (variant === "catalog_candidate") {
-      const pending = selection.componentUid
-        ? this.#componentByUid.get(selection.componentUid)?.pending_candidate
-        : null;
-      if (
-        pending?.candidate_uid &&
-        pending.source_revision_uid === selection.revisionUid
-      ) {
+      const manualVariant = component?.latest_manual_variant;
+      if (manualVariant?.candidate_uid && manualVariant.source_revision_uid) {
         this.#transition(
           kind,
-          { candidateUid: String(pending.candidate_uid) },
+          {
+            revisionUid: String(manualVariant.source_revision_uid),
+            candidateUid: String(manualVariant.candidate_uid),
+          },
           { notify: true, refresh: false },
         );
         row.variant.value = "catalog_candidate";
@@ -402,15 +415,10 @@ export class PromptModeEditor {
       row.variant.value = selection.candidateUid ? "calculated" : "stable";
       return renderMessage(row.evidence, "Kein Katalog-Testkandidat verfügbar");
     }
-    const component = selection.componentUid
-      ? this.#componentByUid.get(selection.componentUid)
-      : null;
-    const revision = component?.current_revision || component?.latest_revision;
     if (
       !component ||
-      !revision ||
-      !selection.revisionUid ||
-      String(revision.revision_uid || "") !== selection.revisionUid ||
+      !stableRevision ||
+      !stableRevisionUid ||
       !this.loadGuidance ||
       !this.materializeCandidate
     ) {
@@ -424,8 +432,7 @@ export class PromptModeEditor {
     try {
       const request = {
         component_uid: selection.componentUid,
-        positive_atoms: revision.positive_atoms || [],
-        negative_atoms: revision.negative_atoms || [],
+        source_revision_uid: stableRevisionUid,
       };
       const guidance = await this.loadGuidance(request, controller.signal);
       const recommendation =
@@ -440,13 +447,13 @@ export class PromptModeEditor {
       if (
         variant === "calculated" &&
         JSON.stringify(recommendation.positive_atoms || []) ===
-          JSON.stringify(request.positive_atoms) &&
+          JSON.stringify(stableRevision.positive_atoms || []) &&
         JSON.stringify(recommendation.negative_atoms || []) ===
-          JSON.stringify(request.negative_atoms)
+          JSON.stringify(stableRevision.negative_atoms || [])
       ) {
         this.#transition(
           kind,
-          { candidateUid: null },
+          { revisionUid: stableRevisionUid, candidateUid: null },
           { notify: true, refresh: false },
         );
         row.variant.value = "stable";
@@ -458,7 +465,6 @@ export class PromptModeEditor {
       const candidate = await this.materializeCandidate(
         {
           ...request,
-          source_revision_uid: selection.revisionUid,
           candidate_type: variant === "next_test" ? "next_test" : "calculated",
           positive_atoms: recommendation.positive_atoms || [],
           negative_atoms: recommendation.negative_atoms || [],
@@ -467,7 +473,10 @@ export class PromptModeEditor {
       );
       this.#transition(
         kind,
-        { candidateUid: String(candidate.candidate_uid || "") || null },
+        {
+          revisionUid: stableRevisionUid,
+          candidateUid: String(candidate.candidate_uid || "") || null,
+        },
         { notify: true, refresh: false },
       );
       row.variant.value = variant;

@@ -11,6 +11,7 @@ from comfyreview.application.prompt_catalog import (
     CreatePromptComponentCommand,
     PromptCatalogService,
     RevisePromptComponentCommand,
+    UpdatePromptComponentCommand,
 )
 from comfyreview.application.prompt_variant_guidance import (
     PromptVariantCoverage,
@@ -275,6 +276,17 @@ def test_promotion_repository_creates_reuses_and_returns_to_revisions(
     )
 
     changed_recipe = PromptVariantRecipe((PromptAtomUsage("aiko", 1150),), ())
+    manual_variant = catalog.update_component(
+        UpdatePromptComponentCommand(
+            component_uid=created.component_uid,
+            name=created.name,
+            tags=created.tags,
+            notes=created.notes,
+            positive_atoms=changed_recipe.positive_atoms,
+            negative_atoms=changed_recipe.negative_atoms,
+        )
+    ).latest_manual_variant
+    assert manual_variant is not None
     changed = repository.promote(
         PromptPromotionDecision(
             component_uid=created.component_uid,
@@ -286,10 +298,12 @@ def test_promotion_repository_creates_reuses_and_returns_to_revisions(
         policy_version="prompt-guidance-v1",
     )
     assert changed.created_revision is True
+    promoted_component = catalog.get_component(created.component_uid)
     assert (
-        catalog.get_component(created.component_uid).current_revision
+        promoted_component.current_revision
         == (catalog.list_revisions(created.component_uid)[1])
     )
+    assert promoted_component.latest_manual_variant == manual_variant
 
     newest = catalog.add_revision(
         RevisePromptComponentCommand(

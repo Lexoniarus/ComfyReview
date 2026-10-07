@@ -6,8 +6,11 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from comfyreview.application import (
     PromptCurrentStandard,
+    PromptGuidanceRevisionConflict,
     PromptVariantGuidanceService,
     PromptVariantObservation,
     PromptVariantRecipe,
@@ -89,7 +92,28 @@ def _guidance(
             ),
             observations,
         )
-    ).build("component-a")
+    ).build("component-a", expected_revision_uid="revision-current")
+
+
+def test_guidance_rejects_a_stale_standard_revision() -> None:
+    recipe = _recipe(1000)
+    service = PromptVariantGuidanceService(
+        _Repository(
+            PromptCurrentStandard(
+                component_uid="component-a",
+                revision_uid="revision-current",
+                recipe=recipe,
+                provisional=False,
+            ),
+            (),
+        )
+    )
+
+    with pytest.raises(
+        PromptGuidanceRevisionConflict,
+        match="prompt standard changed",
+    ):
+        service.build("component-a", expected_revision_uid="revision-old")
 
 
 def test_guidance_requires_five_independent_images_not_repeated_reviews() -> (

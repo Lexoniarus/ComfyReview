@@ -488,11 +488,11 @@ The completed slice establishes these invariants:
 - the current catalog revision is the strongest sufficiently supported exact
   observed variant under a versioned stability policy, not simply the latest
   edit or the highest raw average;
-- a calculated optimized variant is derived guidance and may combine promising
-  atom weights that have not yet been observed together;
-- the Generator exposes stable observed and calculated optimized variants as
-  separate choices alongside a next useful test, all independently selectable
-  per prompt group and loaded into the ordinary editable state;
+- a calculated optimized variant is derived only from the stable recipe and
+  may combine promising atom weights that have not yet been observed together;
+- the Generator exposes stable, latest manual, calculated and next-test
+  variants independently per prompt group and loads them into the ordinary
+  editable state;
 - generation and rating turn an optimized candidate into an observed exact
   recipe; only an observed recipe with sufficient independent-image evidence
   can be promoted;
@@ -527,6 +527,12 @@ candidates; metadata changes remain immediate. Historical groups are backfilled
 only when exact partitioning is provable. Draft and submission services validate
 component, source revision, candidate and rendered prompt before atomic
 persistence.
+
+Schema v16 corrects catalog-test provenance with append-only manual-variant
+selection facts. `latest_manual_variant` is independent from generation and
+promotion state, while calculated and discovery guidance are bound exclusively
+to the expected `current_revision`. The Catalog editor starts from that stable
+revision rather than the numerically latest historical revision.
 
 The Generator exposes stable, visible catalog-test, calculated and next-test
 choices independently per group. Guidance is read-only until an explicit

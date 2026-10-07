@@ -235,9 +235,9 @@ describe("Playground browser components", () => {
         positive_atoms: [{ text: "aiko", weight: 1 }],
         negative_atoms: [],
       },
-      pending_candidate: {
+      latest_manual_variant: {
         candidate_uid: "candidate-catalog",
-        source_revision_uid: "revision-character-a-current",
+        source_revision_uid: "revision-character-a-manual-source",
       },
     };
     editor.render([character, component("scene-a", "scene", "Scene")]);
@@ -250,6 +250,9 @@ describe("Playground browser components", () => {
     variant.dispatchEvent(new Event("change"));
     expect(editor.value().selections[0].candidate_uid).toBe(
       "candidate-catalog",
+    );
+    expect(editor.value().selections[0].revision_uid).toBe(
+      "revision-character-a-manual-source",
     );
     expect(materializeCandidate).not.toHaveBeenCalled();
 
@@ -264,7 +267,7 @@ describe("Playground browser components", () => {
     expect(loadGuidance).toHaveBeenCalledWith(
       expect.objectContaining({
         component_uid: "character-a",
-        positive_atoms: [{ text: "aiko", weight: 1 }],
+        source_revision_uid: "revision-character-a-current",
       }),
       expect.any(AbortSignal),
     );
@@ -275,6 +278,9 @@ describe("Playground browser components", () => {
         positive_atoms: [{ text: "aiko", weight: 1.15 }],
       }),
       expect.any(AbortSignal),
+    );
+    expect(editor.value().selections[0].revision_uid).toBe(
+      "revision-character-a-current",
     );
     expect(editor.value().selections[1].candidate_uid).toBeNull();
 
@@ -326,6 +332,11 @@ describe("Playground browser components", () => {
     );
     const unavailableVariant =
       unavailableCharacter.querySelectorAll("select")[2];
+    expect(
+      [...unavailableVariant.options].find(
+        (option) => option.value === "catalog_candidate",
+      ).disabled,
+    ).toBe(true);
     unavailableVariant.value = "catalog_candidate";
     unavailableVariant.dispatchEvent(new Event("change"));
     expect(unavailableCharacter.textContent).toContain(

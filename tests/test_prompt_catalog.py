@@ -519,11 +519,11 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
     )
     assert updated.latest_revision.revision_number == 2
     assert updated.current_revision == created.latest_revision
-    assert updated.pending_candidate is not None
-    assert updated.pending_candidate.source_revision_uid == (
+    assert updated.latest_manual_variant is not None
+    assert updated.latest_manual_variant.source_revision_uid == (
         created.latest_revision.revision_uid
     )
-    assert updated.pending_candidate.positive_atoms == (
+    assert updated.latest_manual_variant.positive_atoms == (
         prompt_atom_usages_from_text("skyline, storm")
     )
     assert service.get_component(created.component_uid) == updated
@@ -570,9 +570,13 @@ def test_catalog_content_edits_deduplicate_candidates_and_atom_identity(
             negative_atoms=created.latest_revision.negative_atoms,
         )
     )
+    returned_to_first = service.update_component(weight_only)
 
-    assert first.pending_candidate == repeated.pending_candidate
-    assert changed_text.pending_candidate != first.pending_candidate
+    assert first.latest_manual_variant == repeated.latest_manual_variant
+    assert changed_text.latest_manual_variant != first.latest_manual_variant
+    assert (
+        returned_to_first.latest_manual_variant == first.latest_manual_variant
+    )
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM prompt_component_candidates"
@@ -594,6 +598,53 @@ def test_catalog_content_edits_deduplicate_candidates_and_atom_identity(
         assert connection.execute(
             "SELECT COUNT(*) FROM prompt_atoms "
             "WHERE canonical_text = 'city skyline'"
+        ).fetchone() == (1,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_manual_variants"
+        ).fetchone() == (3,)
+
+
+def test_catalog_records_an_existing_calculated_recipe_as_manual(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    service = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(database_path),
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+    calculated = service.materialize_candidate(
+        MaterializePromptCandidateCommand(
+            component_uid=created.component_uid,
+            source_revision_uid=created.standard_revision.revision_uid,
+            candidate_type="calculated",
+            positive_atoms=(PromptAtomUsage("skyline", 1150),),
+            negative_atoms=created.standard_revision.negative_atoms,
+        )
+    )
+
+    updated = service.update_component(
+        UpdatePromptComponentCommand(
+            component_uid=created.component_uid,
+            name=created.name,
+            tags=created.tags,
+            notes=created.notes,
+            positive_atoms=calculated.positive_atoms,
+            negative_atoms=calculated.negative_atoms,
+        )
+    )
+
+    manual_variant = updated.latest_manual_variant
+    assert manual_variant is not None
+    assert manual_variant == calculated
+    assert manual_variant.candidate_type == "calculated"
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_candidates"
+        ).fetchone() == (1,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_manual_variants"
         ).fetchone() == (1,)
 
 
@@ -629,7 +680,7 @@ def test_catalog_candidate_failure_rolls_back_metadata(
     restored = service.get_component(created.component_uid)
     assert restored.name == created.name
     assert restored.tags == created.tags
-    assert restored.pending_candidate is None
+    assert restored.latest_manual_variant is None
 
 
 def test_catalog_materializes_only_weight_changes_for_calculated_candidates(

@@ -22,7 +22,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -596,6 +596,17 @@ _REQUIRED_OBJECTS_V15 = {
     "prompt_component_candidates": "table",
     "prompt_component_promotions": "table",
 }
+_REQUIRED_OBJECTS_V16 = {
+    **_REQUIRED_OBJECTS_V15,
+    "prompt_component_manual_variants": "table",
+}
+_REQUIRED_PROMPT_MANUAL_VARIANT_COLUMNS_V16 = {
+    "id",
+    "manual_variant_uid",
+    "component_id",
+    "candidate_id",
+    "created_at",
+}
 _REQUIRED_PROMPT_CANDIDATE_COLUMNS_V15 = {
     "id",
     "candidate_uid",
@@ -750,10 +761,11 @@ class CanonicalSchemaManager:
             12,
             13,
             14,
+            15,
         }:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1 through 14, or "
+                f"{current_version}; expected 1 through 15, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -783,8 +795,10 @@ class CanonicalSchemaManager:
             self._validate_version_twelve()
         elif current_version == 13:
             self._validate_version_thirteen()
-        else:
+        elif current_version == 14:
             self._validate_version_fourteen()
+        else:
+            self._validate_version_fifteen()
 
         legacy_generator_state = self._read_legacy_generator_state(
             legacy_generator_state_path
@@ -830,7 +844,9 @@ class CanonicalSchemaManager:
                     )
                 if current_version <= 13:
                     self._upgrade_v13_to_v14(connection)
-                self._upgrade_v14_to_v15(connection)
+                if current_version <= 14:
+                    self._upgrade_v14_to_v15(connection)
+                self._upgrade_v15_to_v16(connection)
                 connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
@@ -964,6 +980,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v14_to_v15(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v15_to_v16(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -991,6 +1010,7 @@ class CanonicalSchemaManager:
                 12,
                 13,
                 14,
+                15,
             }:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
@@ -1232,6 +1252,23 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_fifteen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 15:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 15 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V15)
+            self._validate_metadata_version(connection, 15)
+            self._validate_prompt_catalog_v5(connection)
+            self._validate_prompt_catalog_v7(connection)
+            self._validate_generator_state_v13(connection)
+            self._validate_prompt_variants_v15(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -1240,7 +1277,7 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V15)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V16)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
@@ -1254,6 +1291,7 @@ class CanonicalSchemaManager:
         self._validate_generator_state_v13(connection)
         self._validate_lora_catalog_v14(connection)
         self._validate_prompt_variants_v15(connection)
+        self._validate_manual_variants_v16(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -2533,6 +2571,47 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 15")
 
     @staticmethod
+    def _upgrade_v15_to_v16(connection: sqlite3.Connection) -> None:
+        """Retain append-only manual catalog variant selections."""
+        connection.execute(
+            """
+            CREATE TABLE prompt_component_manual_variants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                manual_variant_uid TEXT NOT NULL UNIQUE,
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                candidate_id INTEGER NOT NULL
+                    REFERENCES prompt_component_candidates(id),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_prompt_component_manual_variants_latest "
+            "ON prompt_component_manual_variants(component_id, id DESC)"
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_component_manual_variants(
+                manual_variant_uid, component_id, candidate_id, created_at
+            )
+            SELECT
+                'prompt-manual-variant-v16-' || candidate.id,
+                candidate.component_id,
+                candidate.id,
+                candidate.created_at
+            FROM prompt_component_candidates AS candidate
+            WHERE candidate.candidate_type = 'manual'
+            ORDER BY candidate.id
+            """
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '16' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 16")
+
+    @staticmethod
     def _backfill_exact_generation_prompt_groups(
         connection: sqlite3.Connection,
     ) -> None:
@@ -3627,6 +3706,43 @@ class CanonicalSchemaManager:
             )
 
     @classmethod
+    def _validate_manual_variants_v16(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        columns = cls._table_column_rows(
+            connection, "prompt_component_manual_variants"
+        )
+        missing = sorted(
+            _REQUIRED_PROMPT_MANUAL_VARIANT_COLUMNS_V16 - columns.keys()
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Manual prompt variants are missing required columns: "
+                + ", ".join(missing)
+            )
+        indexes = cls._unique_index_columns(
+            connection, "prompt_component_manual_variants"
+        )
+        if ("manual_variant_uid",) not in indexes:
+            raise CanonicalSchemaValidationError(
+                "Manual prompt variants are missing canonical identity"
+            )
+        mismatched = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_manual_variants AS manual_variant
+            JOIN prompt_component_candidates AS candidate
+              ON candidate.id = manual_variant.candidate_id
+            WHERE candidate.component_id != manual_variant.component_id
+            """
+        ).fetchone()[0]
+        if int(mismatched):
+            raise CanonicalSchemaValidationError(
+                "Manual prompt variants contain cross-component references"
+            )
+
+    @classmethod
     def _validate_generator_state_v13(
         cls,
         connection: sqlite3.Connection,
@@ -3704,6 +3820,10 @@ class CanonicalSchemaManager:
                 self._validate_version_twelve()
             elif version == 13:
                 self._validate_version_thirteen()
+            elif version == 14:
+                self._validate_version_fourteen()
+            elif version == 15:
+                self._validate_version_fifteen()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):

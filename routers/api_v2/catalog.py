@@ -351,7 +351,7 @@ def archive_catalog_component(
 def component_response(component: PromptComponent) -> dict[str, object]:
     """Map one canonical prompt component to its V2 response."""
     current = component.standard_revision
-    candidate = component.pending_candidate
+    candidate = component.latest_manual_variant
     return {
         "component_uid": component.component_uid,
         "kind": component.kind,
@@ -365,11 +365,10 @@ def component_response(component: PromptComponent) -> dict[str, object]:
         "latest_revision": component_revision_response(
             component.latest_revision
         ),
-        "pending_candidate": (
+        "latest_manual_variant": (
             {
                 "candidate_uid": candidate.candidate_uid,
                 "source_revision_uid": candidate.source_revision_uid,
-                "candidate_type": candidate.candidate_type,
                 "content_hash": candidate.content_hash,
                 "positive_atoms": atom_response(candidate.positive_atoms),
                 "negative_atoms": atom_response(candidate.negative_atoms),

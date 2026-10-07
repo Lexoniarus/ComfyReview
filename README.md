@@ -217,7 +217,7 @@ Validate or explicitly upgrade the canonical database:
 ```bash
 python -m comfyreview canonical-db validate
 python -m comfyreview canonical-db upgrade \
-  --output data/comfyreview-v14.sqlite3 \
+  --output data/comfyreview-v16.sqlite3 \
   --backup-dir data/backups/canonical \
   --generator-state data/ui_state/playground_generator_last.json
 python -m comfyreview canonical-db rebuild-image-geometry
@@ -492,17 +492,20 @@ The Playground Generator is designed to carry values back into ComfyUI in a repr
 shared seed, grouped editable prompt atoms and separate prompt/sampler image
 evidence. Each fixed prompt group keeps its concrete source revision and may
 also keep a concrete candidate. Its variant control independently offers the
-promoted stable/provisional catalog recipe, a visible catalog test candidate,
-the calculated weight-only optimum and the next useful weight test. Calculated
-guidance is materialized only after the user selects it; applying any variant
-replaces only that group's atoms in the ordinary editable `PromptAtomEditor`.
+promoted stable/provisional catalog recipe, the most recently authored manual
+catalog variant, the stable recipe's calculated weight-only optimum and the
+stable recipe's next useful weight test. The manual variant remains available
+after generation, review or promotion. Calculated guidance is materialized
+only after the user selects it; applying any variant replaces only that
+group's atoms in the ordinary editable `PromptAtomEditor`.
 Draft and generation payloads retain the exact group, source revision,
 candidate and rendered atom usages.
 
-`POST /api/v2/playground/prompt-guidance` returns the current catalog recipe,
-best observed recipe, calculated optimum, discovery test, support, uncertainty,
-example images and coverage for one loaded component. Explicitly selected
-calculated recipes are deduplicated by
+`POST /api/v2/playground/prompt-guidance` binds to an expected current catalog
+revision and returns its recipe, best observed recipe, calculated optimum,
+discovery test, support, uncertainty, example images and coverage. The server
+rejects a stale source revision instead of calculating from manually loaded
+atoms. Explicitly selected calculated recipes are deduplicated by
 `POST /api/v2/playground/prompt-candidates`. The catalog API exposes both the
 promotion-selected `current_revision` and the numerically highest historical
 `latest_revision`.

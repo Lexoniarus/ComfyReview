@@ -538,10 +538,12 @@ independent results for every loaded prompt component:
 1. the stable observed variant is the revision selected by the newest promotion
    event. Revision 1 starts as a provisional standard and remains selectable
    before enough evidence exists;
-2. the calculated optimized variant is a derived, weight-only estimate for the
-   currently loaded ordered atom list and may not yet have been observed as one
-   exact recipe;
-3. the next useful test is a bounded discovery candidate selected by uncertainty
+2. the latest manual catalog variant is the most recently authored prompt or
+   weight change, independent of whether it has been generated or promoted;
+3. the calculated optimized variant is a derived, weight-only estimate for the
+   promotion-selected stable atom list and may not yet have been observed as
+   one exact recipe;
+4. the next useful test is a bounded discovery candidate selected by uncertainty
    as well as expected result and differs from both the current and optimized
    recipes.
 
@@ -566,7 +568,7 @@ current standard is provisional or no longer sufficiently supported. Evidence
 is component-global rather than checkpoint-, character- or scene-specific.
 
 Calculated guidance never changes text, membership, role or order. For each
-loaded atom it considers supported observed weights and `0.05` intermediate
+stable atom it considers supported observed weights and `0.05` intermediate
 values inside the supported minimum/maximum range, never extrapolation. An
 observed weight anchor requires three independent images and interpolation
 requires two supported anchors; otherwise the current weight is retained.
@@ -586,8 +588,14 @@ partition is provable; ambiguous records remain unknown and are excluded from
 component guidance. Derived summaries remain rebuildable and whole-image
 ratings remain contextual evidence, not causal proof for one atom.
 
-`POST /api/v2/playground/prompt-guidance` is the route translation boundary for
-the read service. `POST /api/v2/playground/prompt-candidates` materializes a
+Schema v16 adds append-only manual-variant selection facts. Candidate recipes
+remain content-deduplicated, while the separate selection history preserves
+the latest manual A→B→A choice even when that recipe was first calculated,
+has already been generated or is now also the promoted stable revision.
+
+`POST /api/v2/playground/prompt-guidance` accepts the component and expected
+stable revision; the read service loads the stable atoms and rejects stale
+revision bindings. `POST /api/v2/playground/prompt-candidates` materializes a
 calculated or manually accepted result only on explicit selection. The browser
 stores the concrete candidate identity alongside the source revision and loads
 only that component's atoms into the normal editor. Review, Delete and Arena

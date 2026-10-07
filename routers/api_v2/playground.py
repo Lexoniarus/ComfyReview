@@ -21,6 +21,7 @@ from comfyreview.application import (
     PlaygroundEvidenceQuery,
     PromptCatalogValidationError,
     PromptDraftOverrides,
+    PromptGuidanceRevisionConflict,
     PromptSelectionCommand,
     PromptSelectionError,
     PromptVariantRecommendation,
@@ -145,18 +146,20 @@ class PlaygroundRenderGuidanceRequest(BaseModel):
 
 
 class PlaygroundPromptGuidanceRequest(BaseModel):
-    """Evaluate one component and the currently loaded ordered atom list."""
+    """Evaluate one component's expected current stable revision."""
 
     component_uid: str
-    positive_atoms: list[PromptAtomRequest]
-    negative_atoms: list[PromptAtomRequest]
+    source_revision_uid: str
 
 
-class PlaygroundPromptCandidateRequest(PlaygroundPromptGuidanceRequest):
+class PlaygroundPromptCandidateRequest(BaseModel):
     """Explicitly materialize one selected prompt recipe."""
 
+    component_uid: str
     source_revision_uid: str
     candidate_type: Literal["manual", "calculated", "next_test"]
+    positive_atoms: list[PromptAtomRequest]
+    negative_atoms: list[PromptAtomRequest]
 
 
 class PlaygroundGeneratorSettingsPayload(BaseModel):
@@ -330,9 +333,10 @@ def playground_prompt_guidance(
         container = get_application_container(request)
         guidance = container.prompt_variant_guidance.build(
             payload.component_uid,
-            positive_atoms=atom_usages(payload.positive_atoms),
-            negative_atoms=atom_usages(payload.negative_atoms),
+            expected_revision_uid=payload.source_revision_uid,
         )
+    except PromptGuidanceRevisionConflict as error:
+        return error_response(409, "stale_prompt_revision", str(error))
     except (KeyError, ValueError) as error:
         return error_response(400, "invalid_prompt_guidance", str(error))
     return JSONResponse(

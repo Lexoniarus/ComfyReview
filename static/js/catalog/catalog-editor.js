@@ -108,13 +108,15 @@ export class CatalogEditor {
       (component?.tags || []).join(", "),
     );
     const notes = areaField("Notizen", component?.notes || "", false);
+    const stableRevision =
+      component?.current_revision || component?.latest_revision;
     const positive = new PromptAtomEditor(
       "Positive Atome",
-      component?.latest_revision?.positive_atoms || [],
+      stableRevision?.positive_atoms || [],
     );
     const negative = new PromptAtomEditor(
       "Negative Atome",
-      component?.latest_revision?.negative_atoms || [],
+      stableRevision?.negative_atoms || [],
     );
     this.atomEditors = [positive, negative];
     fields.append(
@@ -126,7 +128,7 @@ export class CatalogEditor {
       positive.element,
       negative.element,
     );
-    const snapshots = revisionSnapshots(component?.latest_revision);
+    const snapshots = revisionSnapshots(stableRevision);
     const actions = document.createElement("div");
     actions.className = "catalog-actions";
     const save = document.createElement("button");

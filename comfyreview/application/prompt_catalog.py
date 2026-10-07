@@ -41,7 +41,7 @@ class PromptCompositionMembership:
 
 @dataclass(frozen=True, slots=True)
 class PromptComponent:
-    """Represent catalog metadata, history, standard, and pending content."""
+    """Represent catalog metadata, history, standard, and manual content."""
 
     component_uid: str
     kind: str
@@ -53,7 +53,7 @@ class PromptComponent:
     latest_revision: PromptRevision
     content_level: ContentLevel = ContentLevel.STANDARD
     current_revision: PromptRevision | None = None
-    pending_candidate: PromptComponentCandidate | None = None
+    latest_manual_variant: PromptComponentCandidate | None = None
 
     @property
     def standard_revision(self) -> PromptRevision:

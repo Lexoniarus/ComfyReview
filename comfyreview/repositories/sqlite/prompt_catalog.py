@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from pathlib import Path
@@ -353,11 +354,16 @@ class SqlitePromptCatalogRepository:
                     "Prompt component has no current promotion baseline"
                 )
             if str(current["content_hash"]) != revision.content_hash:
-                self._insert_candidate(
+                candidate_id = self._insert_candidate(
                     connection,
                     component_id=component_id,
                     source_revision_id=int(current["id"]),
                     revision=revision,
+                )
+                self._record_manual_variant(
+                    connection,
+                    component_id=component_id,
+                    candidate_id=candidate_id,
                 )
             component = self._get_component(connection, metadata.component_uid)
             connection.commit()
@@ -763,17 +769,10 @@ class SqlitePromptCatalogRepository:
         candidate_row = connection.execute(
             _SELECT_CANDIDATE
             + """
+            JOIN prompt_component_manual_variants AS manual_variant
+              ON manual_variant.candidate_id = candidate.id
             WHERE component.component_uid = ?
-              AND candidate.content_hash != (
-                  SELECT current_revision.content_hash
-                  FROM prompt_component_promotions AS current_promotion
-                  JOIN prompt_revisions AS current_revision
-                    ON current_revision.id = current_promotion.revision_id
-                  WHERE current_promotion.component_id = component.id
-                  ORDER BY current_promotion.id DESC
-                  LIMIT 1
-              )
-            ORDER BY candidate.id DESC
+            ORDER BY manual_variant.id DESC
             LIMIT 1
             """,
             (component.component_uid,),
@@ -791,11 +790,61 @@ class SqlitePromptCatalogRepository:
             current_revision=SqlitePromptCatalogRepository._revision(
                 current_row
             ),
-            pending_candidate=(
+            latest_manual_variant=(
                 SqlitePromptCatalogRepository._candidate(candidate_row)
                 if candidate_row is not None
                 else None
             ),
+        )
+
+    @staticmethod
+    def _record_manual_variant(
+        connection: sqlite3.Connection,
+        *,
+        component_id: int,
+        candidate_id: int,
+    ) -> None:
+        latest = connection.execute(
+            """
+            SELECT manual_variant.manual_variant_uid,
+                   manual_variant.candidate_id
+            FROM prompt_component_manual_variants AS manual_variant
+            WHERE manual_variant.component_id = ?
+            ORDER BY manual_variant.id DESC
+            LIMIT 1
+            """,
+            (component_id,),
+        ).fetchone()
+        if latest is not None and int(latest["candidate_id"]) == candidate_id:
+            return
+        identities = connection.execute(
+            """
+            SELECT component.component_uid, candidate.candidate_uid
+            FROM prompt_components AS component
+            JOIN prompt_component_candidates AS candidate
+              ON candidate.component_id = component.id
+            WHERE component.id = ? AND candidate.id = ?
+            """,
+            (component_id, candidate_id),
+        ).fetchone()
+        if identities is None:
+            raise RuntimeError("Manual variant candidate is not canonical")
+        previous_uid = (
+            str(latest["manual_variant_uid"]) if latest is not None else ""
+        )
+        digest = hashlib.sha256(
+            (
+                f"{identities['component_uid']}\0"
+                f"{identities['candidate_uid']}\0{previous_uid}"
+            ).encode()
+        ).hexdigest()
+        connection.execute(
+            """
+            INSERT INTO prompt_component_manual_variants(
+                manual_variant_uid, component_id, candidate_id
+            ) VALUES (?, ?, ?)
+            """,
+            (f"prompt-manual-variant-{digest}", component_id, candidate_id),
         )
 
     @staticmethod

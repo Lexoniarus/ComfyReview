@@ -309,12 +309,12 @@ def test_version_twelve_upgrade_imports_validated_generator_state_to_copy(
     )
 
     assert report.upgraded_from == 12
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert source.read_bytes() == original
     with sqlite3.connect(source) as connection:
         assert connection.execute("PRAGMA user_version").fetchone() == (12,)
     with sqlite3.connect(output) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         assert connection.execute(
             "SELECT checkpoint, cfg_step_milli FROM playground_generator_state"
         ).fetchone() == ("model.safetensors", 250)
@@ -528,13 +528,13 @@ def test_version_two_upgrade_preserves_output_identity_and_reviews(
 
     report = CanonicalSchemaManager(database_path).upgrade(backup_root)
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 2
     assert report.backup_path is not None
     assert report.backup_path.is_file()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         live = connection.execute(
             """
@@ -634,10 +634,10 @@ def test_version_one_can_upgrade_directly_to_current_schema(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 1
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         row = connection.execute(
             """
             SELECT generation_uid, source, status, seed
@@ -662,7 +662,7 @@ def test_version_three_upgrade_preserves_ids_and_replaces_writable_state(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 3
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -701,7 +701,7 @@ def test_version_four_upgrade_adds_revisioned_prompt_catalog(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 4
     with sqlite3.connect(database_path) as connection:
         objects = dict(
@@ -749,10 +749,10 @@ def test_version_five_upgrade_adds_output_provenance(
         tmp_path / "backups"
     )
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 5
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         image_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(images)")
         }
@@ -793,7 +793,7 @@ def test_version_six_upgrade_normalizes_prompt_atoms_without_changing_snapshots(
 
     report = manager.upgrade(tmp_path / "backups")
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 6
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -840,11 +840,11 @@ def test_version_seven_upgrade_adds_settings_and_normalizes_generation_loras(
 
     report = manager.upgrade(tmp_path / "backups")
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 7
     assert report.backup_path is not None
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute(
             "SELECT density, motion, analytics_page_size, "
@@ -880,7 +880,7 @@ def test_version_seven_upgrade_reports_and_skips_incomplete_lora_provenance(
     report = manager.upgrade(tmp_path / "backups")
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         assert connection.execute(
             "SELECT COUNT(*) FROM generation_loras"
         ).fetchone() == (0,)
@@ -936,10 +936,10 @@ def test_version_eight_upgrade_adds_content_levels_and_image_dimensions(
 
     report = manager.upgrade(tmp_path / "backups")
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 8
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         assert connection.execute(
             "SELECT level, position FROM workspace_content_levels"
         ).fetchall() == [("standard", 0)]
@@ -1002,7 +1002,7 @@ def test_version_nine_upgrade_adds_output_and_content_classification(
     with sqlite3.connect(report.backup_path) as backup:
         assert backup.execute("PRAGMA user_version").fetchone() == (9,)
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         assert connection.execute(
             "SELECT blueprint_version, output_tier "
             "FROM generation_profiles WHERE profile_uid = 'profile-1'"
@@ -1039,12 +1039,12 @@ def test_version_ten_upgrade_adds_empty_geometry_projection(
     report = manager.upgrade(tmp_path / "backups")
 
     assert report.upgraded_from == 10
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.backup_path is not None
     with sqlite3.connect(report.backup_path) as backup:
         assert backup.execute("PRAGMA user_version").fetchone() == (10,)
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         assert connection.execute(
             "SELECT COUNT(*) FROM image_geometry_projection"
         ).fetchone() == (0,)
@@ -1054,7 +1054,7 @@ def test_version_thirteen_upgrade_moves_lora_level_to_revision_copy(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "schema-v13.sqlite3"
-    output = tmp_path / "schema-v15.sqlite3"
+    output = tmp_path / "schema-v16.sqlite3"
     _create_version_twelve_database(source)
     with sqlite3.connect(source) as connection:
         connection.execute(
@@ -1068,10 +1068,10 @@ def test_version_thirteen_upgrade_moves_lora_level_to_revision_copy(
     report = CanonicalSchemaManager(source).upgrade_to(output)
 
     assert report.upgraded_from == 13
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert source.read_bytes() == source_before
     with sqlite3.connect(output) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
+        assert connection.execute("PRAGMA user_version").fetchone() == (16,)
         assert connection.execute(
             "SELECT content_level FROM lora_revisions "
             "WHERE revision_uid = 'lora-revision-v12'"
@@ -1082,7 +1082,7 @@ def test_version_fourteen_upgrade_adds_prompt_variant_facts_and_baseline(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "schema-v14.sqlite3"
-    output = tmp_path / "schema-v15.sqlite3"
+    output = tmp_path / "schema-v16.sqlite3"
     _create_version_fourteen_database(source)
     with sqlite3.connect(source) as connection:
         component_id = connection.execute(
@@ -1153,7 +1153,7 @@ def test_version_fourteen_upgrade_adds_prompt_variant_facts_and_baseline(
 
     report = CanonicalSchemaManager(source).upgrade_to(output)
 
-    assert report.schema_version == 15
+    assert report.schema_version == 16
     assert report.upgraded_from == 14
     assert source.read_bytes() == source_before
     with sqlite3.connect(output) as connection:
@@ -1169,6 +1169,7 @@ def test_version_fourteen_upgrade_adds_prompt_variant_facts_and_baseline(
             "generation_prompt_groups",
             "generation_prompt_group_atom_usages",
             "prompt_component_promotions",
+            "prompt_component_manual_variants",
         } <= objects
         assert connection.execute(
             """
@@ -1233,6 +1234,110 @@ def test_version_fourteen_upgrade_failure_preserves_source(
     assert source.read_bytes() == source_before
     with sqlite3.connect(source) as connection:
         assert connection.execute("PRAGMA user_version").fetchone() == (14,)
+
+
+def test_version_fifteen_upgrade_backfills_only_proven_manual_variants(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "schema-v15.sqlite3"
+    CanonicalSchemaManager(source).prepare_startup()
+    with sqlite3.connect(source) as connection:
+        component_id = connection.execute(
+            "INSERT INTO prompt_components("
+            "component_uid, kind, component_key, name"
+            ") VALUES ('component-v15', 'character', 'v15', 'V15') "
+            "RETURNING id"
+        ).fetchone()[0]
+        revision_id = connection.execute(
+            "INSERT INTO prompt_revisions("
+            "revision_uid, component_id, revision_number, positive_text, "
+            "negative_text, content_hash"
+            ") VALUES ('revision-v15', ?, 1, 'base', '', 'base-hash') "
+            "RETURNING id",
+            (component_id,),
+        ).fetchone()[0]
+        atom_id = connection.execute(
+            "INSERT INTO prompt_atoms(canonical_text) VALUES ('base') "
+            "RETURNING id"
+        ).fetchone()[0]
+        connection.execute(
+            "INSERT INTO prompt_revision_atom_usages("
+            "revision_id, atom_id, scope, position, weight_milli"
+            ") VALUES (?, ?, 'pos', 0, 1000)",
+            (revision_id, atom_id),
+        )
+        connection.execute(
+            "INSERT INTO prompt_component_candidates("
+            "candidate_uid, component_id, source_revision_id, "
+            "candidate_type, content_hash"
+            ") VALUES ('manual-v15', ?, ?, 'manual', 'manual-hash')",
+            (component_id, revision_id),
+        )
+        connection.execute(
+            "INSERT INTO prompt_component_candidates("
+            "candidate_uid, component_id, source_revision_id, "
+            "candidate_type, content_hash"
+            ") VALUES ('calculated-v15', ?, ?, 'calculated', "
+            "'calculated-hash')",
+            (component_id, revision_id),
+        )
+        connection.execute("DROP TABLE prompt_component_manual_variants")
+        connection.execute(
+            "UPDATE schema_metadata SET value = '15' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 15")
+        connection.commit()
+    source_before = source.read_bytes()
+    output = tmp_path / "schema-v16.sqlite3"
+
+    report = CanonicalSchemaManager(source).upgrade_to(output)
+
+    assert report.schema_version == 16
+    assert report.upgraded_from == 15
+    assert source.read_bytes() == source_before
+    with sqlite3.connect(output) as connection:
+        assert connection.execute(
+            "SELECT candidate.candidate_uid "
+            "FROM prompt_component_manual_variants AS manual_variant "
+            "JOIN prompt_component_candidates AS candidate "
+            "ON candidate.id = manual_variant.candidate_id"
+        ).fetchall() == [("manual-v15",)]
+
+
+def test_version_fifteen_upgrade_failure_preserves_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "schema-v15.sqlite3"
+    CanonicalSchemaManager(source).prepare_startup()
+    with sqlite3.connect(source) as connection:
+        connection.execute("DROP TABLE prompt_component_manual_variants")
+        connection.execute(
+            "UPDATE schema_metadata SET value = '15' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 15")
+        connection.commit()
+    source_before = source.read_bytes()
+    original_upgrade = CanonicalSchemaManager._upgrade_v15_to_v16
+
+    def fail_after_schema_changes(connection: sqlite3.Connection) -> None:
+        original_upgrade(connection)
+        raise OSError("forced v16 migration failure")
+
+    monkeypatch.setattr(
+        CanonicalSchemaManager,
+        "_upgrade_v15_to_v16",
+        staticmethod(fail_after_schema_changes),
+    )
+
+    with pytest.raises(OSError, match="forced v16 migration failure"):
+        CanonicalSchemaManager(source).upgrade(tmp_path / "backups")
+
+    assert source.read_bytes() == source_before
+    with sqlite3.connect(source) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone() == (15,)
 
 
 def test_version_seven_upgrade_rejects_malformed_lora_provenance(
@@ -1324,12 +1429,12 @@ def test_canonical_database_cli_validates_and_upgrades(
         == 0
     )
     output = capsys.readouterr().out
-    assert '"schema_version": 15' in output
+    assert '"schema_version": 16' in output
     assert '"upgraded_from": 2' in output
 
     assert main(["canonical-db", "validate"]) == 2
     assert (
-        CanonicalSchemaManager(output_database).validate().schema_version == 15
+        CanonicalSchemaManager(output_database).validate().schema_version == 16
     )
     with sqlite3.connect(database_path) as connection:
         assert connection.execute("PRAGMA user_version").fetchone() == (2,)

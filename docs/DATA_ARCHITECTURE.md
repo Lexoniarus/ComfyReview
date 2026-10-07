@@ -177,16 +177,17 @@ that complete recipe, including its weights, then appends a promotion event.
 Earlier revisions remain bound to their historical images. Display name, tags
 and notes remain mutable metadata and continue to take effect immediately.
 
-The product model distinguishes four results:
+The product model distinguishes the four Generator choices plus one analytical
+comparison:
 
 - the current stable or provisional catalog variant selected by promotion;
-- the best observed variant: the strongest exact recipe in the recorded data,
-  which may not yet be stable enough to become the catalog standard;
-- a calculated optimized variant: a derived candidate assembled from the
-  available atom-weight evidence and allowed to be unobserved as an exact
-  combination;
-- the next useful test: a candidate selected to reduce uncertainty rather than
-  merely maximize the estimated score.
+- the latest manual catalog variant, regardless of generation or promotion;
+- a calculated optimized variant: a weight-only candidate derived from the
+  stable recipe and allowed to be unobserved as an exact combination;
+- the next useful test: a stable-recipe weight candidate selected to reduce
+  uncertainty rather than merely maximize the estimated score;
+- the best observed variant remains visible analytical context but is not a
+  separate Generator choice.
 
 The Generator offers `Stable`, `Catalog test`, `Calculated` and `Next test`
 independently for Character, Outfit, Scene, Modifier and every other prompt
@@ -207,8 +208,8 @@ lower-bound advantage unless the current standard is provisional or no longer
 sufficiently supported. Evidence is global to the component rather than split
 by checkpoint or surrounding prompt groups.
 
-Calculated guidance may change only the weights of the supplied ordered atom
-list. Each atom uses observed supported weights plus `0.05` intermediate values
+Calculated guidance may change only the weights of the promotion-selected
+stable ordered atom list. Each atom uses observed supported weights plus `0.05` intermediate values
 within supported bounds; extrapolation, atom substitution, insertion, removal
 and reordering are forbidden. An anchor needs three independent images and
 interpolation needs two supported anchors. Effects are shrunk against the
@@ -242,6 +243,14 @@ The v15 runtime tables are canonical facts rather than a score cache:
 - `prompt_component_promotions` is append-only and makes the newest event's
   revision the current catalog standard while preserving the prior revision,
   evidence frontier, policy version, reason and measurements.
+
+Schema v16 adds `prompt_component_manual_variants` as an append-only authored
+selection history. It points at deduplicated candidate recipes but is a
+separate fact: the latest manual variant remains queryable after generation,
+review or promotion, may equal the current stable revision, and is never
+replaced by a calculated or discovery candidate. The v15-to-v16 backfill
+records only candidates explicitly stored as `manual`; missing historical
+intent is not inferred.
 
 The read repository derives observed variants and atom-weight evidence from
 these facts. Guidance candidates are not persisted until explicitly selected,

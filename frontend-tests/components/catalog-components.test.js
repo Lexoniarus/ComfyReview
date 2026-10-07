@@ -69,11 +69,15 @@ describe("Catalog browser components", () => {
       }),
     );
 
-    editor.render(components[1], [revision(1), revision(2)]);
+    editor.render({ ...components[1], current_revision: revision(1) }, [
+      revision(1),
+      revision(2),
+    ]);
     expect(root.querySelectorAll(".catalog-revision")).toHaveLength(2);
     expect(
       root.querySelector(".catalog-rendered-snapshots").textContent,
-    ).toContain("positive 2");
+    ).toContain("positive 1");
+    expect(root.querySelector("[data-atom-text]").value).toBe("positive 1");
     expect(root.querySelector("select").disabled).toBe(true);
     root.querySelector(".archive-button").click();
     expect(onArchive).toHaveBeenCalledWith(false);

@@ -292,6 +292,7 @@ from comfyreview.application.prompt_catalog import (
 )
 from comfyreview.application.prompt_variant_guidance import (
     PromptCurrentStandard,
+    PromptGuidanceRevisionConflict,
     PromptVariantCoverage,
     PromptVariantEvidenceRepository,
     PromptVariantGuidance,
@@ -654,6 +655,7 @@ __all__ = [
     "PromptSetupHandoff",
     "PromptCompositionEvidence",
     "PromptCurrentStandard",
+    "PromptGuidanceRevisionConflict",
     "PromptVariantCoverage",
     "PromptVariantEvidenceRepository",
     "PromptVariantGuidance",

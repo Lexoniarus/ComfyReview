@@ -45,6 +45,7 @@ from comfyreview.application import (
     PlaygroundSubmissionFailure,
     PromptComponent,
     PromptComponentCandidate,
+    PromptGuidanceRevisionConflict,
     PromptRenderer,
     PromptRevision,
     PromptSelection,
@@ -64,6 +65,7 @@ from comfyreview.application import (
     WorkflowProvenance,
 )
 from comfyreview.domain import (
+    PromptAtomUsage,
     prompt_atom_usages_from_text,
     render_prompt_atom_usages,
 )
@@ -399,13 +401,15 @@ class _PromptCatalog:
 
 class _PromptVariantGuidance:
     def __init__(self) -> None:
-        self.request: tuple[object, object, object] | None = None
+        self.request: tuple[object, object] | None = None
 
-    def build(self, component_uid, *, positive_atoms, negative_atoms):
-        self.request = (component_uid, positive_atoms, negative_atoms)
+    def build(self, component_uid, *, expected_revision_uid):
+        self.request = (component_uid, expected_revision_uid)
+        if expected_revision_uid == "revision-stale":
+            raise PromptGuidanceRevisionConflict("prompt standard changed")
         recipe = SimpleNamespace(
-            positive_atoms=positive_atoms,
-            negative_atoms=negative_atoms,
+            positive_atoms=(PromptAtomUsage("positive character-a", 1100),),
+            negative_atoms=(),
         )
         score = SimpleNamespace(
             lower_bound=0.6,
@@ -1393,8 +1397,7 @@ def test_v2_playground_prompt_guidance_and_candidate_materialization() -> None:
         "/api/v2/playground/prompt-guidance",
         json={
             "component_uid": "character-a",
-            "positive_atoms": atoms,
-            "negative_atoms": [],
+            "source_revision_uid": "revision-character-a",
         },
     )
     candidate = client.post(
@@ -1407,8 +1410,11 @@ def test_v2_playground_prompt_guidance_and_candidate_materialization() -> None:
             "negative_atoms": [],
         },
     )
-
     assert guidance.status_code == 200
+    assert container.prompt_variant_guidance.request == (
+        "character-a",
+        "revision-character-a",
+    )
     assert guidance.json()["optimized"]["positive_atoms"] == atoms
     assert guidance.json()["optimized"]["score"] == {
         "lower_bound": 0.6,
@@ -1421,6 +1427,15 @@ def test_v2_playground_prompt_guidance_and_candidate_materialization() -> None:
         "sufficiently_observed": True,
     }
     assert candidate.status_code == 200
+    stale = client.post(
+        "/api/v2/playground/prompt-guidance",
+        json={
+            "component_uid": "character-a",
+            "source_revision_uid": "revision-stale",
+        },
+    )
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "stale_prompt_revision"
     assert candidate.json()["candidate_uid"] == "candidate-a"
     assert (
         container.prompt_catalog_service.candidate_command.candidate_type
