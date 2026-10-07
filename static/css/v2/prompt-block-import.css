@@ -1,0 +1,46 @@
+.prompt-block-import {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+}
+
+.prompt-block-import[hidden] {
+  display: none;
+}
+
+.prompt-block-import-field {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  font-weight: 650;
+}
+
+.prompt-block-import-field small {
+  font-weight: 450;
+}
+
+.prompt-block-import-field textarea {
+  min-height: 8rem;
+  resize: vertical;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.prompt-block-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.prompt-block-import-status {
+  min-height: 1.25rem;
+  margin: 0;
+  color: var(--status-failed);
+  font-size: var(--font-size-caption);
+}

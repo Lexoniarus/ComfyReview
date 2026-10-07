@@ -32,15 +32,27 @@ export class PromptAtomEditor {
         signal: this.abortController.signal,
       },
     );
+    const bulkImport = document.createElement("button");
+    bulkImport.type = "button";
+    bulkImport.textContent = "Prompt-Block einfügen";
+    bulkImport.addEventListener(
+      "click",
+      () => {
+        actions.open = false;
+        this.#toggleImportPanel(true);
+      },
+      { signal: this.abortController.signal },
+    );
     const reset = document.createElement("button");
     reset.type = "button";
     reset.textContent = "Revision zurücksetzen";
     reset.addEventListener("click", () => this.reset(), {
       signal: this.abortController.signal,
     });
-    actions.append(summary, add, reset);
+    actions.append(summary, add, bulkImport, reset);
     headingRow.append(heading, actions);
-    this.element.append(headingRow, this.list);
+    this.importPanel = this.#buildImportPanel();
+    this.element.append(headingRow, this.importPanel, this.list);
     this.list.addEventListener("dragover", (event) => this.#dragOver(event), {
       signal: this.abortController.signal,
     });
@@ -86,6 +98,77 @@ export class PromptAtomEditor {
   /** Release all owned listeners. */
   dispose() {
     this.abortController.abort();
+  }
+
+  #buildImportPanel() {
+    const panel = document.createElement("section");
+    panel.className = "prompt-block-import";
+    panel.hidden = true;
+
+    const label = document.createElement("label");
+    label.className = "prompt-block-import-field";
+    const title = document.createElement("span");
+    title.textContent = "Prompt-Block";
+    const hint = document.createElement("small");
+    hint.textContent =
+      "Komplette ComfyUI-Prompts einfügen, z. B. (masterpiece:1.3), (best quality:1.3), solo.";
+    const input = document.createElement("textarea");
+    input.rows = 6;
+    input.dataset.promptBlockInput = "";
+    input.placeholder = "(masterpiece:1.3), (best quality:1.3), ...";
+    label.append(title, hint, input);
+
+    const status = document.createElement("p");
+    status.className = "prompt-block-import-status";
+    status.dataset.promptBlockStatus = "";
+    status.setAttribute("aria-live", "polite");
+
+    const actions = document.createElement("div");
+    actions.className = "prompt-block-import-actions";
+    const replace = importButton("Ersetzen", "primary-button");
+    const append = importButton("Anhängen", "secondary-button");
+    const cancel = importButton("Abbrechen", "secondary-button");
+    replace.addEventListener("click", () => this.#applyPromptBlock("replace"), {
+      signal: this.abortController.signal,
+    });
+    append.addEventListener("click", () => this.#applyPromptBlock("append"), {
+      signal: this.abortController.signal,
+    });
+    cancel.addEventListener(
+      "click",
+      () => {
+        status.textContent = "";
+        this.#toggleImportPanel(false);
+      },
+      { signal: this.abortController.signal },
+    );
+    actions.append(replace, append, cancel);
+    panel.append(label, status, actions);
+
+    this.importInput = input;
+    this.importStatus = status;
+    return panel;
+  }
+
+  /** @param {boolean} open */
+  #toggleImportPanel(open) {
+    this.importPanel.hidden = !open;
+    if (open) this.importInput.focus();
+  }
+
+  /** @param {"replace" | "append"} mode */
+  #applyPromptBlock(mode) {
+    const usages = parsePromptBlock(this.importInput.value);
+    if (!usages.length) {
+      this.importStatus.textContent = "Keine gültigen Prompt-Atome erkannt.";
+      return;
+    }
+    if (mode === "replace") this.list.replaceChildren();
+    for (const usage of usages) this.#append(usage);
+    this.importInput.value = "";
+    this.importStatus.textContent = "";
+    this.#toggleImportPanel(false);
+    this.onChange();
   }
 
   /** @param {Record<string, any>} usage */
@@ -220,6 +303,55 @@ export class PromptAtomEditor {
     });
     this.list.insertBefore(dragging, next || null);
   }
+}
+
+/** Parse a rendered ComfyUI prompt into ordered atom usages. @param {unknown} value */
+export function parsePromptBlock(value) {
+  return splitPromptBlock(String(value || ""))
+    .map((part) => parsePromptAtom(part))
+    .filter((usage) => usage !== null);
+}
+
+/** @param {string} value */
+function splitPromptBlock(value) {
+  const parts = [];
+  let start = 0;
+  let depth = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === "(") depth += 1;
+    else if (character === ")") depth = Math.max(0, depth - 1);
+    const separator = character === "," || character === "\n";
+    if (separator && depth === 0) {
+      parts.push(value.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(value.slice(start));
+  return parts.map((part) => part.trim()).filter(Boolean);
+}
+
+/** @param {string} value */
+function parsePromptAtom(value) {
+  let token = value.trim();
+  if (token.startsWith("(") && token.endsWith(")")) {
+    token = token.slice(1, -1).trim();
+  }
+  if (!token) return null;
+  const weighted = token.match(/^(.*):\s*(\d+(?:\.\d+)?)$/);
+  if (!weighted) return { text: token, weight: 1 };
+  const text = weighted[1].trim();
+  if (!text) return null;
+  return { text, weight: Math.max(0.01, Number(weighted[2])) };
+}
+
+/** @param {string} label @param {string} className */
+function importButton(label, className) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.textContent = label;
+  return button;
 }
 
 /** @param {Element} row */
