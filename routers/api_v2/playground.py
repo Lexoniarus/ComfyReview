@@ -13,6 +13,7 @@ from comfyreview.application import (
     AspectFormat,
     ContentClassificationError,
     GenerationLoraSelection,
+    GeneratorStateValidationError,
     ImageContextNotFoundError,
     ManualPromptSelection,
     PlaygroundEvidenceQuery,
@@ -38,6 +39,8 @@ router = APIRouter()
 
 class PlaygroundSelectionIntent(BaseModel):
     """Describe one explicit fixed, random or disabled prompt role."""
+
+    model_config = ConfigDict(extra="forbid")
 
     kind: PromptKind
     mode: Literal["fixed", "random", "off"]
@@ -73,6 +76,17 @@ class PlaygroundDraftLora(BaseModel):
 
     lora_uid: str
     revision_uid: str | None = None
+    model_strength: float = 1.0
+    clip_strength: float = 1.0
+
+
+class PlaygroundGeneratorStateLora(BaseModel):
+    """Persist one stable LoRA revision with exact UI strengths."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lora_uid: str
+    revision_uid: str
     model_strength: float = 1.0
     clip_strength: float = 1.0
 
@@ -123,7 +137,7 @@ class PlaygroundGeneratorSettingsPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     selections: list[PlaygroundSelectionIntent] = Field(default_factory=list)
-    loras: list[PlaygroundDraftLora] = Field(default_factory=list)
+    loras: list[PlaygroundGeneratorStateLora] = Field(default_factory=list)
     checkpoint: str
     sampler: str
     scheduler: str
@@ -156,10 +170,13 @@ def save_playground_generator_state(
 ) -> JSONResponse:
     """Persist the complete generator state after an explicit UI change."""
     settings = payload.model_dump(mode="json")
-    get_application_container(request).playground_generator_settings.save(
-        settings
-    )
-    return JSONResponse(settings)
+    try:
+        saved = get_application_container(
+            request
+        ).playground_generator_settings.save(settings)
+    except GeneratorStateValidationError as error:
+        return error_response(400, "invalid_generator_state", str(error))
+    return JSONResponse(saved)
 
 
 @router.get("/playground/capabilities")

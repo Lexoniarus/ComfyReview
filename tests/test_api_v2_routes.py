@@ -840,8 +840,9 @@ class _PlaygroundGeneratorSettings:
     def load(self):
         return dict(self.settings)
 
-    def save(self, settings) -> None:
+    def save(self, settings):
         self.settings = dict(settings)
+        return dict(self.settings)
 
 
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:

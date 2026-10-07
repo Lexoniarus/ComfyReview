@@ -7,6 +7,7 @@ export { promptKinds } from "./prompt-kind-contract.js";
 /** @typedef {{mode?: string, componentUid?: string | null, revisionUid?: string | null}} PromptSelectionPatch */
 /** @typedef {{kind: string, mode: "fixed" | "random" | "off", component_uid: string | null, revision_uid: string | null}} PromptSelectionValue */
 /** @typedef {{selections: PromptSelectionValue[], loras: Array<Record<string, any>>}} PromptModeEditorValue */
+/** @typedef {{lora_uid: string, revision_uid: string, model_strength: number, clip_strength: number}} GeneratorStateLora */
 
 /** Own fixed, random and disabled prompt-role controls plus catalog evidence. */
 export class PromptModeEditor {
@@ -100,6 +101,20 @@ export class PromptModeEditor {
         };
       }),
       loras: this.loras?.value() || [],
+    };
+  }
+
+  /** @returns {{selections: PromptSelectionValue[], loras: GeneratorStateLora[]}} Return the strict durable-state projection. */
+  stateValue() {
+    const value = this.value();
+    return {
+      selections: value.selections,
+      loras: value.loras.map((item) => ({
+        lora_uid: String(item.lora_uid || ""),
+        revision_uid: String(item.revision_uid || ""),
+        model_strength: Number(item.model_strength),
+        clip_strength: Number(item.clip_strength),
+      })),
     };
   }
 

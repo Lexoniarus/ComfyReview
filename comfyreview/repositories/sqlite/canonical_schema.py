@@ -11,14 +11,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from comfyreview.application import CanonicalSchemaReport
+from comfyreview.application import (
+    CanonicalSchemaReport,
+    GeneratorStateSnapshot,
+    GeneratorStateValidationError,
+)
 from comfyreview.domain import (
     PromptAtomUsage,
     prompt_atom_usages_from_text,
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -574,6 +578,46 @@ _REQUIRED_LORA_REVISION_ATOM_COLUMNS_V12 = {
     "position",
     "weight_milli",
 }
+_REQUIRED_OBJECTS_V13 = {
+    **_REQUIRED_OBJECTS_V12,
+    "playground_generator_state": "table",
+    "playground_generator_prompt_selections": "table",
+    "playground_generator_loras": "table",
+}
+_REQUIRED_GENERATOR_STATE_COLUMNS_V13 = {
+    "singleton_id",
+    "checkpoint",
+    "sampler",
+    "scheduler",
+    "seed_mode",
+    "seed",
+    "steps_min",
+    "steps_max",
+    "cfg_min_milli",
+    "cfg_max_milli",
+    "cfg_step_milli",
+    "denoise_milli",
+    "batch_runs",
+    "aspect_format",
+    "resolution_class",
+    "updated_at",
+}
+_REQUIRED_GENERATOR_SELECTION_COLUMNS_V13 = {
+    "singleton_id",
+    "position",
+    "kind",
+    "mode",
+    "component_id",
+    "revision_id",
+}
+_REQUIRED_GENERATOR_LORA_COLUMNS_V13 = {
+    "singleton_id",
+    "position",
+    "lora_definition_id",
+    "lora_revision_id",
+    "model_strength_milli",
+    "clip_strength_milli",
+}
 
 
 class CanonicalSchemaValidationError(RuntimeError):
@@ -609,6 +653,7 @@ class CanonicalSchemaManager:
     def upgrade(
         self,
         backup_directory: Path | None = None,
+        legacy_generator_state_path: Path | None = None,
     ) -> CanonicalSchemaReport:
         """Back up and explicitly upgrade a supported older schema."""
         if not self._database_path.exists():
@@ -622,10 +667,10 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}:
+        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1 through 11, or "
+                f"{current_version}; expected 1 through 12, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -649,8 +694,14 @@ class CanonicalSchemaManager:
             self._validate_version_nine()
         elif current_version == 10:
             self._validate_version_ten()
-        else:
+        elif current_version == 11:
             self._validate_version_eleven()
+        else:
+            self._validate_version_twelve()
+
+        legacy_generator_state = self._read_legacy_generator_state(
+            legacy_generator_state_path
+        )
 
         backup_path = self._create_backup(backup_directory)
         source_path = self._database_path
@@ -684,7 +735,9 @@ class CanonicalSchemaManager:
                     self._upgrade_v9_to_v10(connection)
                 if current_version <= 10:
                     self._upgrade_v10_to_v11(connection)
-                self._upgrade_v11_to_v12(connection)
+                if current_version <= 11:
+                    self._upgrade_v11_to_v12(connection)
+                self._upgrade_v12_to_v13(connection, legacy_generator_state)
                 connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
@@ -721,6 +774,7 @@ class CanonicalSchemaManager:
         self,
         output_path: Path,
         backup_directory: Path | None = None,
+        legacy_generator_state_path: Path | None = None,
     ) -> CanonicalSchemaReport:
         """Upgrade into a new validated database while preserving the source."""
         if not self._database_path.exists():
@@ -740,7 +794,10 @@ class CanonicalSchemaManager:
         source_hash = self._file_hash(self._database_path)
         shutil.copy2(self._database_path, target)
         try:
-            report = CanonicalSchemaManager(target).upgrade(backup_directory)
+            report = CanonicalSchemaManager(target).upgrade(
+                backup_directory,
+                legacy_generator_state_path,
+            )
             CanonicalSchemaManager(target).validate()
             if self._file_hash(self._database_path) != source_hash:
                 raise CanonicalSchemaValidationError(
@@ -805,6 +862,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v11_to_v12(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v12_to_v13(connection, None)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -817,7 +877,7 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}:
+            if version in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -1013,6 +1073,20 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_twelve(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 12:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 12 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V12)
+            self._validate_metadata_version(connection, 12)
+            self._validate_lora_catalog_v12(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -1021,7 +1095,7 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V12)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V13)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
@@ -1032,6 +1106,7 @@ class CanonicalSchemaManager:
         self._validate_workspace_settings_v10(connection)
         self._validate_image_geometry_v11(connection)
         self._validate_lora_catalog_v12(connection)
+        self._validate_generator_state_v13(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -1976,6 +2051,220 @@ class CanonicalSchemaManager:
         )
         connection.execute("PRAGMA user_version = 12")
 
+    @classmethod
+    def _upgrade_v12_to_v13(
+        cls,
+        connection: sqlite3.Connection,
+        legacy_state: GeneratorStateSnapshot | None,
+    ) -> None:
+        """Add normalized Generator state and optionally import legacy JSON."""
+        connection.execute(
+            """
+            CREATE TABLE playground_generator_state (
+                singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                checkpoint TEXT NOT NULL,
+                sampler TEXT NOT NULL,
+                scheduler TEXT NOT NULL,
+                seed_mode TEXT NOT NULL
+                    CHECK (seed_mode IN ('fixed', 'random')),
+                seed INTEGER NOT NULL,
+                steps_min INTEGER NOT NULL CHECK (steps_min > 0),
+                steps_max INTEGER NOT NULL CHECK (steps_max > 0),
+                cfg_min_milli INTEGER NOT NULL CHECK (cfg_min_milli > 0),
+                cfg_max_milli INTEGER NOT NULL CHECK (cfg_max_milli > 0),
+                cfg_step_milli INTEGER NOT NULL CHECK (cfg_step_milli > 0),
+                denoise_milli INTEGER NOT NULL
+                    CHECK (denoise_milli BETWEEN 0 AND 1000),
+                batch_runs INTEGER NOT NULL CHECK (batch_runs > 0),
+                aspect_format TEXT NOT NULL CHECK (aspect_format IN (
+                    '2:3', '3:2', '16:9', '9:16', '1:1'
+                )),
+                resolution_class TEXT NOT NULL CHECK (resolution_class IN (
+                    '720', '1080', '2160'
+                )),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                CHECK (steps_min <= steps_max),
+                CHECK (cfg_min_milli <= cfg_max_milli)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE playground_generator_prompt_selections (
+                singleton_id INTEGER NOT NULL
+                    REFERENCES playground_generator_state(singleton_id)
+                    ON DELETE CASCADE,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                kind TEXT NOT NULL CHECK (kind IN (
+                    'character', 'scene', 'outfit', 'pose', 'expression',
+                    'lighting', 'modifier'
+                )),
+                mode TEXT NOT NULL CHECK (mode IN ('fixed', 'random', 'off')),
+                component_id INTEGER REFERENCES prompt_components(id),
+                revision_id INTEGER REFERENCES prompt_revisions(id),
+                PRIMARY KEY (singleton_id, position),
+                UNIQUE (singleton_id, kind),
+                CHECK (
+                    (mode = 'fixed' AND component_id IS NOT NULL
+                        AND revision_id IS NOT NULL)
+                    OR (mode != 'fixed' AND component_id IS NULL
+                        AND revision_id IS NULL)
+                )
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE playground_generator_loras (
+                singleton_id INTEGER NOT NULL
+                    REFERENCES playground_generator_state(singleton_id)
+                    ON DELETE CASCADE,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                lora_definition_id INTEGER NOT NULL
+                    REFERENCES lora_definitions(id),
+                lora_revision_id INTEGER NOT NULL
+                    REFERENCES lora_revisions(id),
+                model_strength_milli INTEGER NOT NULL,
+                clip_strength_milli INTEGER NOT NULL,
+                PRIMARY KEY (singleton_id, position),
+                UNIQUE (singleton_id, lora_definition_id, lora_revision_id)
+            )
+            """
+        )
+        if legacy_state is not None:
+            cls._insert_generator_state(connection, legacy_state)
+        connection.execute(
+            "UPDATE schema_metadata SET value = '13' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 13")
+
+    @staticmethod
+    def _insert_generator_state(
+        connection: sqlite3.Connection,
+        state: GeneratorStateSnapshot,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO playground_generator_state(
+                singleton_id, checkpoint, sampler, scheduler, seed_mode, seed,
+                steps_min, steps_max, cfg_min_milli, cfg_max_milli,
+                cfg_step_milli, denoise_milli, batch_runs,
+                aspect_format, resolution_class
+            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                state.checkpoint,
+                state.sampler,
+                state.scheduler,
+                state.seed_mode,
+                state.seed,
+                state.steps_min,
+                state.steps_max,
+                state.cfg_min_milli,
+                state.cfg_max_milli,
+                state.cfg_step_milli,
+                state.denoise_milli,
+                state.batch_runs,
+                state.aspect_format,
+                state.resolution_class,
+            ),
+        )
+        for position, selection in enumerate(state.selections):
+            component_id = None
+            revision_id = None
+            if selection.mode == "fixed":
+                row = connection.execute(
+                    """
+                    SELECT component.id, revision.id
+                    FROM prompt_components AS component
+                    JOIN prompt_revisions AS revision
+                      ON revision.component_id = component.id
+                    WHERE component.component_uid = ?
+                      AND revision.revision_uid = ?
+                    """,
+                    (selection.component_uid, selection.revision_uid),
+                ).fetchone()
+                if row is None:
+                    raise CanonicalSchemaValidationError(
+                        "Legacy Generator state references unknown prompt "
+                        f"revision: {selection.revision_uid}"
+                    )
+                component_id, revision_id = int(row[0]), int(row[1])
+            connection.execute(
+                """
+                INSERT INTO playground_generator_prompt_selections(
+                    singleton_id, position, kind, mode,
+                    component_id, revision_id
+                ) VALUES (1, ?, ?, ?, ?, ?)
+                """,
+                (
+                    position,
+                    selection.kind,
+                    selection.mode,
+                    component_id,
+                    revision_id,
+                ),
+            )
+        for position, lora in enumerate(state.loras):
+            row = connection.execute(
+                """
+                SELECT definition.id, revision.id
+                FROM lora_definitions AS definition
+                JOIN lora_revisions AS revision
+                  ON revision.lora_definition_id = definition.id
+                WHERE definition.lora_uid = ? AND revision.revision_uid = ?
+                """,
+                (lora.lora_uid, lora.revision_uid),
+            ).fetchone()
+            if row is None:
+                raise CanonicalSchemaValidationError(
+                    "Legacy Generator state references unknown LoRA revision: "
+                    f"{lora.revision_uid}"
+                )
+            connection.execute(
+                """
+                INSERT INTO playground_generator_loras(
+                    singleton_id, position, lora_definition_id,
+                    lora_revision_id, model_strength_milli,
+                    clip_strength_milli
+                ) VALUES (1, ?, ?, ?, ?, ?)
+                """,
+                (
+                    position,
+                    int(row[0]),
+                    int(row[1]),
+                    lora.model_strength_milli,
+                    lora.clip_strength_milli,
+                ),
+            )
+
+    @staticmethod
+    def _read_legacy_generator_state(
+        source_path: Path | None,
+    ) -> GeneratorStateSnapshot | None:
+        if source_path is None:
+            return None
+        path = Path(source_path).resolve()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise CanonicalSchemaValidationError(
+                f"Legacy Generator state cannot be read: {path}"
+            ) from error
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("generator_v2"), dict
+        ):
+            raise CanonicalSchemaValidationError(
+                "Legacy Generator state is missing generator_v2"
+            )
+        try:
+            return GeneratorStateSnapshot.from_mapping(payload["generator_v2"])
+        except GeneratorStateValidationError as error:
+            raise CanonicalSchemaValidationError(
+                f"Legacy Generator state is invalid: {error}"
+            ) from error
+
     @staticmethod
     def _legacy_lora_selections(
         payload: str,
@@ -2627,6 +2916,56 @@ class CanonicalSchemaManager:
                 "Every LoRA definition requires an immutable revision"
             )
 
+    @classmethod
+    def _validate_generator_state_v13(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        state_columns = cls._table_column_rows(
+            connection, "playground_generator_state"
+        )
+        selection_columns = cls._table_column_rows(
+            connection, "playground_generator_prompt_selections"
+        )
+        lora_columns = cls._table_column_rows(
+            connection, "playground_generator_loras"
+        )
+        missing = sorted(
+            (_REQUIRED_GENERATOR_STATE_COLUMNS_V13 - state_columns.keys())
+            | (
+                _REQUIRED_GENERATOR_SELECTION_COLUMNS_V13
+                - selection_columns.keys()
+            )
+            | (_REQUIRED_GENERATOR_LORA_COLUMNS_V13 - lora_columns.keys())
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical Generator state is missing columns: "
+                + ", ".join(missing)
+            )
+        mismatched_prompt_revisions = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM playground_generator_prompt_selections AS selection
+            JOIN prompt_revisions AS revision
+              ON revision.id = selection.revision_id
+            WHERE revision.component_id != selection.component_id
+            """
+        ).fetchone()[0]
+        mismatched_lora_revisions = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM playground_generator_loras AS selection
+            JOIN lora_revisions AS revision
+              ON revision.id = selection.lora_revision_id
+            WHERE revision.lora_definition_id != selection.lora_definition_id
+            """
+        ).fetchone()[0]
+        if int(mismatched_prompt_revisions) or int(mismatched_lora_revisions):
+            raise CanonicalSchemaValidationError(
+                "Generator state contains mismatched catalog revisions"
+            )
+
     def _is_valid_version(self, version: int) -> bool:
         try:
             if version == 1:
@@ -2651,6 +2990,8 @@ class CanonicalSchemaManager:
                 self._validate_version_ten()
             elif version == 11:
                 self._validate_version_eleven()
+            elif version == 12:
+                self._validate_version_twelve()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):

@@ -107,6 +107,14 @@ describe("Playground browser components", () => {
         revision_uid: "lora-revision-1",
       }),
     ]);
+    expect(editor.stateValue().loras).toEqual([
+      {
+        lora_uid: "lora-style",
+        revision_uid: "lora-revision-1",
+        model_strength: 0.7,
+        clip_strength: 0.5,
+      },
+    ]);
     Array.from(root.querySelectorAll(".prompt-lora-layer button"))
       .find((button) => button.textContent === "Entfernen")
       .click();
@@ -133,6 +141,7 @@ describe("Playground browser components", () => {
         ]),
       }),
     );
+    expect(editor.stateValue().loras).toEqual([]);
     rows[1].querySelectorAll("select")[1].dispatchEvent(new Event("change"));
     editor.dispose();
 

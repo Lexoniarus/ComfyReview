@@ -150,6 +150,16 @@ from comfyreview.application.generation_reconciliation import (
     GenerationOutputRecovery,
     GenerationReconciliationService,
 )
+from comfyreview.application.generator_state import (
+    GeneratorLoraState,
+    GeneratorStateRepository,
+    GeneratorStateService,
+    GeneratorStateSnapshot,
+    GeneratorStateValidationError,
+)
+from comfyreview.application.generator_state import (
+    GeneratorPromptSelection as GeneratorStatePromptSelection,
+)
 from comfyreview.application.image_generator_handoff import (
     GeneratorPromptSelection,
     ImageGenerationFacts,
@@ -481,6 +491,12 @@ __all__ = [
     "GenerationSubmission",
     "GenerationSummary",
     "GenerationValidationError",
+    "GeneratorLoraState",
+    "GeneratorStatePromptSelection",
+    "GeneratorStateRepository",
+    "GeneratorStateService",
+    "GeneratorStateSnapshot",
+    "GeneratorStateValidationError",
     "CompiledOutputBinding",
     "CompiledSamplerStage",
     "CompiledWorkflow",

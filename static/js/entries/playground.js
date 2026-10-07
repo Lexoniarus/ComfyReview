@@ -75,7 +75,7 @@ if (root instanceof HTMLElement) {
     const persistence = new GeneratorStatePersistence({
       api,
       snapshot: () => ({
-        ...modes.value(),
+        ...modes.stateValue(),
         ...controls.stateValue(),
       }),
       onError: (error) => {

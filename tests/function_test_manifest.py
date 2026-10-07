@@ -1,6 +1,22 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.generator_state:GeneratorStateSnapshot.from_mapping": (
+        "tests/test_generator_state.py::"
+        "test_generator_state_snapshot_validates_complete_fixed_references"
+    ),
+    "comfyreview.application.generator_state:GeneratorStateSnapshot.to_mapping": (
+        "tests/test_generator_state.py::"
+        "test_generator_state_round_trips_normalized_catalog_references"
+    ),
+    "comfyreview.application.generator_state:GeneratorStateService.load": (
+        "tests/test_generator_state.py::"
+        "test_generator_state_round_trips_normalized_catalog_references"
+    ),
+    "comfyreview.application.generator_state:GeneratorStateService.save": (
+        "tests/test_generator_state.py::"
+        "test_generator_state_rejects_unstable_ids_and_rolls_back"
+    ),
     "comfyreview.application.lora_effects:LoraGraphEffectPolicy.effects": (
         "tests/test_content_classification.py::"
         "test_lora_graph_effect_policy_ignores_disconnected_and_zero_branches"

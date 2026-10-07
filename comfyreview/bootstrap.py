@@ -29,6 +29,7 @@ from comfyreview.application import (
     GenerationQueryService,
     GenerationReconciliationService,
     GenerationService,
+    GeneratorStateService,
     ImageContentLevelService,
     ImageContextQueryService,
     ImageGeneratorHandoffService,
@@ -77,7 +78,6 @@ from comfyreview.providers import (
 from comfyreview.repositories.filesystem import (
     JsonComfyUiCapabilityCache,
     JsonWorkflowBlueprintRepository,
-    PlaygroundGeneratorStateRepository,
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
@@ -91,6 +91,7 @@ from comfyreview.repositories.sqlite import (
     SqliteGenerationOutputRepository,
     SqliteGenerationQueryRepository,
     SqliteGenerationRepository,
+    SqliteGeneratorStateRepository,
     SqliteImageContentLevelRepository,
     SqliteImageContextRepository,
     SqliteImageFileRepository,
@@ -121,10 +122,6 @@ from routers.top_router import router as top_router
 from services.analytics_page_service import AnalyticsPageService
 from services.output_file_service import OutputFileService
 from services.playground_discovery_service import PlaygroundDiscoveryService
-from services.playground_generator_ui.ports import PlaygroundGeneratorState
-from services.playground_generator_ui.settings_state import (
-    PlaygroundGeneratorSettingsService,
-)
 from services.playground_label_service import PromptLabelService
 from services.playground_render_guidance_service import (
     PlaygroundRenderGuidanceService,
@@ -152,8 +149,7 @@ class ApplicationContainer:
     render_guidance: RenderGuidanceService
     playground_render_guidance: PlaygroundRenderGuidanceService
     playground_discovery: PlaygroundDiscoveryService
-    playground_ui_state: PlaygroundGeneratorState
-    playground_generator_settings: PlaygroundGeneratorSettingsService
+    playground_generator_settings: GeneratorStateService
     generation_service: GenerationService
     generation_worker: GenerationLifecycleWorker
     generation_queries: GenerationQueryService
@@ -310,18 +306,6 @@ def build_application_container(
         comfyui_provider,
         capability_cache,
     )
-    playground_ui_state = PlaygroundGeneratorStateRepository(
-        head_path=(
-            configured.data_directory
-            / "ui_state"
-            / "playground_generator_last.json"
-        ),
-        preview_path=(
-            configured.data_directory
-            / "ui_state"
-            / "playground_generator_preview.json"
-        ),
-    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -369,9 +353,8 @@ def build_application_container(
             guidance=render_guidance,
             discovery=playground_discovery,
         ),
-        playground_ui_state=playground_ui_state,
-        playground_generator_settings=PlaygroundGeneratorSettingsService(
-            playground_ui_state
+        playground_generator_settings=GeneratorStateService(
+            SqliteGeneratorStateRepository(configured.canonical_database_path)
         ),
         generation_service=generation_service,
         generation_worker=generation_worker,

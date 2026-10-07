@@ -1495,6 +1495,7 @@ function createFixture(options = {}) {
       selectionSnapshots.add(activeSelectionValue);
       return activeSelectionValue;
     }),
+    stateValue: vi.fn(() => ({ selections: [], loras: [] })),
   });
   const controls = disposable({
     render: vi.fn(),

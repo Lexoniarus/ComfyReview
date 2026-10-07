@@ -382,6 +382,44 @@ def test_image_handoff_rejects_incomplete_canonical_lora_identity() -> None:
         ).get("image-1")
 
 
+def test_image_handoff_rejects_duplicate_canonical_lora_positions() -> None:
+    stage = GenerationStageSummary(
+        "base_sampler", "sampler", 0, 42, 24, 6.5, "euler", "normal", 0.8
+    )
+    first = ImageLoraSnapshot(
+        "lora-1",
+        "revision-1",
+        "first.safetensors",
+        0,
+        800,
+        600,
+        "standard",
+        True,
+        True,
+    )
+    second = ImageLoraSnapshot(
+        "lora-2",
+        "revision-2",
+        "second.safetensors",
+        0,
+        700,
+        500,
+        "standard",
+        True,
+        True,
+    )
+
+    with pytest.raises(
+        ImageGeneratorHandoffValidationError,
+        match="duplicate canonical LoRA position: 0",
+    ):
+        ImageGeneratorHandoffService(
+            images=cast(Any, _Images(_image_context())),
+            repository=_Facts(ImageGenerationFacts((stage,), (first, second))),
+            capabilities=_Capabilities(),
+        ).get("image-1")
+
+
 def _image_context() -> ImageContext:
     return ImageContext(
         image_uid="image-1",

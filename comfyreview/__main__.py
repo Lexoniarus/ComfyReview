@@ -93,6 +93,7 @@ def _parser() -> argparse.ArgumentParser:
     canonical_upgrade = canonical_actions.add_parser("upgrade")
     canonical_upgrade.add_argument("--backup-dir", type=Path)
     canonical_upgrade.add_argument("--output", type=Path, required=True)
+    canonical_upgrade.add_argument("--generator-state", type=Path)
     canonical_actions.add_parser("rebuild-image-geometry")
 
     legacy_output = commands.add_parser("legacy-output")
@@ -235,7 +236,11 @@ def _run_canonical(options: argparse.Namespace) -> int:
     if options.action == "validate":
         report = manager.validate()
     elif options.action == "upgrade":
-        report = manager.upgrade_to(options.output, options.backup_dir)
+        report = manager.upgrade_to(
+            options.output,
+            options.backup_dir,
+            options.generator_state,
+        )
     else:
         manager.validate()
         result = ImageGeometryProjectionService(
