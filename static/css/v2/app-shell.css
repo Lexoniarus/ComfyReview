@@ -223,16 +223,39 @@ input:focus-visible {
   font-size: var(--font-size-control);
 }
 
+.prompt-atom-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .prompt-atom-list {
   display: grid;
   gap: var(--space-2);
 }
 
 .prompt-atom-row {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(10rem, 1fr) 6rem repeat(6, auto);
+  grid-template-columns: minmax(10rem, 1fr) 5.5rem 2.5rem 2.5rem;
   gap: var(--space-1);
   align-items: center;
+}
+
+.prompt-atom-row input {
+  min-width: 0;
+}
+
+.prompt-atom-row [data-atom-text] {
+  border-color: transparent;
+  background: transparent;
+}
+
+.prompt-atom-row [data-atom-text]:hover,
+.prompt-atom-row [data-atom-text]:focus-visible {
+  border-color: var(--color-border);
+  background: var(--color-surface);
 }
 
 .prompt-atom-row.is-dragging {
@@ -250,7 +273,7 @@ input:focus-visible {
 }
 
 .prompt-atom-row button,
-.prompt-atom-editor > button {
+.prompt-atom-actions button {
   min-height: 2.25rem;
   padding: 0.4rem 0.6rem;
   border: 0.0625rem solid var(--color-border);
@@ -259,12 +282,61 @@ input:focus-visible {
   cursor: pointer;
 }
 
+.prompt-atom-actions,
+.prompt-atom-row-actions {
+  position: relative;
+}
+
+.prompt-atom-actions summary,
+.prompt-atom-row-actions summary {
+  min-height: 2.25rem;
+  padding: 0.4rem 0.6rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  cursor: pointer;
+  list-style: none;
+}
+
+.prompt-atom-actions summary::-webkit-details-marker,
+.prompt-atom-row-actions summary::-webkit-details-marker {
+  display: none;
+}
+
+.prompt-atom-actions[open],
+.prompt-atom-row-actions[open] {
+  z-index: 4;
+}
+
+.prompt-atom-actions[open] > button,
+.prompt-atom-row-actions[open] > button {
+  position: relative;
+  display: block;
+  width: max-content;
+  margin-top: var(--space-1);
+  margin-left: auto;
+}
+
+.prompt-atom-actions[open]::after,
+.prompt-atom-row-actions[open]::after {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: -1;
+  width: max-content;
+  min-width: 100%;
+  height: calc(100% - 2.25rem);
+  padding: var(--space-1);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  content: "";
+}
+
 @media (width <= 42rem) {
   .prompt-atom-row {
-    grid-template-columns: minmax(0, 1fr) 5.5rem;
-  }
-
-  .prompt-atom-row button {
-    grid-column: span 1;
+    grid-template-columns: minmax(0, 1fr) 5rem 2.5rem 2.5rem;
   }
 }

@@ -11,8 +11,14 @@ export class PromptAtomEditor {
     this.list = document.createElement("div");
     this.list.className = "prompt-atom-list";
     this.pointerDrag = null;
+    const headingRow = document.createElement("div");
+    headingRow.className = "prompt-atom-editor-heading";
     const heading = document.createElement("h3");
     heading.textContent = label;
+    const actions = document.createElement("details");
+    actions.className = "prompt-atom-actions";
+    const summary = document.createElement("summary");
+    summary.textContent = "Aktionen";
     const add = document.createElement("button");
     add.type = "button";
     add.textContent = "Atom hinzufügen";
@@ -32,7 +38,9 @@ export class PromptAtomEditor {
     reset.addEventListener("click", () => this.reset(), {
       signal: this.abortController.signal,
     });
-    this.element.append(heading, this.list, add, reset);
+    actions.append(summary, add, reset);
+    headingRow.append(heading, actions);
+    this.element.append(headingRow, this.list);
     this.list.addEventListener("dragover", (event) => this.#dragOver(event), {
       signal: this.abortController.signal,
     });
@@ -120,6 +128,12 @@ export class PromptAtomEditor {
     handle.setAttribute("aria-label", "Atom verschieben");
     handle.textContent = "↕";
     row.append(handle);
+    const actions = document.createElement("details");
+    actions.className = "prompt-atom-row-actions";
+    const summary = document.createElement("summary");
+    summary.setAttribute("aria-label", "Weitere Atom-Aktionen");
+    summary.textContent = "•••";
+    actions.append(summary);
     for (const [label, action] of [
       ["−0,01", "decrease"],
       ["+0,01", "increase"],
@@ -133,8 +147,9 @@ export class PromptAtomEditor {
       button.addEventListener("click", () => this.#move(row, action), {
         signal: this.abortController.signal,
       });
-      row.append(button);
+      actions.append(button);
     }
+    row.append(actions);
     this.list.append(row);
   }
 

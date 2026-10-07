@@ -53,7 +53,7 @@ describe("Catalog browser components", () => {
     const createInputs = root.querySelectorAll("input");
     createInputs[0].value = "Neue Szene";
     createInputs[1].value = "rain, night";
-    root.querySelector(".prompt-atom-editor > button").click();
+    button(root, "Atom hinzufügen").click();
     const positiveText = root.querySelectorAll("[data-atom-text]")[0];
     positiveText.value = "rainy street";
     root
@@ -105,7 +105,7 @@ describe("Catalog browser components", () => {
     inputs[2].value = "style, anime";
     inputs[3].value = "0.8";
     inputs[4].value = "0.65";
-    root.querySelector(".prompt-atom-editor > button").click();
+    button(root, "Atom hinzufügen").click();
     root.querySelector("[data-atom-text]").value = "anime trigger";
     root
       .querySelector("form")
@@ -198,4 +198,10 @@ function revision(number) {
     positive_atoms: [{ text: `positive ${number}`, weight: 1 }],
     negative_atoms: [],
   };
+}
+
+function button(root, label) {
+  return [...root.querySelectorAll("button")].find(
+    (candidate) => candidate.textContent === label,
+  );
 }

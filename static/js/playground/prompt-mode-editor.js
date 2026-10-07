@@ -1,4 +1,5 @@
 import { LoraStackEditor } from "../settings/lora-stack-editor.js";
+import { PromptComponentComposer } from "./prompt-component-composer.js";
 import { promptKinds } from "./prompt-kind-contract.js";
 
 export { promptKinds } from "./prompt-kind-contract.js";
@@ -6,7 +7,7 @@ export { promptKinds } from "./prompt-kind-contract.js";
 /** @typedef {Readonly<{kind: string, mode: "fixed" | "random" | "off", componentUid: string | null, revisionUid: string | null, candidateUid: string | null}>} PromptSelectionState */
 /** @typedef {{mode?: string, componentUid?: string | null, revisionUid?: string | null, candidateUid?: string | null}} PromptSelectionPatch */
 /** @typedef {{kind: string, mode: "fixed" | "random" | "off", component_uid: string | null, revision_uid: string | null, candidate_uid?: string | null}} PromptSelectionValue */
-/** @typedef {{selections: PromptSelectionValue[], loras: Array<Record<string, any>>}} PromptModeEditorValue */
+/** @typedef {{selections: PromptSelectionValue[], loras: Array<Record<string, any>>, component_overrides: Array<Record<string, any>>}} PromptModeEditorValue */
 /** @typedef {{lora_uid: string, revision_uid: string, model_strength: number, clip_strength: number}} GeneratorStateLora */
 
 /** Own fixed, random and disabled prompt-role controls plus catalog evidence. */
@@ -27,8 +28,12 @@ export class PromptModeEditor {
     this.loadGuidance = evidence.loadGuidance || null;
     this.materializeCandidate = evidence.materializeCandidate || null;
     this.onImageSelect = evidence.onImageSelect || (() => {});
-    /** @type {Map<string, {mode: HTMLSelectElement, component: HTMLSelectElement, variant: HTMLSelectElement, evidence: HTMLElement}>} */
+    /** @type {Map<string, {mode: HTMLSelectElement, component: HTMLSelectElement, variant: HTMLSelectElement, evidence: HTMLElement, composer: HTMLElement}>} */
     this.rows = new Map();
+    /** @type {Map<string, PromptComponentComposer>} */
+    this.composers = new Map();
+    /** @type {Map<string, Record<string, any>>} */
+    this.candidateByUid = new Map();
     /** @type {Map<string, any>} */
     this.cache = new Map();
     /** @type {Map<string, AbortController>} */
@@ -42,6 +47,7 @@ export class PromptModeEditor {
   /** @param {Array<Record<string, any>>} components @param {Array<Record<string, any>>} [loraDefinitions] */
   render(components, loraDefinitions = []) {
     this.#cancelRequests();
+    this.#disposeComposers();
     this.root.replaceChildren();
     this.rows.clear();
     this.#selectionState.clear();
@@ -116,6 +122,9 @@ export class PromptModeEditor {
         };
       }),
       loras: this.loras?.value() || [],
+      component_overrides: [...this.composers.values()]
+        .filter((composer) => composer.isDirty())
+        .map((composer) => composer.value()),
     };
   }
 
@@ -223,6 +232,7 @@ export class PromptModeEditor {
       row.variant.disabled = busy || row.mode.value !== "fixed";
     }
     this.loras?.setBusy(busy);
+    for (const composer of this.composers.values()) composer.setBusy(busy);
   }
 
   dispose() {
@@ -230,6 +240,7 @@ export class PromptModeEditor {
     this.#cancelRequests();
     this.loras?.dispose();
     this.loras = null;
+    this.#disposeComposers();
     this.rows.clear();
     this.#selectionState.clear();
     this.#stableRevisionByComponent.clear();
@@ -269,6 +280,7 @@ export class PromptModeEditor {
     variant.disabled = mode.value !== "fixed";
     const evidence = document.createElement("div");
     evidence.className = "prompt-reference";
+    const composer = document.createElement("div");
     mode.addEventListener(
       "change",
       () => {
@@ -292,8 +304,11 @@ export class PromptModeEditor {
       () => void this.#chooseVariant(kind, variant.value),
       { signal: this.abortController.signal },
     );
-    element.append(title, mode, component, variant, evidence);
-    return { element, controls: { mode, component, variant, evidence } };
+    element.append(title, mode, component, variant, evidence, composer);
+    return {
+      element,
+      controls: { mode, component, variant, evidence, composer },
+    };
   }
 
   /**
@@ -344,12 +359,18 @@ export class PromptModeEditor {
       ? this.#componentByUid.get(componentUid)?.latest_manual_variant
       : null;
     const manualCandidateUid = manualVariant?.candidate_uid || null;
+    const selectedCandidate = candidateUid
+      ? this.candidateByUid.get(candidateUid)
+      : null;
     const manualOption = [...row.variant.options].find(
       (item) => item.value === "catalog_candidate",
     );
-    if (manualOption) manualOption.disabled = !manualCandidateUid;
+    if (manualOption)
+      manualOption.disabled =
+        !manualCandidateUid && selectedCandidate?.candidate_type !== "manual";
     row.variant.value = candidateUid
-      ? candidateUid === manualCandidateUid
+      ? candidateUid === manualCandidateUid ||
+        selectedCandidate?.candidate_type === "manual"
         ? "catalog_candidate"
         : "calculated"
       : "stable";
@@ -363,6 +384,7 @@ export class PromptModeEditor {
         candidateUid,
       }),
     );
+    this.#syncComposer(kind);
     if (options.refresh !== false) void this.#refresh(kind);
     if (options.notify) this.onChange();
   }
@@ -471,6 +493,7 @@ export class PromptModeEditor {
         },
         controller.signal,
       );
+      this.candidateByUid.set(String(candidate.candidate_uid || ""), candidate);
       this.#transition(
         kind,
         {
@@ -558,6 +581,74 @@ export class PromptModeEditor {
   #cancelRequests() {
     for (const request of this.requests.values()) request.abort();
     this.requests.clear();
+  }
+
+  /** @param {string} kind */
+  #syncComposer(kind) {
+    const row = this.rows.get(kind);
+    const selection = this.#selectionState.get(kind);
+    this.composers.get(kind)?.dispose();
+    this.composers.delete(kind);
+    row?.composer.replaceChildren();
+    row?.composer.removeAttribute("class");
+    if (!row || !selection || selection.mode !== "fixed") return;
+    const component = selection.componentUid
+      ? this.#componentByUid.get(selection.componentUid)
+      : null;
+    const stable = component?.current_revision || component?.latest_revision;
+    if (
+      !component ||
+      !stable ||
+      !selection.componentUid ||
+      !selection.revisionUid
+    )
+      return;
+    const candidate = selection.candidateUid
+      ? this.candidateByUid.get(selection.candidateUid) ||
+        (component.latest_manual_variant?.candidate_uid ===
+        selection.candidateUid
+          ? component.latest_manual_variant
+          : null)
+      : null;
+    const materializeCandidate = this.materializeCandidate;
+    const composer = new PromptComponentComposer(row.composer, {
+      kind,
+      componentUid: selection.componentUid,
+      revisionUid: selection.revisionUid,
+      candidateUid: selection.candidateUid,
+      positiveAtoms: candidate?.positive_atoms || stable.positive_atoms || [],
+      negativeAtoms: candidate?.negative_atoms || stable.negative_atoms || [],
+      onChange: () => this.onChange(),
+      onReset: () =>
+        this.#transition(
+          kind,
+          {
+            revisionUid: String(stable.revision_uid || ""),
+            candidateUid: null,
+          },
+          { notify: true },
+        ),
+      onSave: materializeCandidate
+        ? (payload, signal) => materializeCandidate(payload, signal)
+        : undefined,
+      onSaved: (saved) => {
+        const candidateUid = String(saved.candidate_uid || "");
+        if (!candidateUid) return;
+        this.candidateByUid.set(candidateUid, saved);
+        this.#transition(
+          kind,
+          { candidateUid },
+          { notify: true, refresh: false },
+        );
+      },
+    });
+    composer.setBusy(this.isBusy);
+    this.composers.set(kind, composer);
+  }
+
+  #disposeComposers() {
+    for (const composer of this.composers.values()) composer.dispose();
+    this.composers.clear();
   }
 }
 

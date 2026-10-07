@@ -26,6 +26,7 @@ static/js/layout/responsive-rails.js
 static/js/review/review-keyboard.js
 static/js/review/review-stage.js
 static/js/playground/prompt-mode-editor.js
+static/js/playground/prompt-component-composer.js
 static/js/playground/playground-intent.js
 static/js/playground/generator-handoff-action.js
 static/js/playground/generator-handoff-applier.js

@@ -204,6 +204,102 @@ describe("Playground browser components", () => {
     });
 
     editor.dispose();
+
+    const empty = new PromptModeEditor(document.createElement("div"));
+    empty.render([]);
+    expect(empty.value().component_overrides).toEqual([]);
+    empty.dispose();
+  });
+
+  it("edits fixed atoms locally, resets them and explicitly saves a catalog test", async () => {
+    const root = document.createElement("div");
+    const onChange = vi.fn();
+    const materializeCandidate = vi.fn(async (payload) => ({
+      candidate_uid: "candidate-manual",
+      candidate_type: "manual",
+      source_revision_uid: payload.source_revision_uid,
+      positive_atoms: payload.positive_atoms,
+      negative_atoms: payload.negative_atoms,
+    }));
+    const editor = new PromptModeEditor(root, onChange, {
+      materializeCandidate,
+    });
+    const character = {
+      ...component("character-a", "character", "Aiko"),
+      current_revision: {
+        revision_uid: "revision-character-a-current",
+        positive_atoms: [{ text: "silver hair", weight: 1 }],
+        negative_atoms: [{ text: "blur", weight: 1 }],
+      },
+    };
+    editor.render([character, component("scene-a", "scene", "Rooftop")]);
+    const characterRow = root.querySelector(
+      '.prompt-mode-row[data-kind="character"]',
+    );
+    const sceneRow = root.querySelector('.prompt-mode-row[data-kind="scene"]');
+
+    expect(
+      characterRow.querySelector(".prompt-component-composer"),
+    ).not.toBeNull();
+    expect(sceneRow.querySelector(".prompt-component-composer")).toBeNull();
+    const positive = characterRow.querySelector("[data-atom-text]");
+    positive.value = "cyan hair";
+    positive.dispatchEvent(new Event("input"));
+    expect(editor.value().component_overrides).toEqual([
+      {
+        kind: "character",
+        component_uid: "character-a",
+        revision_uid: "revision-character-a-current",
+        candidate_uid: null,
+        positive_atoms: [{ text: "cyan hair", weight: 1 }],
+        negative_atoms: [{ text: "blur", weight: 1 }],
+      },
+    ]);
+
+    click(characterRow, "Auf Katalogstand zurücksetzen");
+    expect(editor.value().component_overrides).toEqual([]);
+    expect(characterRow.querySelector("[data-atom-text]").value).toBe(
+      "silver hair",
+    );
+
+    characterRow.querySelector("[data-atom-text]").value = "violet hair";
+    characterRow
+      .querySelector("[data-atom-text]")
+      .dispatchEvent(new Event("input"));
+    click(characterRow, "Als Katalog-Test speichern");
+    await vi.waitFor(() =>
+      expect(editor.value().selections[0].candidate_uid).toBe(
+        "candidate-manual",
+      ),
+    );
+    expect(materializeCandidate).toHaveBeenCalledWith(
+      {
+        component_uid: "character-a",
+        source_revision_uid: "revision-character-a-current",
+        candidate_type: "manual",
+        positive_atoms: [{ text: "violet hair", weight: 1 }],
+        negative_atoms: [{ text: "blur", weight: 1 }],
+      },
+      expect.any(AbortSignal),
+    );
+    expect(editor.value().component_overrides).toEqual([]);
+    expect(onChange).toHaveBeenCalled();
+
+    const mode = characterRow.querySelector("select");
+    mode.value = "random";
+    mode.dispatchEvent(new Event("change"));
+    expect(characterRow.querySelector(".prompt-component-composer")).toBeNull();
+    editor.dispose();
+
+    const missingUidRoot = document.createElement("div");
+    const missingUid = new PromptModeEditor(missingUidRoot, () => {}, {
+      materializeCandidate: async () => ({}),
+    });
+    missingUid.render([character]);
+    click(missingUidRoot, "Als Katalog-Test speichern");
+    await settle();
+    expect(missingUid.value().selections[0].candidate_uid).toBeNull();
+    missingUid.dispose();
   });
 
   it("selects and reloads one concrete calculated candidate per group", async () => {
@@ -488,6 +584,7 @@ describe("Playground browser components", () => {
         },
       ]),
       loras: [],
+      component_overrides: [],
     });
     editor.dispose();
   });
@@ -507,7 +604,7 @@ describe("Playground browser components", () => {
     const originalGet = editor.rows.get.bind(editor.rows);
     let sceneLookups = 0;
     vi.spyOn(editor.rows, "get").mockImplementation((kind) => {
-      if (kind === "scene" && ++sceneLookups === 2) return undefined;
+      if (kind === "scene" && ++sceneLookups === 3) return undefined;
       return originalGet(kind);
     });
     mode.value = "off";
@@ -1865,6 +1962,12 @@ function promptSelection(kind, componentUid) {
 async function settle() {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function click(root, label) {
+  [...root.querySelectorAll("button")]
+    .find((candidate) => candidate.textContent === label)
+    .click();
 }
 
 function generationProfile(overrides = {}) {

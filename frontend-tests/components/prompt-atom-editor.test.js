@@ -33,7 +33,7 @@ describe("Prompt atom editor", () => {
     button(rows[1], "Entfernen").click();
     expect(editor.value()).toEqual([{ text: "silver hair", weight: 1 }]);
 
-    editor.element.querySelectorAll(":scope > button")[0].click();
+    button(editor.element, "Atom hinzufügen").click();
     const added = editor.element.querySelectorAll(".prompt-atom-row")[1];
     const addedText = added.querySelector("[data-atom-text]");
     const addedWeight = added.querySelector("[data-atom-weight]");
@@ -43,7 +43,7 @@ describe("Prompt atom editor", () => {
     addedWeight.dispatchEvent(new Event("input"));
     expect(editor.value()[1]).toEqual({ text: "soft smile", weight: 1.15 });
 
-    editor.element.querySelectorAll(":scope > button")[1].click();
+    button(editor.element, "Revision zurücksetzen").click();
     expect(editor.value()).toHaveLength(2);
     expect(onChange).toHaveBeenCalled();
     editor.dispose();
