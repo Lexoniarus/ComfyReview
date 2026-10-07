@@ -159,7 +159,7 @@ def test_content_level_recovery_is_complete_non_destructive_and_preserves_overri
     assert database.read_bytes() == source_before
     assert result.reclassified_generations == 1
     assert result.preserved_overrides == 1
-    assert CanonicalSchemaManager(output).validate().schema_version == 14
+    assert CanonicalSchemaManager(output).validate().schema_version == 15
     with sqlite3.connect(output) as connection:
         assert "content_level_sexy" in json.loads(
             connection.execute(

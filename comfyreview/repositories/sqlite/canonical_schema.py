@@ -22,7 +22,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -588,6 +588,67 @@ _REQUIRED_OBJECTS_V14 = dict(_REQUIRED_OBJECTS_V13)
 _REQUIRED_LORA_REVISION_COLUMNS_V14 = _REQUIRED_LORA_REVISION_COLUMNS_V12 | {
     "content_level"
 }
+_REQUIRED_OBJECTS_V15 = {
+    **_REQUIRED_OBJECTS_V14,
+    "generation_prompt_group_atom_usages": "table",
+    "generation_prompt_groups": "table",
+    "prompt_candidate_atom_usages": "table",
+    "prompt_component_candidates": "table",
+    "prompt_component_promotions": "table",
+}
+_REQUIRED_PROMPT_CANDIDATE_COLUMNS_V15 = {
+    "id",
+    "candidate_uid",
+    "component_id",
+    "source_revision_id",
+    "candidate_type",
+    "content_hash",
+    "created_at",
+}
+_REQUIRED_PROMPT_CANDIDATE_ATOM_COLUMNS_V15 = {
+    "candidate_id",
+    "atom_id",
+    "scope",
+    "position",
+    "weight_milli",
+}
+_REQUIRED_GENERATION_PROMPT_GROUP_COLUMNS_V15 = {
+    "id",
+    "group_uid",
+    "generation_id",
+    "component_id",
+    "source_revision_id",
+    "candidate_id",
+    "kind",
+    "position",
+    "content_hash",
+    "created_at",
+}
+_REQUIRED_GENERATION_PROMPT_GROUP_ATOM_COLUMNS_V15 = {
+    "group_id",
+    "atom_id",
+    "scope",
+    "position",
+    "weight_milli",
+}
+_REQUIRED_PROMPT_PROMOTION_COLUMNS_V15 = {
+    "id",
+    "promotion_uid",
+    "component_id",
+    "revision_id",
+    "previous_revision_id",
+    "policy_version",
+    "review_frontier",
+    "independent_image_count",
+    "review_count",
+    "deleted_count",
+    "lower_bound_score",
+    "expected_score",
+    "average_rating",
+    "reason",
+    "provisional",
+    "created_at",
+}
 _REQUIRED_GENERATOR_STATE_COLUMNS_V13 = {
     "singleton_id",
     "checkpoint",
@@ -614,6 +675,9 @@ _REQUIRED_GENERATOR_SELECTION_COLUMNS_V13 = {
     "component_id",
     "revision_id",
 }
+_REQUIRED_GENERATOR_SELECTION_COLUMNS_V15 = (
+    _REQUIRED_GENERATOR_SELECTION_COLUMNS_V13 | {"candidate_id"}
+)
 _REQUIRED_GENERATOR_LORA_COLUMNS_V13 = {
     "singleton_id",
     "position",
@@ -671,10 +735,25 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}:
+        if current_version not in {
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+        }:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1 through 13, or "
+                f"{current_version}; expected 1 through 14, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -702,8 +781,10 @@ class CanonicalSchemaManager:
             self._validate_version_eleven()
         elif current_version == 12:
             self._validate_version_twelve()
-        else:
+        elif current_version == 13:
             self._validate_version_thirteen()
+        else:
+            self._validate_version_fourteen()
 
         legacy_generator_state = self._read_legacy_generator_state(
             legacy_generator_state_path
@@ -747,7 +828,9 @@ class CanonicalSchemaManager:
                     self._upgrade_v12_to_v13(
                         connection, legacy_generator_state
                     )
-                self._upgrade_v13_to_v14(connection)
+                if current_version <= 13:
+                    self._upgrade_v13_to_v14(connection)
+                self._upgrade_v14_to_v15(connection)
                 connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
@@ -878,6 +961,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v13_to_v14(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v14_to_v15(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -890,7 +976,22 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}:
+            if version in {
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+            }:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -1115,6 +1216,22 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_fourteen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 14:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 14 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V14)
+            self._validate_metadata_version(connection, 14)
+            self._validate_lora_catalog_v12(connection)
+            self._validate_generator_state_v13(connection)
+            self._validate_lora_catalog_v14(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -1123,7 +1240,7 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V14)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V15)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
@@ -1136,6 +1253,7 @@ class CanonicalSchemaManager:
         self._validate_lora_catalog_v12(connection)
         self._validate_generator_state_v13(connection)
         self._validate_lora_catalog_v14(connection)
+        self._validate_prompt_variants_v15(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -2193,6 +2311,225 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 14")
 
     @staticmethod
+    def _upgrade_v14_to_v15(connection: sqlite3.Connection) -> None:
+        """Add exact prompt candidates, generation groups, and promotions."""
+        connection.execute(
+            """
+            CREATE TABLE prompt_component_candidates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_uid TEXT NOT NULL UNIQUE,
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                source_revision_id INTEGER NOT NULL
+                    REFERENCES prompt_revisions(id),
+                candidate_type TEXT NOT NULL CHECK (candidate_type IN (
+                    'manual', 'calculated', 'next_test'
+                )),
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (component_id, content_hash)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE prompt_candidate_atom_usages (
+                candidate_id INTEGER NOT NULL
+                    REFERENCES prompt_component_candidates(id)
+                    ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                PRIMARY KEY (candidate_id, scope, position)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_prompt_candidate_atom ON "
+            "prompt_candidate_atom_usages(atom_id, weight_milli)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE generation_prompt_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_uid TEXT NOT NULL UNIQUE,
+                generation_id INTEGER NOT NULL
+                    REFERENCES generations(id) ON DELETE CASCADE,
+                component_id INTEGER NOT NULL REFERENCES prompt_components(id),
+                source_revision_id INTEGER NOT NULL
+                    REFERENCES prompt_revisions(id),
+                candidate_id INTEGER
+                    REFERENCES prompt_component_candidates(id),
+                kind TEXT NOT NULL,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (generation_id, position)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_generation_prompt_groups_component "
+            "ON generation_prompt_groups(component_id, generation_id)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE generation_prompt_group_atom_usages (
+                group_id INTEGER NOT NULL
+                    REFERENCES generation_prompt_groups(id) ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                PRIMARY KEY (group_id, scope, position)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_generation_prompt_group_atom "
+            "ON generation_prompt_group_atom_usages(atom_id, weight_milli)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE prompt_component_promotions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                promotion_uid TEXT NOT NULL UNIQUE,
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                revision_id INTEGER NOT NULL REFERENCES prompt_revisions(id),
+                previous_revision_id INTEGER REFERENCES prompt_revisions(id),
+                policy_version TEXT NOT NULL,
+                review_frontier INTEGER NOT NULL CHECK (review_frontier >= 0),
+                independent_image_count INTEGER NOT NULL
+                    CHECK (independent_image_count >= 0),
+                review_count INTEGER NOT NULL CHECK (review_count >= 0),
+                deleted_count INTEGER NOT NULL CHECK (deleted_count >= 0),
+                lower_bound_score REAL,
+                expected_score REAL,
+                average_rating REAL,
+                reason TEXT NOT NULL CHECK (reason IN (
+                    'initial', 'migration_baseline', 'evidence'
+                )),
+                provisional INTEGER NOT NULL CHECK (provisional IN (0, 1)),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_prompt_component_promotions_current "
+            "ON prompt_component_promotions(component_id, id DESC)"
+        )
+        connection.execute(
+            """
+            CREATE TRIGGER prompt_revision_initial_promotion
+            AFTER INSERT ON prompt_revisions
+            WHEN NOT EXISTS (
+                SELECT 1
+                FROM prompt_component_promotions AS promotion
+                WHERE promotion.component_id = NEW.component_id
+            )
+            BEGIN
+                INSERT INTO prompt_component_promotions(
+                    promotion_uid,
+                    component_id,
+                    revision_id,
+                    previous_revision_id,
+                    policy_version,
+                    review_frontier,
+                    independent_image_count,
+                    review_count,
+                    deleted_count,
+                    lower_bound_score,
+                    expected_score,
+                    average_rating,
+                    reason,
+                    provisional
+                ) VALUES (
+                    'prompt-promotion-initial-' || NEW.revision_uid,
+                    NEW.component_id,
+                    NEW.id,
+                    NULL,
+                    'prompt-guidance-v1',
+                    COALESCE((
+                        SELECT value FROM review_clock WHERE singleton_id = 1
+                    ), 0),
+                    0,
+                    0,
+                    0,
+                    NULL,
+                    NULL,
+                    NULL,
+                    'initial',
+                    1
+                );
+            END
+            """
+        )
+        connection.execute(
+            "ALTER TABLE playground_generator_prompt_selections "
+            "ADD COLUMN candidate_id INTEGER "
+            "REFERENCES prompt_component_candidates(id)"
+        )
+        review_frontier = int(
+            connection.execute(
+                "SELECT value FROM review_clock WHERE singleton_id = 1"
+            ).fetchone()[0]
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_component_promotions(
+                promotion_uid,
+                component_id,
+                revision_id,
+                previous_revision_id,
+                policy_version,
+                review_frontier,
+                independent_image_count,
+                review_count,
+                deleted_count,
+                lower_bound_score,
+                expected_score,
+                average_rating,
+                reason,
+                provisional
+            )
+            SELECT
+                'prompt-promotion-v15-baseline-' || component.id || '-' ||
+                    revision.id,
+                component.id,
+                revision.id,
+                NULL,
+                'prompt-guidance-v1',
+                ?,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL,
+                'migration_baseline',
+                1
+            FROM prompt_components AS component
+            JOIN prompt_revisions AS revision
+              ON revision.component_id = component.id
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM prompt_revisions AS newer
+                WHERE newer.component_id = component.id
+                  AND newer.revision_number > revision.revision_number
+            )
+            ORDER BY component.id
+            """,
+            (review_frontier,),
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '15' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 15")
+
+    @staticmethod
     def _insert_generator_state(
         connection: sqlite3.Connection,
         state: GeneratorStateSnapshot,
@@ -2991,6 +3328,158 @@ class CanonicalSchemaManager:
         if int(invalid):
             raise CanonicalSchemaValidationError(
                 "LoRA trigger revisions contain invalid content levels"
+            )
+
+    @classmethod
+    def _validate_prompt_variants_v15(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        candidate_columns = cls._table_column_rows(
+            connection, "prompt_component_candidates"
+        )
+        candidate_atom_columns = cls._table_column_rows(
+            connection, "prompt_candidate_atom_usages"
+        )
+        group_columns = cls._table_column_rows(
+            connection, "generation_prompt_groups"
+        )
+        group_atom_columns = cls._table_column_rows(
+            connection, "generation_prompt_group_atom_usages"
+        )
+        promotion_columns = cls._table_column_rows(
+            connection, "prompt_component_promotions"
+        )
+        selection_columns = cls._table_column_rows(
+            connection, "playground_generator_prompt_selections"
+        )
+        missing = sorted(
+            (_REQUIRED_PROMPT_CANDIDATE_COLUMNS_V15 - candidate_columns.keys())
+            | (
+                _REQUIRED_PROMPT_CANDIDATE_ATOM_COLUMNS_V15
+                - candidate_atom_columns.keys()
+            )
+            | (
+                _REQUIRED_GENERATION_PROMPT_GROUP_COLUMNS_V15
+                - group_columns.keys()
+            )
+            | (
+                _REQUIRED_GENERATION_PROMPT_GROUP_ATOM_COLUMNS_V15
+                - group_atom_columns.keys()
+            )
+            | (
+                _REQUIRED_PROMPT_PROMOTION_COLUMNS_V15
+                - promotion_columns.keys()
+            )
+            | (
+                _REQUIRED_GENERATOR_SELECTION_COLUMNS_V15
+                - selection_columns.keys()
+            )
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Prompt variant facts are missing required columns: "
+                + ", ".join(missing)
+            )
+
+        unique_constraints = (
+            (
+                "prompt_component_candidates",
+                (("candidate_uid",), ("component_id", "content_hash")),
+            ),
+            (
+                "generation_prompt_groups",
+                (("group_uid",), ("generation_id", "position")),
+            ),
+            ("prompt_component_promotions", (("promotion_uid",),)),
+        )
+        for table_name, expected_indexes in unique_constraints:
+            indexes = cls._unique_index_columns(connection, table_name)
+            if any(expected not in indexes for expected in expected_indexes):
+                raise CanonicalSchemaValidationError(
+                    f"{table_name} is missing canonical identity constraints"
+                )
+        trigger = connection.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type = 'trigger' "
+            "AND name = 'prompt_revision_initial_promotion'"
+        ).fetchone()
+        if trigger is None:
+            raise CanonicalSchemaValidationError(
+                "Prompt revisions are missing initial promotion enforcement"
+            )
+
+        mismatch_queries = (
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_candidates AS candidate
+            JOIN prompt_revisions AS revision
+              ON revision.id = candidate.source_revision_id
+            WHERE revision.component_id != candidate.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM generation_prompt_groups AS prompt_group
+            JOIN prompt_revisions AS revision
+              ON revision.id = prompt_group.source_revision_id
+            WHERE revision.component_id != prompt_group.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM generation_prompt_groups AS prompt_group
+            JOIN prompt_component_candidates AS candidate
+              ON candidate.id = prompt_group.candidate_id
+            WHERE candidate.component_id != prompt_group.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_promotions AS promotion
+            JOIN prompt_revisions AS revision
+              ON revision.id = promotion.revision_id
+            WHERE revision.component_id != promotion.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_promotions AS promotion
+            JOIN prompt_revisions AS revision
+              ON revision.id = promotion.previous_revision_id
+            WHERE revision.component_id != promotion.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM playground_generator_prompt_selections AS selection
+            JOIN prompt_component_candidates AS candidate
+              ON candidate.id = selection.candidate_id
+            WHERE candidate.component_id != selection.component_id
+            """,
+        )
+        if any(
+            int(connection.execute(query).fetchone()[0])
+            for query in mismatch_queries
+        ):
+            raise CanonicalSchemaValidationError(
+                "Prompt variant facts contain cross-component references"
+            )
+
+        missing_promotions = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM prompt_components AS component
+                WHERE EXISTS (
+                    SELECT 1 FROM prompt_revisions AS revision
+                    WHERE revision.component_id = component.id
+                )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM prompt_component_promotions AS promotion
+                    WHERE promotion.component_id = component.id
+                )
+                """
+            ).fetchone()[0]
+        )
+        if missing_promotions:
+            raise CanonicalSchemaValidationError(
+                "Every revisioned prompt component requires a promotion"
             )
 
     @classmethod
