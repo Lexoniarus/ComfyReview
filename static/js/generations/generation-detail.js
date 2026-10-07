@@ -2,7 +2,7 @@ import { lifecycleLabel } from "./generation-list.js";
 
 /** Render one canonical generation detail and own its reconciliation action. */
 export class GenerationDetail {
-  /** @param {HTMLElement} root @param {{onReconcile: (uid: string, promptId: string | null) => void}} actions */
+  /** @param {HTMLElement} root @param {{onReconcile: (uid: string, promptId: string | null) => void, createGeneratorActions?: (uid: string) => HTMLElement}} actions */
   constructor(root, actions) {
     this.root = root;
     this.actions = actions;
@@ -37,6 +37,9 @@ export class GenerationDetail {
         : "Legacy / unbekannt",
     );
     appendFact(facts, "Graph-Hash", generation.graph_hash || "—");
+    if (generation.failure_reason) {
+      appendFact(facts, "Abgleichhinweis", generation.failure_reason);
+    }
 
     const prompts = document.createElement("section");
     prompts.className = "generation-prompt-grid";
@@ -61,6 +64,11 @@ export class GenerationDetail {
       const caption = document.createElement("figcaption");
       caption.textContent = `${output.role} · Node ${output.node_id} · Index ${output.output_index}`;
       figure.append(image, caption);
+      if (output.image_uid && this.actions.createGeneratorActions) {
+        figure.append(
+          this.actions.createGeneratorActions(String(output.image_uid)),
+        );
+      }
       grid.append(figure);
     }
     if (!grid.children.length) {
@@ -76,7 +84,7 @@ export class GenerationDetail {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "primary-button";
-      button.textContent = "Mit ComfyUI abgleichen";
+      button.textContent = "Auftrag / Output abgleichen";
       button.addEventListener(
         "click",
         () =>

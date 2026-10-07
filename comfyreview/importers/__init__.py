@@ -1,5 +1,12 @@
 """Explicit offline import and audit adapters."""
 
+from comfyreview.importers.content_levels import (
+    ContentLevelAuditor,
+    ContentLevelAuditResult,
+    ContentLevelRecovery,
+    ContentLevelRecoveryResult,
+    ContentLevelRecoveryValidationError,
+)
 from comfyreview.importers.legacy_compositions import (
     HistoricalCompositionReconstructor,
     LegacyCompositionAuditor,
@@ -40,8 +47,20 @@ from comfyreview.importers.legacy_prompts import (
     LegacyPromptImportResult,
     LegacyPromptImportValidationError,
 )
+from comfyreview.importers.legacy_provenance import (
+    LegacyProvenanceAuditor,
+    LegacyProvenanceAuditResult,
+    LegacyProvenanceRecovery,
+    LegacyProvenanceRecoveryResult,
+    LegacyProvenanceValidationError,
+)
 
 __all__ = [
+    "ContentLevelAuditor",
+    "ContentLevelAuditResult",
+    "ContentLevelRecovery",
+    "ContentLevelRecoveryResult",
+    "ContentLevelRecoveryValidationError",
     "HistoricalCompositionReconstructor",
     "LegacyCompositionAuditor",
     "LegacyCompositionAuditResult",
@@ -70,6 +89,11 @@ __all__ = [
     "LegacyPromptImportResult",
     "LegacyPromptImportRecoveryError",
     "LegacyPromptImportValidationError",
+    "LegacyProvenanceAuditor",
+    "LegacyProvenanceAuditResult",
+    "LegacyProvenanceRecovery",
+    "LegacyProvenanceRecoveryResult",
+    "LegacyProvenanceValidationError",
     "LegacySamplerStageImport",
     "SqliteLegacyFeatureMigration",
 ]

@@ -27,6 +27,15 @@ class CatalogEvidenceRepository(Protocol):
         """Return top live images in deterministic ranking order."""
         ...
 
+    def list_top_lora_images(
+        self,
+        lora_uid: str,
+        *,
+        limit: int,
+    ) -> tuple[CatalogEvidenceImage, ...]:
+        """Return top live images generated with one stable LoRA."""
+        ...
+
 
 class CatalogEvidenceService:
     """Validate and expose bounded visual evidence for catalog entries."""
@@ -47,6 +56,23 @@ class CatalogEvidenceService:
         if limit < 1 or limit > 3:
             raise ValueError("catalog evidence limit must be between 1 and 3")
         return self._repository.list_top_images(
+            normalized_uid,
+            limit=limit,
+        )
+
+    def list_top_lora_images(
+        self,
+        lora_uid: str,
+        *,
+        limit: int = 3,
+    ) -> tuple[CatalogEvidenceImage, ...]:
+        """Return bounded visible evidence for one stable LoRA identity."""
+        normalized_uid = str(lora_uid).strip()
+        if not normalized_uid:
+            raise ValueError("lora_uid is required")
+        if limit < 1 or limit > 3:
+            raise ValueError("catalog evidence limit must be between 1 and 3")
+        return self._repository.list_top_lora_images(
             normalized_uid,
             limit=limit,
         )

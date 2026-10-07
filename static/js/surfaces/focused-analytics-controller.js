@@ -28,7 +28,8 @@ export class AnalyticsController {
     this.historyRef = dependencies.historyRef || window.history;
     this.abortController = new AbortController();
     this.viewName = defaultView(this.section);
-    this.parameter = "";
+    this.parameter = "sampler";
+    this.guidanceScope = "setup";
     this.scopeKind = "character";
   }
 
@@ -37,9 +38,13 @@ export class AnalyticsController {
     const query = new URLSearchParams(this.locationRef.search);
     this.model.value = query.get("model") || "";
     this.minimumSamples.value =
-      query.get("min_n") || defaultMinimum(this.section);
-    this.viewName = query.get("view") || defaultView(this.section);
-    this.parameter = query.get("parameter") || "";
+      query.get(this.section === "parameters" ? "minimum_images" : "min_n") ||
+      defaultMinimum(this.section);
+    this.viewName =
+      query.get(this.section === "parameters" ? "basis" : "view") ||
+      defaultView(this.section);
+    this.parameter = query.get("parameter") || "sampler";
+    this.guidanceScope = query.get("scope") || "setup";
     this.scopeKind = query.get("kind") || "character";
     this.form.addEventListener(
       "submit",
@@ -91,10 +96,14 @@ export class AnalyticsController {
   #writeUrl() {
     const query = new URLSearchParams();
     if (this.model.value.trim()) query.set("model", this.model.value.trim());
-    query.set("min_n", normalizedMinimum(this.minimumSamples.value));
-    if (this.viewName) query.set("view", this.viewName);
-    if (this.viewName === "values" && this.parameter) {
-      query.set("parameter", this.parameter);
+    if (this.section === "parameters") {
+      query.set("minimum_images", normalizedMinimum(this.minimumSamples.value));
+      query.set("basis", this.viewName || "observed");
+      query.set("scope", this.guidanceScope);
+      if (this.guidanceScope === "parameter")
+        query.set("parameter", this.parameter);
+    } else if (this.section !== "overview") {
+      query.set("min_n", normalizedMinimum(this.minimumSamples.value));
     }
     if (this.section === "scopes") query.set("kind", this.scopeKind);
     const suffix = query.toString();
@@ -112,6 +121,21 @@ export class AnalyticsController {
     if (viewControl instanceof HTMLElement) {
       this.viewName = viewControl.dataset.analyticsView || "";
       this.parameter = viewControl.dataset.analyticsParameter || "";
+      this.#writeUrl();
+      await this.reload();
+      return;
+    }
+    const basisControl = event.target.closest("[data-guidance-basis]");
+    if (basisControl instanceof HTMLElement) {
+      this.viewName = basisControl.dataset.guidanceBasis || "observed";
+      this.#writeUrl();
+      await this.reload();
+      return;
+    }
+    const scopeControl = event.target.closest("[data-guidance-scope]");
+    if (scopeControl instanceof HTMLElement) {
+      this.guidanceScope = scopeControl.dataset.guidanceScope || "setup";
+      this.parameter = scopeControl.dataset.guidanceParameter || this.parameter;
       this.#writeUrl();
       await this.reload();
       return;
@@ -148,16 +172,23 @@ export class AnalyticsController {
 
   /** @param {number} offset @param {AbortSignal} signal */
   #loadPage(offset, signal) {
+    if (this.section === "overview") {
+      return this.api.get("analytics/overview", { signal });
+    }
     const query = new URLSearchParams({
       model: this.model.value.trim(),
-      min_n: normalizedMinimum(this.minimumSamples.value),
       offset: String(offset),
       limit: "24",
     });
-    if (this.viewName) query.set("view", this.viewName);
-    if (this.viewName === "values" && this.parameter) {
-      query.set("parameter", this.parameter);
+    if (this.section === "parameters") {
+      query.set("basis", this.viewName || "observed");
+      query.set("scope", this.guidanceScope);
+      query.set("minimum_images", normalizedMinimum(this.minimumSamples.value));
+      if (this.guidanceScope === "parameter")
+        query.set("parameter", this.parameter);
+      return this.api.get(`analytics/render?${query.toString()}`, { signal });
     }
+    query.set("min_n", normalizedMinimum(this.minimumSamples.value));
     if (this.section === "scopes") query.set("kind", this.scopeKind);
     return this.api.get(`analytics/${this.section}?${query.toString()}`, {
       signal,
@@ -167,15 +198,14 @@ export class AnalyticsController {
 
 /** @param {string} section */
 function defaultMinimum(section) {
-  if (section === "overview") return "5";
-  if (section === "parameters") return "10";
+  if (section === "overview") return "0";
+  if (section === "parameters") return "0";
   return "8";
 }
 
 /** @param {string} section */
 function defaultView(section) {
-  if (section === "parameters") return "summary";
-  if (section === "combinations") return "prompt";
+  if (section === "parameters") return "observed";
   return "";
 }
 

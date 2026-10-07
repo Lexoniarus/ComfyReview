@@ -65,38 +65,6 @@ export class SettingsController {
     await this.#mutate(() => this.api.put("settings/preferences", payload));
   }
 
-  /** @param {string | null} uid @param {Record<string, any>} payload */
-  async saveProfile(uid, payload) {
-    await this.#mutate(() =>
-      uid
-        ? this.api.put(
-            `settings/generation-profiles/${encodeURIComponent(uid)}`,
-            payload,
-          )
-        : this.api.post("settings/generation-profiles", payload),
-    );
-  }
-
-  /** @param {string} uid @param {boolean} archived */
-  async archiveProfile(uid, archived) {
-    await this.#mutate(() =>
-      this.api.patch(
-        `settings/generation-profiles/${encodeURIComponent(uid)}/archive`,
-        { archived },
-      ),
-    );
-  }
-
-  /** @param {string} uid */
-  async defaultProfile(uid) {
-    await this.#mutate(() =>
-      this.api.put(
-        `settings/generation-profiles/${encodeURIComponent(uid)}/default`,
-        {},
-      ),
-    );
-  }
-
   /** Run a read-only provider check and refresh the ComfyUI section. */
   async checkComfyUi() {
     this.#status("Verbindung wird geprüft …");
@@ -110,6 +78,43 @@ export class SettingsController {
     } catch (error) {
       this.#status(errorMessage(error, "Verbindungstest fehlgeschlagen."));
     }
+  }
+
+  /** @param {string} providerName @param {string} contentLevel */
+  async classifyLora(providerName, contentLevel) {
+    await this.#mutate(() =>
+      this.api.post("settings/loras/classify", {
+        provider_name: providerName,
+        content_level: contentLevel,
+      }),
+    );
+  }
+
+  /** @param {string} uid */
+  async previewLora(uid) {
+    try {
+      const impact = await this.api.get(
+        `settings/loras/${encodeURIComponent(uid)}/reclassification-impact`,
+      );
+      if (this.data) {
+        this.data.lora_impacts = {
+          ...(this.data.lora_impacts || {}),
+          [uid]: impact,
+        };
+        this.view.render("content", this.data);
+      }
+    } catch (error) {
+      this.#status(errorMessage(error, "Vorschau fehlgeschlagen."));
+    }
+  }
+
+  /** @param {string} uid @param {number} revision */
+  async reclassifyLora(uid, revision) {
+    await this.#mutate(() =>
+      this.api.post(`settings/loras/${encodeURIComponent(uid)}/reclassify`, {
+        expected_revision: revision,
+      }),
+    );
   }
 
   /** Release requests, listeners and child views. */

@@ -79,8 +79,15 @@ def test_playground_catalog_browse_and_create_urls_render_v2_shell() -> None:
     assert views.calls == []
 
 
-def test_playground_home_renders_canonical_generation_shell() -> None:
+def test_playground_home_renders_combination_overview() -> None:
     response = hub.playground_home(_request(_CatalogViews()))
+
+    assert response.template.name == "playground_overview.html"
+    assert set(response.context) == {"request"}
+
+
+def test_generation_history_renders_canonical_generation_shell() -> None:
+    response = hub.generations_page(_request(_CatalogViews()))
 
     assert response.template.name == "generations.html"
     assert set(response.context) == {"request"}

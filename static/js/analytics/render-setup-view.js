@@ -6,6 +6,7 @@ import {
   stageLine,
   textValue,
 } from "./analytics-formatters.js";
+import { createGeneratorHandoffAction } from "../playground/generator-handoff-action.js";
 
 /** Render one observed technical setup with bounded evidence. */
 export class RenderSetupView {
@@ -23,13 +24,13 @@ export class RenderSetupView {
     const header = document.createElement("header");
     const title = document.createElement("strong");
     title.textContent = textValue(item.checkpoint);
-    const action = document.createElement("button");
-    action.type = "button";
-    action.className = "secondary-button analytics-use-button";
-    action.dataset.playgroundIntent = "render_setup";
-    action.dataset.setupKey = String(item.setup_key || "");
-    action.dataset.renderSetup = JSON.stringify(item);
-    action.textContent = "Im Generator verwenden";
+    const action = createGeneratorHandoffAction("render_setup", {
+      className: "analytics-use-button",
+      data: {
+        setupKey: String(item.setup_key || ""),
+        renderSetup: JSON.stringify(item),
+      },
+    });
     header.append(title, action);
     const stages = document.createElement("div");
     stages.className = "analytics-stage-list";

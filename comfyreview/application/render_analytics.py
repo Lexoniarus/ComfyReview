@@ -22,6 +22,8 @@ class RenderParameter(StrEnum):
     CFG = "cfg"
     SAMPLER = "sampler"
     SCHEDULER = "scheduler"
+    ASPECT_FORMAT = "aspect_format"
+    RESOLUTION_CLASS = "resolution_class"
 
 
 @dataclass(frozen=True, slots=True)

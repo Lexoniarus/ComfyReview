@@ -147,6 +147,7 @@ function itemKey(item) {
     item.component_uid ||
       item.composition_uid ||
       item.setup_key ||
+      (item.settings ? JSON.stringify(item.settings) : "") ||
       `${item.parameter || "item"}:${item.value || ""}`,
   );
 }

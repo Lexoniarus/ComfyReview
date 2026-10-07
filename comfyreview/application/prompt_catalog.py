@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
+from comfyreview.application.workspace_settings import ContentLevel
 from comfyreview.domain import PromptAtomUsage, render_prompt_atom_usages
 
 
@@ -40,7 +41,7 @@ class PromptCompositionMembership:
 
 @dataclass(frozen=True, slots=True)
 class PromptComponent:
-    """Represent mutable catalog metadata and its latest revision."""
+    """Represent catalog metadata, history, standard, and manual content."""
 
     component_uid: str
     kind: str
@@ -50,6 +51,27 @@ class PromptComponent:
     notes: str
     archived: bool
     latest_revision: PromptRevision
+    content_level: ContentLevel = ContentLevel.STANDARD
+    current_revision: PromptRevision | None = None
+    latest_manual_variant: PromptComponentCandidate | None = None
+
+    @property
+    def standard_revision(self) -> PromptRevision:
+        """Return the revision selected by the newest promotion fact."""
+        return self.current_revision or self.latest_revision
+
+
+@dataclass(frozen=True, slots=True)
+class PromptComponentCandidate:
+    """Represent one explicitly selected, not-yet-promoted component recipe."""
+
+    candidate_uid: str
+    component_uid: str
+    source_revision_uid: str
+    candidate_type: str
+    content_hash: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +85,7 @@ class CreatePromptComponentCommand:
     notes: str = ""
     positive_atoms: tuple[PromptAtomUsage, ...] = ()
     negative_atoms: tuple[PromptAtomUsage, ...] = ()
+    content_level: ContentLevel = ContentLevel.STANDARD
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +105,7 @@ class UpdatePromptComponentMetadataCommand:
     name: str
     tags: tuple[str, ...]
     notes: str
+    content_level: ContentLevel = ContentLevel.STANDARD
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +116,18 @@ class UpdatePromptComponentCommand:
     name: str
     tags: tuple[str, ...]
     notes: str
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
+    content_level: ContentLevel = ContentLevel.STANDARD
+
+
+@dataclass(frozen=True, slots=True)
+class MaterializePromptCandidateCommand:
+    """Explicitly retain one manual or calculated component recipe."""
+
+    component_uid: str
+    source_revision_uid: str
+    candidate_type: str
     positive_atoms: tuple[PromptAtomUsage, ...]
     negative_atoms: tuple[PromptAtomUsage, ...]
 
@@ -119,6 +155,7 @@ class NewPromptComponent:
     tags: tuple[str, ...]
     notes: str
     revision: PromptRevisionDraft
+    content_level: ContentLevel = ContentLevel.STANDARD
 
 
 class PromptIdentitySource(Protocol):
@@ -165,7 +202,21 @@ class PromptCatalogRepository(Protocol):
         metadata: UpdatePromptComponentMetadataCommand,
         revision: PromptRevisionDraft,
     ) -> PromptComponent:
-        """Update metadata and append content in one transaction."""
+        """Update metadata and select changed content as a candidate."""
+        ...
+
+    def materialize_candidate(
+        self,
+        component_uid: str,
+        source_revision_uid: str,
+        candidate_type: str,
+        revision: PromptRevisionDraft,
+    ) -> PromptComponentCandidate:
+        """Persist or return one explicitly selected recipe candidate."""
+        ...
+
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        """Return one candidate by stable identity."""
         ...
 
     def get_component(self, component_uid: str) -> PromptComponent:
@@ -214,6 +265,17 @@ def prompt_revision_identity(
         f"{component_uid}\0{content_hash}".encode()
     ).hexdigest()
     return f"prompt-revision-{revision_hash}", content_hash
+
+
+def prompt_candidate_identity(
+    component_uid: str,
+    content_hash: str,
+) -> str:
+    """Return a stable identity for one component recipe candidate."""
+    digest = hashlib.sha256(
+        f"{component_uid}\0{content_hash}".encode()
+    ).hexdigest()
+    return f"prompt-candidate-{digest}"
 
 
 def prompt_composition_identity(
@@ -322,6 +384,7 @@ class PromptCatalogService:
                 tags=self._tags(command.tags),
                 notes=str(command.notes or "").strip(),
                 revision=revision,
+                content_level=command.content_level,
             )
         )
 
@@ -351,6 +414,7 @@ class PromptCatalogService:
             name=self._required(command.name, "name"),
             tags=self._tags(command.tags),
             notes=str(command.notes or "").strip(),
+            content_level=command.content_level,
         )
         return self._repository.update_metadata(normalized)
 
@@ -358,7 +422,7 @@ class PromptCatalogService:
         self,
         command: UpdatePromptComponentCommand,
     ) -> PromptComponent:
-        """Persist metadata and content changes as one atomic catalog edit."""
+        """Persist metadata immediately and content as an explicit candidate."""
         component_uid = self._required(
             command.component_uid,
             "component_uid",
@@ -368,6 +432,7 @@ class PromptCatalogService:
             name=self._required(command.name, "name"),
             tags=self._tags(command.tags),
             notes=str(command.notes or "").strip(),
+            content_level=command.content_level,
         )
         revision = self._revision(
             component_uid,
@@ -375,6 +440,54 @@ class PromptCatalogService:
             command.negative_atoms,
         )
         return self._repository.update_component(metadata, revision)
+
+    def materialize_candidate(
+        self,
+        command: MaterializePromptCandidateCommand,
+    ) -> PromptComponentCandidate:
+        """Validate and persist one explicitly selected prompt candidate."""
+        component_uid = self._required(command.component_uid, "component_uid")
+        source_revision_uid = self._required(
+            command.source_revision_uid, "source_revision_uid"
+        )
+        candidate_type = self._required(
+            command.candidate_type, "candidate_type"
+        )
+        if candidate_type not in {"manual", "calculated", "next_test"}:
+            raise PromptCatalogValidationError("invalid candidate_type")
+        sources = self._repository.list_components_for_revisions(
+            (source_revision_uid,)
+        )
+        if len(sources) != 1:
+            raise PromptCatalogValidationError("unknown source revision")
+        source = sources[0]
+        if source.component_uid != component_uid:
+            raise PromptCatalogValidationError(
+                "source revision does not belong to component"
+            )
+        revision = self._revision(
+            component_uid,
+            command.positive_atoms,
+            command.negative_atoms,
+        )
+        if candidate_type != "manual" and self._structure(
+            source.latest_revision
+        ) != self._draft_structure(revision):
+            raise PromptCatalogValidationError(
+                "calculated candidates may only change atom weights"
+            )
+        return self._repository.materialize_candidate(
+            component_uid,
+            source_revision_uid,
+            candidate_type,
+            revision,
+        )
+
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        """Return one exact materialized prompt candidate."""
+        return self._repository.get_candidate(
+            self._required(candidate_uid, "candidate_uid")
+        )
 
     def get_component(self, component_uid: str) -> PromptComponent:
         """Return one component by stable identity."""
@@ -476,4 +589,30 @@ class PromptCatalogService:
             dict.fromkeys(
                 tag for raw_tag in tags if (tag := str(raw_tag or "").strip())
             )
+        )
+
+    @staticmethod
+    def _structure(
+        revision: PromptRevision,
+    ) -> tuple[tuple[str, int, str], ...]:
+        return tuple(
+            (scope, position, atom.text)
+            for scope, atoms in (
+                ("pos", revision.positive_atoms),
+                ("neg", revision.negative_atoms),
+            )
+            for position, atom in enumerate(atoms)
+        )
+
+    @staticmethod
+    def _draft_structure(
+        revision: PromptRevisionDraft,
+    ) -> tuple[tuple[str, int, str], ...]:
+        return tuple(
+            (scope, position, atom.text)
+            for scope, atoms in (
+                ("pos", revision.positive_atoms),
+                ("neg", revision.negative_atoms),
+            )
+            for position, atom in enumerate(atoms)
         )

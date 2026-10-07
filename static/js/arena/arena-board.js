@@ -2,7 +2,7 @@
 export class ArenaBoard {
   /**
    * @param {HTMLElement} root
-   * @param {{onDecision: (side: "left" | "right") => void, onInspect: (image: Record<string, unknown>) => void, onExpand: (url: string) => void}} callbacks
+   * @param {{onDecision: (side: "left" | "right") => void, onInspect: (image: Record<string, unknown>) => void, onExpand: (url: string) => void, createGeneratorActions?: (uid: string) => HTMLElement}} callbacks
    */
   constructor(root, callbacks) {
     this.root = root;
@@ -19,8 +19,18 @@ export class ArenaBoard {
   render(pair) {
     this.pair = pair;
     this.root.replaceChildren(
-      competitorCard("left", "A", pair.left),
-      competitorCard("right", "B", pair.right),
+      competitorCard(
+        "left",
+        "A",
+        pair.left,
+        this.callbacks.createGeneratorActions,
+      ),
+      competitorCard(
+        "right",
+        "B",
+        pair.right,
+        this.callbacks.createGeneratorActions,
+      ),
     );
   }
 
@@ -83,8 +93,8 @@ export class ArenaBoard {
   }
 }
 
-/** @param {"left" | "right"} side @param {string} label @param {Record<string, unknown>} image */
-function competitorCard(side, label, image) {
+/** @param {"left" | "right"} side @param {string} label @param {Record<string, unknown>} image @param {((uid: string) => HTMLElement) | undefined} createGeneratorActions */
+function competitorCard(side, label, image, createGeneratorActions) {
   const card = document.createElement("article");
   card.className = "v2-panel arena-card";
   const imageButton = document.createElement("button");
@@ -113,5 +123,9 @@ function competitorCard(side, label, image) {
   inspect.textContent = "Details";
   actions.append(decide, inspect);
   card.append(imageButton, actions);
+  const uid = String(image.image_uid || "");
+  if (uid && typeof createGeneratorActions === "function") {
+    card.append(createGeneratorActions(uid));
+  }
   return card;
 }

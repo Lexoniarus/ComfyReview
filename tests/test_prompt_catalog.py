@@ -10,10 +10,12 @@ import pytest
 
 from comfyreview.application import (
     CreatePromptComponentCommand,
+    MaterializePromptCandidateCommand,
     NewPromptComponent,
     PromptCatalogService,
     PromptCatalogValidationError,
     PromptComponent,
+    PromptComponentCandidate,
     PromptCompositionMembership,
     PromptRevision,
     PromptRevisionDraft,
@@ -190,6 +192,38 @@ class _CatalogRepository:
     ) -> tuple[PromptComponent, ...]:
         del composition_uid
         return ()
+
+    def materialize_candidate(
+        self,
+        component_uid: str,
+        source_revision_uid: str,
+        candidate_type: str,
+        revision: PromptRevisionDraft,
+    ) -> PromptComponentCandidate:
+        return PromptComponentCandidate(
+            candidate_uid="candidate-fixed",
+            component_uid=component_uid,
+            source_revision_uid=source_revision_uid,
+            candidate_type=candidate_type,
+            content_hash=revision.content_hash,
+            positive_atoms=revision.positive_atoms,
+            negative_atoms=revision.negative_atoms,
+        )
+
+    def get_candidate(self, candidate_uid: str) -> PromptComponentCandidate:
+        if candidate_uid != "candidate-fixed":
+            raise KeyError(candidate_uid)
+        assert self.component is not None
+        revision = self.component.latest_revision
+        return PromptComponentCandidate(
+            candidate_uid=candidate_uid,
+            component_uid=self.component.component_uid,
+            source_revision_uid=revision.revision_uid,
+            candidate_type="manual",
+            content_hash=revision.content_hash,
+            positive_atoms=revision.positive_atoms,
+            negative_atoms=revision.negative_atoms,
+        )
 
 
 def _service() -> tuple[PromptCatalogService, _CatalogRepository]:
@@ -483,7 +517,15 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
             negative_atoms=prompt_atom_usages_from_text("blur"),
         )
     )
-    assert updated.latest_revision.revision_number == 3
+    assert updated.latest_revision.revision_number == 2
+    assert updated.current_revision == created.latest_revision
+    assert updated.latest_manual_variant is not None
+    assert updated.latest_manual_variant.source_revision_uid == (
+        created.latest_revision.revision_uid
+    )
+    assert updated.latest_manual_variant.positive_atoms == (
+        prompt_atom_usages_from_text("skyline, storm")
+    )
     assert service.get_component(created.component_uid) == updated
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -491,7 +533,232 @@ def test_sqlite_prompt_catalog_preserves_revisions_and_archive_state(
         ).fetchone() == (1,)
         assert connection.execute(
             "SELECT COUNT(*) FROM prompt_revisions"
+        ).fetchone() == (2,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_candidates"
+        ).fetchone() == (1,)
+
+
+def test_catalog_content_edits_deduplicate_candidates_and_atom_identity(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    service = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(database_path),
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+    weight_only = UpdatePromptComponentCommand(
+        component_uid=created.component_uid,
+        name=created.name,
+        tags=created.tags,
+        notes=created.notes,
+        positive_atoms=(PromptAtomUsage("skyline", 1200),),
+        negative_atoms=created.latest_revision.negative_atoms,
+    )
+
+    first = service.update_component(weight_only)
+    repeated = service.update_component(weight_only)
+    changed_text = service.update_component(
+        UpdatePromptComponentCommand(
+            component_uid=created.component_uid,
+            name=created.name,
+            tags=created.tags,
+            notes=created.notes,
+            positive_atoms=(PromptAtomUsage("city skyline", 1200),),
+            negative_atoms=created.latest_revision.negative_atoms,
+        )
+    )
+    returned_to_first = service.update_component(weight_only)
+
+    assert first.latest_manual_variant == repeated.latest_manual_variant
+    assert changed_text.latest_manual_variant != first.latest_manual_variant
+    assert (
+        returned_to_first.latest_manual_variant == first.latest_manual_variant
+    )
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_candidates"
+        ).fetchone() == (2,)
+        skyline_ids = connection.execute(
+            """
+            SELECT DISTINCT atom.id
+            FROM prompt_atoms AS atom
+            LEFT JOIN prompt_revision_atom_usages AS revision_usage
+              ON revision_usage.atom_id = atom.id
+            LEFT JOIN prompt_candidate_atom_usages AS candidate_usage
+              ON candidate_usage.atom_id = atom.id
+            WHERE atom.canonical_text = 'skyline'
+              AND revision_usage.atom_id IS NOT NULL
+              AND candidate_usage.atom_id IS NOT NULL
+            """
+        ).fetchall()
+        assert len(skyline_ids) == 1
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_atoms "
+            "WHERE canonical_text = 'city skyline'"
+        ).fetchone() == (1,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_manual_variants"
         ).fetchone() == (3,)
+
+
+def test_catalog_records_an_existing_calculated_recipe_as_manual(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    service = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(database_path),
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+    calculated = service.materialize_candidate(
+        MaterializePromptCandidateCommand(
+            component_uid=created.component_uid,
+            source_revision_uid=created.standard_revision.revision_uid,
+            candidate_type="calculated",
+            positive_atoms=(PromptAtomUsage("skyline", 1150),),
+            negative_atoms=created.standard_revision.negative_atoms,
+        )
+    )
+
+    updated = service.update_component(
+        UpdatePromptComponentCommand(
+            component_uid=created.component_uid,
+            name=created.name,
+            tags=created.tags,
+            notes=created.notes,
+            positive_atoms=calculated.positive_atoms,
+            negative_atoms=calculated.negative_atoms,
+        )
+    )
+
+    manual_variant = updated.latest_manual_variant
+    assert manual_variant is not None
+    assert manual_variant == calculated
+    assert manual_variant.candidate_type == "calculated"
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_candidates"
+        ).fetchone() == (1,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM prompt_component_manual_variants"
+        ).fetchone() == (1,)
+
+
+def test_catalog_candidate_failure_rolls_back_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    repository = SqlitePromptCatalogRepository(database_path)
+    service = PromptCatalogService(
+        repository=repository,
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+
+    def fail_candidate(*_args, **_kwargs) -> int:
+        raise RuntimeError("candidate write failed")
+
+    monkeypatch.setattr(repository, "_insert_candidate", fail_candidate)
+    with pytest.raises(RuntimeError, match="candidate write failed"):
+        service.update_component(
+            UpdatePromptComponentCommand(
+                component_uid=created.component_uid,
+                name="Should Roll Back",
+                tags=("changed",),
+                notes="changed",
+                positive_atoms=(PromptAtomUsage("changed", 1000),),
+                negative_atoms=(),
+            )
+        )
+
+    restored = service.get_component(created.component_uid)
+    assert restored.name == created.name
+    assert restored.tags == created.tags
+    assert restored.latest_manual_variant is None
+
+
+def test_catalog_materializes_only_weight_changes_for_calculated_candidates(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    service = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(database_path),
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+
+    candidate = service.materialize_candidate(
+        MaterializePromptCandidateCommand(
+            component_uid=created.component_uid,
+            source_revision_uid=created.latest_revision.revision_uid,
+            candidate_type="calculated",
+            positive_atoms=(PromptAtomUsage("skyline", 1150),),
+            negative_atoms=created.latest_revision.negative_atoms,
+        )
+    )
+    repeated = service.materialize_candidate(
+        MaterializePromptCandidateCommand(
+            component_uid=created.component_uid,
+            source_revision_uid=created.latest_revision.revision_uid,
+            candidate_type="calculated",
+            positive_atoms=(PromptAtomUsage("skyline", 1150),),
+            negative_atoms=created.latest_revision.negative_atoms,
+        )
+    )
+
+    assert repeated == candidate
+    assert service.get_candidate(candidate.candidate_uid) == candidate
+    with pytest.raises(PromptCatalogValidationError, match="only change"):
+        service.materialize_candidate(
+            MaterializePromptCandidateCommand(
+                component_uid=created.component_uid,
+                source_revision_uid=created.latest_revision.revision_uid,
+                candidate_type="next_test",
+                positive_atoms=(PromptAtomUsage("different atom", 1000),),
+                negative_atoms=created.latest_revision.negative_atoms,
+            )
+        )
+    for command, message in (
+        (
+            MaterializePromptCandidateCommand(
+                component_uid=created.component_uid,
+                source_revision_uid=created.latest_revision.revision_uid,
+                candidate_type="unsupported",
+                positive_atoms=created.latest_revision.positive_atoms,
+                negative_atoms=created.latest_revision.negative_atoms,
+            ),
+            "invalid candidate_type",
+        ),
+        (
+            MaterializePromptCandidateCommand(
+                component_uid=created.component_uid,
+                source_revision_uid="revision-missing",
+                candidate_type="manual",
+                positive_atoms=created.latest_revision.positive_atoms,
+                negative_atoms=created.latest_revision.negative_atoms,
+            ),
+            "unknown source revision",
+        ),
+        (
+            MaterializePromptCandidateCommand(
+                component_uid="component-other",
+                source_revision_uid=created.latest_revision.revision_uid,
+                candidate_type="manual",
+                positive_atoms=created.latest_revision.positive_atoms,
+                negative_atoms=created.latest_revision.negative_atoms,
+            ),
+            "does not belong",
+        ),
+    ):
+        with pytest.raises(PromptCatalogValidationError, match=message):
+            service.materialize_candidate(command)
 
 
 def test_sqlite_prompt_catalog_reads_exact_revision_and_composition(

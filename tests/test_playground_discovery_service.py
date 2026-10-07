@@ -45,6 +45,7 @@ def test_playground_discovery_uses_native_capabilities_and_refreshes_cache(
                 ("normal",),
                 ("model.safetensors",),
                 ("style.safetensors",),
+                ("example-upscaler.pth",),
             )
         ),
         cache_path,
@@ -55,6 +56,7 @@ def test_playground_discovery_uses_native_capabilities_and_refreshes_cache(
     assert result.checkpoints == ["model.safetensors"]
     assert result.samplers == ["euler"]
     assert result.loras == ["style.safetensors"]
+    assert result.upscale_models == ["example-upscaler.pth"]
     assert cache_path.is_file()
 
 

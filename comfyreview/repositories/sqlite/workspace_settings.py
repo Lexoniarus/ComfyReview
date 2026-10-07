@@ -9,6 +9,7 @@ from comfyreview.application.workspace_settings import (
     ContentLevel,
     GenerationLoraSelection,
     GenerationProfile,
+    OutputTier,
     WorkspacePreferences,
 )
 from comfyreview.repositories.sqlite.connection import connect_existing
@@ -30,7 +31,6 @@ class SqliteWorkspacePreferencesRepository:
                        preference.analytics_page_size,
                        profile.profile_uid AS default_profile_uid,
                        preference.review_unrated_only,
-                       preference.review_max_attempts,
                        preference.default_curation_set_key
                 FROM workspace_preferences AS preference
                 LEFT JOIN generation_profiles AS profile
@@ -71,8 +71,7 @@ class SqliteWorkspacePreferencesRepository:
                     if row["default_profile_uid"] is not None
                     else None
                 ),
-                review_unrated_only=bool(row["review_unrated_only"]),
-                review_max_attempts=int(row["review_max_attempts"]),
+                review_prioritize_unrated=bool(row["review_unrated_only"]),
                 default_curation_set_key=(
                     str(row["default_curation_set_key"])
                     if row["default_curation_set_key"] is not None
@@ -98,7 +97,6 @@ class SqliteWorkspacePreferencesRepository:
                     analytics_page_size = ?,
                     default_generation_profile_id = ?,
                     review_unrated_only = ?,
-                    review_max_attempts = ?,
                     default_curation_set_key = ?,
                     updated_at = datetime('now')
                 WHERE singleton_id = 1
@@ -108,8 +106,7 @@ class SqliteWorkspacePreferencesRepository:
                     preferences.motion,
                     preferences.analytics_page_size,
                     profile_id,
-                    int(preferences.review_unrated_only),
-                    preferences.review_max_attempts,
+                    int(preferences.review_prioritize_unrated),
                     preferences.default_curation_set_key,
                 ),
             )
@@ -203,8 +200,8 @@ class SqliteGenerationProfileRepository:
                     checkpoint, sampler, scheduler, seed_mode, fixed_seed,
                     steps_min, steps_max, cfg_min_milli, cfg_max_milli,
                     denoise_milli, batch_size, image_width, image_height,
-                    archived_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    output_tier, archived_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(profile_uid) DO UPDATE SET
                     name = excluded.name,
                     blueprint_uid = excluded.blueprint_uid,
@@ -222,6 +219,7 @@ class SqliteGenerationProfileRepository:
                     batch_size = excluded.batch_size,
                     image_width = excluded.image_width,
                     image_height = excluded.image_height,
+                    output_tier = excluded.output_tier,
                     archived_at = excluded.archived_at,
                     updated_at = datetime('now')
                 """,
@@ -243,6 +241,7 @@ class SqliteGenerationProfileRepository:
                     profile.batch_size,
                     profile.image_width,
                     profile.image_height,
+                    profile.output_tier.value,
                     "1970-01-01 00:00:00" if profile.archived else None,
                 ),
             )
@@ -259,15 +258,16 @@ class SqliteGenerationProfileRepository:
             connection.executemany(
                 """
                 INSERT INTO generation_profile_loras(
-                    profile_id, position, lora_name,
+                    profile_id, position, lora_name, lora_uid,
                     model_strength_milli, clip_strength_milli
-                ) VALUES (?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 tuple(
                     (
                         profile_id,
                         lora.position,
                         lora.name,
+                        lora.lora_uid,
                         lora.model_strength_milli,
                         lora.clip_strength_milli,
                     )
@@ -318,12 +318,26 @@ class SqliteGenerationProfileRepository:
                 model_strength_milli=int(item["model_strength_milli"]),
                 clip_strength_milli=int(item["clip_strength_milli"]),
                 position=int(item["position"]),
+                lora_uid=(
+                    str(item["lora_uid"])
+                    if item["lora_uid"] is not None
+                    else None
+                ),
+                content_level=(
+                    str(item["content_level"])
+                    if item["content_level"] is not None
+                    else None
+                ),
             )
             for item in connection.execute(
                 """
-                SELECT position, lora_name,
-                       model_strength_milli, clip_strength_milli
-                FROM generation_profile_loras
+                SELECT selection.position, selection.lora_name,
+                       selection.lora_uid, definition.content_level,
+                       selection.model_strength_milli,
+                       selection.clip_strength_milli
+                FROM generation_profile_loras AS selection
+                LEFT JOIN lora_definitions AS definition
+                  ON definition.lora_uid = selection.lora_uid
                 WHERE profile_id = ?
                 ORDER BY position
                 """,
@@ -352,6 +366,7 @@ class SqliteGenerationProfileRepository:
             batch_size=int(row["batch_size"]),
             image_width=int(row["image_width"]),
             image_height=int(row["image_height"]),
+            output_tier=OutputTier(str(row["output_tier"])),
             loras=loras,
             archived=row["archived_at"] is not None,
             is_default=bool(row["is_default"]),

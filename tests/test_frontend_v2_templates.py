@@ -83,6 +83,11 @@ def test_playground_generator_url_renders_the_canonical_v2_shell() -> None:
     application.include_router(playground_generator_router)
 
     response = TestClient(application).get("/playground/generator")
+    legacy_post = TestClient(application).post("/playground/generator")
+    legacy_preview = TestClient(application).get(
+        "/playground/generator/preview_draft_best",
+        params={"draft_id": "legacy"},
+    )
 
     assert response.status_code == 200
     assert 'data-v2-surface="playground"' in response.text
@@ -90,6 +95,8 @@ def test_playground_generator_url_renders_the_canonical_v2_shell() -> None:
     assert "/static/css/v2/playground.css" in response.text
     assert "/api/v2" not in response.text
     assert "inline" not in response.text.casefold()
+    assert legacy_post.status_code == 405
+    assert legacy_preview.status_code == 404
 
 
 def test_catalog_url_renders_the_revisioned_v2_shell() -> None:
@@ -136,6 +143,7 @@ def test_only_external_asset_v2_templates_remain() -> None:
         "index.html",
         "playground.html",
         "playground_generator.html",
+        "playground_overview.html",
         "settings.html",
         "top_pictures.html",
     }

@@ -11,6 +11,11 @@ describe("CatalogController", () => {
     await fixture.controller.start();
     expect(fixture.browser.render).toHaveBeenCalledWith([
       { component_uid: "component-a" },
+      expect.objectContaining({
+        component_uid: "lora-a",
+        catalog_kind: "lora",
+        name: "Style",
+      }),
     ]);
 
     await fixture.controller.select("component-a");
@@ -104,6 +109,17 @@ function createFixture(options = {}) {
         return Promise.resolve({ revisions: [{ revision_number: 1 }] });
       }
       if (path.includes("include_archived")) {
+        if (path.includes("catalog/loras")) {
+          return Promise.resolve({
+            loras: [
+              {
+                lora_uid: "lora-a",
+                provider_name: "style.safetensors",
+                display_name: "Style",
+              },
+            ],
+          });
+        }
         return Promise.resolve({
           components: [{ component_uid: "component-a" }],
         });

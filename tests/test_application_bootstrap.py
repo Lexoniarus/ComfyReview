@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
 
 from comfyreview.api.v2_presenters import ImageResponseMapper
 from comfyreview.application import (
+    AnalyticsCoverageService,
     AnalyticsReportService,
     AnalyticsService,
     ArenaService,
@@ -17,17 +18,25 @@ from comfyreview.application import (
     CatalogEvidenceService,
     CurationImage,
     CurationService,
-    GenerationProfileService,
+    GenerationLifecycleWorker,
     GenerationQueryService,
     GenerationReconciliationService,
     GenerationService,
+    GeneratorStateService,
+    ImageContentLevelService,
     ImageContextQueryService,
+    ImageGeneratorHandoffService,
+    LoraCatalogService,
+    LoraDraftSelectionService,
+    LoraTriggerValidationService,
     OutputImageReadModel,
+    PlaygroundEvidenceService,
     PlaygroundGenerationSweepPolicy,
     PlaygroundService,
     PlaygroundSubmissionService,
     PromptCatalogService,
     PromptRenderer,
+    RenderGuidanceService,
     ReviewCandidateService,
     ReviewHistoryService,
     ReviewResult,
@@ -47,14 +56,14 @@ from comfyreview.providers import (
     CanonicalOutputImageCatalog,
     OutputFileUrlMapper,
 )
-from comfyreview.repositories.filesystem import (
-    PlaygroundGeneratorStateRepository,
-)
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.settings import Settings, load_settings
 from services.analytics_page_service import AnalyticsPageService
 from services.playground_discovery_service import PlaygroundDiscoveryService
 from services.playground_label_service import PromptLabelService
+from services.playground_render_guidance_service import (
+    PlaygroundRenderGuidanceService,
+)
 from services.prompt_catalog_view_service import PromptCatalogViewService
 
 
@@ -84,9 +93,11 @@ class _RecordingReviewService:
 
 
 class _EmptyArenaRepository:
-    def list_played_directions(self, image_uids):
+    def pairing_history(self, image_uids):
         del image_uids
-        return frozenset()
+        from comfyreview.application import ArenaPairingHistory
+
+        return ArenaPairingHistory(frozenset(), ())
 
     def get_competitors(self, left_image_uid, right_image_uid):
         raise AssertionError((left_image_uid, right_image_uid))
@@ -108,6 +119,18 @@ class _EmptyCurationFiles:
         raise AssertionError((image, set_key))
 
 
+class _RecordingGenerationWorker:
+    def __init__(self, events: list[str]) -> None:
+        self._events = events
+
+    def start(self) -> None:
+        self._events.append("worker-start")
+
+    def stop(self) -> bool:
+        self._events.append("worker-stop")
+        return True
+
+
 def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
     return ApplicationContainer(
@@ -116,24 +139,33 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         output_images=_EmptyOutputImageCatalog(),
         file_urls=OutputFileUrlMapper(settings.output_root),
         image_contexts=cast(ImageContextQueryService, object()),
+        image_generator_handoffs=cast(ImageGeneratorHandoffService, object()),
         scope_facets=cast(ScopeFacetService, object()),
         review_candidates=cast(ReviewCandidateService, object()),
         image_responses=cast(ImageResponseMapper, object()),
         analytics_service=cast(AnalyticsService, object()),
         analytics_reports=cast(AnalyticsReportService, object()),
         analytics_pages=cast(AnalyticsPageService, object()),
-        playground_discovery=cast(PlaygroundDiscoveryService, object()),
-        playground_ui_state=PlaygroundGeneratorStateRepository(
-            head_path=tmp_path / "head.json",
-            preview_path=tmp_path / "preview.json",
+        analytics_coverage=cast(AnalyticsCoverageService, object()),
+        render_guidance=cast(RenderGuidanceService, object()),
+        playground_render_guidance=cast(
+            PlaygroundRenderGuidanceService, object()
         ),
+        playground_discovery=cast(PlaygroundDiscoveryService, object()),
+        playground_generator_settings=cast(GeneratorStateService, object()),
         generation_service=cast(GenerationService, object()),
+        generation_worker=cast(
+            GenerationLifecycleWorker,
+            _RecordingGenerationWorker(events),
+        ),
         generation_queries=cast(GenerationQueryService, object()),
         generation_reconciliation=cast(
             GenerationReconciliationService,
             object(),
         ),
         prompt_catalog_service=cast(PromptCatalogService, object()),
+        prompt_variant_guidance=cast(Any, object()),
+        prompt_promotions=cast(Any, object()),
         catalog_evidence=cast(CatalogEvidenceService, object()),
         prompt_renderer=PromptRenderer(),
         prompt_catalog_views=cast(PromptCatalogViewService, object()),
@@ -147,6 +179,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
             PlaygroundGenerationSweepPolicy,
             object(),
         ),
+        playground_evidence=cast(PlaygroundEvidenceService, object()),
         workflow_defaults=cast(WorkflowDefaultsService, object()),
         review_service=cast(ReviewService, _RecordingReviewService()),
         review_history=cast(ReviewHistoryService, object()),
@@ -160,8 +193,11 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
             allowed_set_keys=settings.curation_set_keys,
         ),
         workspace_preferences=cast(WorkspacePreferencesService, object()),
-        generation_profiles=cast(GenerationProfileService, object()),
         runtime_diagnostics=cast(RuntimeDiagnosticsService, object()),
+        lora_catalog=cast(LoraCatalogService, object()),
+        lora_drafts=cast(LoraDraftSelectionService, object()),
+        lora_triggers=cast(LoraTriggerValidationService, object()),
+        image_content_levels=cast(ImageContentLevelService, object()),
     )
 
 
@@ -177,13 +213,13 @@ def test_lifespan_prepares_only_the_canonical_runtime_schema(
     assert not container.settings.data_directory.exists()
 
     with TestClient(application):
-        assert events == ["canonical"]
+        assert events == ["canonical", "worker-start"]
         assert container.settings.trash_root.is_dir()
         assert container.settings.lora_export_root.is_dir()
         assert container.settings.workflows_directory.is_dir()
         assert container.settings.comfyui_checkpoints_directory.is_dir()
 
-    assert events == ["canonical"]
+    assert events == ["canonical", "worker-start", "worker-stop"]
 
 
 def test_lifespan_preserves_schema_order_when_application_body_fails(
@@ -196,7 +232,7 @@ def test_lifespan_preserves_schema_order_when_application_body_fails(
         with TestClient(application):
             raise RuntimeError("application failed")
 
-    assert events == ["canonical"]
+    assert events == ["canonical", "worker-start", "worker-stop"]
 
 
 def test_static_modules_require_browser_revalidation(tmp_path: Path) -> None:
@@ -242,10 +278,11 @@ def test_default_container_wires_canonical_review_runtime(
         PlaygroundDiscoveryService,
     )
     assert isinstance(
-        container.playground_ui_state,
-        PlaygroundGeneratorStateRepository,
+        container.playground_generator_settings,
+        GeneratorStateService,
     )
     assert isinstance(container.generation_service, GenerationService)
+    assert isinstance(container.generation_worker, GenerationLifecycleWorker)
     assert isinstance(
         container.generation_reconciliation,
         GenerationReconciliationService,

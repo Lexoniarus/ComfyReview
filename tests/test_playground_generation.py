@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 from comfyreview.application import (
+    AspectFormat,
     GenerationCanvas,
     GenerationMutationError,
     GenerationRequest,
@@ -19,6 +20,7 @@ from comfyreview.application import (
     PlaygroundGenerationSweepPolicy,
     PlaygroundSubmissionService,
     RenderedPrompt,
+    ResolutionClass,
 )
 from comfyreview.domain import prompt_atom_usages_from_text
 
@@ -47,6 +49,8 @@ def _draft() -> PlaygroundGenerationDraft:
             1.0,
         ),
         output_subdirectory="playground/Hero_Name",
+        aspect_format=AspectFormat.PORTRAIT_2_3,
+        resolution_class=ResolutionClass.FULL_HD_1080,
     )
 
 
@@ -81,9 +85,9 @@ def test_playground_generation_policy_builds_reproducible_request() -> None:
         .model_branch
         == "model-without-suffix"
     )
-    assert _policy().build_request(
-        replace(_draft(), image_width=768, image_height=1152)
-    ).canvas == GenerationCanvas(768, 1152)
+    assert _policy().build_request(_draft()).canvas == GenerationCanvas(
+        768, 1152
+    )
 
 
 @pytest.mark.parametrize(
@@ -101,10 +105,6 @@ def test_playground_generation_policy_builds_reproducible_request() -> None:
         (
             replace(_draft(), output_subdirectory="playground//hero"),
             "safe relative",
-        ),
-        (
-            replace(_draft(), image_width=768, image_height=None),
-            "provided together",
         ),
     ),
 )

@@ -6,6 +6,15 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Protocol
 
+from comfyreview.application.content_classification import (
+    ImageContentClassification,
+)
+from comfyreview.application.generation_geometry import ImageGeometryProjection
+from comfyreview.application.workspace_settings import (
+    ContentLevel,
+    PreferencesRepository,
+)
+
 
 class ScopeKind(StrEnum):
     """Identify one canonical prompt-component scope kind."""
@@ -33,6 +42,13 @@ class ImageOrder(StrEnum):
     RECENT = "recent"
     TOP = "top"
     WORST = "worst"
+
+
+class ReviewCandidateOrder(StrEnum):
+    """Select the server-owned review rotation policy."""
+
+    PRIORITIZE_UNRATED = "prioritize_unrated"
+    LEAST_RECENT = "least_recent"
 
 
 class ImageQueryValidationError(ValueError):
@@ -180,6 +196,18 @@ class CurationSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ImageLoraUsage:
+    """Expose one normalized, graph-effective LoRA used by a generation."""
+
+    lora_uid: str
+    revision_uid: str
+    provider_name: str
+    position: int
+    model_strength_milli: int
+    clip_strength_milli: int
+
+
+@dataclass(frozen=True, slots=True)
 class ImageContext:
     """Expose canonical image facts without HTTP or local-path contracts."""
 
@@ -195,6 +223,12 @@ class ImageContext:
     output_index: int
     review: ReviewSummary
     curation: CurationSummary | None
+    loras: tuple[ImageLoraUsage, ...] = ()
+    content: ImageContentClassification = ImageContentClassification(
+        inferred_level=ContentLevel.STANDARD,
+        effective_level=ContentLevel.STANDARD,
+    )
+    geometry: ImageGeometryProjection | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,7 +297,11 @@ class ReviewCandidateRepository(Protocol):
         """Return requested component identities absent from the catalog."""
         ...
 
-    def next_candidate(self, filters: ImageFilter) -> ImageContext | None:
+    def next_candidate(
+        self,
+        filters: ImageFilter,
+        order: ReviewCandidateOrder,
+    ) -> ImageContext | None:
         """Return the next matching live image when available."""
         ...
 
@@ -337,15 +375,23 @@ class ReviewCandidateService:
         self,
         repository: ReviewCandidateRepository,
         draft_overrides: DraftOverridePolicy,
+        preferences: PreferencesRepository,
     ) -> None:
         self._repository = repository
         self._draft_overrides = draft_overrides
+        self._preferences = preferences
 
     def next_candidate(self, filters: ImageFilter) -> ImageContext | None:
         """Return the next candidate matching one canonical filter."""
         normalized = _normalize_filter(filters)
         _validate_scope_selection(self._repository, normalized.scopes)
-        image = self._repository.next_candidate(normalized)
+        preferences = self._preferences.get()
+        order = (
+            ReviewCandidateOrder.PRIORITIZE_UNRATED
+            if preferences.review_prioritize_unrated
+            else ReviewCandidateOrder.LEAST_RECENT
+        )
+        image = self._repository.next_candidate(normalized, order)
         if image is None:
             return None
         return replace(

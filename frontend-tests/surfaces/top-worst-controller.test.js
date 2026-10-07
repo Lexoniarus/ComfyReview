@@ -34,7 +34,7 @@ describe("TopWorstController", () => {
       48,
     );
     expect(fixture.root.querySelector("[data-result-count]")?.textContent).toBe(
-      "1 Bilder",
+      "1 bewertetes Bild",
     );
     expect(fixture.pagination.render).toHaveBeenCalledWith(1, 48, 48);
 
@@ -47,8 +47,24 @@ describe("TopWorstController", () => {
       image_uid: "image/1",
     });
     expect(fixture.rails.open).toHaveBeenCalledWith("inspector");
+    await fixture.controller.selectImage("image/1");
+    expect(fixture.rails.close).toHaveBeenCalledWith("inspector");
     await fixture.controller.refresh("image/1");
     expect(fixture.grid.render).toHaveBeenCalledTimes(2);
+    fixture.rails.open("scope");
+    fixture.root.querySelector("[data-scope-navigator]")?.click();
+    fixture.root.querySelector("[data-rail-action]")?.click();
+    fixture.root.click();
+    expect(fixture.rails.close).toHaveBeenCalledWith("scope");
+    fixture.rails.open("inspector");
+    fixture.root.querySelector("[data-image-inspector]")?.click();
+    fixture.root.querySelector("[data-rail-action]")?.click();
+    fixture.root.querySelector("[data-image-action='select']")?.click();
+    fixture.root.click();
+    expect(fixture.rails.close).toHaveBeenCalledWith("inspector");
+    await fixture.controller.reload();
+    expect(fixture.grid.render).toHaveBeenCalledTimes(3);
+    expect(fixture.inspector.empty).toHaveBeenCalledOnce();
 
     fixture.root.querySelector("[data-surface-action='worst']")?.click();
     fixture.root.click();
@@ -96,6 +112,7 @@ describe("TopWorstController", () => {
 
     const idle = createFixture();
     await idle.controller.refresh("image-1");
+    await idle.controller.reload();
     expect(idle.api.get).not.toHaveBeenCalled();
   });
 });
@@ -106,6 +123,10 @@ function createFixture(options = {}) {
     "beforeend",
     "<button data-surface-action='top'></button>" +
       "<button data-surface-action='worst'></button>" +
+      "<button data-rail-action='scope'></button>" +
+      "<button data-image-action='select' data-image-uid='image-1'></button>" +
+      "<aside data-scope-navigator></aside>" +
+      "<aside data-image-inspector></aside>" +
       "<span data-result-count></span>",
   );
   document.body.append(root);
@@ -142,16 +163,30 @@ function createFixture(options = {}) {
     loading: vi.fn(),
     render: vi.fn(),
     error: vi.fn(),
+    empty: vi.fn(),
     dispose: vi.fn(),
   };
   const inspector = {
     loading: vi.fn(),
     render: vi.fn(),
     error: vi.fn(),
+    empty: vi.fn(),
     dispose: vi.fn(),
   };
   const viewer = { dispose: vi.fn() };
-  const rails = { open: vi.fn(), dispose: vi.fn() };
+  const openRails = new Set();
+  const rails = {
+    open: vi.fn((rail) => {
+      openRails.clear();
+      openRails.add(rail);
+    }),
+    close: vi.fn((rail) => {
+      openRails.delete(rail);
+    }),
+    isOpen: vi.fn((rail) => openRails.has(rail)),
+    isDrawerMode: vi.fn(() => true),
+    dispose: vi.fn(),
+  };
   const pagination = { render: vi.fn(), dispose: vi.fn() };
   const controller = new TopWorstController({
     api,

@@ -1,70 +1,137 @@
-import {
-  arrayValue,
-  emptyMessage,
-  percentValue,
-  recordValue,
-  reportIntro,
-  sectionTitle,
-  settingLine,
-  textValue,
-} from "./analytics-formatters.js";
+import { recordValue, reportIntro, textValue } from "./analytics-formatters.js";
+import { AnalyticsCardRail } from "./analytics-card-rail.js";
 
-/** Render the bounded recommendation overview. */
+/** Render coverage and diagnostics without mixing in recommendations. */
 export class OverviewAnalyticsView {
+  constructor() {
+    this.metrics = new AnalyticsCardRail("analytics-overview-card-track");
+    this.modeled = new AnalyticsCardRail("analytics-overview-card-track");
+    this.geometry = new AnalyticsCardRail("analytics-overview-card-track");
+  }
+
   /** @param {HTMLElement} root @param {Record<string, any>} payload */
   render(root, payload) {
-    const stable = arrayValue(payload.stable);
-    const avoid = arrayValue(payload.avoid);
-    const approximate = recordValue(payload.approx);
     root.append(
       reportIntro(
-        "Entscheidungshilfe",
-        "Beobachtete Evidenz und rechnerische Kandidaten bleiben klar getrennt.",
+        "Datenabdeckung",
+        "Die Übersicht zeigt, was die kanonischen Daten tatsächlich abdecken. Empfehlungen stehen ausschließlich in der Render-Analyse.",
       ),
-      recommendationGroup("Stabile Empfehlungen", stable, "stable"),
-      recommendationGroup("Vermeiden", avoid, "avoid"),
-      approximationGroup(approximate),
+      overviewSection(
+        "Abdeckung",
+        "Was in der kanonischen Datenbasis tatsächlich vorhanden ist.",
+        this.metrics,
+        metricCards(payload),
+      ),
+      overviewSection(
+        "Modellierbare Einzelwerte",
+        "Werte mit mindestens drei unabhängigen Bildern; fehlende Variation bleibt neutral.",
+        this.modeled,
+        modeledValueCards(payload.modeled_value_counts),
+      ),
+      overviewSection(
+        "Deskriptive Ausgabegeometrie",
+        "Format und Auflösung beschreiben vorhandene Bilder; sie sind keine Sampler-Empfehlung.",
+        this.geometry,
+        geometryValueCards(payload.geometry_value_counts),
+      ),
     );
   }
+
+  /** Release every owned carousel. */
+  dispose() {
+    this.metrics.dispose();
+    this.modeled.dispose();
+    this.geometry.dispose();
+  }
 }
 
-/** @param {string} title @param {unknown[]} rows @param {string} tone */
-function recommendationGroup(title, rows, tone) {
+/** @param {string} titleText @param {string} descriptionText @param {AnalyticsCardRail} rail @param {HTMLElement[]} cards */
+function overviewSection(titleText, descriptionText, rail, cards) {
   const section = document.createElement("section");
-  section.className = "analytics-recommendations";
-  section.dataset.tone = tone;
-  section.append(sectionTitle(title));
-  if (!rows.length) section.append(emptyMessage("Keine Einträge."));
-  for (const value of rows) {
-    const item = recordValue(value);
-    const card = document.createElement("article");
-    card.textContent = `${textValue(item.label || item.checkpoint)} · ${textValue(item.n)} Belege`;
-    section.append(card);
-  }
+  section.className = "analytics-overview-section";
+  const title = document.createElement("h2");
+  title.textContent = titleText;
+  const description = document.createElement("p");
+  description.textContent = descriptionText;
+  rail.clear();
+  rail.append(...cards);
+  section.append(title, description, rail.element);
   return section;
 }
 
-/** @param {Record<string, any>} approximate */
-function approximationGroup(approximate) {
-  const section = document.createElement("section");
-  section.className = "analytics-approximation";
-  section.append(sectionTitle("Rechnerische Kandidaten"));
-  const rows = arrayValue(approximate.rows);
-  if (!rows.length) {
-    section.append(emptyMessage("Keine rechnerischen Kandidaten."));
+/** @param {Record<string, any>} payload */
+function metricCards(payload) {
+  const cards = [];
+  for (const [label, value] of [
+    ["Aktive Bilder", payload.active_image_count],
+    ["Bewertete Bilder", payload.rated_image_count],
+    ["Beobachtete Render-Setups", payload.observed_setup_count],
+    ["Davon ausreichend gesichtet", payload.stable_setup_count],
+    ["Prompt-verknüpft", payload.prompt_linked_image_count],
+    ["Prompt-Abdeckung fehlt", payload.unlinked_prompt_image_count],
+    ["Legacy-Bilder", payload.legacy_image_count],
+    ["Geometrie projiziert", payload.geometry_projected_count],
+  ]) {
+    const wrapper = document.createElement("article");
+    wrapper.className = "analytics-overview-card";
+    const term = document.createElement("span");
+    term.textContent = label;
+    const description = document.createElement("strong");
+    description.textContent = textValue(value);
+    wrapper.append(term, description);
+    cards.push(wrapper);
   }
-  for (const value of rows) {
-    const item = recordValue(value);
-    const card = document.createElement("article");
-    const content = document.createElement("span");
-    content.textContent = `${settingLine(item)} · ${percentValue(item.pred_success)} prognostiziert`;
-    const action = document.createElement("button");
-    action.type = "button";
-    action.dataset.playgroundIntent = "recommendation";
-    action.dataset.recommendation = JSON.stringify(item);
-    action.textContent = "Im Generator verwenden";
-    card.append(content, action);
-    section.append(card);
+  return cards;
+}
+
+/** @param {unknown} values */
+function modeledValueCards(values) {
+  const cards = [];
+  const rows = recordValue(values);
+  for (const [key, value] of Object.entries(rows)) {
+    cards.push(overviewValueCard(label(key), textValue(value), "Werte"));
   }
-  return section;
+  return cards;
+}
+
+/** @param {unknown} values */
+function geometryValueCards(values) {
+  return (Array.isArray(values) ? values : []).map((value) => {
+    const row = recordValue(value);
+    return overviewValueCard(
+      `${label(String(row.dimension || ""))} ${textValue(row.value)}`,
+      textValue(row.image_count),
+      "Bilder",
+    );
+  });
+}
+
+/** @param {string} title @param {string} value @param {string} unit */
+function overviewValueCard(title, value, unit) {
+  const card = document.createElement("article");
+  card.className = "analytics-overview-card";
+  const heading = document.createElement("span");
+  heading.textContent = title;
+  const amount = document.createElement("strong");
+  amount.textContent = value;
+  const suffix = document.createElement("small");
+  suffix.textContent = unit;
+  card.append(heading, amount, suffix);
+  return card;
+}
+
+/** @param {string} key */
+function label(key) {
+  return (
+    {
+      checkpoint: "Checkpoint",
+      sampler: "Sampler",
+      scheduler: "Scheduler",
+      steps: "Steps",
+      cfg: "CFG",
+      denoise: "Denoise",
+      aspect_format: "Format",
+      resolution_class: "Auflösungsklasse",
+    }[key] || key
+  );
 }

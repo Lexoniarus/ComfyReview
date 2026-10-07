@@ -15,31 +15,57 @@ from comfyreview.application import (
     ArenaPair,
     ArenaResult,
     CatalogEvidenceImage,
+    ContentClassificationError,
+    ContentLevel,
     CurationResult,
+    EvidenceScore,
     GenerationSettings,
     GenerationSubmission,
+    GeneratorPromptSelection,
+    GuidanceBasis,
+    GuidanceConfidence,
+    GuidanceParameter,
+    GuidanceScope,
     ImageClassification,
+    ImageContentClassification,
     ImageContext,
     ImageContextNotFoundError,
+    ImageGeneratorHandoffValidationError,
+    ImageLoraUsage,
     ImagePage,
     ImageScope,
+    LoraDefinition,
+    LoraRevision,
+    ManualPromptSelection,
     PlaygroundDraft,
+    PlaygroundEvidence,
+    PlaygroundEvidenceMatch,
     PlaygroundGenerationSweepPolicy,
     PlaygroundSubmissionBatch,
     PlaygroundSubmissionFailure,
     PromptComponent,
+    PromptComponentCandidate,
+    PromptGuidanceRevisionConflict,
     PromptRenderer,
     PromptRevision,
     PromptSelection,
+    PromptSelectionError,
     PromptSnapshot,
     RenderedPrompt,
+    RenderGuidance,
+    RenderGuidanceCoverage,
+    RenderGuidancePage,
+    RenderRecommendation,
+    RenderSettings,
     ReviewResult,
     ReviewSummary,
     ScopeFacet,
     ScopeKind,
+    SelectedPromptComponent,
     WorkflowProvenance,
 )
 from comfyreview.domain import (
+    PromptAtomUsage,
     prompt_atom_usages_from_text,
     render_prompt_atom_usages,
 )
@@ -134,6 +160,141 @@ class _Curation:
         )
 
 
+class _ImageContentLevels:
+    def set_level(self, image_uid, content_level):
+        if image_uid == "missing":
+            raise ContentClassificationError("unknown image")
+        inferred = ContentLevel.SEXY
+        return ImageContentClassification(
+            inferred_level=inferred,
+            effective_level=content_level or inferred,
+            override_level=content_level,
+        )
+
+
+class _ImageGeneratorHandoffs:
+    def get(self, image_uid):
+        if image_uid == "missing":
+            raise ImageContextNotFoundError("missing")
+        if image_uid == "inconsistent":
+            raise ImageGeneratorHandoffValidationError(
+                "duplicate prompt scope kind: scene"
+            )
+        return SimpleNamespace(
+            image_uid=image_uid,
+            generation_uid="generation-1",
+            prompt_setup=SimpleNamespace(
+                source_image_uid=image_uid,
+                availability="grouped",
+                selections=(
+                    GeneratorPromptSelection(
+                        ScopeKind.CHARACTER, "character-a", "revision-a", 0
+                    ),
+                    GeneratorPromptSelection(
+                        ScopeKind.SCENE, "scene-a", "revision-b", 1
+                    ),
+                    GeneratorPromptSelection(
+                        ScopeKind.OUTFIT, "outfit-a", "revision-c", 2
+                    ),
+                    GeneratorPromptSelection(
+                        ScopeKind.MODIFIER, "modifier-a", "revision-d", 3
+                    ),
+                ),
+                component_uids=(
+                    "character-a",
+                    "scene-a",
+                    "outfit-a",
+                    "modifier-a",
+                ),
+                revision_uids=(
+                    "revision-a",
+                    "revision-b",
+                    "revision-c",
+                    "revision-d",
+                ),
+                positive_atoms=prompt_atom_usages_from_text("hero"),
+                negative_atoms=prompt_atom_usages_from_text("blur"),
+                draft_overridden=False,
+                loras=(),
+                issues=(),
+            ),
+            render_setup=SimpleNamespace(
+                applicable=True,
+                checkpoint="model.safetensors",
+                sampler_stages=(
+                    SimpleNamespace(
+                        role="base_sampler",
+                        order=0,
+                        seed=17,
+                        steps=24,
+                        cfg=6.5,
+                        sampler="euler",
+                        scheduler="normal",
+                        denoise=1.0,
+                    ),
+                ),
+                seed=17,
+                aspect_format="1:1",
+                resolution_class="1080",
+                actual_width=1080,
+                actual_height=1080,
+                target_width=1080,
+                target_height=1080,
+                geometry_match="exact",
+                issues=(),
+            ),
+        )
+
+
+class _LoraCatalog:
+    def list_definitions(self):
+        return (
+            LoraDefinition(
+                "lora-style",
+                "style.safetensors",
+                ContentLevel.LEWD,
+                1,
+                latest_revision=LoraRevision(
+                    "lora-revision-style",
+                    1,
+                    1000,
+                    1000,
+                    ContentLevel.LEWD,
+                    "hash",
+                    prompt_atom_usages_from_text("style trigger"),
+                    (),
+                ),
+            ),
+        )
+
+
+class _LoraDrafts:
+    def resolve(self, selections):
+        return tuple(
+            SimpleNamespace(
+                selection=replace(selection, name="style.safetensors"),
+                display_name="Style",
+                revision=SimpleNamespace(
+                    revision_uid="lora-revision-style",
+                    positive_atoms=prompt_atom_usages_from_text(
+                        "style trigger"
+                    ),
+                    negative_atoms=(),
+                ),
+            )
+            for selection in selections
+        )
+
+
+class _LoraTriggers:
+    def validate(self, selections, positive_atoms, negative_atoms):
+        del selections, negative_atoms
+        if not any(atom.text == "style trigger" for atom in positive_atoms):
+            raise ContentClassificationError(
+                "lora_trigger_required: style trigger"
+            )
+
+
 class _Arena:
     command = None
 
@@ -173,6 +334,7 @@ def _prompt_component(
 class _PromptCatalog:
     def __init__(self) -> None:
         self.component = _prompt_component()
+        self.candidate_command = None
 
     def list_components(self, *, include_archived=False):
         return (
@@ -224,6 +386,65 @@ class _PromptCatalog:
         )
         return self.component
 
+    def materialize_candidate(self, command):
+        self.candidate_command = command
+        return PromptComponentCandidate(
+            candidate_uid="candidate-a",
+            component_uid=command.component_uid,
+            source_revision_uid=command.source_revision_uid,
+            candidate_type=command.candidate_type,
+            content_hash="candidate-hash",
+            positive_atoms=command.positive_atoms,
+            negative_atoms=command.negative_atoms,
+        )
+
+
+class _PromptVariantGuidance:
+    def __init__(self) -> None:
+        self.request: tuple[object, object] | None = None
+
+    def build(self, component_uid, *, expected_revision_uid):
+        self.request = (component_uid, expected_revision_uid)
+        if expected_revision_uid == "revision-stale":
+            raise PromptGuidanceRevisionConflict("prompt standard changed")
+        recipe = SimpleNamespace(
+            positive_atoms=(PromptAtomUsage("positive character-a", 1100),),
+            negative_atoms=(),
+        )
+        score = SimpleNamespace(
+            lower_bound=0.6,
+            expected_success_rate=0.8,
+            average_rating=8.5,
+            image_count=5,
+            review_count=6,
+            deleted_count=1,
+            standard_deviation=0.1,
+            sufficiently_observed=True,
+        )
+        recommendation = SimpleNamespace(
+            recipe=recipe,
+            score=score,
+            image_uids=("image-1",),
+            revision_uid="revision-character-a",
+            candidate_uid=None,
+        )
+        return SimpleNamespace(
+            model_version="prompt-guidance-v1",
+            current_provisional=False,
+            current_standard=recommendation,
+            best_observed=recommendation,
+            optimized=recommendation,
+            next_test=recommendation,
+            coverage=SimpleNamespace(
+                image_count=5,
+                review_count=6,
+                observed_variant_count=1,
+                stable_variant_count=1,
+                modeled_atom_count=1,
+                atom_count=1,
+            ),
+        )
+
 
 class _CatalogEvidence:
     def list_top_images(self, component_uid, *, limit=3):
@@ -232,6 +453,22 @@ class _CatalogEvidence:
         return (
             CatalogEvidenceImage("evidence-1", 9.25, 4),
             CatalogEvidenceImage("evidence-2", None, 0),
+        )
+
+    def list_top_lora_images(self, lora_uid, *, limit=3):
+        assert lora_uid == "lora-style"
+        assert limit == 3
+        return (CatalogEvidenceImage("evidence-1", 9.25, 4),)
+
+
+class _PlaygroundEvidence:
+    query = None
+
+    def find(self, query):
+        self.query = query
+        return PlaygroundEvidence(
+            PlaygroundEvidenceMatch("image-prompt", 9.0, 4),
+            PlaygroundEvidenceMatch("image-sampler", 8.0, 3),
         )
 
 
@@ -243,20 +480,71 @@ class _Playground:
     def list_available_components(self):
         return (_prompt_component(),)
 
+    def list_generator_components(self):
+        return self.list_available_components()
+
     def prepare_draft(self, command, *, overrides=None):
         self.command = command
         self.overrides = overrides
-        return PlaygroundDraft(
-            PromptSelection(
-                (_prompt_component(), _prompt_component("scene-a", "scene"))
+        character = _prompt_component()
+        scene = _prompt_component("scene-a", "scene")
+        character_revision = character.latest_revision
+        character_revision_uid = getattr(
+            command,
+            "character_revision_uid",
+            None,
+        )
+        if character_revision_uid is not None:
+            character_revision = replace(
+                character_revision,
+                revision_uid=character_revision_uid,
+            )
+        character_candidate_uid = getattr(
+            command,
+            "character_candidate_uid",
+            None,
+        )
+        character_candidate = (
+            PromptComponentCandidate(
+                candidate_uid=character_candidate_uid,
+                component_uid=character.component_uid,
+                source_revision_uid=character_revision.revision_uid,
+                candidate_type="calculated",
+                content_hash="candidate-hash",
+                positive_atoms=prompt_atom_usages_from_text(
+                    "candidate positive"
+                ),
+                negative_atoms=(),
+            )
+            if character_candidate_uid
+            else None
+        )
+        scene_revision = scene.latest_revision
+        manual_selections = getattr(command, "manual_selections", ())
+        if manual_selections:
+            requested_revision_uid = manual_selections[0].revision_uid
+            if requested_revision_uid is not None:
+                scene_revision = replace(
+                    scene_revision,
+                    revision_uid=requested_revision_uid,
+                )
+        selected = (
+            SelectedPromptComponent(
+                character,
+                character_revision,
+                character_candidate,
             ),
+            SelectedPromptComponent(scene, scene_revision),
+        )
+        return PlaygroundDraft(
+            PromptSelection(selected),
             RenderedPrompt(
                 render_prompt_atom_usages(overrides.positive_atoms)
                 if overrides and overrides.positive_atoms is not None
                 else "rendered positive",
                 "rendered negative",
                 "notes",
-                ("revision-character-a", "revision-scene-a"),
+                tuple(item.revision.revision_uid for item in selected),
                 overrides is not None,
                 overrides.positive_atoms
                 if overrides and overrides.positive_atoms is not None
@@ -273,19 +561,62 @@ class _Playground:
         self.composition_uid = composition_uid
         return self.prepare_draft(SimpleNamespace(), overrides=None)
 
+    def resolve_composition_selection(self, composition_uid):
+        self.composition_uid = composition_uid
+        character = _prompt_component()
+        scene = _prompt_component("scene-a", "scene")
+        selection = PromptSelection(
+            (
+                SelectedPromptComponent(
+                    character,
+                    replace(
+                        character.latest_revision,
+                        revision_uid="character-historical",
+                    ),
+                ),
+                SelectedPromptComponent(
+                    scene,
+                    replace(
+                        scene.latest_revision,
+                        revision_uid="scene-historical",
+                    ),
+                ),
+            ),
+        )
+        self.composition_selection = selection
+        return selection
+
     def confirm_draft(self, command):
         self.confirm_command = command
-        if "missing" in command.component_uids:
+        if any(
+            selection.component_uid == "missing"
+            for selection in command.prompt_selections
+        ):
             raise KeyError("missing")
+        components = (
+            _prompt_component(),
+            _prompt_component("scene-a", "scene"),
+        )
+        components_by_uid = {
+            component.component_uid: component for component in components
+        }
+        selected = tuple(
+            SelectedPromptComponent(
+                components_by_uid[selection.component_uid],
+                replace(
+                    components_by_uid[selection.component_uid].latest_revision,
+                    revision_uid=selection.revision_uid,
+                ),
+            )
+            for selection in command.prompt_selections
+        )
         return PlaygroundDraft(
-            PromptSelection(
-                (_prompt_component(), _prompt_component("scene-a", "scene"))
-            ),
+            PromptSelection(selected),
             RenderedPrompt(
                 render_prompt_atom_usages(command.positive_atoms),
                 render_prompt_atom_usages(command.negative_atoms),
                 "notes",
-                ("revision-character-a", "revision-scene-a"),
+                tuple(item.revision.revision_uid for item in selected),
                 render_prompt_atom_usages(command.positive_atoms)
                 != "rendered positive",
                 command.positive_atoms,
@@ -381,6 +712,7 @@ def _generation_summary():
         started_at=None,
         completed_at="2026-01-01 00:01:00",
         output_count=1,
+        failure_reason=None,
     )
 
 
@@ -391,12 +723,13 @@ class _PlaygroundDiscovery:
             samplers=["euler"],
             schedulers=["normal"],
             loras=["style.safetensors"],
+            upscale_models=["example-upscaler.pth"],
         )
 
 
 class _WorkflowDefaults:
     def load(self, blueprint_uid, version):
-        assert (blueprint_uid, version) == ("default-character", 3)
+        assert (blueprint_uid, version) == ("default-character", 4)
         return SimpleNamespace(
             checkpoint="model.safetensors",
             sampler=SimpleNamespace(
@@ -498,20 +831,137 @@ class _AnalyticsPages:
     def playground_combinations_context(self, **values):
         self.call = ("playground-combinations", values)
         return {
-            "two_component": [
+            "characters": [
                 {
-                    "combo_key": "character-a|scene-a",
-                    "component_uids": ["character-a", "scene-a"],
-                    "component_names": ["Aiko", "Rooftop"],
-                    "label": "Aiko + Rooftop",
-                    "average_rating": 8.5,
-                    "image_count": 2,
-                    "rating_count": 4,
-                    "best_images": [{"url": "/files/output/image-1.png"}],
+                    "character_uid": "character-a",
+                    "character_name": "Aiko",
+                    "two_component": [
+                        {
+                            "combo_key": "character-a|scene-a",
+                            "component_uids": ["character-a", "scene-a"],
+                            "component_names": ["Aiko", "Rooftop"],
+                            "label": "Aiko + Rooftop",
+                            "average_rating": 8.5,
+                            "image_count": 2,
+                            "rating_count": 4,
+                            "best_images": [
+                                {"url": "/files/output/image-1.png"}
+                            ],
+                        }
+                    ],
+                    "three_component": [],
                 }
-            ],
-            "three_component": [],
+            ]
         }
+
+
+class _AnalyticsCoverage:
+    def load(self):
+        return SimpleNamespace(
+            active_image_count=12,
+            rated_image_count=10,
+            prompt_linked_image_count=9,
+            unlinked_prompt_image_count=3,
+            legacy_image_count=2,
+            geometry_projected_count=11,
+            missing_geometry_count=1,
+            observed_setup_count=7,
+            stable_setup_count=2,
+            modeled_value_counts=(("sampler", 3),),
+            geometry_value_counts=(("aspect_format", "1:1", 12),),
+            model_version="render-guidance-v1",
+        )
+
+
+class _RenderGuidance:
+    def __init__(self) -> None:
+        settings = RenderSettings(
+            "model.safetensors", "euler", "normal", 24, 6.5, 1.0
+        )
+        score = EvidenceScore(
+            GuidanceBasis.OBSERVED,
+            0.8,
+            0.8,
+            0.6,
+            8.0,
+            6,
+            8,
+            GuidanceConfidence.LOW,
+            True,
+            True,
+            1.0,
+        )
+        self.recommendation = RenderRecommendation(settings, score, True)
+        self.coverage = RenderGuidanceCoverage(
+            6, 8, 1, 1, ((GuidanceParameter.SAMPLER, 1),)
+        )
+
+    def build(self, **_values):
+        return RenderGuidance(
+            self.recommendation,
+            None,
+            self.recommendation,
+            self.recommendation,
+            None,
+            None,
+            (),
+            (self.recommendation,),
+            (),
+            self.coverage,
+        )
+
+    def query(self, **values):
+        if values.get("parameter") == "seed":
+            raise ValueError("unsupported render parameter")
+        return RenderGuidancePage(
+            GuidanceBasis.OBSERVED,
+            GuidanceScope.SETUP,
+            None,
+            (self.recommendation,),
+            1,
+            1,
+            1,
+            0,
+            24,
+            self.coverage,
+        )
+
+
+class _PlaygroundRenderGuidance:
+    def __init__(self, guidance: _RenderGuidance) -> None:
+        self.guidance = guidance
+
+    def build(self, _settings):
+        return self.guidance.build()
+
+
+class _PlaygroundGeneratorSettings:
+    def __init__(self) -> None:
+        self.settings = {
+            "selections": [],
+            "loras": [],
+            "checkpoint": "model.safetensors",
+            "sampler": "euler",
+            "scheduler": "normal",
+            "seed_mode": "fixed",
+            "seed": 17,
+            "steps_min": 24,
+            "steps_max": 24,
+            "cfg_min": 6.5,
+            "cfg_max": 6.5,
+            "cfg_step": 0.1,
+            "denoise": 1.0,
+            "batch_runs": 1,
+            "aspect_format": "1:1",
+            "resolution_class": "1080",
+        }
+
+    def load(self):
+        return dict(self.settings)
+
+    def save(self, settings):
+        self.settings = dict(settings)
+        return dict(self.settings)
 
 
 def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
@@ -545,7 +995,17 @@ def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
         rankings.json()["items"][0]["image_url"] == "/files/output/image-1.png"
     )
     assert "prompt_snapshot" not in rankings.json()["items"][0]
-    assert container.image_contexts.query.filters.minimum_rating_count == 2
+    assert rankings.json()["items"][0]["loras"] == [
+        {
+            "lora_uid": "lora-style",
+            "revision_uid": "lora-revision-style",
+            "provider_name": "style.safetensors",
+            "position": 0,
+            "model_strength": 0.75,
+            "clip_strength": 0.5,
+        }
+    ]
+    assert container.image_contexts.query.filters.minimum_rating_count == 1
 
 
 def test_v2_image_context_has_url_but_never_exposes_local_path() -> None:
@@ -558,6 +1018,91 @@ def test_v2_image_context_has_url_but_never_exposes_local_path() -> None:
     assert response.json()["prompt_snapshot"]["positive"] == "positive"
     assert "png_path" not in response.text
     assert "json_path" not in response.text
+
+
+def test_v2_image_generator_handoff_exposes_visible_prompt_components() -> (
+    None
+):
+    client, _container = _client()
+
+    response = client.get("/api/v2/images/image-1/generator-handoff")
+
+    assert response.status_code == 200
+    assert response.json()["prompt_setup"]["component_uids"] == [
+        "character-a",
+        "scene-a",
+        "outfit-a",
+        "modifier-a",
+    ]
+    assert response.json()["prompt_setup"]["revision_uids"] == [
+        "revision-a",
+        "revision-b",
+        "revision-c",
+        "revision-d",
+    ]
+    assert response.json()["prompt_setup"]["selections"] == [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "revision_uid": "revision-a",
+            "position": 0,
+        },
+        {
+            "kind": "scene",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-b",
+            "position": 1,
+        },
+        {
+            "kind": "outfit",
+            "component_uid": "outfit-a",
+            "revision_uid": "revision-c",
+            "position": 2,
+        },
+        {
+            "kind": "modifier",
+            "component_uid": "modifier-a",
+            "revision_uid": "revision-d",
+            "position": 3,
+        },
+    ]
+
+
+def test_v2_image_generator_handoff_reports_inconsistent_scopes() -> None:
+    client, _container = _client()
+
+    response = client.get("/api/v2/images/inconsistent/generator-handoff")
+
+    assert response.status_code == 409
+    error = response.json()["error"]
+    assert error["code"] == "inconsistent_generator_handoff"
+    assert error["message"] == "duplicate prompt scope kind: scene"
+
+
+def test_v2_image_content_level_supports_override_and_inherit() -> None:
+    client, _container = _client()
+
+    overridden = client.put(
+        "/api/v2/images/image-1/content-level",
+        json={"content_level": "nude"},
+    )
+    inherited = client.put(
+        "/api/v2/images/image-1/content-level",
+        json={"content_level": None},
+    )
+    missing = client.put(
+        "/api/v2/images/missing/content-level",
+        json={"content_level": "explicit"},
+    )
+
+    assert overridden.json() == {
+        "inferred_level": "sexy",
+        "effective_level": "nude",
+        "override_level": "nude",
+    }
+    assert inherited.json()["effective_level"] == "sexy"
+    assert inherited.json()["override_level"] is None
+    assert missing.status_code == 404
 
 
 def test_v2_review_history_exposes_append_only_events() -> None:
@@ -682,6 +1227,7 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
     catalog = client.get("/api/v2/catalog/components")
     playground_catalog = client.get("/api/v2/playground/components")
     capabilities = client.get("/api/v2/playground/capabilities")
+    loras = client.get("/api/v2/catalog/loras")
 
     assert catalog.status_code == 200
     assert catalog.json()["components"][0]["component_uid"] == "character-a"
@@ -694,6 +1240,7 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "negative_atoms": [{"text": "negative", "weight": 1.0}],
     }
     assert playground_catalog.status_code == 200
+    assert loras.json()["loras"][0]["available"] is True
     assert playground_catalog.json()["components"][0]["component_uid"] == (
         "character-a"
     )
@@ -702,6 +1249,31 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
         "samplers": ["euler"],
         "schedulers": ["normal"],
         "loras": ["style.safetensors"],
+        "lora_definitions": [
+            {
+                "lora_uid": "lora-style",
+                "provider_name": "style.safetensors",
+                "display_name": "style.safetensors",
+                "tags": [],
+                "notes": "",
+                "revision": 1,
+                "archived": False,
+                "latest_revision": {
+                    "revision_uid": "lora-revision-style",
+                    "revision_number": 1,
+                    "content_level": "lewd",
+                    "default_model_strength": 1.0,
+                    "default_clip_strength": 1.0,
+                    "content_hash": "hash",
+                    "positive_atoms": [
+                        {"text": "style trigger", "weight": 1.0}
+                    ],
+                    "negative_atoms": [],
+                },
+                "available": True,
+            }
+        ],
+        "upscale_models": ["example-upscaler.pth"],
         "defaults": {
             "checkpoint": "model.safetensors",
             "seed": 1,
@@ -714,10 +1286,161 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
     }
     combinations = client.get("/api/v2/playground/top-combinations")
     assert combinations.status_code == 200
-    assert combinations.json()["two_component"][0]["component_uids"] == [
+    assert combinations.json()["characters"][0]["two_component"][0][
+        "component_uids"
+    ] == [
         "character-a",
         "scene-a",
     ]
+
+
+def test_v2_playground_projects_exact_composition_prompt_selections() -> None:
+    client, container = _client()
+
+    response = client.get(
+        "/api/v2/playground/compositions/composition-a/prompt-selections"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "selections": [
+            {
+                "kind": "character",
+                "component_uid": "character-a",
+                "revision_uid": "character-historical",
+            },
+            {
+                "kind": "scene",
+                "component_uid": "scene-a",
+                "revision_uid": "scene-historical",
+            },
+        ]
+    }
+    assert container.playground_service.composition_uid == "composition-a"
+    assert tuple(
+        selected.revision.revision_uid
+        for selected in container.playground_service.composition_selection.components
+    ) == ("character-historical", "scene-historical")
+
+
+def test_v2_playground_composition_handoff_surfaces_selection_rejection() -> (
+    None
+):
+    client, container = _client()
+
+    for message in (
+        "composition contains an inactive prompt component",
+        "prompt selection contains a disabled content level",
+    ):
+
+        def reject_composition(
+            composition_uid: str,
+            expected_message: str = message,
+        ) -> PromptSelection:
+            assert composition_uid == "composition-rejected"
+            raise PromptSelectionError(expected_message)
+
+        container.playground_service.resolve_composition_selection = (
+            reject_composition
+        )
+        response = client.get(
+            "/api/v2/playground/compositions/composition-rejected/prompt-selections"
+        )
+
+        assert response.status_code == 400
+        assert response.json()["error"]["message"] == message
+
+
+def test_v2_playground_generator_state_round_trips_strict_payload() -> None:
+    client, container = _client()
+
+    current = client.get("/api/v2/playground/generator-state")
+    selections = [
+        {
+            "kind": "character",
+            "mode": "fixed",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-old",
+            "candidate_uid": None,
+        }
+    ]
+    changed = {
+        **current.json(),
+        "selections": selections,
+        "steps_min": 28,
+        "steps_max": 32,
+    }
+    saved = client.put(
+        "/api/v2/playground/generator-state",
+        json=changed,
+    )
+    restored = client.get("/api/v2/playground/generator-state")
+    invalid = client.put(
+        "/api/v2/playground/generator-state",
+        json={**changed, "unknown": True},
+    )
+
+    assert current.status_code == 200
+    assert saved.status_code == 200
+    assert saved.json()["steps_min"] == 28
+    assert saved.json()["selections"] == selections
+    assert restored.json()["selections"] == selections
+    assert container.playground_generator_settings.settings == changed
+    assert invalid.status_code == 422
+
+
+def test_v2_playground_prompt_guidance_and_candidate_materialization() -> None:
+    client, container = _client()
+    atoms = [{"text": "positive character-a", "weight": 1.1}]
+
+    guidance = client.post(
+        "/api/v2/playground/prompt-guidance",
+        json={
+            "component_uid": "character-a",
+            "source_revision_uid": "revision-character-a",
+        },
+    )
+    candidate = client.post(
+        "/api/v2/playground/prompt-candidates",
+        json={
+            "component_uid": "character-a",
+            "source_revision_uid": "revision-character-a",
+            "candidate_type": "calculated",
+            "positive_atoms": atoms,
+            "negative_atoms": [],
+        },
+    )
+    assert guidance.status_code == 200
+    assert container.prompt_variant_guidance.request == (
+        "character-a",
+        "revision-character-a",
+    )
+    assert guidance.json()["optimized"]["positive_atoms"] == atoms
+    assert guidance.json()["optimized"]["score"] == {
+        "lower_bound": 0.6,
+        "expected_success_rate": 0.8,
+        "average_rating": 8.5,
+        "image_count": 5,
+        "review_count": 6,
+        "deleted_count": 1,
+        "standard_deviation": 0.1,
+        "sufficiently_observed": True,
+    }
+    assert candidate.status_code == 200
+    stale = client.post(
+        "/api/v2/playground/prompt-guidance",
+        json={
+            "component_uid": "character-a",
+            "source_revision_uid": "revision-stale",
+        },
+    )
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "stale_prompt_revision"
+    assert candidate.json()["candidate_uid"] == "candidate-a"
+    assert (
+        container.prompt_catalog_service.candidate_command.candidate_type
+        == "calculated"
+    )
 
 
 def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
@@ -732,6 +1455,7 @@ def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
         json={
             "kind": "scene",
             "name": "Rainy street",
+            "content_level": "standard",
             "tags": ["rain"],
             "notes": "note",
             "positive_atoms": [{"text": "rainy street", "weight": 1.0}],
@@ -743,6 +1467,7 @@ def test_v2_catalog_reads_revision_history_and_mutates_without_deleting() -> (
         json={
             "kind": "scene",
             "name": "Rainy street night",
+            "content_level": "standard",
             "tags": ["rain", "night"],
             "positive_atoms": [
                 {"text": "rainy street at night", "weight": 1.0}
@@ -783,6 +1508,7 @@ def test_v2_catalog_rejects_missing_components_and_kind_changes() -> None:
     payload = {
         "kind": "scene",
         "name": "Scene",
+        "content_level": "standard",
         "positive_atoms": [{"text": "scene", "weight": 1.0}],
     }
 
@@ -805,8 +1531,19 @@ def test_v2_catalog_rejects_missing_components_and_kind_changes() -> None:
 def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
     client, container = _client()
     selections = [
-        {"kind": "character", "mode": "fixed", "component_uid": "character-a"},
-        {"kind": "scene", "mode": "fixed", "component_uid": "scene-a"},
+        {
+            "kind": "character",
+            "mode": "fixed",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-old",
+            "candidate_uid": "candidate-calculated",
+        },
+        {
+            "kind": "scene",
+            "mode": "fixed",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-old",
+        },
         {"kind": "outfit", "mode": "random"},
         {"kind": "pose", "mode": "off"},
         {"kind": "expression", "mode": "random"},
@@ -818,24 +1555,87 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         "/api/v2/playground/drafts",
         json={
             "selections": selections,
-            "seed": 17,
+            "generation": _draft_generation(seed=17),
             "positive_atoms": [{"text": "draft positive", "weight": 1.0}],
         },
     )
 
     assert response.status_code == 200
+    assert response.json()["draft_uid"].startswith("draft-")
+    assert response.json()["seed"] == 17
     assert response.json()["positive_prompt"] == "draft positive"
     assert response.json()["revision_uids"] == [
-        "revision-character-a",
-        "revision-scene-a",
+        "revision-character-old",
+        "revision-scene-old",
+    ]
+    assert response.json()["prompt_selections"] == [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-old",
+        },
+        {
+            "kind": "scene",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-old",
+        },
+    ]
+    assert (
+        response.json()["components"][0]["latest_revision"]["revision_uid"]
+        == "revision-character-a"
+    )
+    assert response.json()["groups"][0]["revision_uid"] == (
+        "revision-character-old"
+    )
+    assert response.json()["groups"][0]["candidate_uid"] == (
+        "candidate-calculated"
+    )
+    assert response.json()["prompt_groups"][0]["candidate_uid"] == (
+        "candidate-calculated"
+    )
+    assert response.json()["prompt_groups"][0]["positive_atoms"] == [
+        {"text": "candidate positive", "weight": 1.0}
+    ]
+    assert response.json()["groups"][1]["revision_uid"] == (
+        "revision-scene-old"
+    )
+    assert response.json()["groups"][1]["positive_atoms"] == [
+        {"text": "positive scene-a", "weight": 1.0}
     ]
     assert container.playground_service.command.character_component_uid == (
         "character-a"
+    )
+    assert (
+        container.playground_service.command.character_revision_uid
+        == "revision-character-old"
+    )
+    assert container.playground_service.command.character_candidate_uid == (
+        "candidate-calculated"
+    )
+    assert container.playground_service.command.manual_selections[0] == (
+        ManualPromptSelection("scene", "scene-a", "revision-scene-old")
     )
     assert container.playground_service.command.disabled_kinds == (
         "pose",
         "lighting",
     )
+    for selection_index in (2, 3):
+        invalid_revision_mode = [dict(selection) for selection in selections]
+        invalid_revision_mode[selection_index]["revision_uid"] = (
+            "revision-not-fixed"
+        )
+        rejected = client.post(
+            "/api/v2/playground/drafts",
+            json={
+                "selections": invalid_revision_mode,
+                "generation": _draft_generation(seed=17),
+            },
+        )
+        assert rejected.status_code == 400
+        assert rejected.json()["error"]["code"] == (
+            "invalid_playground_selection"
+        )
+
     preview = client.post(
         "/api/v2/playground/render-preview",
         json={
@@ -851,6 +1651,103 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         "negative_prompt": "blur",
     }
 
+    randomized = client.post(
+        "/api/v2/playground/drafts",
+        json={
+            "selections": selections,
+            "generation": _draft_generation(seed=None),
+        },
+    )
+    concrete_seed = randomized.json()["seed"]
+    assert isinstance(concrete_seed, int)
+    assert container.playground_service.command.seed == concrete_seed
+
+    evidence = client.post(
+        "/api/v2/playground/evidence",
+        json={
+            **_draft_generation(),
+            "positive_atoms": [{"text": "hero", "weight": 1.01}],
+            "negative_atoms": [{"text": "blur", "weight": 1.0}],
+        },
+    )
+    assert evidence.json()["prompt_match"]["image_uid"] == "image-prompt"
+    assert evidence.json()["sampler_match"]["image_uid"] == "image-sampler"
+    assert (
+        container.playground_evidence.query.positive_atoms[0].weight_milli
+        == 1010
+    )
+
+
+def test_v2_playground_draft_appends_selected_lora_triggers() -> None:
+    client, _container = _client()
+
+    response = client.post(
+        "/api/v2/playground/drafts",
+        json={
+            "selections": [
+                {
+                    "kind": kind,
+                    "mode": "fixed" if kind == "character" else "off",
+                    **(
+                        {"component_uid": "character-a"}
+                        if kind == "character"
+                        else {}
+                    ),
+                }
+                for kind in (
+                    "character",
+                    "scene",
+                    "outfit",
+                    "pose",
+                    "expression",
+                    "lighting",
+                    "modifier",
+                )
+            ],
+            "generation": _draft_generation(),
+            "loras": [
+                {
+                    "lora_uid": "lora-style",
+                    "revision_uid": "lora-revision-style",
+                    "model_strength": 0.8,
+                    "clip_strength": 0.7,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert (
+        response.json()["positive_prompt"]
+        == "rendered positive, style trigger"
+    )
+    assert response.json()["positive_atoms"][-1] == {
+        "text": "style trigger",
+        "weight": 1.0,
+    }
+    assert response.json()["groups"][-1]["kind"] == "lora"
+    assert response.json()["groups"][-1]["positive_atoms"] == [
+        {"text": "style trigger", "weight": 1.0}
+    ]
+
+    missing_trigger = client.post(
+        "/api/v2/playground/render-preview",
+        json={
+            "positive_atoms": [{"text": "rendered positive", "weight": 1.0}],
+            "negative_atoms": [],
+            "loras": [
+                {
+                    "lora_uid": "lora-style",
+                    "revision_uid": "lora-revision-style",
+                    "model_strength": 0.8,
+                    "clip_strength": 0.7,
+                }
+            ],
+        },
+    )
+    assert missing_trigger.status_code == 400
+    assert missing_trigger.json()["error"]["code"] == ("lora_trigger_required")
+
 
 def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
     None
@@ -859,7 +1756,10 @@ def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
 
     incomplete = client.post(
         "/api/v2/playground/drafts",
-        json={"selections": [{"kind": "character", "mode": "random"}]},
+        json={
+            "selections": [{"kind": "character", "mode": "random"}],
+            "generation": _draft_generation(),
+        },
     )
     selections = [
         {"kind": kind, "mode": "off"}
@@ -874,7 +1774,8 @@ def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
         )
     ]
     disabled = client.post(
-        "/api/v2/playground/drafts", json={"selections": selections}
+        "/api/v2/playground/drafts",
+        json={"selections": selections, "generation": _draft_generation()},
     )
 
     assert incomplete.status_code == 400
@@ -891,17 +1792,24 @@ def test_v2_playground_accepts_exact_revision_and_composition_handoffs() -> (
 
     revisions = client.post(
         "/api/v2/playground/drafts",
-        json={"revision_uids": ["revision-character-a", "revision-scene-a"]},
+        json={
+            "revision_uids": ["revision-character-a", "revision-scene-a"],
+            "generation": _draft_generation(),
+        },
     )
     composition = client.post(
         "/api/v2/playground/drafts",
-        json={"composition_uid": "composition-a"},
+        json={
+            "composition_uid": "composition-a",
+            "generation": _draft_generation(),
+        },
     )
     mixed = client.post(
         "/api/v2/playground/drafts",
         json={
             "composition_uid": "composition-a",
             "revision_uids": ["revision-character-a"],
+            "generation": _draft_generation(),
         },
     )
 
@@ -921,14 +1829,39 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
     client, container = _client()
     payload = {
         "draft_uid": "draft-1",
-        "component_uids": ["character-a", "scene-a"],
+        "prompt_selections": [
+            {
+                "kind": "character",
+                "component_uid": "character-a",
+                "revision_uid": "revision-character-old",
+            },
+            {
+                "kind": "scene",
+                "component_uid": "scene-a",
+                "revision_uid": "revision-scene-old",
+            },
+        ],
+        "prompt_groups": [
+            {
+                "kind": "character",
+                "component_uid": "character-a",
+                "revision_uid": "revision-character-old",
+                "positive_atoms": [{"text": "edited positive", "weight": 1.0}],
+                "negative_atoms": [{"text": "edited negative", "weight": 1.0}],
+            },
+            {
+                "kind": "scene",
+                "component_uid": "scene-a",
+                "revision_uid": "revision-scene-old",
+                "positive_atoms": [],
+                "negative_atoms": [],
+            },
+        ],
         "positive_atoms": [{"text": "edited positive", "weight": 1.0}],
         "negative_atoms": [{"text": "edited negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
-        "blueprint_uid": "default-character",
-        "blueprint_version": 3,
-        "image_width": 768,
-        "image_height": 1152,
+        "aspect_format": "2:3",
+        "resolution_class": "1080",
         "sampler": {
             "seed": 42,
             "steps": 24,
@@ -957,15 +1890,25 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
     draft = container.playground_submission_service.draft
     assert draft.prompt.positive_text == "edited positive"
     assert draft.prompt.revision_uids == (
-        "revision-character-a",
-        "revision-scene-a",
+        "revision-character-old",
+        "revision-scene-old",
     )
     assert draft.output_subdirectory == "playground/character-a-key"
-    assert (draft.image_width, draft.image_height) == (768, 1152)
-    assert draft.blueprint_version == 3
-    assert container.playground_service.confirm_command.component_uids == (
-        "character-a",
-        "scene-a",
+    assert draft.aspect_format.value == "2:3"
+    assert draft.resolution_class.value == "1080"
+    assert draft.blueprint_version == 4
+    assert tuple(
+        (
+            selection.kind,
+            selection.component_uid,
+            selection.revision_uid,
+        )
+        for selection in (
+            container.playground_service.confirm_command.prompt_selections
+        )
+    ) == (
+        ("character", "character-a", "revision-character-old"),
+        ("scene", "scene-a", "revision-scene-old"),
     )
 
 
@@ -975,10 +1918,27 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     client, container = _client()
     payload: dict[str, Any] = {
         "draft_uid": "draft-1",
-        "component_uids": ["missing"],
+        "prompt_selections": [
+            {
+                "kind": "character",
+                "component_uid": "missing",
+                "revision_uid": "revision-missing",
+            }
+        ],
+        "prompt_groups": [
+            {
+                "kind": "character",
+                "component_uid": "missing",
+                "revision_uid": "revision-missing",
+                "positive_atoms": [{"text": "positive", "weight": 1.0}],
+                "negative_atoms": [{"text": "negative", "weight": 1.0}],
+            }
+        ],
         "positive_atoms": [{"text": "positive", "weight": 1.0}],
         "negative_atoms": [{"text": "negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
+        "aspect_format": "2:3",
+        "resolution_class": "1080",
         "sampler": {
             "seed": 42,
             "steps": 24,
@@ -990,7 +1950,35 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     }
 
     invalid = client.post("/api/v2/generations", json=payload)
-    payload["component_uids"] = ["character-a", "scene-a"]
+    assert container.playground_submission_service.draft is None
+    payload["prompt_selections"] = [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-a",
+        },
+        {
+            "kind": "scene",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-a",
+        },
+    ]
+    payload["prompt_groups"] = [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-a",
+            "positive_atoms": [{"text": "positive", "weight": 1.0}],
+            "negative_atoms": [{"text": "negative", "weight": 1.0}],
+        },
+        {
+            "kind": "scene",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-a",
+            "positive_atoms": [],
+            "negative_atoms": [],
+        },
+    ]
     bad_sweep = {
         **payload,
         "sampler": {**payload["sampler"], "steps_max": 20},
@@ -1002,6 +1990,8 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     graph_payload = dict(payload)
     graph_payload["workflow_graph"] = {"42": {"class_type": "SaveImage"}}
     graph = client.post("/api/v2/generations", json=graph_payload)
+    legacy_payload = {**payload, "component_uids": ["character-a"]}
+    legacy = client.post("/api/v2/generations", json=legacy_payload)
 
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "invalid_generation"
@@ -1009,6 +1999,22 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
     assert failed.status_code == 500
     assert failed.json()["error"]["code"] == "generation_failed"
     assert graph.status_code == 422
+    assert legacy.status_code == 422
+
+
+def _draft_generation(seed: int | None = 17) -> dict[str, object]:
+    return {
+        "checkpoint": "model.safetensors",
+        "sampler": "euler",
+        "scheduler": "normal",
+        "seed": seed,
+        "randomize_seed": seed is None,
+        "steps": 24,
+        "cfg": 6.5,
+        "denoise": 1.0,
+        "aspect_format": "2:3",
+        "resolution_class": "1080",
+    }
 
 
 def test_v2_generation_reads_expose_lifecycle_outputs_and_urls() -> None:
@@ -1059,37 +2065,30 @@ def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() ->
         "/api/v2/analytics/overview", params={"model": "anime"}
     )
     scopes = client.get("/api/v2/analytics/scopes")
-    parameters = client.get("/api/v2/analytics/parameters")
-    parameter_values = client.get(
-        "/api/v2/analytics/parameters",
-        params={"view": "values", "parameter": "steps"},
-    )
+    render = client.get("/api/v2/analytics/render")
     combinations = client.get(
         "/api/v2/analytics/combinations", params={"min_n": 2}
-    )
-    render_setups = client.get(
-        "/api/v2/analytics/combinations", params={"view": "render"}
     )
     composition_setups = client.get(
         "/api/v2/analytics/combinations/composition-a/render-setups"
     )
     invalid_parameter = client.get(
-        "/api/v2/analytics/parameters",
-        params={"view": "values", "parameter": "seed"},
+        "/api/v2/analytics/render",
+        params={"scope": "parameter", "parameter": "seed"},
     )
+    retired_parameters = client.get("/api/v2/analytics/parameters")
 
-    assert overview.json()["stable"] == [{"label": "stable"}]
+    assert overview.json()["observed_setup_count"] == 7
     assert scopes.json()["rows"][0]["component_uid"] == "character-a"
-    assert parameters.json()["recommendations"][0]["checkpoint"] == (
+    assert render.json()["items"][0]["settings"]["checkpoint"] == (
         "model.safetensors"
     )
-    assert parameter_values.json()["rows"][0]["value"] == "20"
     assert combinations.json()["rows"][0]["composition_uid"] == (
         "composition-a"
     )
-    assert render_setups.json()["rows"][0]["setup_key"] == "setup-a"
     assert composition_setups.json()["composition_uid"] == "composition-a"
     assert invalid_parameter.status_code == 400
+    assert retired_parameters.status_code == 404
     assert container.analytics_pages.call == (
         "composition-render-setups",
         {
@@ -1102,6 +2101,7 @@ def test_v2_analytics_endpoints_delegate_all_calculation_to_server_services() ->
 
 
 def _client() -> tuple[TestClient, SimpleNamespace]:
+    render_guidance = _RenderGuidance()
     container = SimpleNamespace(
         settings=SimpleNamespace(
             minimum_runs=2,
@@ -1115,9 +2115,13 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         review_service=_Reviews(),
         review_history=_ReviewHistory(),
         curation_service=_Curation(),
+        image_content_levels=_ImageContentLevels(),
+        image_generator_handoffs=_ImageGeneratorHandoffs(),
         arena_service=_Arena(),
         prompt_catalog_service=_PromptCatalog(),
+        prompt_variant_guidance=_PromptVariantGuidance(),
         catalog_evidence=_CatalogEvidence(),
+        playground_evidence=_PlaygroundEvidence(),
         prompt_renderer=PromptRenderer(),
         playground_service=_Playground(),
         playground_submission_service=_PlaygroundSubmission(),
@@ -1126,7 +2130,14 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         generation_reconciliation=_GenerationReconciliation(),
         playground_discovery=_PlaygroundDiscovery(),
         workflow_defaults=_WorkflowDefaults(),
+        lora_catalog=_LoraCatalog(),
+        lora_drafts=_LoraDrafts(),
+        lora_triggers=_LoraTriggers(),
         analytics_pages=_AnalyticsPages(),
+        analytics_coverage=_AnalyticsCoverage(),
+        render_guidance=render_guidance,
+        playground_render_guidance=_PlaygroundRenderGuidance(render_guidance),
+        playground_generator_settings=_PlaygroundGeneratorSettings(),
     )
     application = FastAPI()
     application.state.container = container
@@ -1155,4 +2166,14 @@ def _context(image_uid: str = "image-1") -> ImageContext:
         output_index=0,
         review=ReviewSummary(9, 2, 8.5),
         curation=None,
+        loras=(
+            ImageLoraUsage(
+                lora_uid="lora-style",
+                revision_uid="lora-revision-style",
+                provider_name="style.safetensors",
+                position=0,
+                model_strength_milli=750,
+                clip_strength_milli=500,
+            ),
+        ),
     )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -12,12 +13,14 @@ from comfyreview.application import (
     GenerationCanvas,
     GenerationLoraSelection,
     GenerationOutputPolicy,
+    GenerationPromptGroup,
     GenerationPromptSnapshot,
     GenerationRequest,
     GenerationSamplerSettings,
     PreparedGeneration,
     WorkflowCompiler,
 )
+from comfyreview.domain import prompt_atom_usages_from_text
 from comfyreview.repositories.filesystem import JsonWorkflowBlueprintRepository
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
@@ -78,7 +81,23 @@ def _blueprint_payload() -> dict[str, object]:
 def _request(revision_uid: str) -> GenerationRequest:
     return GenerationRequest(
         prompt=GenerationPromptSnapshot(
-            "hero, (smile:1.2)", "blur", (revision_uid,)
+            "hero, (smile:1.2)",
+            "blur",
+            (revision_uid,),
+            positive_atoms=prompt_atom_usages_from_text("hero, (smile:1.2)"),
+            negative_atoms=prompt_atom_usages_from_text("blur"),
+            prompt_groups=(
+                GenerationPromptGroup(
+                    kind="character",
+                    component_uid="component-1",
+                    revision_uid=revision_uid,
+                    position=0,
+                    positive_atoms=prompt_atom_usages_from_text(
+                        "hero, (smile:1.2)"
+                    ),
+                    negative_atoms=prompt_atom_usages_from_text("blur"),
+                ),
+            ),
         ),
         blueprint_uid="portrait",
         blueprint_version=1,
@@ -239,6 +258,38 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
             "WHERE generation_id = (SELECT id FROM generations "
             "WHERE generation_uid = 'generation-native')"
         ).fetchall()
+        prompt_groups = connection.execute(
+            """
+            SELECT prompt_group.kind, component.component_uid,
+                   revision.revision_uid, prompt_group.candidate_id,
+                   prompt_group.content_hash
+            FROM generation_prompt_groups AS prompt_group
+            JOIN prompt_components AS component
+              ON component.id = prompt_group.component_id
+            JOIN prompt_revisions AS revision
+              ON revision.id = prompt_group.source_revision_id
+            WHERE prompt_group.generation_id = (
+                SELECT id FROM generations
+                WHERE generation_uid = 'generation-native'
+            )
+            """
+        ).fetchall()
+        prompt_group_atoms = connection.execute(
+            """
+            SELECT usage.scope, usage.position, atom.canonical_text,
+                   usage.weight_milli
+            FROM generation_prompt_group_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            JOIN generation_prompt_groups AS prompt_group
+              ON prompt_group.id = usage.group_id
+            WHERE prompt_group.generation_id = (
+                SELECT id FROM generations
+                WHERE generation_uid = 'generation-native'
+            )
+            ORDER BY CASE usage.scope WHEN 'pos' THEN 0 ELSE 1 END,
+                     usage.position
+            """
+        ).fetchall()
     assert generation[:4] == (
         "native_comfyui",
         "completed",
@@ -254,6 +305,18 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
     assert memberships == 3
     assert composition_memberships == [("character", 0, revision_uid)]
     assert loras == [(0, "style.safetensors", 800, 650)]
+    assert len(prompt_groups) == 1
+    assert prompt_groups[0][:4] == (
+        "character",
+        "component-1",
+        revision_uid,
+        None,
+    )
+    assert prompt_group_atoms == [
+        ("pos", 0, "hero", 1000),
+        ("pos", 1, "smile", 1200),
+        ("neg", 0, "blur", 1000),
+    ]
 
 
 def test_generation_repository_enforces_transitions_and_missing_database(
@@ -266,3 +329,58 @@ def test_generation_repository_enforces_transitions_and_missing_database(
         repository.get("missing")
     with pytest.raises(FileNotFoundError):
         SqliteGenerationRepository(tmp_path / "missing.sqlite3").get("missing")
+
+
+def test_generation_repository_rolls_back_mismatched_prompt_candidate(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    revision_uid = _catalog_revision(database_path)
+    with sqlite3.connect(database_path) as connection:
+        component_id, revision_id = connection.execute(
+            """
+            SELECT component.id, revision.id
+            FROM prompt_components AS component
+            JOIN prompt_revisions AS revision
+              ON revision.component_id = component.id
+            WHERE component.component_uid = 'component-1'
+            """
+        ).fetchone()
+        connection.execute(
+            """
+            INSERT INTO prompt_component_candidates(
+                candidate_uid, component_id, source_revision_id,
+                candidate_type, content_hash
+            ) VALUES ('candidate-wrong', ?, ?, 'manual', 'wrong-hash')
+            """,
+            (component_id, revision_id),
+        )
+    directory = tmp_path / "blueprints" / "portrait"
+    directory.mkdir(parents=True)
+    (directory / "v1.json").write_text(
+        json.dumps(_blueprint_payload()), encoding="utf-8"
+    )
+    request = _request(revision_uid)
+    group = replace(
+        request.prompt.prompt_groups[0], candidate_uid="candidate-wrong"
+    )
+    request = replace(
+        request,
+        prompt=replace(request.prompt, prompt_groups=(group,)),
+    )
+    blueprint = JsonWorkflowBlueprintRepository(tmp_path / "blueprints").get(
+        "portrait", 1
+    )
+    compiled = WorkflowCompiler().compile(blueprint, request)
+
+    with pytest.raises(RuntimeError, match="candidate does not match"):
+        SqliteGenerationRepository(database_path).prepare(
+            PreparedGeneration("generation-invalid", request, compiled)
+        )
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM generations "
+            "WHERE generation_uid = 'generation-invalid'"
+        ).fetchone() == (0,)

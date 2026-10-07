@@ -1,10 +1,10 @@
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
-/** @typedef {{render: (components: any[]) => void, applyIntent: (intent: Record<string, any>) => void, value: () => {selections: any[], seed: number | null}, dispose: () => void}} ModesBoundary */
-/** @typedef {{render: (capabilities: any) => void, applyIntent: (intent: Record<string, any>) => void, value: () => any, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
-/** @typedef {{render: (draft: any, draftUid: string) => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
+/** @typedef {{render: (components: any[], loras?: any[]) => void, applyState: (state: Record<string, any>) => string[] | void, showResolvedComponents: (components: any[]) => void, value: () => {selections: any[], loras?: any[]}, stateValue: () => {selections: any[], loras: any[]}, setBusy: (busy: boolean) => void, dispose: () => void}} ModesBoundary */
+/** @typedef {{render: (capabilities: any) => void, applyState: (state: Record<string, any>) => string[] | void, applyIntent: (intent: Record<string, any>) => string[] | void, stateValue: () => Record<string, any>, draftValue: () => any, renderSettings: () => any, renderGuidance: (payload: any, basis: "observed" | "predicted") => void, applyRenderSettings: (settings: Record<string, any>) => string[], applyParameter: (parameter: string, value: unknown) => boolean, value: () => any, useConcreteSeed: (seed: number) => void, setBusy: (busy: boolean) => void, dispose: () => void}} ControlsBoundary */
+/** @typedef {{render: (draft: any, draftUid: string) => void, clear: () => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
-/** @typedef {{render: (payload: Record<string, any>) => void, dispose: () => void}} CombinationsBoundary */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, combinations: CombinationsBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, newDraftUid: () => string, intent?: Record<string, any>}} PlaygroundDependencies */
+/** @typedef {{render: (payload: any) => void, renderLoading: (message?: string) => void, dispose: () => void}} GuidanceBoundary */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, persistence: {load: () => Promise<any>, schedule: () => void, flush: () => Promise<any>, dispose: () => void}, handoffApplier: {apply: (intent: Record<string, any>) => Promise<{applied: boolean, rejected: string[], promptSourceImageUid: string | null}>}, draftSession: {isReady: boolean, invalidate: () => void, prepare: (operation: (signal: AbortSignal) => Promise<Record<string, any>>) => Promise<Record<string, any>>, submit: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -14,18 +14,25 @@ export class PlaygroundController {
     this.modes = dependencies.modes;
     this.controls = dependencies.controls;
     this.draft = dependencies.draft;
-    this.combinations = dependencies.combinations;
+    this.guidance = dependencies.guidance;
     this.requests = dependencies.requests;
     this.previewRequests = dependencies.previewRequests;
+    this.guidanceRequests = dependencies.guidanceRequests;
+    this.persistence = dependencies.persistence;
+    this.handoffApplier = dependencies.handoffApplier;
+    this.draftSession = dependencies.draftSession;
     this.prepareButton = dependencies.prepareButton;
     this.submitButton = dependencies.submitButton;
     this.status = dependencies.status;
     this.result = dependencies.result;
-    this.newDraftUid = dependencies.newDraftUid;
     this.intent = dependencies.intent || {};
-    this.draftReference = null;
     this.abortController = new AbortController();
-    this.hasDraft = false;
+    this.guidanceTimer = null;
+    this.guidancePayload = null;
+    this.promptSourceImageUid = null;
+    this.imagePromptEdited = false;
+    /** @type {"observed" | "predicted"} */
+    this.guidanceBasis = "observed";
   }
 
   /** Refresh the explanatory snapshot through the authoritative renderer. */
@@ -38,6 +45,30 @@ export class PlaygroundController {
         this.api.post("playground/render-preview", payload, { signal }),
       );
       this.draft.renderSnapshots(rendered);
+      await this.refreshEvidence();
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        this.status.textContent = errorMessage(error);
+      }
+    }
+  }
+
+  /** Refresh prompt- and sampler-oriented image evidence. */
+  async refreshEvidence() {
+    const prompt = this.draft.promptPayload();
+    if (!prompt) return;
+    try {
+      const evidence = await this.previewRequests.run((signal) =>
+        this.api.post(
+          "playground/evidence",
+          {
+            ...this.controls.draftValue(),
+            ...prompt,
+          },
+          { signal },
+        ),
+      );
+      this.draft.renderEvidence(evidence);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         this.status.textContent = errorMessage(error);
@@ -54,50 +85,117 @@ export class PlaygroundController {
       signal: this.abortController.signal,
     });
     try {
-      const [catalog, capabilities, profiles, combinations] =
-        await this.requests.run((signal) =>
+      const [catalog, capabilities, savedState] = await this.requests.run(
+        (signal) =>
           Promise.all([
             this.api.get("playground/components", { signal }),
             this.api.get("playground/capabilities", { signal }),
-            this.api.get("settings/generation-profiles", { signal }),
-            this.api.get("playground/top-combinations", { signal }),
+            this.persistence.load().catch(() => ({})),
           ]),
-        );
-      this.modes.render(catalog.components || []);
-      this.controls.render({
-        ...capabilities,
-        profiles: profiles.items || [],
-      });
-      this.combinations.render(combinations);
-      await this.#applyIntent();
-      this.status.textContent = hasPrefill(this.intent)
-        ? "Vorbelegung übernommen – erstelle den Entwurf ausdrücklich"
-        : "Bereit für deinen Entwurf";
+      );
+      this.modes.render(
+        catalog.components || [],
+        capabilities.lora_definitions || [],
+      );
+      this.controls.render(capabilities);
+      const stateRejected = [
+        ...(this.modes.applyState(savedState) || []),
+        ...(this.controls.applyState(savedState) || []),
+      ];
+      const handoff = await this.handoffApplier.apply(this.intent);
+      this.promptSourceImageUid = handoff.promptSourceImageUid;
+      this.imagePromptEdited = false;
+      const rejected = [...stateRejected, ...handoff.rejected];
+      await this.refreshGuidance();
+      this.status.textContent = rejected.length
+        ? `Vorbelegung teilweise abgewiesen: ${rejected.join(", ")}`
+        : handoff.applied
+          ? "Vorbelegung übernommen – erstelle den Entwurf ausdrücklich"
+          : "Bereit für deinen Entwurf";
     } catch (error) {
       this.status.textContent = errorMessage(error);
       this.prepareButton.disabled = true;
     }
   }
 
-  /** Prepare a draft without mutating catalog revisions. */
-  async prepare() {
-    this.#setBusy(true);
-    this.result.replaceChildren();
-    this.status.textContent = "Prompt wird zusammengestellt …";
+  /** Refresh the shared server-side evidence for the current setup. */
+  async refreshGuidance() {
+    this.guidanceRequests.cancelRequests();
+    this.guidance.renderLoading();
     try {
-      const draft = await this.requests.run((signal) =>
+      const payload = await this.guidanceRequests.run((signal) =>
         this.api.post(
-          "playground/drafts",
-          this.draftReference || this.modes.value(),
+          "playground/render-guidance",
+          this.controls.renderSettings(),
           { signal },
         ),
       );
-      this.draft.render(draft, this.newDraftUid());
-      this.hasDraft = true;
-      this.status.textContent = "Entwurf bereit zur Prüfung";
+      this.guidancePayload = payload;
+      this.guidance.render(payload);
+      this.controls.renderGuidance(payload, this.guidanceBasis);
     } catch (error) {
-      this.hasDraft = false;
-      this.status.textContent = errorMessage(error);
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        this.guidance.renderLoading(errorMessage(error));
+      }
+    }
+  }
+
+  /** @param {"observed" | "predicted"} basis */
+  guidanceModeChanged(basis) {
+    this.guidanceBasis = basis;
+    if (this.guidancePayload)
+      this.controls.renderGuidance(this.guidancePayload, basis);
+  }
+
+  /** Invalidate the draft and debounce a new evidence calculation. */
+  settingsChanged() {
+    this.invalidateDraft();
+    this.status.textContent = "Änderungen erkannt – Entwurf neu erstellen";
+    this.persistence.schedule();
+    this.guidanceRequests.cancel(this.guidanceTimer);
+    this.guidanceTimer = this.guidanceRequests.schedule(
+      () => void this.refreshGuidance(),
+      180,
+    );
+  }
+
+  /** @param {Record<string, any>} settings */
+  applyGuidanceSetup(settings) {
+    const rejected = this.controls.applyRenderSettings(settings);
+    if (!rejected.length) this.settingsChanged();
+    this.status.textContent = rejected.length
+      ? `Nicht verfügbare Werte abgewiesen: ${rejected.join(", ")}`
+      : "Empfohlenes Gesamtsetup übernommen";
+  }
+
+  /** @param {string} parameter @param {unknown} value */
+  applyGuidanceParameter(parameter, value) {
+    const applied = this.controls.applyParameter(parameter, value);
+    if (applied) this.settingsChanged();
+    this.status.textContent = applied
+      ? `${parameterLabel(parameter)} übernommen`
+      : `${parameterLabel(parameter)} ist in ComfyUI nicht verfügbar`;
+  }
+
+  /** Prepare a draft without mutating catalog revisions. */
+  async prepare() {
+    this.invalidateDraft();
+    this.#setBusy(true);
+    this.status.textContent = "Prompt wird zusammengestellt …";
+    try {
+      const draft = await this.draftSession.prepare((signal) =>
+        this.api.post("playground/drafts", this.#draftRequest(), { signal }),
+      );
+      this.controls.useConcreteSeed(Number(draft.seed));
+      this.modes.showResolvedComponents(draft.components || []);
+      this.draft.render(draft, String(draft.draft_uid));
+      this.status.textContent = "Entwurf bereit zur Prüfung";
+      await this.refreshEvidence();
+    } catch (error) {
+      this.draft.clear();
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        this.status.textContent = errorMessage(error);
+      }
     } finally {
       this.#setBusy(false);
     }
@@ -105,12 +203,15 @@ export class PlaygroundController {
 
   /** Submit the reviewed snapshot through the native generation service. */
   async submit() {
-    const payload = this.draft.generationPayload(this.controls.value());
+    const payload = this.draft.generationPayload({
+      ...this.controls.value(),
+      loras: this.modes.value().loras || [],
+    });
     if (!payload) return;
     this.#setBusy(true);
     this.status.textContent = "Generierung wird übergeben …";
     try {
-      const submission = await this.requests.run((signal) =>
+      const submission = await this.draftSession.submit((signal) =>
         this.api.post("generations", payload, { signal }),
       );
       /** @type {Array<Record<string, any>>} */
@@ -126,6 +227,7 @@ export class PlaygroundController {
           ? "An ComfyUI übergeben"
           : `${submissions.length} Generierungen an ComfyUI übergeben`;
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       this.result.dataset.state = "error";
       this.result.textContent = errorMessage(error);
       this.status.textContent = "Generierung fehlgeschlagen";
@@ -139,74 +241,66 @@ export class PlaygroundController {
     this.abortController.abort();
     this.requests.dispose();
     this.previewRequests.dispose();
+    this.guidanceRequests.dispose();
+    this.draftSession.dispose();
+    this.persistence.dispose();
     this.modes.dispose();
     this.controls.dispose();
     this.draft.dispose();
-    this.combinations.dispose();
+    this.guidance.dispose();
   }
 
-  /** Use current mode controls after the user changes a prompt prefill. */
-  clearDraftReference() {
-    this.draftReference = null;
+  /** Persist prompt controls after the user changes them. */
+  promptSettingsChanged() {
+    if (this.promptSourceImageUid) this.imagePromptEdited = true;
+    this.invalidateDraft();
+    this.status.textContent = "Änderungen erkannt – Entwurf neu erstellen";
+    this.persistence.schedule();
+  }
+
+  /** Invalidate a reviewed snapshot after its source settings change. */
+  invalidateDraft() {
+    this.draftSession.invalidate();
+    this.previewRequests.cancelRequests();
+    this.draft.clear();
+    this.result.replaceChildren();
+    delete this.result.dataset.state;
+    this.submitButton.disabled = true;
   }
 
   /** @param {boolean} busy */
   #setBusy(busy) {
     this.prepareButton.disabled = busy;
-    this.submitButton.disabled = busy || !this.hasDraft;
+    this.submitButton.disabled = busy || !this.draftSession.isReady;
+    this.modes.setBusy(busy);
     this.controls.setBusy(busy);
   }
 
-  async #applyIntent() {
-    let intent = this.intent;
-    if (intent.imageUid) {
-      const image = await this.requests.run((signal) =>
-        this.api.get(`images/${encodeURIComponent(intent.imageUid)}`, {
-          signal,
-        }),
-      );
-      intent = imageIntent(image);
-      this.intent = intent;
+  #draftRequest() {
+    const generation = this.controls.draftValue();
+    if (!this.promptSourceImageUid) {
+      return { ...this.modes.value(), generation };
     }
-    this.modes.applyIntent(intent);
-    this.controls.applyIntent(intent);
-    if (Array.isArray(intent.revisionUids) && intent.revisionUids.length) {
-      this.draftReference = { revision_uids: intent.revisionUids };
-    } else if (intent.compositionUid) {
-      this.draftReference = { composition_uid: intent.compositionUid };
+    if (!this.imagePromptEdited) {
+      return {
+        selections: [],
+        loras: [],
+        prompt_source: {
+          mode: "image_snapshot",
+          image_uid: this.promptSourceImageUid,
+        },
+        generation,
+      };
     }
+    return {
+      ...this.modes.value(),
+      prompt_source: {
+        mode: "image_adapted",
+        image_uid: this.promptSourceImageUid,
+      },
+      generation,
+    };
   }
-}
-
-/** @param {Record<string, any>} image */
-function imageIntent(image) {
-  const scopes = Array.isArray(image.scopes) ? image.scopes : [];
-  const settings =
-    image.generation_settings && typeof image.generation_settings === "object"
-      ? image.generation_settings
-      : {};
-  return {
-    imageUid: String(image.image_uid || ""),
-    componentUids: scopes.map((scope) => String(scope.component_uid || "")),
-    revisionUids: scopes.map((scope) => String(scope.revision_uid || "")),
-    checkpoint: settings.checkpoint,
-    sampler: settings.sampler,
-    scheduler: settings.scheduler,
-    seedMode: "fixed",
-    seed: settings.seed,
-    steps_min: settings.steps,
-    steps_max: settings.steps,
-    cfg_min: settings.cfg,
-    cfg_max: settings.cfg,
-    denoise: settings.denoise,
-  };
-}
-
-/** @param {Record<string, any>} intent */
-function hasPrefill(intent) {
-  return Object.values(intent).some((value) =>
-    Array.isArray(value) ? value.length > 0 : value !== "" && value != null,
-  );
 }
 
 /** @param {unknown} error */
@@ -214,4 +308,18 @@ function errorMessage(error) {
   return error && typeof error === "object" && "message" in error
     ? String(error.message)
     : "Die Anfrage ist fehlgeschlagen.";
+}
+
+/** @param {string} parameter */
+function parameterLabel(parameter) {
+  return (
+    {
+      checkpoint: "Checkpoint",
+      sampler: "Sampler",
+      scheduler: "Scheduler",
+      steps: "Steps",
+      cfg: "CFG",
+      denoise: "Denoise",
+    }[parameter] || parameter
+  );
 }

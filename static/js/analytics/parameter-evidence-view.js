@@ -1,157 +1,209 @@
 import {
-  arrayValue,
-  decimalValue,
   emptyMessage,
   parameterLabels,
-  percentValue,
   recordValue,
   reportIntro,
-  sectionTitle,
-  settingLine,
   textValue,
 } from "./analytics-formatters.js";
+import { AnalyticsCardRail } from "./analytics-card-rail.js";
+import { createGeneratorHandoffAction } from "../playground/generator-handoff-action.js";
 
-/** Render calculated and observed render-parameter evidence. */
+/** Render the same four evidence modes exposed by the Generator. */
 export class ParameterEvidenceView {
-  /** @param {{images: import("./evidence-image-strip.js").EvidenceImageStrip, setups: import("./render-setup-view.js").RenderSetupView}} dependencies */
+  /** @param {{images: import("./evidence-image-strip.js").EvidenceImageStrip}} dependencies */
   constructor(dependencies) {
     this.images = dependencies.images;
-    this.setups = dependencies.setups;
-    this.collection = document.createElement("div");
+    this.rail = new AnalyticsCardRail("analytics-guidance-grid");
+    this.collection = this.rail.track;
   }
 
   /** @param {HTMLElement} root @param {Record<string, any>} payload */
   render(root, payload) {
-    this.collection.replaceChildren();
-    const view = String(payload.view || "summary");
-    const parameter = String(payload.parameter || "");
+    this.rail.clear();
+    const basis = String(payload.basis || "observed");
+    const scope = String(payload.scope || "setup");
+    const parameter = String(payload.parameter || "sampler");
     root.append(
       reportIntro(
-        "Renderparameter",
-        "Rechnerische Empfehlungen und gemeinsam beobachtete Setups bleiben getrennt.",
+        "Render-Analyse",
+        "Gesichtete Stabilität und rechnerische Qualität verwenden exakt dasselbe Evidenzmodell wie der Generator.",
       ),
-      parameterNavigation(view, parameter),
+      modeNavigation(basis, scope, parameter),
+      coverageSummary(payload),
+      this.rail.element,
     );
-    if (view === "values") {
-      this.collection.className = "analytics-parameter-grid";
-      root.append(
-        sectionTitle(parameterLabels.get(parameter) || "Werte"),
-        this.collection,
-      );
-      this.append(payload.items, view);
-      if (!this.collection.children.length) {
-        this.collection.append(
-          emptyMessage("Keine Werte für diesen Parameter."),
-        );
-      }
-      return;
-    }
-    root.append(
-      sectionTitle("Rechnerische Empfehlung · nicht gemeinsam getestet"),
-      recommendationGrid(payload.recommendations),
-      sectionTitle("Beobachtete vollständige Setups"),
-    );
-    this.collection.className = "analytics-tested-list";
-    root.append(this.collection);
-    this.append(payload.items, view);
-    if (!this.collection.children.length) {
-      this.collection.append(emptyMessage("Keine beobachteten Setups."));
-    }
+    this.append(payload.items, scope, basis);
+    if (!this.collection.children.length)
+      this.rail.append(emptyMessage("Keine Evidenz für diesen Filter."));
   }
 
-  /** @param {unknown} values @param {string} view */
-  append(values, view = "summary") {
-    for (const value of arrayValue(values)) {
-      this.collection.append(
-        view === "values"
-          ? this.#parameterCard(value)
-          : this.setups.render(value),
+  /** @param {unknown} values @param {string} scope @param {string} basis */
+  append(values, scope = "setup", basis = "observed") {
+    for (const value of Array.isArray(values) ? values : []) {
+      this.rail.append(
+        scope === "parameter"
+          ? parameterCard(value, basis, this.images)
+          : setupCard(value, basis, this.images),
       );
     }
   }
 
-  /** @param {unknown} value */
-  #parameterCard(value) {
-    const row = recordValue(value);
-    const card = document.createElement("article");
-    card.className = "analytics-parameter-card";
-    card.dataset.itemKey = `${textValue(row.parameter)}:${textValue(row.value)}`;
-    const content = document.createElement("div");
-    const name = document.createElement("strong");
-    name.textContent = textValue(row.value);
-    const evidence = document.createElement("span");
-    evidence.textContent = `${textValue(row.sample_count)} Belege · Ø ${decimalValue(row.average_rating)} / 10`;
-    const confidence = document.createElement("span");
-    confidence.textContent = `Erwartet ${percentValue(row.expected_success_rate)} · Untergrenze ${percentValue(row.lower_bound)}`;
-    const action = document.createElement("button");
-    action.type = "button";
-    action.className = "secondary-button analytics-use-button";
-    action.dataset.playgroundIntent = "parameter";
-    action.dataset.parameter = String(row.parameter || "");
-    action.dataset.value = String(row.value || "");
-    action.textContent = "Im Generator verwenden";
-    content.append(name, evidence, confidence, action);
-    card.append(
-      content,
-      this.images.render(row.best_images, String(row.value)),
-    );
-    return card;
+  /** Release the owned carousel. */
+  dispose() {
+    this.rail.dispose();
   }
 }
 
-/** @param {string} selectedView @param {string} selectedParameter */
-function parameterNavigation(selectedView, selectedParameter) {
-  const navigation = document.createElement("nav");
-  navigation.className = "analytics-subtabs";
-  navigation.setAttribute("aria-label", "Parameteransicht");
-  navigation.append(
-    viewButton("Übersicht", "summary", "", selectedView, selectedParameter),
-  );
-  for (const [parameter, label] of parameterLabels) {
-    navigation.append(
-      viewButton(label, "values", parameter, selectedView, selectedParameter),
-    );
+/** @param {string} basis @param {string} scope @param {string} parameter */
+function modeNavigation(basis, scope, parameter) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "analytics-guidance-navigation";
+  const bases = document.createElement("nav");
+  bases.className = "analytics-subtabs";
+  bases.setAttribute("aria-label", "Evidenzgrundlage");
+  for (const [value, label] of [
+    ["observed", "Gesichtet"],
+    ["predicted", "Rechnerisch"],
+  ]) {
+    const button = modeButton(label, value === basis);
+    button.dataset.guidanceBasis = value;
+    bases.append(button);
   }
-  return navigation;
+  const scopes = document.createElement("nav");
+  scopes.className = "analytics-subtabs";
+  scopes.setAttribute("aria-label", "Evidenzebene");
+  for (const [value, label] of [
+    ["setup", "Gesamtsetup"],
+    ["parameter", "Einzelwerte"],
+  ]) {
+    const button = modeButton(label, value === scope);
+    button.dataset.guidanceScope = value;
+    scopes.append(button);
+  }
+  wrapper.append(bases, scopes);
+  if (scope === "parameter") {
+    const parameters = document.createElement("nav");
+    parameters.className = "analytics-subtabs analytics-parameter-tabs";
+    parameters.setAttribute("aria-label", "Renderparameter");
+    for (const [value, label] of parameterLabels) {
+      if (["aspect_format", "resolution_class"].includes(value)) continue;
+      const button = modeButton(label, value === parameter);
+      button.dataset.guidanceScope = "parameter";
+      button.dataset.guidanceParameter = value;
+      parameters.append(button);
+    }
+    wrapper.append(parameters);
+  }
+  return wrapper;
 }
 
-/** @param {string} label @param {string} view @param {string} parameter @param {string} selectedView @param {string} selectedParameter */
-function viewButton(label, view, parameter, selectedView, selectedParameter) {
+/** @param {Record<string, any>} payload */
+function coverageSummary(payload) {
+  const coverage = recordValue(payload.coverage);
+  const element = document.createElement("p");
+  element.className = "analytics-coverage-summary";
+  element.textContent = `${textValue(coverage.observed_setup_count)} Setups beobachtet · ${textValue(coverage.stable_setup_count)} ab fünf unabhängigen Bildern ausreichend gesichtet · ${textValue(payload.filtered_total)} im aktuellen Filter`;
+  return element;
+}
+
+/** @param {Record<string, any>} item @param {string} basis @param {import("./evidence-image-strip.js").EvidenceImageStrip} images */
+function setupCard(item, basis, images) {
+  const row = recordValue(item);
+  const settings = recordValue(row.settings);
+  const evidence = recordValue(row.evidence);
+  const card = cardShell(evidence, basis);
+  const heading = document.createElement("strong");
+  heading.textContent = String(settings.checkpoint || "Unbekanntes Setup");
+  const values = document.createElement("span");
+  values.textContent = `Sampler ${textValue(settings.sampler)} · ${textValue(settings.scheduler)} · Steps ${textValue(settings.steps)} · CFG ${textValue(settings.cfg)} · Denoise ${textValue(settings.denoise)}`;
+  const support = evidenceLine(evidence, basis);
+  const intentKind = basis === "predicted" ? "recommendation" : "render_setup";
+  const action = createGeneratorHandoffAction(intentKind, {
+    className: "analytics-use-button",
+    data:
+      basis === "predicted"
+        ? { recommendation: JSON.stringify(settings) }
+        : { renderSetup: JSON.stringify(settings) },
+    disabled: row.applicable === false,
+  });
+  const body = cardBody(heading, values, support, action);
+  card.append(images.render(row.best_images, "Render-Setup"), body);
+  return card;
+}
+
+/** @param {Record<string, any>} item @param {string} basis @param {import("./evidence-image-strip.js").EvidenceImageStrip} images */
+function parameterCard(item, basis, images) {
+  const row = recordValue(item);
+  const evidence = recordValue(row[basis]);
+  const card = cardShell(evidence, basis);
+  const heading = document.createElement("strong");
+  heading.textContent = `${parameterLabels.get(String(row.parameter)) || textValue(row.parameter)}: ${textValue(row.value)}`;
+  const support = evidenceLine(evidence, basis);
+  const action = createGeneratorHandoffAction("parameter", {
+    className: "analytics-use-button",
+    data: {
+      parameter: String(row.parameter || ""),
+      value: String(row.value || ""),
+    },
+    disabled: row.applicable === false,
+  });
+  const body = cardBody(heading, support, action);
+  card.append(images.render(row.best_images, heading.textContent), body);
+  return card;
+}
+
+/** @param {...HTMLElement} elements */
+function cardBody(...elements) {
+  const body = document.createElement("div");
+  body.className = "analytics-card-body";
+  body.append(...elements);
+  return body;
+}
+
+/** @param {Record<string, any>} evidence @param {string} basis */
+function cardShell(evidence, basis) {
+  const card = document.createElement("article");
+  card.className = "analytics-guidance-card media-card";
+  card.dataset.source = basis;
+  const rank =
+    evidence.relative_rank == null
+      ? Number.NaN
+      : Number(evidence.relative_rank);
+  card.dataset.tone = Number.isFinite(rank)
+    ? rank >= 0.67
+      ? "high"
+      : rank >= 0.34
+        ? "medium"
+        : "low"
+    : "neutral";
+  return card;
+}
+
+/** @param {Record<string, any>} evidence @param {string} basis */
+function evidenceLine(evidence, basis) {
+  const line = document.createElement("span");
+  const score = Number(evidence.expected_success_rate) * 100;
+  line.textContent = `${Number.isFinite(score) ? score.toFixed(1) : "–"} % ${basis === "predicted" ? "prognostizierter" : "beobachteter"} Erfolg · ${textValue(evidence.image_count)} unabhängige Bilder · ${textValue(evidence.review_count)} Reviews · ${confidenceLabel(String(evidence.confidence || ""))}`;
+  return line;
+}
+
+/** @param {string} label @param {boolean} pressed */
+function modeButton(label, pressed) {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = label;
-  button.dataset.analyticsView = view;
-  if (parameter) button.dataset.analyticsParameter = parameter;
-  button.setAttribute(
-    "aria-pressed",
-    String(view === selectedView && parameter === selectedParameter),
-  );
+  button.setAttribute("aria-pressed", String(pressed));
   return button;
 }
 
-/** @param {unknown} values */
-function recommendationGrid(values) {
-  const rows = arrayValue(values);
-  if (!rows.length) return emptyMessage("Keine rechnerischen Empfehlungen.");
-  const grid = document.createElement("div");
-  grid.className = "analytics-best-grid";
-  for (const value of rows) {
-    const item = recordValue(value);
-    const card = document.createElement("article");
-    const title = document.createElement("strong");
-    title.textContent = textValue(item.checkpoint);
-    const settings = document.createElement("span");
-    settings.textContent = settingLine(item);
-    const score = document.createElement("span");
-    score.textContent = `Prognose ${percentValue(item.score)} · Checkpoint-Untergrenze ${percentValue(item.checkpoint_lower_bound)}`;
-    const action = document.createElement("button");
-    action.type = "button";
-    action.className = "secondary-button analytics-use-button";
-    action.dataset.playgroundIntent = "recommendation";
-    action.dataset.recommendation = JSON.stringify(item);
-    action.textContent = "Im Generator verwenden";
-    card.append(title, settings, score, action);
-    grid.append(card);
-  }
-  return grid;
+/** @param {string} value */
+function confidenceLabel(value) {
+  return (
+    {
+      insufficient: "nicht belastbar",
+      low: "geringe Evidenz",
+      medium: "mittlere Sicherheit",
+      high: "hohe Sicherheit",
+    }[value] || "unbekannt"
+  );
 }

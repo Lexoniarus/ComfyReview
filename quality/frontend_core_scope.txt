@@ -3,7 +3,10 @@ static/js/core/api-error.js
 static/js/core/api-client.js
 static/js/core/request-lifecycle.js
 static/js/components/confirmation-dialog.js
+static/js/components/evidence-carousel.js
+static/js/components/cyclic-card-rail.js
 static/js/curation/image-curation-controller.js
+static/js/content/image-content-level-controller.js
 static/js/catalog/catalog-browser.js
 static/js/catalog/catalog-evidence-view.js
 static/js/catalog/catalog-editor.js
@@ -11,6 +14,7 @@ static/js/arena/arena-board.js
 static/js/arena/arena-keyboard.js
 static/js/images/pagination-controls.js
 static/js/inspector/context-view.js
+static/js/inspector/content-level-view.js
 static/js/inspector/curation-view.js
 static/js/inspector/generation-view.js
 static/js/inspector/image-inspector.js
@@ -23,6 +27,11 @@ static/js/review/review-keyboard.js
 static/js/review/review-stage.js
 static/js/playground/prompt-mode-editor.js
 static/js/playground/playground-intent.js
+static/js/playground/generator-handoff-action.js
+static/js/playground/generator-handoff-applier.js
+static/js/playground/generator-state-persistence.js
+static/js/playground/draft-session.js
+static/js/playground/render-guidance-panel.js
 static/js/playground/top-combinations.js
 static/js/playground/generation-controls.js
 static/js/playground/dual-range-control.js
@@ -31,6 +40,7 @@ static/js/prompts/prompt-atom-editor.js
 static/js/generations/generation-list.js
 static/js/generations/generation-detail.js
 static/js/analytics/focused-analytics-view.js
+static/js/analytics/analytics-card-rail.js
 static/js/analytics/analytics-collection-controller.js
 static/js/analytics/analytics-formatters.js
 static/js/analytics/composition-evidence-view.js
@@ -54,3 +64,4 @@ static/js/settings/lora-stack-editor.js
 static/js/settings/generation-profile-editor.js
 static/js/settings/settings-view.js
 static/js/surfaces/settings-controller.js
+static/js/images/image-generator-actions.js

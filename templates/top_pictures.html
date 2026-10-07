@@ -24,7 +24,7 @@
         </button>
         <h1 id="ranking-title">Top / Worst</h1>
         <span class="result-count" data-result-count aria-live="polite"
-          >Bilder werden geladen …</span
+          >Bewertete Bilder werden geladen …</span
         >
       </div>
       <div class="ranking-actions">
@@ -75,6 +75,13 @@
       ×
     </button>
     <img alt="Vergrößerte Bildansicht" />
+  </dialog>
+  <dialog class="confirm-dialog" data-confirm-dialog>
+    <p data-confirm-message></p>
+    <div class="confirm-dialog-actions">
+      <button type="button" data-confirm-result="cancel">Abbrechen</button>
+      <button type="button" data-confirm-result="confirm">Löschen</button>
+    </div>
   </dialog>
 </div>
 {% endblock %} {% block scripts %}

@@ -4,15 +4,24 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
+from comfyreview.application import (
+    ComfyUiCapabilities,
+    ImageGeneratorHandoffService,
+)
+from comfyreview.application.image_generator_handoff import (
+    ImageGenerationFacts,
+)
 from comfyreview.application.image_queries import (
     DraftOverridePolicy,
     ImageClassification,
     ImageFilter,
     ImageOrder,
     ImageQuery,
+    ReviewCandidateOrder,
     ScopeKind,
     ScopeSelection,
 )
@@ -79,6 +88,7 @@ def test_sqlite_image_context_exposes_exact_scopes_and_prompt_evidence(
     tmp_path: Path,
 ) -> None:
     database_path = _seed_scope_database(tmp_path)
+    _insert_lora_usage(database_path, "generation-image-1")
     repository = SqliteImageContextRepository(database_path)
 
     exact = repository.get_image("image-1")
@@ -97,6 +107,12 @@ def test_sqlite_image_context_exposes_exact_scopes_and_prompt_evidence(
     assert exact.workflow.graph_hash == "graph-1"
     assert exact.curation is not None
     assert exact.curation.set_key == "favorites"
+    assert len(exact.loras) == 1
+    assert exact.loras[0].lora_uid == "lora-style"
+    assert exact.loras[0].revision_uid == "lora-revision-style"
+    assert exact.loras[0].provider_name == "style.safetensors"
+    assert exact.loras[0].model_strength_milli == 750
+    assert exact.loras[0].clip_strength_milli == 500
     assert overridden is not None
     assert overridden.prompt_snapshot.draft_overridden is False
     policy = DraftOverridePolicy(PromptRenderer())
@@ -108,6 +124,138 @@ def test_sqlite_image_context_exposes_exact_scopes_and_prompt_evidence(
         is True
     )
     assert repository.get_image("missing") is None
+
+
+def test_image_handoff_uses_composition_revision_not_component_latest(
+    tmp_path: Path,
+) -> None:
+    database_path = _seed_scope_database(tmp_path)
+    connection = sqlite3.connect(database_path)
+    try:
+        component_id = int(
+            connection.execute(
+                "SELECT id FROM prompt_components "
+                "WHERE component_uid = 'character-a'"
+            ).fetchone()[0]
+        )
+        old_revision_id = int(
+            connection.execute(
+                "SELECT id FROM prompt_revisions "
+                "WHERE revision_uid = 'revision-character-a'"
+            ).fetchone()[0]
+        )
+        latest_revision_id = int(
+            connection.execute(
+                """
+                INSERT INTO prompt_revisions(
+                    revision_uid, component_id, revision_number,
+                    positive_text, negative_text, content_hash
+                ) VALUES (
+                    'revision-character-a-new', ?, 2, 'Aiko newest', '',
+                    'hash-character-a-new'
+                )
+                RETURNING id
+                """,
+                (component_id,),
+            ).fetchone()[0]
+        )
+        latest_revision_uid = connection.execute(
+            """
+            SELECT revision_uid
+            FROM prompt_revisions
+            WHERE component_id = ?
+            ORDER BY revision_number DESC
+            LIMIT 1
+            """,
+            (component_id,),
+        ).fetchone()[0]
+        assert latest_revision_uid == "revision-character-a-new"
+        for revision_id, text in (
+            (old_revision_id, "Aiko"),
+            (latest_revision_id, "Aiko newest"),
+        ):
+            connection.execute(
+                "INSERT OR IGNORE INTO prompt_atoms(canonical_text) VALUES (?)",
+                (text,),
+            )
+            atom_id = int(
+                connection.execute(
+                    "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                    (text,),
+                ).fetchone()[0]
+            )
+            connection.execute(
+                """
+                INSERT INTO prompt_revision_atom_usages(
+                    revision_id, atom_id, scope, position, weight_milli
+                ) VALUES (?, ?, 'pos', 0, 1000)
+                """,
+                (revision_id, atom_id),
+            )
+        old_revision_atoms = connection.execute(
+            """
+            SELECT atom.canonical_text
+            FROM prompt_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            WHERE usage.revision_id = ? AND usage.scope = 'pos'
+            ORDER BY usage.position
+            """,
+            (old_revision_id,),
+        ).fetchall()
+        latest_revision_atoms = connection.execute(
+            """
+            SELECT atom.canonical_text
+            FROM prompt_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            WHERE usage.revision_id = ? AND usage.scope = 'pos'
+            ORDER BY usage.position
+            """,
+            (latest_revision_id,),
+        ).fetchall()
+        assert tuple(row[0] for row in old_revision_atoms) == ("Aiko",)
+        assert tuple(row[0] for row in latest_revision_atoms) == (
+            "Aiko newest",
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    image = SqliteImageContextRepository(database_path).get_image("image-1")
+    assert image is not None
+    canonical_image = image
+    character_scope = next(
+        scope
+        for scope in canonical_image.scopes
+        if scope.kind is ScopeKind.CHARACTER
+    )
+    assert character_scope.revision_uid == "revision-character-a"
+    assert canonical_image.prompt_snapshot.positive == "Aiko, dress"
+
+    class _Images:
+        def get_image(self, image_uid: str):
+            assert image_uid == "image-1"
+            return canonical_image
+
+    class _Facts:
+        def get_generation_facts(self, generation_uid: str):
+            assert generation_uid == canonical_image.generation_uid
+            return ImageGenerationFacts((), ())
+
+    class _Capabilities:
+        def discover_capabilities(self) -> ComfyUiCapabilities:
+            return ComfyUiCapabilities((), (), (), (), ())
+
+    handoff = ImageGeneratorHandoffService(
+        images=cast(Any, _Images()),
+        repository=cast(Any, _Facts()),
+        capabilities=_Capabilities(),
+    ).get("image-1")
+
+    assert handoff.prompt_setup.selections[0].revision_uid == (
+        "revision-character-a"
+    )
+    assert handoff.prompt_setup.selections[0].component_uid == "character-a"
+    assert handoff.prompt_setup.selections[0].position == 0
 
 
 def test_sqlite_scope_facets_exclude_their_own_kind_filter(
@@ -140,15 +288,46 @@ def test_sqlite_review_candidate_uses_canonical_filters(
     repository = SqliteReviewCandidateRepository(database_path)
 
     candidate = repository.next_candidate(
-        ImageFilter(scopes=ScopeSelection(("character-a",)))
+        ImageFilter(scopes=ScopeSelection(("character-a",))),
+        ReviewCandidateOrder.PRIORITIZE_UNRATED,
     )
     missing = repository.next_candidate(
-        ImageFilter(scopes=ScopeSelection(("character-b",)), set_key="missing")
+        ImageFilter(
+            scopes=ScopeSelection(("character-b",)), set_key="missing"
+        ),
+        ReviewCandidateOrder.PRIORITIZE_UNRATED,
     )
 
     assert candidate is not None
     assert candidate.image_uid == "image-3"
     assert missing is None
+
+
+def test_sqlite_review_candidate_prioritizes_new_unrated_then_oldest_rated(
+    tmp_path: Path,
+) -> None:
+    database_path = _seed_scope_database(tmp_path)
+    repository = SqliteReviewCandidateRepository(database_path)
+
+    newest_unrated = repository.next_candidate(
+        ImageFilter(),
+        ReviewCandidateOrder.PRIORITIZE_UNRATED,
+    )
+    oldest_rated = repository.next_candidate(
+        ImageFilter(scopes=ScopeSelection(("outfit-x",))),
+        ReviewCandidateOrder.PRIORITIZE_UNRATED,
+    )
+    fair_without_priority = repository.next_candidate(
+        ImageFilter(scopes=ScopeSelection(("outfit-x",))),
+        ReviewCandidateOrder.LEAST_RECENT,
+    )
+
+    assert newest_unrated is not None
+    assert newest_unrated.image_uid == "image-unclassified"
+    assert oldest_rated is not None
+    assert oldest_rated.image_uid == "image-1"
+    assert fair_without_priority is not None
+    assert fair_without_priority.image_uid == "image-1"
 
 
 def test_sqlite_image_filters_cover_model_checkpoint_rating_and_sets(
@@ -215,17 +394,13 @@ def test_sqlite_image_queries_apply_canonical_content_visibility(
     connection = sqlite3.connect(database_path)
     try:
         connection.execute(
-            "UPDATE prompt_components SET tags = ? "
-            "WHERE component_uid = 'scene-old'",
-            ('["nsfw_level_nude"]',),
+            "UPDATE generations SET inferred_content_level = 'lewd' "
+            "WHERE generation_uid IN "
+            "('generation-image-1', 'generation-image-2')"
         )
         connection.execute(
-            "UPDATE prompt_components SET tags = 'legacy-tag' "
-            "WHERE component_uid = 'character-a'"
-        )
-        connection.execute(
-            "UPDATE prompt_components SET tags = '[\"lewd\"]' "
-            "WHERE component_uid = 'outfit-x'"
+            "UPDATE generations SET inferred_content_level = 'nude' "
+            "WHERE generation_uid = 'generation-image-3'"
         )
         connection.commit()
     finally:
@@ -481,3 +656,56 @@ def _insert_prompt(
             (scope, prompt_hash, text),
         ).fetchone()[0]
     )
+
+
+def _insert_lora_usage(database_path: Path, generation_uid: str) -> None:
+    connection = sqlite3.connect(database_path)
+    try:
+        definition_id = int(
+            connection.execute(
+                """
+                INSERT INTO lora_definitions(
+                    lora_uid, provider_name, content_level, display_name,
+                    tags, notes
+                ) VALUES (
+                    'lora-style', 'style.safetensors', 'standard',
+                    'Style', '[]', ''
+                ) RETURNING id
+                """
+            ).fetchone()[0]
+        )
+        revision_id = int(
+            connection.execute(
+                """
+                INSERT INTO lora_revisions(
+                    revision_uid, lora_definition_id, revision_number,
+                    default_model_strength_milli,
+                    default_clip_strength_milli, content_hash, content_level
+                ) VALUES (
+                    'lora-revision-style', ?, 1, 1000, 1000,
+                    'lora-hash', 'standard'
+                ) RETURNING id
+                """,
+                (definition_id,),
+            ).fetchone()[0]
+        )
+        generation_id = int(
+            connection.execute(
+                "SELECT id FROM generations WHERE generation_uid = ?",
+                (generation_uid,),
+            ).fetchone()[0]
+        )
+        connection.execute(
+            """
+            INSERT INTO generation_loras(
+                generation_id, position, lora_name,
+                model_strength_milli, clip_strength_milli, lora_uid,
+                content_level_snapshot, lora_revision_id
+            ) VALUES (?, 0, 'style.safetensors', 750, 500,
+                      'lora-style', 'standard', ?)
+            """,
+            (generation_id, revision_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()

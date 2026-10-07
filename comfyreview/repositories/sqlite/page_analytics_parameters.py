@@ -342,12 +342,15 @@ def _load_param_rows(
         f"""
         SELECT rating.run, rating.checkpoint, rating.steps,
                ROUND(rating.cfg,1) as cfg_bin, rating.sampler,
-               rating.scheduler, rating.rating, rating.deleted
+               rating.scheduler, rating.rating, rating.deleted,
+               geometry.aspect_format, geometry.resolution_class
         FROM ratings AS rating
         JOIN current_image_reviews AS current_review
           ON current_review.sequence = rating.run
         JOIN images AS image ON image.id = current_review.image_id
         JOIN generations AS generation ON generation.id = image.generation_id
+        LEFT JOIN image_geometry_projection AS geometry
+          ON geometry.image_id = image.id
         {where}
         """,
         args,
@@ -371,6 +374,26 @@ def _iter_param_feats(
         feats.append(("cfg", r["cfg_bin"], run, r["rating"], deleted))
         feats.append(("sampler", r["sampler"], run, r["rating"], deleted))
         feats.append(("scheduler", r["scheduler"], run, r["rating"], deleted))
+        if r["aspect_format"] is not None:
+            feats.append(
+                (
+                    "aspect_format",
+                    r["aspect_format"],
+                    run,
+                    r["rating"],
+                    deleted,
+                )
+            )
+        if r["resolution_class"] is not None:
+            feats.append(
+                (
+                    "resolution_class",
+                    r["resolution_class"],
+                    run,
+                    r["rating"],
+                    deleted,
+                )
+            )
     return feats
 
 

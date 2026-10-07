@@ -4,40 +4,42 @@ from __future__ import annotations
 
 import re
 
-from comfyreview.application.workspace_settings import CONTENT_LEVEL_TAGS
-
 _SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
-def content_visibility_predicate(generation_alias: str = "generation") -> str:
-    """Return SQL that rejects compositions above enabled content levels."""
+def content_visibility_predicate(
+    generation_alias: str = "generation",
+    image_alias: str | None = "image",
+) -> str:
+    """Return SQL for the effective image level and workspace policy."""
     if not _SQL_IDENTIFIER.fullmatch(generation_alias):
         raise ValueError("generation alias must be a SQL identifier")
-    rules = " UNION ALL ".join(
-        f"SELECT '{tag}' AS tag, '{level.value}' AS level"
-        for tag, level in CONTENT_LEVEL_TAGS.items()
-    )
+    if image_alias is not None and not _SQL_IDENTIFIER.fullmatch(image_alias):
+        raise ValueError("image alias must be a SQL identifier")
+    if image_alias is None:
+        override = f"""
+            SELECT state.override_content_level
+            FROM images AS content_image
+            JOIN image_content_level_state AS state
+              ON state.image_id = content_image.id
+            WHERE content_image.generation_id = {generation_alias}.id
+            ORDER BY content_image.id
+            LIMIT 1
+        """
+    else:
+        override = f"""
+            SELECT state.override_content_level
+            FROM image_content_level_state AS state
+            WHERE state.image_id = {image_alias}.id
+        """
     return f"""
-        NOT EXISTS (
+        EXISTS (
             SELECT 1
-            FROM prompt_composition_revisions AS content_membership
-            JOIN prompt_revisions AS content_revision
-              ON content_revision.id = content_membership.revision_id
-            JOIN prompt_components AS content_component
-              ON content_component.id = content_revision.component_id
-            JOIN json_each(
-                CASE
-                    WHEN json_valid(content_component.tags)
-                    THEN content_component.tags
-                    ELSE '[]'
-                END
-            ) AS content_tag
-            JOIN ({rules}) AS content_rule
-              ON content_rule.tag = lower(CAST(content_tag.value AS TEXT))
-            LEFT JOIN workspace_content_levels AS enabled_content
-              ON enabled_content.level = content_rule.level
-            WHERE content_membership.composition_id =
-                  {generation_alias}.prompt_composition_id
-              AND enabled_content.level IS NULL
+            FROM workspace_content_levels AS enabled_content
+            WHERE enabled_content.singleton_id = 1
+              AND enabled_content.level = COALESCE(
+                  ({override}),
+                  {generation_alias}.inferred_content_level
+              )
         )
     """

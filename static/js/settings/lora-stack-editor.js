@@ -1,31 +1,87 @@
 /** Own an ordered editable LoRA stack and its DOM lifecycle. */
 export class LoraStackEditor {
-  /** @param {HTMLElement} root */
-  constructor(root) {
+  /** @param {HTMLElement} root @param {() => void} [onChange] */
+  constructor(root, onChange = () => {}) {
     this.root = root;
-    /** @type {string[]} */
+    this.onChange = onChange;
+    /** @type {Array<Record<string, any>>} */
     this.available = [];
     /** @type {Array<Record<string, any>>} */
     this.items = [];
     this.abortController = new AbortController();
+    this.isBusy = false;
   }
 
-  /** @param {Array<Record<string, any>>} items @param {string[]} available */
+  /** @param {Array<Record<string, any>>} items @param {Array<string | Record<string, any>>} available */
   render(items, available) {
     this.abortController.abort();
     this.abortController = new AbortController();
-    this.available = [...available];
-    this.items = items.map((item) => ({
-      name: String(item.name || ""),
-      model_strength: Number(item.model_strength ?? 1),
-      clip_strength: Number(item.clip_strength ?? 1),
-    }));
+    this.available = available.map((item) =>
+      typeof item === "string"
+        ? { name: item, lora_uid: null, content_level: null }
+        : {
+            name: String(item.provider_name || item.name || ""),
+            display_name: String(
+              item.display_name || item.provider_name || item.name || "",
+            ),
+            lora_uid: item.lora_uid || null,
+            revision_uid: item.latest_revision?.revision_uid || null,
+            default_model_strength: Number(
+              item.latest_revision?.default_model_strength ?? 1,
+            ),
+            default_clip_strength: Number(
+              item.latest_revision?.default_clip_strength ?? 1,
+            ),
+            content_level: item.latest_revision?.content_level || null,
+            available: item.available !== false,
+          },
+    );
+    this.items = items.map((item) => {
+      const definition = this.available.find(
+        (candidate) =>
+          (item.lora_uid && candidate.lora_uid === item.lora_uid) ||
+          (item.name && candidate.name === item.name),
+      );
+      return {
+        name: String(item.provider_name || item.name || definition?.name || ""),
+        model_strength: Number(
+          item.model_strength ?? definition?.default_model_strength ?? 1,
+        ),
+        clip_strength: Number(
+          item.clip_strength ?? definition?.default_clip_strength ?? 1,
+        ),
+        lora_uid: item.lora_uid || definition?.lora_uid || null,
+        revision_uid: item.revision_uid || definition?.revision_uid || null,
+        content_level: item.content_level || definition?.content_level || null,
+      };
+    });
     this.#draw();
   }
 
   /** Return the ordered browser draft. */
   value() {
-    return this.items.map((item) => ({ ...item }));
+    return this.items.map((item) => ({
+      name: item.name,
+      model_strength: item.model_strength,
+      clip_strength: item.clip_strength,
+      lora_uid: item.lora_uid,
+      revision_uid: item.revision_uid,
+    }));
+  }
+
+  /** Disable the complete mutable stack without losing row semantics. */
+  /** @param {boolean} busy */
+  setBusy(busy) {
+    this.isBusy = busy;
+    for (const control of this.root.querySelectorAll("button, input, select")) {
+      if (
+        control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement ||
+        control instanceof HTMLSelectElement
+      ) {
+        control.disabled = busy || control.dataset.baseDisabled === "true";
+      }
+    }
   }
 
   /** Release listeners and retained state. */
@@ -49,32 +105,76 @@ export class LoraStackEditor {
       "click",
       () => {
         const selected = this.available.find(
-          (name) => !this.items.some((item) => item.name === name),
+          (candidate) =>
+            candidate.available !== false &&
+            !this.items.some((item) => item.name === candidate.name),
         );
         if (!selected) return;
         this.items.push({
-          name: selected,
-          model_strength: 1,
-          clip_strength: 1,
+          name: selected.name,
+          model_strength: selected.default_model_strength ?? 1,
+          clip_strength: selected.default_clip_strength ?? 1,
+          lora_uid: selected.lora_uid,
+          revision_uid: selected.revision_uid,
+          content_level: selected.content_level,
         });
         this.#draw();
+        this.onChange();
       },
       { signal: this.abortController.signal },
     );
     this.root.append(heading, list, add);
+    for (const control of this.root.querySelectorAll("button:disabled")) {
+      if (control instanceof HTMLButtonElement) {
+        control.dataset.baseDisabled = "true";
+      }
+    }
+    this.setBusy(this.isBusy);
   }
 
   /** @param {Record<string, any>} item @param {number} index */
   #row(item, index) {
     const row = document.createElement("div");
     row.className = "settings-lora-row";
-    const name = selectField("LoRA", this.available, item.name);
+    const known = this.available.find(
+      (candidate) => candidate.name === item.name,
+    );
+    const candidates = known
+      ? this.available
+      : [
+          ...this.available,
+          {
+            name: item.name,
+            display_name: `${item.name} · nicht verfügbar`,
+            available: false,
+          },
+        ];
+    const name = selectField("LoRA", candidates, item.name);
+    const selectedAvailable = Boolean(known && known.available !== false);
+    row.dataset.availability = selectedAvailable ? "available" : "missing";
+    if (!selectedAvailable) {
+      const warning = document.createElement("span");
+      warning.className = "settings-lora-warning";
+      warning.textContent = "Provider-Datei nicht verfügbar";
+      row.append(warning);
+    }
     const model = numberField("Model", item.model_strength, "0.05");
     const clip = numberField("CLIP", item.clip_strength, "0.05");
     name.control.addEventListener(
       "change",
       () => {
         item.name = name.control.value;
+        const selected = this.available.find(
+          (candidate) => candidate.name === item.name,
+        );
+        item.lora_uid = selected?.lora_uid || null;
+        item.revision_uid = selected?.revision_uid || null;
+        item.content_level = selected?.content_level || null;
+        item.model_strength = selected?.default_model_strength ?? 1;
+        item.clip_strength = selected?.default_clip_strength ?? 1;
+        model.control.value = String(item.model_strength);
+        clip.control.value = String(item.clip_strength);
+        this.onChange();
       },
       { signal: this.abortController.signal },
     );
@@ -82,6 +182,7 @@ export class LoraStackEditor {
       "input",
       () => {
         item.model_strength = Number(model.control.value);
+        this.onChange();
       },
       { signal: this.abortController.signal },
     );
@@ -89,6 +190,7 @@ export class LoraStackEditor {
       "input",
       () => {
         item.clip_strength = Number(clip.control.value);
+        this.onChange();
       },
       { signal: this.abortController.signal },
     );
@@ -125,23 +227,26 @@ export class LoraStackEditor {
       this.items[index],
     ];
     this.#draw();
+    this.onChange();
   }
 
   /** @param {number} index */
   #remove(index) {
     this.items.splice(index, 1);
     this.#draw();
+    this.onChange();
   }
 }
 
-/** @param {string} label @param {string[]} values @param {string} selected */
+/** @param {string} label @param {Array<Record<string, any>>} values @param {string} selected */
 function selectField(label, values, selected) {
   const wrapper = field(label);
   const control = document.createElement("select");
   for (const value of values) {
     const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
+    option.value = String(value.name || "");
+    option.textContent = String(value.display_name || value.name || "");
+    option.disabled = value.available === false && option.value !== selected;
     control.append(option);
   }
   control.value = selected;

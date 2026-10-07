@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import base64
 import hashlib
+import json
 import shutil
 import sqlite3
 import sys
@@ -43,6 +44,7 @@ class BrowserTestRuntime:
         self.data_directory = self.root / "data"
         self.output_root = self.root / "output"
         self.database_path = self.data_directory / "canonical.sqlite3"
+        self.submitted_prompts: list[dict[str, Any]] = []
 
     def create_application(self) -> FastAPI:
         """Build and seed one isolated application with fake ComfyUI routes."""
@@ -87,12 +89,38 @@ class BrowserTestRuntime:
                 name="Aiko",
                 positive_text="aiko",
             )
+            outfit_revision_id = self._insert_component(
+                connection,
+                kind="outfit",
+                component_uid="component-outfit-e2e",
+                name="Test Outfit",
+                positive_text="test outfit",
+            )
+            pose_revision_id = self._insert_component(
+                connection,
+                kind="pose",
+                component_uid="component-pose-e2e",
+                name="Test Pose",
+                positive_text="test pose",
+            )
+            lora_revision_id = self._insert_lora(connection)
+            self._insert_component(
+                connection,
+                kind="outfit",
+                component_uid="component-outfit-underwear",
+                name="Basic Underwear Set",
+                positive_text="underwear",
+                content_level="sexy",
+            )
             sequence = 0
             for index in range(30):
                 sequence = self._insert_generation(
                     connection,
                     index=index,
                     character_revision_id=character_revision_id,
+                    outfit_revision_id=outfit_revision_id,
+                    pose_revision_id=pose_revision_id,
+                    lora_revision_id=lora_revision_id,
                     negative_prompt_id=negative_prompt_id,
                     first_sequence=sequence,
                 )
@@ -106,6 +134,9 @@ class BrowserTestRuntime:
         *,
         index: int,
         character_revision_id: int,
+        outfit_revision_id: int,
+        pose_revision_id: int,
+        lora_revision_id: int,
         negative_prompt_id: int,
         first_sequence: int,
     ) -> int:
@@ -117,6 +148,17 @@ class BrowserTestRuntime:
             name=scene_name,
             positive_text=f"test scene {index + 1:02d}",
         )
+        if index == 0:
+            connection.execute(
+                """
+                UPDATE prompt_components
+                SET archived_at = '2026-01-01 00:00:00'
+                WHERE id = (
+                    SELECT component_id FROM prompt_revisions WHERE id = ?
+                )
+                """,
+                (scene_revision_id,),
+            )
         composition_uid = f"composition-e2e-{index + 1:02d}"
         composition_id = self._last_row_id(
             connection.execute(
@@ -133,10 +175,19 @@ class BrowserTestRuntime:
             (
                 (composition_id, character_revision_id, "character", 0),
                 (composition_id, scene_revision_id, "scene", 1),
+                (composition_id, outfit_revision_id, "outfit", 2),
+                (composition_id, pose_revision_id, "pose", 3),
             ),
         )
+        positive_text = (
+            f"aiko, test scene {index + 1:02d}, test outfit, test pose"
+        )
+        if index == 0:
+            positive_text += ", detail trigger"
         positive_prompt_id = self._insert_prompt(
-            connection, "pos", f"aiko, test scene {index + 1:02d}"
+            connection,
+            "pos",
+            positive_text,
         )
         setup_index = index // 10
         checkpoint = f"NetaYume-e2e-{setup_index + 1}.safetensors"
@@ -209,6 +260,20 @@ class BrowserTestRuntime:
             """,
             (generation_id, 1000 + index, steps, cfg, sampler),
         )
+        if index == 0:
+            connection.execute(
+                """
+                INSERT INTO generation_loras(
+                    generation_id, position, lora_name,
+                    model_strength_milli, clip_strength_milli,
+                    lora_uid, content_level_snapshot, lora_revision_id
+                ) VALUES (
+                    ?, 0, 'character-detail.safetensors', 800, 600,
+                    'lora-e2e-detail', 'standard', ?
+                )
+                """,
+                (generation_id, lora_revision_id),
+            )
         sequence = first_sequence
         for rating_index in range(8):
             sequence += 1
@@ -237,15 +302,25 @@ class BrowserTestRuntime:
         component_uid: str,
         name: str,
         positive_text: str,
+        content_level: str = "standard",
     ) -> int:
+        negative_text = (
+            "bad anatomy, low quality" if kind == "character" else ""
+        )
         component_id = BrowserTestRuntime._last_row_id(
             connection.execute(
                 """
                 INSERT INTO prompt_components(
-                    kind, component_key, name, component_uid
-                ) VALUES (?, ?, ?, ?)
+                    kind, component_key, name, component_uid, tags
+                ) VALUES (?, ?, ?, ?, ?)
                 """,
-                (kind, component_uid, name, component_uid),
+                (
+                    kind,
+                    component_uid,
+                    name,
+                    component_uid,
+                    json.dumps([f"content_level_{content_level}"]),
+                ),
             )
         )
         content_hash = BrowserTestRuntime._digest(positive_text)
@@ -255,12 +330,13 @@ class BrowserTestRuntime:
                 INSERT INTO prompt_revisions(
                     revision_uid, component_id, revision_number,
                     positive_text, negative_text, content_hash
-                ) VALUES (?, ?, 1, ?, '', ?)
+                ) VALUES (?, ?, 1, ?, ?, ?)
                 """,
                 (
                     f"revision-{component_uid}",
                     component_id,
                     positive_text,
+                    negative_text,
                     content_hash,
                 ),
             )
@@ -269,6 +345,61 @@ class BrowserTestRuntime:
         connection.execute(
             """
             INSERT INTO prompt_revision_atom_usages(
+                revision_id, atom_id, scope, position, weight_milli
+            ) VALUES (?, ?, 'pos', 0, 1000)
+            """,
+            (revision_id, atom_id),
+        )
+        if negative_text:
+            for position, text in enumerate(negative_text.split(", ")):
+                negative_atom_id = BrowserTestRuntime._insert_atom(
+                    connection, text
+                )
+                connection.execute(
+                    """
+                    INSERT INTO prompt_revision_atom_usages(
+                        revision_id, atom_id, scope, position, weight_milli
+                    ) VALUES (?, ?, 'neg', ?, 1000)
+                    """,
+                    (revision_id, negative_atom_id, position),
+                )
+        return revision_id
+
+    @staticmethod
+    def _insert_lora(connection: sqlite3.Connection) -> int:
+        definition_id = BrowserTestRuntime._last_row_id(
+            connection.execute(
+                """
+                INSERT INTO lora_definitions(
+                    lora_uid, provider_name, display_name, content_level
+                ) VALUES (
+                    'lora-e2e-detail', 'character-detail.safetensors',
+                    'Character Detail', 'standard'
+                )
+                """
+            )
+        )
+        content_hash = BrowserTestRuntime._digest(
+            "\0".join(("1000", "1000", "", ""))
+        )
+        revision_id = BrowserTestRuntime._last_row_id(
+            connection.execute(
+                """
+            INSERT INTO lora_revisions(
+                revision_uid, lora_definition_id, revision_number,
+                default_model_strength_milli,
+                default_clip_strength_milli, content_hash
+            ) VALUES (
+                'lora-revision-e2e-detail', ?, 1, 1000, 1000, ?
+            )
+            """,
+                (definition_id, content_hash),
+            )
+        )
+        atom_id = BrowserTestRuntime._insert_atom(connection, "detail trigger")
+        connection.execute(
+            """
+            INSERT INTO lora_revision_atom_usages(
                 revision_id, atom_id, scope, position, weight_milli
             ) VALUES (?, ?, 'pos', 0, 1000)
             """,
@@ -323,8 +454,7 @@ class BrowserTestRuntime:
             raise RuntimeError("SQLite insert did not return a row id")
         return int(value)
 
-    @staticmethod
-    def _add_test_routes(application: FastAPI) -> None:
+    def _add_test_routes(self, application: FastAPI) -> None:
         @application.get("/_e2e/health")
         def health() -> dict[str, str]:
             return {"status": "ok"}
@@ -361,6 +491,14 @@ class BrowserTestRuntime:
                         }
                     }
                 },
+                "UpscaleModelLoader": {
+                    "input": {
+                        "required": {"model_name": [["4x-AnimeSharp.pth"]]}
+                    }
+                },
+                "ImageUpscaleWithModel": {},
+                "ImageSharpen": {},
+                "ImageScale": {},
                 "SaveImage": {},
                 "PrimitiveString": {},
                 "PrimitiveStringMultiline": {},
@@ -371,8 +509,30 @@ class BrowserTestRuntime:
             }
 
         @application.post("/_fake_comfyui/prompt")
-        def submit_prompt() -> dict[str, str]:
+        def submit_prompt(payload: dict[str, Any]) -> dict[str, str]:
+            self.submitted_prompts.append(payload)
             return {"prompt_id": "e2e-prompt-1"}
+
+        @application.get("/_e2e/submissions")
+        def submissions() -> dict[str, Any]:
+            with sqlite3.connect(self.database_path) as connection:
+                loras = connection.execute(
+                    """
+                    SELECT lora_name, model_strength_milli,
+                           clip_strength_milli
+                    FROM generation_loras
+                    WHERE generation_id = (
+                        SELECT MAX(id) FROM generations
+                    )
+                    ORDER BY position
+                    """
+                ).fetchall()
+            return {
+                "prompt": self.submitted_prompts[-1]
+                if self.submitted_prompts
+                else None,
+                "loras": [list(item) for item in loras],
+            }
 
 
 runtime = BrowserTestRuntime()
@@ -380,4 +540,4 @@ atexit.register(runtime.cleanup)
 app = runtime.create_application()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning")

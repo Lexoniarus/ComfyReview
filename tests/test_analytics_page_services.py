@@ -10,6 +10,7 @@ from comfyreview.application import (
     AnalyticsReportService,
     AnalyticsService,
     CalculatedRenderRecommendation,
+    CharacterCombinationGroup,
     CollectionPage,
     CompositionAnalyticsService,
     CompositionStatistic,
@@ -67,6 +68,21 @@ class _Analytics:
                 image_count=1,
                 total_rating_count=4,
                 best_images=(self.image,),
+            ),
+        )
+
+    def observed_combinations_by_character(
+        self, *, combo_size, limit_per_character
+    ):
+        combinations = self.observed_combinations(
+            combo_size=combo_size,
+            limit=limit_per_character,
+        )
+        return (
+            CharacterCombinationGroup(
+                "character-a",
+                "Hero",
+                combinations,
             ),
         )
 
@@ -272,7 +288,7 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
     ]
     assert stats["view"] == "prompt"
     assert stats["model_list"] == ["sdxl"]
-    assert playground["two_component"][0] == {
+    assert playground["characters"][0]["two_component"][0] == {
         "combo_key": "character:1|scene:2",
         "component_uids": ["character-a", "scene-a"],
         "component_names": ["Hero", "Rooftop"],
@@ -280,6 +296,7 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
         "average_rating": 8.5,
         "image_count": 1,
         "rating_count": 4,
+        "factors": [],
         "best_images": [
             {
                 "image_uid": "",
@@ -289,7 +306,9 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
             }
         ],
     }
-    assert playground["three_component"][0]["component_uids"] == [
+    assert playground["characters"][0]["three_component"][0][
+        "component_uids"
+    ] == [
         "character-a",
         "scene-a",
         "outfit-a",

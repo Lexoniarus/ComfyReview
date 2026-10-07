@@ -14,7 +14,13 @@ describe("review components", () => {
     const onRate = vi.fn();
     const onDelete = vi.fn();
     const onExpand = vi.fn();
-    const stage = new ReviewStage(root, { onRate, onDelete, onExpand });
+    const createGeneratorActions = vi.fn(() => document.createElement("menu"));
+    const stage = new ReviewStage(root, {
+      onRate,
+      onDelete,
+      onExpand,
+      createGeneratorActions,
+    });
 
     stage.loading();
     expect(root.textContent).toContain("geladen");
@@ -24,7 +30,8 @@ describe("review components", () => {
     expect(root.textContent).toContain("kein Bild");
     stage.error("");
     expect(root.textContent).toContain("konnte nicht");
-    stage.render({ image_url: "/files/image.png" });
+    stage.render({ image_uid: "image-1", image_url: "/files/image.png" });
+    expect(createGeneratorActions).toHaveBeenCalledOnce();
     root.querySelector("[data-rating='7']")?.click();
     root.querySelector("[data-review-action='delete']")?.click();
     root.querySelector("[data-review-action='expand']")?.click();

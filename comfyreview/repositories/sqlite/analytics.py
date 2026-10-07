@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from itertools import combinations as factor_combinations
 from pathlib import Path
 from typing import Any
 
 from comfyreview.application.analytics import (
     AnalyticsImage,
+    CharacterCombinationGroup,
     ObservedPromptCombination,
+    PromptFactor,
     PromptMatchPreview,
     PromptTokenStatistic,
 )
@@ -23,6 +26,8 @@ _PARAMETER_COLUMNS = {
     "cfg": "ROUND(generation.cfg, 1)",
     "sampler": "generation.sampler",
     "scheduler": "generation.scheduler",
+    "aspect_format": "geometry.aspect_format",
+    "resolution_class": "geometry.resolution_class",
 }
 
 
@@ -257,84 +262,174 @@ class SqliteAnalyticsRepository:
         combo_size: int,
         limit: int,
     ) -> tuple[ObservedPromptCombination, ...]:
-        """Aggregate canonical character/scene[/outfit] memberships."""
+        """Aggregate observed character-scoped prompt factors."""
+        combinations = self._observed_combinations(combo_size)
+        return tuple(combinations[:limit])
+
+    def list_observed_combinations_by_character(
+        self,
+        *,
+        combo_size: int,
+        limit_per_character: int,
+    ) -> tuple[CharacterCombinationGroup, ...]:
+        """Rank combinations independently for every canonical character."""
+        grouped: dict[str, list[ObservedPromptCombination]] = defaultdict(list)
+        for combination in self._observed_combinations(combo_size):
+            grouped[combination.component_uids[0]].append(combination)
+        groups = [
+            CharacterCombinationGroup(
+                character_uid=character_uid,
+                character_name=combinations[0].component_names[0],
+                combinations=tuple(combinations[:limit_per_character]),
+            )
+            for character_uid, combinations in grouped.items()
+            if combinations
+        ]
+        groups.sort(
+            key=lambda item: (
+                item.character_name.casefold(),
+                item.character_uid,
+            )
+        )
+        return tuple(groups)
+
+    def _observed_combinations(
+        self,
+        combo_size: int,
+    ) -> list[ObservedPromptCombination]:
+        """Aggregate observed character-scoped factors of one size."""
         connection = connect_read_only(self._database_path, rows=True)
         try:
-            rows = connection.execute(
+            image_rows = connection.execute(
                 f"""
-                WITH composition_scopes AS (
-                    SELECT
-                        membership.composition_id,
-                        MAX(CASE WHEN component.kind = 'character'
-                            THEN component.component_uid END) AS character_uid,
-                        MAX(CASE WHEN component.kind = 'character'
-                            THEN component.name END) AS character_name,
-                        COUNT(DISTINCT CASE WHEN component.kind = 'character'
-                            THEN component.id END) AS character_count,
-                        MAX(CASE WHEN component.kind = 'scene'
-                            THEN component.component_uid END) AS scene_uid,
-                        MAX(CASE WHEN component.kind = 'scene'
-                            THEN component.name END) AS scene_name,
-                        COUNT(DISTINCT CASE WHEN component.kind = 'scene'
-                            THEN component.id END) AS scene_count,
-                        MAX(CASE WHEN component.kind = 'outfit'
-                            THEN component.component_uid END) AS outfit_uid,
-                        MAX(CASE WHEN component.kind = 'outfit'
-                            THEN component.name END) AS outfit_name,
-                        COUNT(DISTINCT CASE WHEN component.kind = 'outfit'
-                            THEN component.id END) AS outfit_count
-                    FROM prompt_composition_revisions AS membership
-                    JOIN prompt_revisions AS revision
-                        ON revision.id = membership.revision_id
-                    JOIN prompt_components AS component
-                        ON component.id = revision.component_id
-                    GROUP BY membership.composition_id
-                )
                 SELECT
-                    scope.character_uid,
-                    scope.character_name,
-                    scope.scene_uid,
-                    scope.scene_name,
-                    scope.outfit_uid,
-                    scope.outfit_name,
+                    generation.id AS generation_id,
                     image.image_uid,
                     image.png_path,
                     image.json_path,
                     summary.average_rating,
                     summary.rating_count
                 FROM generations AS generation
-                JOIN composition_scopes AS scope
-                    ON scope.composition_id = generation.prompt_composition_id
                 JOIN images AS image ON image.generation_id = generation.id
                 LEFT JOIN image_review_summary AS summary
                     ON summary.image_id = image.id
                 WHERE image.deleted_at IS NULL
                   AND {content_visibility_predicate()}
-                  AND scope.character_count = 1
-                  AND scope.scene_count = 1
-                  AND (? = 2 OR scope.outfit_count = 1)
-                ORDER BY scope.character_uid, scope.scene_uid,
-                         scope.outfit_uid, summary.average_rating DESC,
+                ORDER BY summary.average_rating DESC,
                          summary.rating_count DESC, image.image_uid
-                """,
-                (combo_size,),
+                """
+            ).fetchall()
+            component_rows = connection.execute(
+                """
+                SELECT DISTINCT generation.id AS generation_id, component.kind,
+                       component.component_uid, component.name,
+                       revision.revision_uid
+                FROM generations AS generation
+                JOIN prompt_composition_revisions AS membership
+                  ON membership.composition_id = generation.prompt_composition_id
+                JOIN prompt_revisions AS revision
+                  ON revision.id = membership.revision_id
+                JOIN prompt_components AS component
+                  ON component.id = revision.component_id
+                WHERE component.kind IN (
+                      'character', 'scene', 'outfit', 'pose', 'expression',
+                      'lighting', 'modifier'
+                  )
+                ORDER BY generation.id, membership.position
+                """
+            ).fetchall()
+            lora_rows = connection.execute(
+                """
+                SELECT DISTINCT generation.id AS generation_id,
+                       definition.lora_uid, definition.display_name,
+                       definition.provider_name, definition.archived_at,
+                       current.revision_uid,
+                       current.default_model_strength_milli,
+                       current.default_clip_strength_milli,
+                       EXISTS (
+                           SELECT 1 FROM lora_revision_atom_usages AS trigger
+                           WHERE trigger.revision_id = current.id
+                       ) AS has_triggers
+                FROM generations AS generation
+                JOIN generation_loras AS selection
+                  ON selection.generation_id = generation.id
+                JOIN lora_definitions AS definition
+                  ON definition.lora_uid = selection.lora_uid
+                JOIN lora_revisions AS current
+                  ON current.lora_definition_id = definition.id
+                 AND current.revision_number = (
+                     SELECT MAX(candidate.revision_number)
+                     FROM lora_revisions AS candidate
+                     WHERE candidate.lora_definition_id = definition.id
+                 )
+                WHERE selection.lora_revision_id IS NOT NULL
+                ORDER BY generation.id, selection.position
+                """
             ).fetchall()
         finally:
             connection.close()
-        grouped: dict[tuple[str, ...], list[Any]] = defaultdict(list)
-        for row in rows:
-            key: tuple[str, ...] = (
-                str(row["character_uid"]),
-                str(row["scene_uid"]),
+        components_by_generation: dict[int, list[PromptFactor]] = defaultdict(
+            list
+        )
+        for row in component_rows:
+            components_by_generation[int(row["generation_id"])].append(
+                PromptFactor(
+                    source="component",
+                    kind=str(row["kind"]),
+                    uid=str(row["component_uid"]),
+                    name=str(row["name"]),
+                    revision_uid=str(row["revision_uid"]),
+                )
             )
-            if combo_size == 3:
-                outfit_uid = str(row["outfit_uid"] or "")
-                if not outfit_uid:
-                    continue
-                key = (*key, outfit_uid)
-            grouped[key].append(row)
+        for row in lora_rows:
+            components_by_generation[int(row["generation_id"])].append(
+                PromptFactor(
+                    source="lora",
+                    kind="lora",
+                    uid=str(row["lora_uid"]),
+                    name=str(row["display_name"] or row["provider_name"]),
+                    revision_uid=str(row["revision_uid"]),
+                    applicable=(
+                        row["archived_at"] is None
+                        and bool(row["has_triggers"])
+                    ),
+                    reason=(
+                        None
+                        if row["archived_at"] is None
+                        and bool(row["has_triggers"])
+                        else "current_revision_unavailable"
+                    ),
+                    model_strength_milli=int(
+                        row["default_model_strength_milli"]
+                    ),
+                    clip_strength_milli=int(
+                        row["default_clip_strength_milli"]
+                    ),
+                )
+            )
+        grouped: dict[tuple[str, ...], list[Any]] = defaultdict(list)
+        factors_by_key: dict[tuple[str, ...], tuple[PromptFactor, ...]] = {}
+        for row in image_rows:
+            factors = components_by_generation[int(row["generation_id"])]
+            characters = [
+                factor for factor in factors if factor.kind == "character"
+            ]
+            candidates = [
+                factor for factor in factors if factor.kind != "character"
+            ]
+            if len(characters) != 1:
+                continue
+            character = characters[0]
+            for selected in factor_combinations(candidates, combo_size):
+                ordered = (character, *selected)
+                key = tuple(
+                    f"{factor.source}:{factor.uid}" for factor in ordered
+                )
+                factors_by_key[key] = ordered
+                grouped[key].append(row)
         combinations: list[ObservedPromptCombination] = []
-        for component_uids, combo_rows in grouped.items():
+        for factor_key, combo_rows in grouped.items():
+            prompt_factors = factors_by_key[factor_key]
             images = tuple(
                 self._analytics_image(row) for row in combo_rows[:3]
             )
@@ -346,19 +441,23 @@ class SqliteAnalyticsRepository:
                 * int(row["rating_count"] or 0)
                 for row in combo_rows
             )
-            first = combo_rows[0]
-            component_names = (
-                str(first["character_name"]),
-                str(first["scene_name"]),
-                *((str(first["outfit_name"]),) if combo_size == 3 else ()),
+            component_factors = tuple(
+                factor
+                for factor in prompt_factors
+                if factor.source == "component"
+            )
+            component_uids = tuple(factor.uid for factor in component_factors)
+            component_names = tuple(
+                factor.name for factor in component_factors
             )
             combinations.append(
                 ObservedPromptCombination(
-                    combo_key="|".join(component_uids),
+                    combo_key="|".join(factor_key),
                     combo_size=combo_size,
                     component_uids=component_uids,
                     component_names=component_names,
-                    label=" + ".join(component_names),
+                    factors=prompt_factors,
+                    label=" + ".join(factor.name for factor in prompt_factors),
                     average_rating=(
                         weighted_sum / total_count if total_count else None
                     ),
@@ -377,7 +476,7 @@ class SqliteAnalyticsRepository:
             ),
             reverse=True,
         )
-        return tuple(combinations[:limit])
+        return combinations
 
     def latest_review_sequence(self) -> int:
         """Read the append-only review-event frontier."""
@@ -422,6 +521,8 @@ class SqliteAnalyticsRepository:
                         ON generation.id = image.generation_id
                     JOIN image_review_summary AS summary
                         ON summary.image_id = image.id
+                    LEFT JOIN image_geometry_projection AS geometry
+                        ON geometry.image_id = image.id
                     WHERE image.deleted_at IS NULL
                       AND {content_visibility_predicate()}
                       AND CAST({expression} AS TEXT) IN ({placeholders})

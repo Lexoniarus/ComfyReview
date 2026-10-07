@@ -19,6 +19,8 @@ _DIRECT_ROLES = {
     "reference_image",
     "image_width",
     "image_height",
+    "output_width",
+    "output_height",
 }
 _SUPPORTED_ROLES = (
     _PROMPT_ROLES
@@ -78,6 +80,7 @@ class WorkflowBlueprint:
     output_bindings: tuple[WorkflowOutputBinding, ...]
     sampler_roles: tuple[str, ...]
     capability_requirements: tuple[str, ...] = ()
+    upscale_model_requirements: tuple[str, ...] = ()
     lora_chain_binding: WorkflowLoraChainBinding | None = None
 
 
@@ -115,6 +118,7 @@ class CompiledWorkflow:
     output_bindings: tuple[CompiledOutputBinding, ...]
     sampler_stages: tuple[CompiledSamplerStage, ...]
     capability_requirements: tuple[str, ...]
+    upscale_model_requirements: tuple[str, ...] = ()
 
 
 class WorkflowBlueprintRepository(Protocol):
@@ -186,7 +190,21 @@ class WorkflowCompiler:
                 request.canvas.height,
                 resolved_roles,
             )
-
+        if request.geometry is not None:
+            self._write_required_role(
+                graph,
+                blueprint,
+                "output_width",
+                request.geometry.output_width,
+                resolved_roles,
+            )
+            self._write_required_role(
+                graph,
+                blueprint,
+                "output_height",
+                request.geometry.output_height,
+                resolved_roles,
+            )
         stages = self._compile_sampler_stages(
             graph,
             blueprint,
@@ -219,6 +237,9 @@ class WorkflowCompiler:
             output_bindings=outputs,
             sampler_stages=stages,
             capability_requirements=tuple(blueprint.capability_requirements),
+            upscale_model_requirements=tuple(
+                blueprint.upscale_model_requirements
+            ),
         )
 
     @staticmethod

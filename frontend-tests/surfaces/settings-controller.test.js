@@ -13,7 +13,7 @@ describe("SettingsController", () => {
 
     fixture.navigation.querySelector("button").click();
     expect(fixture.view.render).toHaveBeenLastCalledWith(
-      "profiles",
+      "content",
       fixture.data,
     );
     expect(
@@ -21,34 +21,26 @@ describe("SettingsController", () => {
     ).toBe("true");
 
     await fixture.controller.savePreferences({ density: "compact" });
-    await fixture.controller.saveProfile(null, { name: "New" });
-    await fixture.controller.saveProfile("profile-a", { name: "Updated" });
-    await fixture.controller.archiveProfile("profile-a", true);
-    await fixture.controller.defaultProfile("profile-a");
+    await fixture.controller.classifyLora("style.safetensors", "lewd");
+    await fixture.controller.previewLora("lora/style");
+    await fixture.controller.reclassifyLora("lora/style", 3);
     await fixture.controller.checkComfyUi();
 
     expect(fixture.api.put).toHaveBeenCalledWith("settings/preferences", {
       density: "compact",
     });
-    expect(fixture.api.post).toHaveBeenCalledWith(
-      "settings/generation-profiles",
-      {
-        name: "New",
-      },
-    );
-    expect(fixture.api.put).toHaveBeenCalledWith(
-      "settings/generation-profiles/profile-a",
-      { name: "Updated" },
-    );
-    expect(fixture.api.patch).toHaveBeenCalledWith(
-      "settings/generation-profiles/profile-a/archive",
-      { archived: true },
-    );
-    expect(fixture.api.put).toHaveBeenCalledWith(
-      "settings/generation-profiles/profile-a/default",
-      {},
-    );
     expect(fixture.api.post).toHaveBeenCalledWith("settings/comfyui/check", {});
+    expect(fixture.api.post).toHaveBeenCalledWith("settings/loras/classify", {
+      provider_name: "style.safetensors",
+      content_level: "lewd",
+    });
+    expect(fixture.api.get).toHaveBeenCalledWith(
+      "settings/loras/lora%2Fstyle/reclassification-impact",
+    );
+    expect(fixture.api.post).toHaveBeenCalledWith(
+      "settings/loras/lora%2Fstyle/reclassify",
+      { expected_revision: 3 },
+    );
     expect(fixture.view.render).toHaveBeenLastCalledWith(
       "comfyui",
       expect.objectContaining({ runtime: { connected: true } }),
@@ -87,17 +79,29 @@ describe("SettingsController", () => {
     expect(unknownMutation.status.textContent).toBe(
       "Verbindungstest fehlgeschlagen.",
     );
+
+    const previewFailure = createFixture({
+      previewError: new Error("Vorschau kaputt"),
+    });
+    await previewFailure.controller.start();
+    await previewFailure.controller.previewLora("lora-a");
+    expect(previewFailure.status.textContent).toBe("Vorschau kaputt");
   });
 });
 
 function createFixture(options = {}) {
   const data = { preferences: { density: "comfortable" } };
   const api = {
-    get: vi.fn(() =>
-      options.loadError
+    get: vi.fn((path) => {
+      if (path.includes("reclassification-impact")) {
+        return options.previewError
+          ? Promise.reject(options.previewError)
+          : Promise.resolve({ revision: 3, image_count: 2 });
+      }
+      return options.loadError
         ? Promise.reject(options.loadError)
-        : Promise.resolve(data),
-    ),
+        : Promise.resolve(data);
+    }),
     put: vi.fn(() => mutation(options)),
     post: vi.fn((path) =>
       options.mutationError
@@ -112,7 +116,7 @@ function createFixture(options = {}) {
   };
   const navigation = document.createElement("nav");
   const button = document.createElement("button");
-  button.dataset.section = "profiles";
+  button.dataset.section = "content";
   navigation.append(button);
   const status = document.createElement("p");
   const view = { render: vi.fn(), dispose: vi.fn() };

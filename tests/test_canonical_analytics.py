@@ -12,10 +12,15 @@ from comfyreview.application import (
     AnalyticsReportService,
     AnalyticsService,
     CalculatedRenderRecommendation,
+    CharacterCombinationGroup,
     CollectionPage,
     CompositionAnalyticsService,
     CompositionStatistic,
+    ContentLevel,
+    CreateLoraDefinitionCommand,
+    LoraCatalogService,
     ObservedPromptCombination,
+    PromptFactor,
     PromptMatchPreview,
     PromptTokenStatistic,
     RenderAnalyticsService,
@@ -26,11 +31,13 @@ from comfyreview.application import (
     ScopeStatistic,
     normalize_page,
 )
+from comfyreview.domain import prompt_atom_usage
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
     SqliteCompositionAnalyticsRepository,
+    SqliteLoraCatalogRepository,
     SqliteRenderAnalyticsRepository,
 )
 
@@ -67,6 +74,10 @@ class _AnalyticsRepository:
 
     def list_observed_combinations(self, **values):
         self.calls.append(("observed", values))
+        return ()
+
+    def list_observed_combinations_by_character(self, **values):
+        self.calls.append(("observed-by-character", values))
         return ()
 
     def latest_review_sequence(self):
@@ -257,11 +268,20 @@ def test_analytics_service_handles_empty_and_observed_queries() -> None:
     assert service.best_images_for_combos(()) == {}
     assert service.best_images_for_parameter("steps", ()) == {}
     assert service.observed_combinations(combo_size=2, limit=-1) == ()
+    assert (
+        service.observed_combinations_by_character(
+            combo_size=3,
+            limit_per_character=-1,
+        )
+        == ()
+    )
     assert service.latest_review_sequence() == 9
     assert service.token_statistics_for(()) == {}
     assert service.best_prompt_match(()) is None
     with pytest.raises(ValueError, match="combo_size must be 2 or 3"):
         service.observed_combinations(combo_size=4)
+    with pytest.raises(ValueError, match="combo_size must be 2 or 3"):
+        service.observed_combinations_by_character(combo_size=4)
 
 
 def test_analytics_service_normalizes_selected_tokens_and_matches() -> None:
@@ -760,7 +780,11 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         model_branch="",
         limit_per_value=3,
     )
-    observed = repository.list_observed_combinations(combo_size=3, limit=8)
+    observed = repository.list_observed_combinations(combo_size=2, limit=8)
+    observed_by_character = repository.list_observed_combinations_by_character(
+        combo_size=2,
+        limit_per_character=8,
+    )
     selected = repository.list_selected_prompt_token_statistics(
         ("hero", "missing"),
         model_branch="sdxl",
@@ -788,8 +812,11 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
     assert parameter_images["20"][0].rating_count == 1
     assert observed == (
         ObservedPromptCombination(
-            combo_key="component-1|component-2|component-3",
-            combo_size=3,
+            combo_key=(
+                "component:component-1|component:component-2|"
+                "component:component-3"
+            ),
+            combo_size=2,
             component_uids=("component-1", "component-2", "component-3"),
             component_names=("Alice", "Rooftop", "Red Coat"),
             label="Alice + Rooftop + Red Coat",
@@ -805,6 +832,36 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
                     image_uid="image-1",
                 ),
             ),
+            factors=(
+                PromptFactor(
+                    source="component",
+                    kind="character",
+                    uid="component-1",
+                    name="Alice",
+                    revision_uid="revision-1",
+                ),
+                PromptFactor(
+                    source="component",
+                    kind="scene",
+                    uid="component-2",
+                    name="Rooftop",
+                    revision_uid="revision-2",
+                ),
+                PromptFactor(
+                    source="component",
+                    kind="outfit",
+                    uid="component-3",
+                    name="Red Coat",
+                    revision_uid="revision-3",
+                ),
+            ),
+        ),
+    )
+    assert observed_by_character == (
+        CharacterCombinationGroup(
+            character_uid="component-1",
+            character_name="Alice",
+            combinations=observed,
         ),
     )
     assert repository.latest_review_sequence() == 1
@@ -817,6 +874,75 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         )
 
 
+def test_observed_character_combinations_include_evidenced_lora_factors(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _insert_analytics_fixture(database_path, tmp_path)
+    loras = LoraCatalogService(SqliteLoraCatalogRepository(database_path))
+    definition = loras.create(
+        CreateLoraDefinitionCommand(
+            provider_name="style.safetensors",
+            display_name="Style",
+            content_level=ContentLevel.SEXY,
+            tags=(),
+            notes="",
+            default_model_strength_milli=800,
+            default_clip_strength_milli=700,
+            positive_atoms=(prompt_atom_usage("style trigger", 1.0),),
+            negative_atoms=(),
+        )
+    )
+    assert definition.latest_revision is not None
+    second_png = tmp_path / "second.png"
+    second_png.write_bytes(b"png")
+    with sqlite3.connect(database_path) as connection:
+        revision_id = connection.execute(
+            "SELECT id FROM lora_revisions WHERE revision_uid = ?",
+            (definition.latest_revision.revision_uid,),
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO generation_loras(
+                generation_id, position, lora_name, lora_uid,
+                model_strength_milli, clip_strength_milli,
+                content_level_snapshot, lora_revision_id
+            ) VALUES (1, 0, ?, ?, 800, 700, 'sexy', ?)
+            """,
+            (definition.provider_name, definition.lora_uid, revision_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO images(
+                image_uid, generation_id, output_node_id, output_index,
+                png_path
+            ) VALUES ('image-2', 1, 'save', 1, ?)
+            """,
+            (str(second_png),),
+        )
+
+    combinations = SqliteAnalyticsRepository(
+        database_path
+    ).list_observed_combinations(combo_size=2, limit=10)
+
+    lora_combinations = [
+        item
+        for item in combinations
+        if any(factor.source == "lora" for factor in item.factors)
+    ]
+    assert len(lora_combinations) == 2
+    assert all(item.factors[0].kind == "character" for item in combinations)
+    assert all(item.image_count == 2 for item in combinations)
+    assert all(
+        next(
+            factor for factor in item.factors if factor.source == "lora"
+        ).revision_uid
+        == definition.latest_revision.revision_uid
+        for item in lora_combinations
+    )
+
+
 def test_sqlite_analytics_apply_workspace_content_visibility(
     tmp_path: Path,
 ) -> None:
@@ -825,9 +951,7 @@ def test_sqlite_analytics_apply_workspace_content_visibility(
     _insert_analytics_fixture(database_path, tmp_path)
     with sqlite3.connect(database_path) as connection:
         connection.execute(
-            "UPDATE prompt_components SET tags = ? "
-            "WHERE component_uid = 'component-3'",
-            ('["nsfw_level_nude"]',),
+            "UPDATE generations SET inferred_content_level = 'nude'"
         )
         connection.commit()
 
@@ -1018,6 +1142,14 @@ def test_focused_sqlite_analytics_uses_normalized_render_facts(
         connection.execute(
             "UPDATE generations SET combo_key = 'not-a-render-contract'"
         )
+        connection.execute(
+            "INSERT INTO image_geometry_projection("
+            "image_id, actual_width, actual_height, aspect_format, "
+            "resolution_class, target_width, target_height, is_exact, "
+            "classifier_version, projected_at"
+            ") SELECT id, 2160, 3240, '2:3', '2160', 2160, 3240, 1, 1, "
+            "'2026-10-05T00:00:00Z' FROM images WHERE image_uid = 'image-1'"
+        )
 
     render_repository = SqliteRenderAnalyticsRepository(database_path)
     recommendations = render_repository.list_calculated_recommendations(
@@ -1036,6 +1168,14 @@ def test_focused_sqlite_analytics_uses_normalized_render_facts(
     )
     values = render_repository.list_parameter_values(
         RenderParameter.STEPS,
+        model="sdxl",
+        minimum_samples=1,
+        success_threshold=4,
+        delete_weight=5,
+        limit=10,
+    )
+    geometry_values = render_repository.list_parameter_values(
+        RenderParameter.ASPECT_FORMAT,
         model="sdxl",
         minimum_samples=1,
         success_threshold=4,
@@ -1067,5 +1207,7 @@ def test_focused_sqlite_analytics_uses_normalized_render_facts(
     assert setups.entries[0].best_images[0].png_path == tmp_path / "image.png"
     assert values.entries[0].parameter is RenderParameter.STEPS
     assert values.entries[0].value == "20"
+    assert geometry_values.entries[0].value == "2:3"
+    assert geometry_values.entries[0].best_images[0].image_uid == "image-1"
     assert combinations.entries[0].composition_uid == "composition-1"
     assert composition_setups == setups.entries

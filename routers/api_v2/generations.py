@@ -7,19 +7,26 @@ from pydantic import BaseModel, ConfigDict, Field
 from comfyreview.api import get_application_container
 from comfyreview.api.v2_presenters import ImageResponseMapper
 from comfyreview.application import (
+    AspectFormat,
     ConfirmPlaygroundDraftCommand,
+    ContentClassificationError,
     GenerationDetail,
     GenerationLoraSelection,
     GenerationMutationError,
     GenerationNotFoundError,
+    GenerationPromptGroup,
     GenerationQueryValidationError,
     GenerationSamplerSettings,
     GenerationSummary,
     GenerationValidationError,
+    ImageContextNotFoundError,
     PlaygroundGenerationDraft,
     PlaygroundGenerationSweep,
     PromptCatalogValidationError,
+    PromptDraftOverrides,
+    PromptRevisionSelection,
     PromptSelectionError,
+    ResolutionClass,
 )
 from routers.api_v2.catalog import PromptAtomRequest, atom_usages
 from routers.api_v2.common import error_response
@@ -50,9 +57,29 @@ class GenerationLoraRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
+    name: str = ""
+    lora_uid: str | None = None
+    revision_uid: str | None = None
     model_strength: float = 1.0
     clip_strength: float = 1.0
+
+
+class PromptRevisionSelectionRequest(BaseModel):
+    """Carry one exact prompt component revision selected in the draft."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    component_uid: str
+    revision_uid: str
+
+
+class GenerationPromptGroupRequest(PromptRevisionSelectionRequest):
+    """Carry the exact edited atoms for one selected prompt component."""
+
+    candidate_uid: str | None = None
+    positive_atoms: list[PromptAtomRequest] = Field(default_factory=list)
+    negative_atoms: list[PromptAtomRequest] = Field(default_factory=list)
 
 
 class PlaygroundGenerationRequest(BaseModel):
@@ -61,14 +88,18 @@ class PlaygroundGenerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     draft_uid: str
-    component_uids: list[str]
+    prompt_selections: list[PromptRevisionSelectionRequest] = Field(
+        default_factory=list
+    )
+    prompt_groups: list[GenerationPromptGroupRequest] = Field(
+        default_factory=list
+    )
+    source_image_uid: str | None = None
     positive_atoms: list[PromptAtomRequest]
     negative_atoms: list[PromptAtomRequest]
     checkpoint: str
-    blueprint_uid: str = "default-character"
-    blueprint_version: int = 3
-    image_width: int = 1024
-    image_height: int = 1024
+    aspect_format: AspectFormat
+    resolution_class: ResolutionClass
     sampler: PlaygroundSamplerRequest
     loras: list[GenerationLoraRequest] = Field(default_factory=list)
 
@@ -159,27 +190,114 @@ def submit_generation(
     """Submit one reviewed Playground draft through GenerationService."""
     container = get_application_container(request)
     try:
-        confirmed = container.playground_service.confirm_draft(
-            ConfirmPlaygroundDraftCommand(
-                component_uids=tuple(payload.component_uids),
-                positive_atoms=atom_usages(payload.positive_atoms),
-                negative_atoms=atom_usages(payload.negative_atoms),
+        positive_atoms = atom_usages(payload.positive_atoms)
+        negative_atoms = atom_usages(payload.negative_atoms)
+        prompt_groups = tuple(
+            GenerationPromptGroup(
+                kind=group.kind,
+                component_uid=group.component_uid,
+                revision_uid=group.revision_uid,
+                candidate_uid=group.candidate_uid,
+                position=position,
+                positive_atoms=atom_usages(group.positive_atoms),
+                negative_atoms=atom_usages(group.negative_atoms),
             )
+            for position, group in enumerate(payload.prompt_groups)
         )
+        source_loras: tuple[GenerationLoraSelection, ...] | None = None
+        if payload.source_image_uid:
+            if prompt_groups:
+                raise PromptSelectionError(
+                    "historical image snapshots cannot include prompt_groups"
+                )
+            handoff = container.image_generator_handoffs.get(
+                payload.source_image_uid
+            )
+            confirmed = container.playground_service.prepare_image_snapshot(
+                container.image_contexts.get_image(payload.source_image_uid),
+                overrides=PromptDraftOverrides(
+                    positive_atoms=positive_atoms,
+                    negative_atoms=negative_atoms,
+                ),
+            )
+            source_loras = tuple(
+                GenerationLoraSelection(
+                    name=item.provider_name,
+                    model_strength_milli=item.model_strength_milli,
+                    clip_strength_milli=item.clip_strength_milli,
+                    position=position,
+                    lora_uid=item.lora_uid,
+                    revision_uid=item.revision_uid,
+                    content_level=item.content_level,
+                    retain_null_revision=item.revision_uid is None,
+                )
+                for position, item in enumerate(handoff.prompt_setup.loras)
+            )
+        else:
+            expected_groups = tuple(
+                (item.kind, item.component_uid, item.revision_uid)
+                for item in payload.prompt_selections
+            )
+            actual_groups = tuple(
+                (item.kind, item.component_uid, item.revision_uid)
+                for item in prompt_groups
+            )
+            if actual_groups != expected_groups:
+                raise PromptSelectionError(
+                    "prompt_groups must match prompt_selections exactly"
+                )
+            for scope, complete in (
+                ("positive_atoms", positive_atoms),
+                ("negative_atoms", negative_atoms),
+            ):
+                grouped = tuple(
+                    atom
+                    for group in prompt_groups
+                    for atom in getattr(group, scope)
+                )
+                if complete[: len(grouped)] != grouped:
+                    raise PromptSelectionError(
+                        "prompt_groups do not match the rendered prompt"
+                    )
+            confirmed = container.playground_service.confirm_draft(
+                ConfirmPlaygroundDraftCommand(
+                    prompt_selections=tuple(
+                        PromptRevisionSelection(
+                            kind=selection.kind,
+                            component_uid=selection.component_uid,
+                            revision_uid=selection.revision_uid,
+                        )
+                        for selection in payload.prompt_selections
+                    ),
+                    positive_atoms=positive_atoms,
+                    negative_atoms=negative_atoms,
+                )
+            )
         character = next(
-            component
-            for component in confirmed.selection.components
-            if component.kind == "character"
+            (
+                component
+                for component in confirmed.selection.components
+                if component.component.kind == "character"
+            ),
+            None,
+        )
+        character_name = (
+            character.component.name if character else "historical"
+        )
+        character_key = (
+            character.component.component_key
+            if character
+            else "historical-snapshot"
         )
         draft = PlaygroundGenerationDraft(
             draft_uid=payload.draft_uid,
-            character_name=character.name,
+            character_name=character_name,
             prompt=confirmed.prompt,
             checkpoint=payload.checkpoint,
-            blueprint_uid=payload.blueprint_uid,
-            blueprint_version=payload.blueprint_version,
-            image_width=payload.image_width,
-            image_height=payload.image_height,
+            blueprint_uid="default-character",
+            blueprint_version=4,
+            aspect_format=payload.aspect_format,
+            resolution_class=payload.resolution_class,
             sampler=GenerationSamplerSettings(
                 role="base_sampler",
                 seed=payload.sampler.seed,
@@ -189,16 +307,23 @@ def submit_generation(
                 scheduler=payload.sampler.scheduler,
                 denoise=payload.sampler.denoise,
             ),
-            output_subdirectory=f"playground/{character.component_key}",
-            loras=tuple(
-                GenerationLoraSelection(
-                    name=item.name,
-                    model_strength_milli=round(item.model_strength * 1000),
-                    clip_strength_milli=round(item.clip_strength * 1000),
-                    position=position,
+            output_subdirectory=f"playground/{character_key}",
+            loras=(
+                source_loras
+                if source_loras is not None
+                else tuple(
+                    GenerationLoraSelection(
+                        name=item.name,
+                        model_strength_milli=round(item.model_strength * 1000),
+                        clip_strength_milli=round(item.clip_strength * 1000),
+                        position=position,
+                        lora_uid=item.lora_uid,
+                        revision_uid=item.revision_uid,
+                    )
+                    for position, item in enumerate(payload.loras)
                 )
-                for position, item in enumerate(payload.loras)
             ),
+            prompt_groups=prompt_groups,
         )
         drafts = container.playground_generation_sweeps.expand(
             draft,
@@ -217,12 +342,19 @@ def submit_generation(
         batch = container.playground_submission_service.submit(drafts)
     except (
         GenerationValidationError,
-        KeyError,
+        ContentClassificationError,
+        ImageContextNotFoundError,
+        LookupError,
         PromptSelectionError,
         PromptCatalogValidationError,
         StopIteration,
     ) as error:
-        return error_response(400, "invalid_generation", str(error))
+        code = (
+            "lora_trigger_required"
+            if str(error).startswith("lora_trigger_required")
+            else "invalid_generation"
+        )
+        return error_response(400, code, str(error))
     if batch.failures:
         return error_response(
             500,
@@ -265,6 +397,7 @@ def summary_response(generation: GenerationSummary) -> dict[str, object]:
         "started_at": generation.started_at,
         "completed_at": generation.completed_at,
         "output_count": generation.output_count,
+        "failure_reason": generation.failure_reason,
     }
 
 

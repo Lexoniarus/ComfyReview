@@ -36,6 +36,14 @@ export class ContextView {
       chip.textContent = String(scope.name || "");
       scopes.append(chip);
     }
+    for (const lora of image.loras || []) {
+      const chip = document.createElement("span");
+      chip.className = "scope-chip";
+      chip.dataset.scopeKind = "lora";
+      chip.textContent = `LoRA · ${String(lora.provider_name || lora.lora_uid || "Unbekannt")}`;
+      chip.title = `Model ${formatWeight(lora.model_strength)} · CLIP ${formatWeight(lora.clip_strength)}`;
+      scopes.append(chip);
+    }
     if (!scopes.children.length) {
       const empty = document.createElement("p");
       empty.className = "inspector-empty";
@@ -44,6 +52,13 @@ export class ContextView {
     }
     this.element.append(preview, facts, scopes);
   }
+}
+
+/** @param {unknown} value */
+function formatWeight(value) {
+  return Number(value || 0)
+    .toFixed(2)
+    .replace(".", ",");
 }
 
 /** @param {unknown} summary */

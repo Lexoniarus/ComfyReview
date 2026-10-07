@@ -43,12 +43,14 @@ class PlaygroundDiscoveryService:
             samplers=list(capabilities.samplers),
             schedulers=list(capabilities.schedulers),
             loras=list(capabilities.loras),
+            upscale_models=list(capabilities.upscale_models),
         )
         if (
             result.checkpoints
             or result.samplers
             or result.schedulers
             or result.loras
+            or result.upscale_models
         ):
             self._save(result)
             return result
@@ -61,6 +63,7 @@ class PlaygroundDiscoveryService:
             samplers=self._strings(raw.get("samplers")),
             schedulers=self._strings(raw.get("schedulers")),
             loras=self._strings(raw.get("loras")),
+            upscale_models=self._strings(raw.get("upscale_models")),
         )
 
     def _save(self, result: DiscoveryLists) -> None:
@@ -71,6 +74,7 @@ class PlaygroundDiscoveryService:
                     "samplers": result.samplers,
                     "schedulers": result.schedulers,
                     "loras": result.loras,
+                    "upscale_models": result.upscale_models,
                 }
             )
         except OSError:

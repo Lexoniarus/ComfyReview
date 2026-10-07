@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from comfyreview.application.lora_effects import LoraGraphEffectPolicy
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteOutputImageRepository,
@@ -469,6 +470,9 @@ class LegacyOutputAuditor:
         return value if isinstance(value, str) else ""
 
     def _loras(self, graph: dict[str, Any]) -> list[dict[str, Any]]:
+        effective_node_ids = {
+            effect.node_id for effect in LoraGraphEffectPolicy().effects(graph)
+        }
         loras: list[dict[str, Any]] = []
         for node_id, node in graph.items():
             if not isinstance(node, dict):
@@ -478,6 +482,8 @@ class LegacyOutputAuditor:
                 continue
             lora_name = inputs.get("lora_name")
             if not isinstance(lora_name, str) or not lora_name.strip():
+                continue
+            if str(node_id) not in effective_node_ids:
                 continue
             loras.append(
                 {

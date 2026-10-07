@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from comfyreview.application.comfyui import (
     ComfyUiCapabilities,
     ComfyUiConnectionError,
     ComfyUiError,
+    ComfyUiJobStatus,
+    ComfyUiNotFoundError,
     ComfyUiProvider,
     ComfyUiRejectionError,
     ComfyUiTimeoutError,
+)
+from comfyreview.application.generation_geometry import GenerationGeometry
+from comfyreview.application.lora_effects import (
+    CompiledLoraGraphPolicy,
+    LoraGraphValidationError,
 )
 from comfyreview.application.workflow_compilation import (
     CompiledWorkflow,
@@ -35,6 +42,19 @@ class GenerationReconciliationRequired(GenerationMutationError):
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationPromptGroup:
+    """Bind exact prompt atoms to one component revision and candidate."""
+
+    kind: str
+    component_uid: str
+    revision_uid: str
+    position: int
+    positive_atoms: tuple[PromptAtomUsage, ...] = ()
+    negative_atoms: tuple[PromptAtomUsage, ...] = ()
+    candidate_uid: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationPromptSnapshot:
     """Keep rendered prompts and the exact catalog revisions used."""
 
@@ -43,6 +63,7 @@ class GenerationPromptSnapshot:
     revision_uids: tuple[str, ...]
     positive_atoms: tuple[PromptAtomUsage, ...] = ()
     negative_atoms: tuple[PromptAtomUsage, ...] = ()
+    prompt_groups: tuple[GenerationPromptGroup, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +87,10 @@ class GenerationLoraSelection:
     model_strength_milli: int
     clip_strength_milli: int
     position: int
+    lora_uid: str | None = None
+    revision_uid: str | None = None
+    content_level: str | None = None
+    retain_null_revision: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +125,7 @@ class GenerationRequest:
     loras: tuple[GenerationLoraSelection, ...] = ()
     reference_image: str | None = None
     canvas: GenerationCanvas | None = None
+    geometry: GenerationGeometry | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +174,10 @@ class GenerationRepository(Protocol):
         """Return one current lifecycle record."""
         ...
 
+    def list_active(self, limit: int) -> tuple[GenerationRecord, ...]:
+        """Return bounded non-terminal generations in canonical order."""
+        ...
+
     def mark_submitting(self, generation_uid: str) -> GenerationRecord:
         """Move a prepared generation into submitting state."""
         ...
@@ -194,6 +224,25 @@ class GenerationPort(Protocol):
         ...
 
 
+class GenerationLoraContentPolicy(Protocol):
+    """Resolve canonical LoRA content snapshots before compilation."""
+
+    def apply(
+        self, selections: tuple[GenerationLoraSelection, ...]
+    ) -> tuple[GenerationLoraSelection, ...]: ...
+
+
+class GenerationLoraTriggerPolicy(Protocol):
+    """Require exact trigger evidence for every selected LoRA revision."""
+
+    def validate(
+        self,
+        selections: tuple[GenerationLoraSelection, ...],
+        positive_atoms: tuple[PromptAtomUsage, ...],
+        negative_atoms: tuple[PromptAtomUsage, ...],
+    ) -> None: ...
+
+
 class GenerationOutputCollection(Protocol):
     """Persist outputs after ComfyUI reports successful completion."""
 
@@ -220,6 +269,9 @@ class GenerationService:
         comfyui: ComfyUiProvider,
         outputs: GenerationOutputCollection,
         identities: GenerationIdentitySource,
+        lora_content: GenerationLoraContentPolicy | None = None,
+        lora_triggers: GenerationLoraTriggerPolicy | None = None,
+        lora_graph_policy: CompiledLoraGraphPolicy | None = None,
     ) -> None:
         self._blueprints = blueprints
         self._compiler = compiler
@@ -227,21 +279,48 @@ class GenerationService:
         self._comfyui = comfyui
         self._outputs = outputs
         self._identities = identities
+        self._lora_content = lora_content
+        self._lora_triggers = lora_triggers
+        self._lora_graph_policy = lora_graph_policy
         self._logger = logging.getLogger("comfyreview.generation")
 
     def submit(self, request: GenerationRequest) -> GenerationSubmission:
         """Compile, persist and submit one generation without a long transaction."""
+        if request.loras and self._lora_content is not None:
+            request = replace(
+                request, loras=self._lora_content.apply(request.loras)
+            )
+        if request.loras and self._lora_triggers is not None:
+            try:
+                self._lora_triggers.validate(
+                    request.loras,
+                    request.prompt.positive_atoms,
+                    request.prompt.negative_atoms,
+                )
+            except ValueError as error:
+                raise GenerationValidationError(str(error)) from error
         self._validate(request)
-        capabilities = (
-            self._comfyui.discover_capabilities() if request.loras else None
-        )
-        if capabilities is not None:
-            self._validate_loras(request, capabilities.loras)
         blueprint = self._blueprints.get(
             request.blueprint_uid,
             request.blueprint_version,
         )
         compiled = self._compiler.compile(blueprint, request)
+        if self._lora_graph_policy is not None:
+            try:
+                self._lora_graph_policy.validate(compiled.graph, request.loras)
+            except LoraGraphValidationError as error:
+                raise GenerationValidationError(
+                    f"lora_graph_invalid: {error}"
+                ) from error
+        capabilities = (
+            self._comfyui.discover_capabilities()
+            if request.loras
+            or compiled.capability_requirements
+            or compiled.upscale_model_requirements
+            else None
+        )
+        if request.loras and capabilities is not None:
+            self._validate_loras(request, capabilities.loras)
         self._validate_capabilities(compiled, capabilities)
         generation_uid = self._identities.new_generation_uid()
         prepared = PreparedGeneration(generation_uid, request, compiled)
@@ -333,16 +412,52 @@ class GenerationService:
                     type(error).__name__,
                 )
             )
+        return self._submission(self._apply_status(record, status))
+
+    def observe(self, generation_uid: str) -> GenerationSubmission:
+        """Observe one active job once without blocking the caller."""
+        record = self._generations.get(
+            self._required(generation_uid, "generation_uid")
+        )
+        if not record.prompt_id:
+            raise GenerationValidationError(
+                "generation has no external prompt_id"
+            )
+        try:
+            status = self._comfyui.get_status(record.prompt_id)
+        except (ComfyUiTimeoutError, ComfyUiConnectionError):
+            return self._submission(record)
+        except ComfyUiNotFoundError as error:
+            updated = self._generations.mark_reconciliation_required(
+                record.generation_uid,
+                record.prompt_id,
+                type(error).__name__,
+            )
+            return self._submission(updated)
+        except ComfyUiError as error:
+            updated = self._generations.mark_reconciliation_required(
+                record.generation_uid,
+                record.prompt_id,
+                type(error).__name__,
+            )
+            return self._submission(updated)
+        return self._submission(self._apply_status(record, status))
+
+    def _apply_status(
+        self,
+        record: GenerationRecord,
+        status: ComfyUiJobStatus,
+    ) -> GenerationRecord:
         if status.failed:
-            updated = self._generations.mark_failed(
+            return self._generations.mark_failed(
                 record.generation_uid,
                 status.message or "comfyui_failed",
             )
-        elif status.completed:
-            updated = self._complete(record)
-        else:
-            updated = self._generations.mark_running(record.generation_uid)
-        return self._submission(updated)
+        if status.completed:
+            return self._complete(record)
+        if status.state == "running" and record.status != "running":
+            return self._generations.mark_running(record.generation_uid)
+        return record
 
     def _complete(self, record: GenerationRecord) -> GenerationRecord:
         assert record.prompt_id is not None
@@ -365,7 +480,8 @@ class GenerationService:
         discovered: ComfyUiCapabilities | None = None,
     ) -> None:
         requirements = set(compiled.capability_requirements)
-        if not requirements:
+        upscale_requirements = set(compiled.upscale_model_requirements)
+        if not requirements and not upscale_requirements:
             return
         capabilities = discovered or self._comfyui.discover_capabilities()
         available = set(capabilities.node_classes)
@@ -374,6 +490,14 @@ class GenerationService:
             raise GenerationValidationError(
                 "ComfyUI is missing required capabilities: "
                 + ", ".join(sorted(missing))
+            )
+        missing_upscalers = upscale_requirements - set(
+            capabilities.upscale_models
+        )
+        if missing_upscalers:
+            raise GenerationValidationError(
+                "ComfyUI is missing required upscale models: "
+                + ", ".join(sorted(missing_upscalers))
             )
 
     @staticmethod
@@ -425,6 +549,7 @@ class GenerationService:
             raise GenerationValidationError("positive prompt is required")
         if not request.prompt.negative_text.strip():
             raise GenerationValidationError("negative prompt is required")
+        cls._validate_prompt_groups(request.prompt)
         if tuple(lora.position for lora in request.loras) != tuple(
             range(len(request.loras))
         ):
@@ -439,6 +564,35 @@ class GenerationService:
                     raise GenerationValidationError(
                         "image dimensions must be multiples of 8 between 64 and 4096"
                     )
+
+    @classmethod
+    def _validate_prompt_groups(cls, prompt: GenerationPromptSnapshot) -> None:
+        groups = prompt.prompt_groups
+        if not groups:
+            return
+        if tuple(group.position for group in groups) != tuple(
+            range(len(groups))
+        ):
+            raise GenerationValidationError(
+                "prompt group positions must be contiguous"
+            )
+        for group in groups:
+            cls._required(group.kind, "prompt group kind")
+            cls._required(group.component_uid, "prompt group component_uid")
+            cls._required(group.revision_uid, "prompt group revision_uid")
+            if group.candidate_uid is not None:
+                cls._required(
+                    group.candidate_uid, "prompt group candidate_uid"
+                )
+        for scope in ("positive_atoms", "negative_atoms"):
+            grouped = tuple(
+                atom for group in groups for atom in getattr(group, scope)
+            )
+            complete = getattr(prompt, scope)
+            if complete[: len(grouped)] != grouped:
+                raise GenerationValidationError(
+                    "prompt groups do not match the rendered prompt atoms"
+                )
 
     @staticmethod
     def _required(value: str, field: str) -> str:

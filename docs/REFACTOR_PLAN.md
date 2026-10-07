@@ -1,13 +1,17 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover, structured prompt catalog, schema-v9
+Status: the canonical backend cutover, structured prompt catalog, schema-v14
 data migration and Frontend V2 overhaul are implemented on
-`refactor/review-boundary`, 2026-10-03. Analytics collections are bounded,
-Playground handoffs are explicit, generation profiles and ordered LoRA stacks
-are canonical, Settings is a complete product surface, the Inspector is
+`feature/lora-catalog-handoff`, 2026-10-07. Analytics collections are bounded,
+Playground handoffs are explicit, generation profiles are dormant migration
+compatibility, Settings is a complete product surface, the Inspector is
 composed from focused views and Playwright covers the browser acceptance
 contract. The branch stays unmerged until final user acceptance and the final
 integration review.
+
+The Anime-upscale/content-correction feature slice is implemented separately
+from the refactor history and must be cleanly rebased with concurrent
+Frontend-V2 work before integration.
 
 The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
@@ -153,6 +157,14 @@ Runtime imports and their reports/backups are deliberately outside Git.
   persistence pending the explicit projection audit;
 - routes retain their existing URLs, fields and redirects while passing stable
   UIDs into application services.
+- Review candidate selection now interprets the compatibility preference as
+  “unrated first”, then falls back to the oldest review sequence; rated images
+  are never permanently excluded by that preference;
+- `FairArenaPairingPolicy` derives cooldown rotation from canonical match
+  history, keeps repeated reads stable and delays reverse directions until
+  older eligible images have rotated;
+- the ineffective public `review_max_attempts` setting has been removed while
+  its schema column remains dormant compatibility.
 
 ### D. Revisioned prompt catalog
 
@@ -179,11 +191,20 @@ Runtime imports and their reports/backups are deliberately outside Git.
 - `GenerationPort` is implemented by the canonical `GenerationService`;
 - preview drafts now use canonical revisions while preserving their existing
   persisted UI shape and legacy numeric form inputs during transition;
+- draft responses and generation requests exchange ordered typed
+  component/revision bindings, so confirmation preserves historical revisions
+  and accepts an explicitly bound archived revision without restoring it to
+  active/random selection;
 - draft overrides remain non-persisting snapshots and never rewrite catalog
   revisions;
 - the obsolete `PlaygroundGenerator` facade and its helper modules were
   removed;
 - native submission, lifecycle tracking and output collection are wired.
+- one FastAPI-lifespan-owned worker now observes bounded submitted/running work,
+  recovers interrupted local states without resubmission and shuts down through
+  a single owned thread lifecycle;
+- explicit reconciliation can recover one strictly unambiguous persisted PNG
+  through the normal canonical collector when ComfyUI history has expired.
 
 ### F. Legacy projection audit
 
@@ -220,6 +241,23 @@ have been removed.
 Detailed reports and all four pre-write backups remain ignored runtime
 artifacts. The counts above are observed migration results, not importer
 constants.
+
+### Legacy prompt provenance completion (completed)
+
+- `legacy-provenance audit` reads the canonical database without mutation and
+  distinguishes embedded recipes, unique exact matches and reviewed semantic
+  reconstruction;
+- the reviewed curation manifest records only this workspace's historical
+  evidence and is not imported into normal runtime behavior;
+- `legacy-provenance recover` can only create a separate output database and
+  validates it before publication;
+- historical variants are immutable lower-numbered revisions; the pre-existing
+  current revision remains unchanged and latest;
+- one-off recovered components are archived, while original rendered prompts,
+  images, reviews, Arena matches and content classifications remain unchanged;
+- the 2026-10-05 rehearsal covered 385 generations, created 109 missing
+  historical revisions, relinked 324 generations and left all 377 active-image
+  generations with a character membership and no ambiguous slot.
 
 ### Frontend V2 analytics correction (completed)
 
@@ -281,26 +319,259 @@ constants.
   dimensions while the ComfyUI provider remains graph-semantic-free;
 - Blueprint v2 exposes an explicit LoRA insertion role and the compiler builds
   a deterministic Model/CLIP loader chain without provider-side graph logic;
-- `/settings` owns General, Generation profiles, Review, Curation, ComfyUI and
+- `/settings` owns General, Content levels/LoRAs, Review, Curation, ComfyUI and
   Storage/database sections; environment configuration stays read-only;
 - the Inspector delegates Context, Prompt, Generation, Workflow, Reviews and
   Curation rendering to focused views;
 - Scope navigation renders only the active kind instead of hundreds of buttons
   at once;
-- Playground top combinations use cyclic arrow-controlled evidence carousels;
-  native scrollbars are hidden and one to three images fill a bounded card;
-- Playwright runs against a temporary schema-v9 database and fake ComfyUI and
+- Playground top combinations use independently ranked Top-2/Top-3 rows per
+  character and cyclic arrow/touch-controlled evidence rails; native
+  scrollbars are hidden and one to three images fill a bounded card;
+- Playwright runs against a temporary schema-v11 database and fake ComfyUI and
   covers bounded Analytics, Settings persistence, the Playground carousel and
   the four required viewport sizes;
 - Node 24, ESLint, Prettier, Stylelint, checkJs, Vitest coverage and Playwright
   are part of `python scripts/quality.py` and CI.
 
+### Anime upscaling and correctable content levels (completed feature slice)
+
+- schema v10 adds output tiers/target geometry, canonical LoRA definitions,
+  immutable generation-level LoRA snapshots, inferred content level and
+  append-only image override events plus projection;
+- Blueprint v4 owns the fixed AnimeSharp/sharpen/Lanczos output path and maps
+  only semantic target geometry roles; capability validation blocks missing
+  nodes or `example-upscaler.pth` before persistence/submission;
+- Settings creates classified LoRA trigger revisions and offers explicit,
+  revision-checked preview/apply commands for historical reclassification;
+- unclassified LoRAs cannot be added to a Playground request;
+- Top/Worst can raise, lower or inherit an image level and reuses the existing
+  confirmation plus UID-based delete API;
+- shared repository visibility uses the same effective-level policy across all
+  image-bearing surfaces; Card Battler and card development remain outside
+  this feature slice.
+
+### Playground and geometry refactor completion (completed feature slice)
+
+- `/playground` is the Top-2/Top-3 overview, `/playground/generator` is the
+  explicit generator, and `/generations` is lifecycle history;
+- one server-materialized seed drives selection and the base sampler; draft
+  UIDs no longer depend on secure-context browser APIs;
+- direct generation controls replace active profiles, while grouped atom
+  overrides and prompt/sampler evidence share the authoritative renderer and
+  central content visibility;
+- schema v11 adds only rebuildable image geometry, refreshed by an explicit
+  PNG-header scan and atomic replacement;
+- Analytics and Inspector expose actual/classified geometry, and Playwright
+  covers cyclic carousels, four viewports and an insecure LAN-style origin.
+
+### Evidence-guided Generator and focused Analytics (completed feature slice)
+
+- `RenderGuidanceService` replaces the active additive recommendation path for
+  both Generator and Render Analytics without a schema change;
+- observed setup, observed parameter, predicted setup and predicted parameter
+  modes share immutable event evidence, independent-image support thresholds,
+  deterministic ranking, shrunk main effects and supported interactions;
+- the Generator displays catalog references beside Prompt selections, uses
+  accessible single-track Steps/CFG range controls, and applies guidance only
+  after an explicit user action;
+- output geometry and LoRAs remain manual and outside all four optimizer modes;
+- Analytics Overview reports coverage only, Prompt Combinations remains
+  prompt-only, and Render Analytics exposes the same four modes and confidence
+  vocabulary as the Generator;
+- Analytics handoffs use the shared typed direct-navigation owner and are
+  applied visibly in the Generator without staging UI or implicit drafts;
+- one shared evidence carousel and the full-size image viewer are connected to
+  Prompt references, Draft evidence and Analytics cards;
+- the legacy `/api/v2/analytics/parameters` endpoint and the render branch of
+  `/api/v2/analytics/combinations` are no longer active public structures.
+
+### Canonical prompt content levels and shared media cards (completed feature slice)
+
+- `PromptContentLevelPolicy` separates a typed catalog content level from free
+  descriptive tags; canonical `content_level_*` markers override import-only
+  legacy aliases;
+- catalog and Playground V2 contracts expose `content_level`, and the catalog
+  editor requires an explicit five-level choice;
+- image visibility reads the stored generation snapshot or manual override only,
+  eliminating catalog-edit drift across ranking, review, Arena, Analytics and
+  Generator evidence;
+- a complete revisions-bound 791-component curation was audited and recovered
+  into a new validated v11 database; 44 components and 53 generations changed,
+  and the prior runtime database remains backed up;
+- true card collections share three equal tablet columns and natural uncropped
+  media; Overview, Scopes and Render Analytics reuse the cyclic card-rail
+  owner, while nested Playground carousels isolate touch/pointer gestures.
+- normalized historical LoRA usage is graph-effective: disconnected or
+  zero-strength branches remain raw provenance but cannot raise a generation's
+  content level; the explicit v2 content audit found 208 such selections;
+- Top/Worst includes every live image with at least one rating instead of
+  reusing the three-image Analytics/Arena evidence threshold, and Settings
+  exposes a real `Nicht eingestuft` LoRA state.
+
+### Revisioned LoRA catalog and image handoff (implemented feature slice)
+
+- schema v12 extends stable LoRA definitions with mutable display metadata,
+  immutable default/trigger revisions and normalized trigger atom usages;
+- legacy definitions receive an empty revision 1, while historical generation
+  usages retain a `NULL` revision instead of borrowing current triggers;
+- the Generator owns a separately ordered LoRA prompt layer and renders the
+  selected revision's triggers as editable draft-only groups;
+- `CompiledLoraGraphPolicy` proves exact ordered Model and dual-CLIP wiring in
+  Blueprint v4 before persistence or provider submission;
+- `ImageGeneratorHandoffService` returns independent authoritative Prompt and
+  Render packages for visible image UIDs, including snapshot-only legacy and
+  non-applicable multi-stage diagnostics;
+- all card, carousel, viewer and inspector image surfaces reuse one
+  `ImageGeneratorActions` owner and direct typed navigation;
+- Settings remains a status surface; Catalog is the only LoRA editor.
+
+### Generator handoff and lifecycle acceptance (implemented feature slice)
+
+- `GeneratorHandoffNavigator` is the single outgoing owner; the target-side
+  `GeneratorHandoffApplier` loads, projects, applies, persists, rolls back and
+  cleans URL parameters atomically;
+- `DraftSession` owns cancellation, revision rejection and the
+  idle/preparing/ready/submitting state machine; editor changes immediately
+  clear stale draft output;
+- `GeneratorStatePersistence` serializes latest-write-wins saves and flushes
+  the newest snapshot on navigation;
+- schema v13 stores normalized Generator state in canonical SQLite and the
+  explicit v12-to-v13 copy migration can import one validated legacy JSON
+  snapshot without changing its source database;
+- the Generator POST/preview routes, file repository, helper services,
+  tab-local tray and duplicate toast/event paths were removed;
+- Playwright proves exact LoRA weights through reload, draft, generation row,
+  compiled loader and Fake-ComfyUI submission, with one trigger atom.
+
+### Complete prompt attribution and trigger-based LoRA safety (implemented)
+
+- schema v14 places content level on the immutable LoRA trigger revision; the
+  definition-level field is dormant migration compatibility;
+- `LoraUsagePolicy` requires both graph effect and an exact trigger in the
+  matching positive/negative final-prompt scope; weights may differ;
+- preview and submission reject a selected LoRA with all revision triggers
+  removed before any generation persistence or ComfyUI call;
+- hash-bound `legacy-provenance audit/recover` creates recognizable historical
+  component and LoRA revisions, removes unsupported normalized LoRA rows,
+  recomputes inferred levels and requires zero unattributed atoms or ambiguous
+  bindings;
+- complete image handoff replaces all seven component controls and the ordered
+  LoRA layer with normal editable catalog state; unchanged input uses the
+  authoritative snapshot and an explicit edit switches to `image_adapted`;
+- Top-2/Top-3 are observed factors per character, where the character is the
+  group and Scene, Outfit, Pose, Expression, Lighting, Modifier and evidenced
+  LoRAs are the ranked factors.
+- the explicit live promotion on 2026-10-07 preserved the v12 source, upgraded
+  through v13 and v14, audited 414 generations with no unattributed atoms or
+  ambiguous LoRA bindings, retained 19 evidenced LoRA usages and verified
+  complete editable handoffs for all 393 active images;
+- the closing shared gate passed 638 Python tests, 159 frontend tests and 12
+  Playwright scenarios with 100% Python-Core and frontend statement coverage.
+
+### Prompt variant guidance and evidence-based catalog promotion (implemented)
+
+Status: implemented on `feature/lora-catalog-handoff` on 2026-10-07. Schema,
+generation facts, guidance, promotion, Generator integration and recovery are
+split into independently reviewed commits.
+
+The structured-prompt boundary separates atom identity from usage weight and
+makes each immutable catalog revision an exact weighted standard recipe. Schema
+v15 closes the feedback loop with explicit candidates, exact generation prompt
+groups and append-only promotions. `current_revision` now follows the newest
+promotion while `latest_revision` remains historical revision-number state.
+
+The completed slice establishes these invariants:
+
+- normalized semantic content identifies an atom; using another weight does not
+  create another atom, while changed semantic content does;
+- the current catalog revision is the strongest sufficiently supported exact
+  observed variant under a versioned stability policy, not simply the latest
+  edit or the highest raw average;
+- a calculated optimized variant is derived only from the stable recipe and
+  may combine promising atom weights that have not yet been observed together;
+- the Generator exposes stable, latest manual, calculated and next-test
+  variants independently per prompt group and loads them into the ordinary
+  editable state;
+- generation and rating turn an optimized candidate into an observed exact
+  recipe; only an observed recipe with sufficient independent-image evidence
+  can be promoted;
+- automatic reconciliation after Review, Delete or Arena reuses or appends an
+  immutable weighted component revision and records the previous standard,
+  evidence frontier, policy/model version and reason; it never rewrites earlier
+  revisions, historical image bindings or a successfully stored review;
+- best observed, stable observed, predicted optimum and next useful test remain
+  distinct results with visible support and uncertainty;
+- derived evidence is rebuildable from canonical generation, image, prompt and
+  review facts without a precomputed Cartesian product;
+- whole-image ratings provide contextual evidence rather than causal proof for
+  one atom, and ambiguous legacy source attribution is never invented.
+
+The implemented `prompt-guidance-v1` policy uses
+the Render Guidance evidence semantics, a five-independent-image stability
+floor, repeated-review weighting without support inflation, negative delete
+evidence and conservative lower-bound ordering. Automatic promotion requires a
+`0.02` lower-bound lead except for a provisional or unsupported current
+standard. Evidence is component-global. The calculated result is weight-only,
+uses supported observed weights plus in-range `0.05` interpolation, requires
+three images per anchor and two anchors for interpolation, and combines shrunk
+effects as a mean logit effect. Discovery maximizes
+`mean + 1.645 * standard_deviation`, may alter several weights and never
+materializes the Cartesian product.
+
+Schema v15 adds explicit candidates, exact generation prompt groups and
+append-only promotions. The newest promotion defines `current_revision`, while
+`latest_revision` remains the highest historical revision. New revision 1 and
+v14 migration baselines are provisional. Manual catalog-content changes create
+candidates; metadata changes remain immediate. Historical groups are backfilled
+only when exact partitioning is provable. Draft and submission services validate
+component, source revision, candidate and rendered prompt before atomic
+persistence.
+
+Schema v16 corrects catalog-test provenance with append-only manual-variant
+selection facts. `latest_manual_variant` is independent from generation and
+promotion state, while calculated and discovery guidance are bound exclusively
+to the expected `current_revision`. The Catalog editor starts from that stable
+revision rather than the numerically latest historical revision.
+
+The Generator exposes stable, visible catalog-test, calculated and next-test
+choices independently per group. Guidance is read-only until an explicit
+selection materializes a deduplicated candidate, and its atoms enter the same
+editable `PromptAtomEditor` as every other workflow. Review, Delete and Arena
+invoke an injected promotion coordinator after their own transaction. Failures
+leave feedback committed, surface `promotion_pending` and are recoverable with
+the idempotent `prompt-promotions audit|reconcile` command.
+
+The closing shared gate on 2026-10-07 ended with `quality gate passed`: 677
+Python tests, 162 frontend tests and 14 Playwright scenarios passed. Python Core
+and frontend statements, functions and lines retained 100% coverage; formatting,
+linting, strict typing, architecture checks and the function-to-test manifest
+also passed.
+
 ## Final acceptance remaining
 
-The implementation slices are complete. Remaining integration work is limited
-to user-facing visual acceptance, an optional real-ComfyUI generation smoke
-test, the final dead-path usage audit and opening the replacement pull request.
-No automatic merge is planned.
+The previously completed implementation slices and their automated integration
+gates remain valid for their stated scope. Prompt-variant guidance and
+evidence-based catalog promotion and its shared quality gate are complete. The
+local v14-to-v15 backup/new-output/validation/promotion workflow remains an
+explicit operator action outside repository state. The real
+Blueprint-v4 Portrait/Landscape ComfyUI
+smokes were completed successfully on 2026-10-05. On 2026-10-06 the owned
+lifecycle worker completed the newest retained ComfyUI job, and the four jobs
+whose history had expired were recovered through the explicit strict output
+reconcile path. The live Review candidate was an unrated recovered output and
+repeated Arena reads returned one stable pair without creating a match.
+The content-level curation was also recovered and promoted from a new validated
+schema-v11 output database on 2026-10-06; `main.py` was restarted on the LAN
+after retaining the pre-recovery database backup.
+The acceptance audit additionally repaired 165 historical generation snapshots
+for the already-classified Explicit `example-lora-2.safetensors` LoRA
+through the existing revision-checked preview/apply service. No name-based LoRA
+heuristic or unreviewed bulk reclassification was introduced.
+The generator dead-path audit and its automated acceptance are complete. The
+corrective atom-identity and weight-evidence slice above is now implemented.
+User-facing visual acceptance and opening the replacement pull request remain
+separate release actions; no automatic merge is planned.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the

@@ -68,6 +68,7 @@ class ComfyUiCapabilities:
     schedulers: tuple[str, ...]
     checkpoints: tuple[str, ...]
     loras: tuple[str, ...] = ()
+    upscale_models: tuple[str, ...] = ()
 
 
 class ComfyUiProvider(Protocol):

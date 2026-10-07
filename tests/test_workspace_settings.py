@@ -11,6 +11,7 @@ import pytest
 from comfyreview.application import (
     ComfyUiCapabilities,
     ComfyUiConnectionError,
+    OutputTier,
     RuntimeConfigurationSnapshot,
     RuntimeDiagnosticsService,
 )
@@ -69,6 +70,18 @@ class _Identities:
         return "profile-created"
 
 
+class _LoraContent:
+    def apply(self, selections):
+        return tuple(
+            replace(
+                item,
+                lora_uid="lora-style",
+                content_level="sexy",
+            )
+            for item in selections
+        )
+
+
 class _ComfyUi:
     def __init__(self, result: ComfyUiCapabilities | Exception) -> None:
         self.result = result
@@ -115,6 +128,7 @@ def _profile(
     batch_size: int = 1,
     image_width: int = 1024,
     image_height: int = 1024,
+    output_tier: OutputTier = OutputTier.FULL_HD_1080,
     loras: tuple[GenerationLoraSelection, ...] = (
         GenerationLoraSelection("style.safetensors", 800, 600, 0),
     ),
@@ -139,6 +153,7 @@ def _profile(
         batch_size=batch_size,
         image_width=image_width,
         image_height=image_height,
+        output_tier=output_tier,
         loras=loras,
         archived=archived,
         is_default=is_default,
@@ -147,7 +162,9 @@ def _profile(
 
 def test_generation_profile_service_preserves_ordered_lora_stack() -> None:
     repository = _Profiles()
-    service = GenerationProfileService(repository, _Identities())
+    service = GenerationProfileService(
+        repository, _Identities(), _LoraContent()
+    )
     source = _profile(
         profile_uid="browser-value",
         archived=True,
@@ -167,6 +184,7 @@ def test_generation_profile_service_preserves_ordered_lora_stack() -> None:
         "first.safetensors",
         "second.safetensors",
     ]
+    assert all(lora.lora_uid == "lora-style" for lora in created.loras)
     assert service.list_profiles() == (created,)
 
 
@@ -208,7 +226,9 @@ def test_generation_profile_service_updates_and_protects_default_profile() -> (
 ):
     existing = _profile(is_default=True)
     repository = _Profiles((existing,))
-    service = GenerationProfileService(repository, _Identities())
+    service = GenerationProfileService(
+        repository, _Identities(), _LoraContent()
+    )
 
     updated = service.update(replace(existing, name="Updated", archived=True))
 
@@ -226,15 +246,12 @@ def test_generation_profile_service_updates_and_protects_default_profile() -> (
     assert service.set_archived("other", True).archived is True
 
 
-def test_workspace_preferences_service_validates_and_sets_default_profile() -> (
+def test_workspace_preferences_service_validates_and_ignores_dormant_profile() -> (
     None
 ):
-    profile = _profile()
-    profiles = _Profiles((profile,))
     repository = _Preferences(WorkspacePreferences())
     service = WorkspacePreferencesService(
         repository,
-        profiles,
         curation_set_keys=("keep", "archive"),
     )
 
@@ -243,10 +260,10 @@ def test_workspace_preferences_service_validates_and_sets_default_profile() -> (
             density="compact",
             motion="reduced",
             analytics_page_size=48,
-            review_unrated_only=False,
-            review_max_attempts=20,
+            review_prioritize_unrated=False,
             default_curation_set_key="keep",
             curation_set_order=("archive", "keep"),
+            default_generation_profile_uid="dormant-profile",
             enabled_content_levels=(
                 ContentLevel.STANDARD,
                 ContentLevel.SEXY,
@@ -254,28 +271,15 @@ def test_workspace_preferences_service_validates_and_sets_default_profile() -> (
             ),
         )
     )
-    selected = service.set_default_profile(profile.profile_uid)
-
     assert saved.density == "compact"
     assert saved.enabled_content_levels[-1] is ContentLevel.LEWD
-    assert selected.default_generation_profile_uid == profile.profile_uid
-    assert service.get() == selected
-
-    profiles.save(replace(profile, archived=True))
-    with pytest.raises(
-        WorkspaceSettingsValidationError,
-        match="archived profile",
-    ):
-        service.set_default_profile(profile.profile_uid)
+    assert saved.default_generation_profile_uid is None
+    assert service.get() == saved
 
     repository.value = WorkspacePreferences(
-        default_generation_profile_uid=profile.profile_uid
+        default_generation_profile_uid="legacy-profile"
     )
-    with pytest.raises(
-        WorkspaceSettingsValidationError,
-        match="archived profile",
-    ):
-        service.get()
+    assert service.get().default_generation_profile_uid is None
 
 
 def test_workspace_preferences_service_rejects_unknown_or_duplicate_values() -> (
@@ -283,7 +287,6 @@ def test_workspace_preferences_service_rejects_unknown_or_duplicate_values() -> 
 ):
     service = WorkspacePreferencesService(
         _Preferences(WorkspacePreferences()),
-        _Profiles(),
         curation_set_keys=("keep",),
     )
 
@@ -291,11 +294,10 @@ def test_workspace_preferences_service_rejects_unknown_or_duplicate_values() -> 
         WorkspacePreferences(density="wide"),
         WorkspacePreferences(motion="animated"),
         WorkspacePreferences(analytics_page_size=25),
-        WorkspacePreferences(review_max_attempts=0),
         WorkspacePreferences(curation_set_order=("keep", "keep")),
         WorkspacePreferences(curation_set_order=("unknown",)),
         WorkspacePreferences(default_curation_set_key="unknown"),
-        WorkspacePreferences(enabled_content_levels=(ContentLevel.SEXY,)),
+        WorkspacePreferences(enabled_content_levels=()),
         WorkspacePreferences(
             enabled_content_levels=(
                 ContentLevel.STANDARD,
@@ -315,6 +317,28 @@ def test_workspace_preferences_service_rejects_unknown_or_duplicate_values() -> 
             service.update(preferences)
 
 
+def test_workspace_preferences_allow_standard_to_be_disabled() -> None:
+    repository = _Preferences(WorkspacePreferences())
+    service = WorkspacePreferencesService(
+        repository,
+        curation_set_keys=("keep",),
+    )
+
+    saved = service.update(
+        WorkspacePreferences(
+            enabled_content_levels=(
+                ContentLevel.SEXY,
+                ContentLevel.LEWD,
+            )
+        )
+    )
+
+    assert saved.enabled_content_levels == (
+        ContentLevel.SEXY,
+        ContentLevel.LEWD,
+    )
+
+
 def test_sqlite_settings_repositories_persist_profiles_and_preferences(
     tmp_path: Path,
 ) -> None:
@@ -330,8 +354,7 @@ def test_sqlite_settings_repositories_persist_profiles_and_preferences(
             motion="reduced",
             analytics_page_size=12,
             default_generation_profile_uid=saved_profile.profile_uid,
-            review_unrated_only=False,
-            review_max_attempts=12,
+            review_prioritize_unrated=False,
             default_curation_set_key="keep",
             curation_set_order=("archive", "keep"),
             enabled_content_levels=(

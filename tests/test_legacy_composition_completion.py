@@ -14,6 +14,7 @@ from comfyreview.application import (
     PromptRenderer,
     PromptRevision,
     PromptSelection,
+    SelectedPromptComponent,
 )
 from comfyreview.importers import (
     LegacyCompositionAuditor,
@@ -73,7 +74,12 @@ def test_prompt_renderer_defines_exact_historical_roundtrip_order() -> None:
     )
 
     rendered = PromptRenderer().render(
-        PromptSelection((character, scene, lighting))
+        PromptSelection(
+            tuple(
+                SelectedPromptComponent(component, component.latest_revision)
+                for component in (character, scene, lighting)
+            )
+        )
     )
 
     assert rendered.positive_text == "silver hair, rooftop, golden light"

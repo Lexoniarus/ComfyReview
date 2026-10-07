@@ -7,6 +7,7 @@ import pytest
 from comfyreview.application import (
     ComfyUiConnectionError,
     ComfyUiJobStatus,
+    ComfyUiNotFoundError,
     GenerationMutationError,
     GenerationReconciliationRequired,
     GenerationReconciliationService,
@@ -32,6 +33,10 @@ class _Generations:
         self.events.append("get")
         assert generation_uid == "generation-1"
         return self.record
+
+    def list_active(self, limit):
+        del limit
+        return (self.record,)
 
     def prepare(self, generation):
         raise AssertionError(generation)
@@ -127,15 +132,34 @@ class _Outputs:
         return ()
 
 
+class _Recovery:
+    def __init__(
+        self,
+        events: list[str],
+        error: Exception | None = None,
+    ) -> None:
+        self.events = events
+        self.error = error
+
+    def recover(self, generation_uid: str) -> tuple[object, ...]:
+        self.events.append("filesystem_recovery")
+        assert generation_uid == "generation-1"
+        if self.error is not None:
+            raise self.error
+        return ()
+
+
 def _service(
     generations: _Generations,
     comfyui: _ComfyUi,
     outputs: _Outputs,
+    recovery: _Recovery | None = None,
 ) -> GenerationReconciliationService:
     return GenerationReconciliationService(
         generations=generations,
         comfyui=comfyui,
         outputs=outputs,
+        recovery=recovery,
     )
 
 
@@ -207,6 +231,54 @@ def test_reconciliation_collects_completed_external_outputs_idempotently() -> (
 
     assert result.status == "completed"
     assert events[-3:] == ["history", "collect", "completed"]
+
+
+def test_reconciliation_recovers_exact_output_when_history_is_missing() -> (
+    None
+):
+    events: list[str] = []
+    generations = _Generations(events)
+
+    result = _service(
+        generations,
+        _ComfyUi(events, ComfyUiNotFoundError("missing")),
+        _Outputs(events),
+        _Recovery(events),
+    ).reconcile("generation-1")
+
+    assert result.status == "completed"
+    assert events[-3:] == ["history", "filesystem_recovery", "completed"]
+
+
+def test_reconciliation_keeps_typed_reason_when_output_recovery_is_ambiguous() -> (
+    None
+):
+    events: list[str] = []
+    generations = _Generations(events)
+
+    result = _service(
+        generations,
+        _ComfyUi(events, ComfyUiNotFoundError("missing")),
+        _Outputs(events),
+        _Recovery(events, OSError("ambiguous")),
+    ).reconcile("generation-1")
+
+    assert result.status == "reconciliation_required"
+    assert events[-3:] == ["history", "filesystem_recovery", "reconcile"]
+
+
+def test_reconciliation_without_recovery_keeps_the_existing_state() -> None:
+    events: list[str] = []
+    generations = _Generations(events)
+
+    result = _service(
+        generations,
+        _ComfyUi(events, ComfyUiNotFoundError("missing")),
+        _Outputs(events),
+    ).reconcile("generation-1")
+
+    assert result.status == "reconciliation_required"
+    assert events[-1] == "history"
 
 
 def test_reconciliation_keeps_unknown_or_unavailable_external_state() -> None:

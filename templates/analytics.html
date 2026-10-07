@@ -2,7 +2,7 @@
 set active_nav = "analytics" %} {% block styles %}
 <link
   rel="stylesheet"
-  href="/static/css/v2/analytics.css?v=20261002-analytics2"
+  href="/static/css/v2/analytics.css?v=20261006-unified-cards1"
 />
 {% endblock %} {% block content %}
 <section
@@ -30,23 +30,23 @@ set active_nav = "analytics" %} {% block styles %}
       {% else %}
       <a href="/prompt_tokens">Scopes</a>
       {% endif %} {% if initial_section == "parameters" %}
-      <a href="/param_stats" aria-current="page">Parameter</a>
+      <a href="/param_stats" aria-current="page">Render-Analyse</a>
       {% else %}
-      <a href="/param_stats">Parameter</a>
+      <a href="/param_stats">Render-Analyse</a>
       {% endif %} {% if initial_section == "combinations" %}
-      <a href="/stats" aria-current="page">Kombinationen</a>
+      <a href="/stats" aria-current="page">Prompt-Kombinationen</a>
       {% else %}
-      <a href="/stats">Kombinationen</a>
+      <a href="/stats">Prompt-Kombinationen</a>
       {% endif %}
     </nav>
   </header>
 
-  <form class="analytics-filters v2-panel" data-analytics-filters>
+  <form class="analytics-filters v2-panel" data-analytics-filters {% if initial_section == "overview" %}hidden{% endif %}>
     <label
       >Modell <input type="search" data-analytics-model autocomplete="off"
     /></label>
     <label
-      >Mindestbelege <input type="number" min="0" data-analytics-minimum
+      >Mindestbilder <input type="number" min="0" data-analytics-minimum
     /></label>
     <button class="primary-button" type="submit">Anwenden</button>
   </form>
@@ -59,10 +59,14 @@ set active_nav = "analytics" %} {% block styles %}
   <p class="analytics-status" role="status" data-analytics-status>
     Analyse wird geladen …
   </p>
+  <dialog class="image-viewer" data-image-viewer aria-label="Bildansicht">
+    <button class="icon-button" type="button" data-viewer-close aria-label="Bildansicht schließen">×</button>
+    <img alt="Vergrößerter Analysebeleg" />
+  </dialog>
 </section>
 {% endblock %} {% block scripts %}
 <script
   type="module"
-  src="/static/js/entries/analytics.js?v=20261002-analytics2"
+  src="/static/js/entries/analytics.js?v=20261006-unified-cards1"
 ></script>
 {% endblock %}

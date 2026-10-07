@@ -2,10 +2,11 @@
 export class ImageGrid {
   /**
    * @param {HTMLElement} root
-   * @param {{onSelect: (uid: string) => void, onExpand: (uid: string, url: string) => void}} callbacks
+   * @param {{onSelect: (uid: string) => void, onExpand: (uid: string, url: string) => void, createGeneratorActions?: (uid: string) => HTMLElement}} callbacks
    */
   constructor(root, callbacks) {
     this.root = root;
+    this.root.classList.add("media-card-grid");
     this.callbacks = callbacks;
     this.events = new AbortController();
     this.root.addEventListener(
@@ -34,7 +35,13 @@ export class ImageGrid {
       return;
     }
     items.forEach((item, index) =>
-      this.root.append(imageCard(item, offset + index + 1)),
+      this.root.append(
+        imageCard(
+          item,
+          offset + index + 1,
+          this.callbacks.createGeneratorActions,
+        ),
+      ),
     );
   }
 
@@ -64,15 +71,15 @@ export class ImageGrid {
   }
 }
 
-/** @param {Record<string, unknown>} item @param {number} rank */
-function imageCard(item, rank) {
+/** @param {Record<string, unknown>} item @param {number} rank @param {((uid: string) => HTMLElement) | undefined} createGeneratorActions */
+function imageCard(item, rank, createGeneratorActions) {
   const article = document.createElement("article");
-  article.className = "image-card";
+  article.className = "image-card media-card";
   const uid = String(item.image_uid || "");
   const url = String(item.image_url || "");
   const imageButton = document.createElement("button");
   imageButton.type = "button";
-  imageButton.className = "image-card-media";
+  imageButton.className = "image-card-media media-card-image";
   imageButton.dataset.imageAction = "select";
   imageButton.dataset.imageUid = uid;
   const image = document.createElement("img");
@@ -112,6 +119,15 @@ function imageCard(item, rank) {
     chip.textContent = String(scope.name || "");
     scopes.append(chip);
   }
+  for (const lora of /** @type {Array<Record<string, unknown>>} */ (
+    item.loras || []
+  ).slice(0, 1)) {
+    const chip = document.createElement("span");
+    chip.className = "scope-chip";
+    chip.dataset.scopeKind = "lora";
+    chip.textContent = `LoRA · ${String(lora.provider_name || lora.lora_uid || "Unbekannt")}`;
+    scopes.append(chip);
+  }
   const expand = document.createElement("button");
   expand.type = "button";
   expand.className = "icon-button";
@@ -121,6 +137,9 @@ function imageCard(item, rank) {
   expand.setAttribute("aria-label", "Bild vergrößern");
   expand.textContent = "↗";
   body.append(top, count, scopes, expand);
+  if (typeof createGeneratorActions === "function" && uid) {
+    body.append(createGeneratorActions(uid));
+  }
   article.append(imageButton, body);
   return article;
 }

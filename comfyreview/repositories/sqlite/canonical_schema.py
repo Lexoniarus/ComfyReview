@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -10,14 +11,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from comfyreview.application import CanonicalSchemaReport
+from comfyreview.application import (
+    CanonicalSchemaReport,
+    GeneratorStateSnapshot,
+    GeneratorStateValidationError,
+)
 from comfyreview.domain import (
     PromptAtomUsage,
     prompt_atom_usages_from_text,
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 16
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -503,6 +508,196 @@ _REQUIRED_GENERATION_PROFILE_COLUMNS_V9 = (
     _REQUIRED_GENERATION_PROFILE_COLUMNS_V8 | {"image_width", "image_height"}
 )
 
+_REQUIRED_OBJECTS_V10 = {
+    **_REQUIRED_OBJECTS_V9,
+    "lora_definitions": "table",
+    "image_content_level_events": "table",
+    "image_content_level_state": "table",
+}
+_REQUIRED_GENERATION_PROFILE_COLUMNS_V10 = (
+    _REQUIRED_GENERATION_PROFILE_COLUMNS_V9 | {"output_tier"}
+)
+_REQUIRED_GENERATION_COLUMNS_V10 = _REQUIRED_GENERATION_COLUMNS_V2 | {
+    "image_width",
+    "image_height",
+    "output_tier",
+    "output_width",
+    "output_height",
+    "inferred_content_level",
+}
+
+_REQUIRED_OBJECTS_V11 = {
+    **_REQUIRED_OBJECTS_V10,
+    "image_geometry_projection": "table",
+}
+_REQUIRED_IMAGE_GEOMETRY_COLUMNS_V11 = {
+    "image_id",
+    "actual_width",
+    "actual_height",
+    "aspect_format",
+    "resolution_class",
+    "target_width",
+    "target_height",
+    "is_exact",
+    "classifier_version",
+    "projected_at",
+}
+
+_REQUIRED_OBJECTS_V12 = {
+    **_REQUIRED_OBJECTS_V11,
+    "lora_revisions": "table",
+    "lora_revision_atom_usages": "table",
+}
+_REQUIRED_LORA_DEFINITION_COLUMNS_V12 = {
+    "id",
+    "lora_uid",
+    "provider_name",
+    "display_name",
+    "tags",
+    "notes",
+    "content_level",
+    "revision",
+    "archived_at",
+    "created_at",
+    "updated_at",
+}
+_REQUIRED_LORA_REVISION_COLUMNS_V12 = {
+    "id",
+    "revision_uid",
+    "lora_definition_id",
+    "revision_number",
+    "default_model_strength_milli",
+    "default_clip_strength_milli",
+    "content_hash",
+    "created_at",
+}
+_REQUIRED_LORA_REVISION_ATOM_COLUMNS_V12 = {
+    "revision_id",
+    "atom_id",
+    "scope",
+    "position",
+    "weight_milli",
+}
+_REQUIRED_OBJECTS_V13 = {
+    **_REQUIRED_OBJECTS_V12,
+    "playground_generator_state": "table",
+    "playground_generator_prompt_selections": "table",
+    "playground_generator_loras": "table",
+}
+_REQUIRED_OBJECTS_V14 = dict(_REQUIRED_OBJECTS_V13)
+_REQUIRED_LORA_REVISION_COLUMNS_V14 = _REQUIRED_LORA_REVISION_COLUMNS_V12 | {
+    "content_level"
+}
+_REQUIRED_OBJECTS_V15 = {
+    **_REQUIRED_OBJECTS_V14,
+    "generation_prompt_group_atom_usages": "table",
+    "generation_prompt_groups": "table",
+    "prompt_candidate_atom_usages": "table",
+    "prompt_component_candidates": "table",
+    "prompt_component_promotions": "table",
+}
+_REQUIRED_OBJECTS_V16 = {
+    **_REQUIRED_OBJECTS_V15,
+    "prompt_component_manual_variants": "table",
+}
+_REQUIRED_PROMPT_MANUAL_VARIANT_COLUMNS_V16 = {
+    "id",
+    "manual_variant_uid",
+    "component_id",
+    "candidate_id",
+    "created_at",
+}
+_REQUIRED_PROMPT_CANDIDATE_COLUMNS_V15 = {
+    "id",
+    "candidate_uid",
+    "component_id",
+    "source_revision_id",
+    "candidate_type",
+    "content_hash",
+    "created_at",
+}
+_REQUIRED_PROMPT_CANDIDATE_ATOM_COLUMNS_V15 = {
+    "candidate_id",
+    "atom_id",
+    "scope",
+    "position",
+    "weight_milli",
+}
+_REQUIRED_GENERATION_PROMPT_GROUP_COLUMNS_V15 = {
+    "id",
+    "group_uid",
+    "generation_id",
+    "component_id",
+    "source_revision_id",
+    "candidate_id",
+    "kind",
+    "position",
+    "content_hash",
+    "created_at",
+}
+_REQUIRED_GENERATION_PROMPT_GROUP_ATOM_COLUMNS_V15 = {
+    "group_id",
+    "atom_id",
+    "scope",
+    "position",
+    "weight_milli",
+}
+_REQUIRED_PROMPT_PROMOTION_COLUMNS_V15 = {
+    "id",
+    "promotion_uid",
+    "component_id",
+    "revision_id",
+    "previous_revision_id",
+    "policy_version",
+    "review_frontier",
+    "independent_image_count",
+    "review_count",
+    "deleted_count",
+    "lower_bound_score",
+    "expected_score",
+    "average_rating",
+    "reason",
+    "provisional",
+    "created_at",
+}
+_REQUIRED_GENERATOR_STATE_COLUMNS_V13 = {
+    "singleton_id",
+    "checkpoint",
+    "sampler",
+    "scheduler",
+    "seed_mode",
+    "seed",
+    "steps_min",
+    "steps_max",
+    "cfg_min_milli",
+    "cfg_max_milli",
+    "cfg_step_milli",
+    "denoise_milli",
+    "batch_runs",
+    "aspect_format",
+    "resolution_class",
+    "updated_at",
+}
+_REQUIRED_GENERATOR_SELECTION_COLUMNS_V13 = {
+    "singleton_id",
+    "position",
+    "kind",
+    "mode",
+    "component_id",
+    "revision_id",
+}
+_REQUIRED_GENERATOR_SELECTION_COLUMNS_V15 = (
+    _REQUIRED_GENERATOR_SELECTION_COLUMNS_V13 | {"candidate_id"}
+)
+_REQUIRED_GENERATOR_LORA_COLUMNS_V13 = {
+    "singleton_id",
+    "position",
+    "lora_definition_id",
+    "lora_revision_id",
+    "model_strength_milli",
+    "clip_strength_milli",
+}
+
 
 class CanonicalSchemaValidationError(RuntimeError):
     """Signal an unsupported or corrupt canonical database."""
@@ -537,6 +732,7 @@ class CanonicalSchemaManager:
     def upgrade(
         self,
         backup_directory: Path | None = None,
+        legacy_generator_state_path: Path | None = None,
     ) -> CanonicalSchemaReport:
         """Back up and explicitly upgrade a supported older schema."""
         if not self._database_path.exists():
@@ -550,10 +746,26 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8}:
+        if current_version not in {
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+        }:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1, 2, 3, 4, 5, 6, 7, 8, or "
+                f"{current_version}; expected 1 through 15, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -571,11 +783,34 @@ class CanonicalSchemaManager:
             self._validate_version_six()
         elif current_version == 7:
             self._validate_version_seven()
-        else:
+        elif current_version == 8:
             self._validate_version_eight()
+        elif current_version == 9:
+            self._validate_version_nine()
+        elif current_version == 10:
+            self._validate_version_ten()
+        elif current_version == 11:
+            self._validate_version_eleven()
+        elif current_version == 12:
+            self._validate_version_twelve()
+        elif current_version == 13:
+            self._validate_version_thirteen()
+        elif current_version == 14:
+            self._validate_version_fourteen()
+        else:
+            self._validate_version_fifteen()
+
+        legacy_generator_state = self._read_legacy_generator_state(
+            legacy_generator_state_path
+        )
 
         backup_path = self._create_backup(backup_directory)
-        committed = False
+        source_path = self._database_path
+        migration_path = source_path.with_name(
+            f".{source_path.name}.{uuid4().hex}.upgrade"
+        )
+        shutil.copy2(source_path, migration_path)
+        self._database_path = migration_path
         skipped_lora_items = 0
         try:
             connection = self._open_read_write(foreign_keys=False)
@@ -595,9 +830,24 @@ class CanonicalSchemaManager:
                     self._upgrade_v6_to_v7(connection)
                 if current_version <= 7:
                     skipped_lora_items = self._upgrade_v7_to_v8(connection)
-                self._upgrade_v8_to_v9(connection)
+                if current_version <= 8:
+                    self._upgrade_v8_to_v9(connection)
+                if current_version <= 9:
+                    self._upgrade_v9_to_v10(connection)
+                if current_version <= 10:
+                    self._upgrade_v10_to_v11(connection)
+                if current_version <= 11:
+                    self._upgrade_v11_to_v12(connection)
+                if current_version <= 12:
+                    self._upgrade_v12_to_v13(
+                        connection, legacy_generator_state
+                    )
+                if current_version <= 13:
+                    self._upgrade_v13_to_v14(connection)
+                if current_version <= 14:
+                    self._upgrade_v14_to_v15(connection)
+                self._upgrade_v15_to_v16(connection)
                 connection.commit()
-                committed = True
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
                 connection.rollback()
@@ -605,10 +855,15 @@ class CanonicalSchemaManager:
             finally:
                 connection.close()
             self._validate_existing()
+            self._database_path = source_path
+            shutil.copy2(migration_path, source_path)
+            migration_path.unlink(missing_ok=True)
         except Exception:
-            if committed or not self._is_valid_version(current_version):
-                self._restore_backup(backup_path)
+            self._database_path = source_path
+            migration_path.unlink(missing_ok=True)
             raise
+        finally:
+            self._database_path = source_path
 
         return CanonicalSchemaReport(
             schema_version=SCHEMA_VERSION,
@@ -623,6 +878,52 @@ class CanonicalSchemaManager:
                 else ()
             ),
         )
+
+    def upgrade_to(
+        self,
+        output_path: Path,
+        backup_directory: Path | None = None,
+        legacy_generator_state_path: Path | None = None,
+    ) -> CanonicalSchemaReport:
+        """Upgrade into a new validated database while preserving the source."""
+        if not self._database_path.exists():
+            raise CanonicalSchemaValidationError(
+                f"Canonical database does not exist: {self._database_path}"
+            )
+        target = Path(output_path).resolve()
+        if target == self._database_path:
+            raise CanonicalSchemaValidationError(
+                "Migration output must differ from the source database"
+            )
+        if target.exists():
+            raise CanonicalSchemaValidationError(
+                f"Migration output already exists: {target}"
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source_hash = self._file_hash(self._database_path)
+        shutil.copy2(self._database_path, target)
+        try:
+            report = CanonicalSchemaManager(target).upgrade(
+                backup_directory,
+                legacy_generator_state_path,
+            )
+            CanonicalSchemaManager(target).validate()
+            if self._file_hash(self._database_path) != source_hash:
+                raise CanonicalSchemaValidationError(
+                    "Source database changed during migration"
+                )
+            return report
+        except Exception:
+            target.unlink(missing_ok=True)
+            raise
+
+    @staticmethod
+    def _file_hash(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
 
     def _create_new_database(self) -> None:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -661,6 +962,27 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v8_to_v9(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v9_to_v10(connection)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v10_to_v11(connection)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v11_to_v12(connection)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v12_to_v13(connection, None)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v13_to_v14(connection)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v14_to_v15(connection)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v15_to_v16(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -673,7 +995,23 @@ class CanonicalSchemaManager:
         connection = self._open_read_only()
         try:
             version = self._schema_version(connection)
-            if version in {1, 2, 3, 4, 5, 6, 7, 8}:
+            if version in {
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+            }:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
                     "explicit upgrade; run "
@@ -827,6 +1165,110 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_nine(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 9:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 9 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V9)
+            self._validate_metadata_version(connection, 9)
+            self._validate_workspace_settings_v9(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_ten(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 10:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 10 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V10)
+            self._validate_metadata_version(connection, 10)
+            self._validate_workspace_settings_v10(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_eleven(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 11:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 11 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V11)
+            self._validate_metadata_version(connection, 11)
+            self._validate_image_geometry_v11(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_twelve(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 12:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 12 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V12)
+            self._validate_metadata_version(connection, 12)
+            self._validate_lora_catalog_v12(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_thirteen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 13:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 13 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V13)
+            self._validate_metadata_version(connection, 13)
+            self._validate_lora_catalog_v12(connection)
+            self._validate_generator_state_v13(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_fourteen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 14:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 14 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V14)
+            self._validate_metadata_version(connection, 14)
+            self._validate_lora_catalog_v12(connection)
+            self._validate_generator_state_v13(connection)
+            self._validate_lora_catalog_v14(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_fifteen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 15:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 15 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V15)
+            self._validate_metadata_version(connection, 15)
+            self._validate_prompt_catalog_v5(connection)
+            self._validate_prompt_catalog_v7(connection)
+            self._validate_generator_state_v13(connection)
+            self._validate_prompt_variants_v15(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -835,7 +1277,7 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V9)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V16)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
@@ -843,6 +1285,13 @@ class CanonicalSchemaManager:
         self._validate_prompt_catalog_v7(connection)
         self._validate_workspace_settings_v8(connection)
         self._validate_workspace_settings_v9(connection)
+        self._validate_workspace_settings_v10(connection)
+        self._validate_image_geometry_v11(connection)
+        self._validate_lora_catalog_v12(connection)
+        self._validate_generator_state_v13(connection)
+        self._validate_lora_catalog_v14(connection)
+        self._validate_prompt_variants_v15(connection)
+        self._validate_manual_variants_v16(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -1524,6 +1973,912 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 9")
 
     @staticmethod
+    def _upgrade_v9_to_v10(connection: sqlite3.Connection) -> None:
+        levels = "'standard', 'sexy', 'lewd', 'nude', 'explicit'"
+        tiers = "'hd_720', 'full_hd_1080', 'uhd_4k'"
+        connection.execute(
+            "ALTER TABLE generation_profiles ADD COLUMN output_tier TEXT "
+            "NOT NULL DEFAULT 'full_hd_1080' CHECK (output_tier IN ("
+            + tiers
+            + "))"
+        )
+        connection.execute(
+            "UPDATE generation_profiles SET blueprint_version = 4 "
+            "WHERE blueprint_uid = 'default-character' "
+            "AND blueprint_version <= 3 AND archived_at IS NULL"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN output_tier TEXT "
+            "CHECK (output_tier IS NULL OR output_tier IN (" + tiers + "))"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN output_width INTEGER"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN output_height INTEGER"
+        )
+        connection.execute(
+            "ALTER TABLE generations ADD COLUMN inferred_content_level TEXT "
+            "NOT NULL DEFAULT 'standard' CHECK (inferred_content_level IN ("
+            + levels
+            + "))"
+        )
+        connection.execute(
+            """
+            CREATE TABLE lora_definitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                lora_uid TEXT NOT NULL UNIQUE,
+                provider_name TEXT NOT NULL UNIQUE,
+                content_level TEXT
+                    CHECK (content_level IS NULL OR content_level IN (
+                        'standard', 'sexy', 'lewd', 'nude', 'explicit'
+                    )),
+                revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        names = connection.execute(
+            "SELECT lora_name FROM generation_profile_loras "
+            "UNION SELECT lora_name FROM generation_loras"
+        ).fetchall()
+        for (name,) in names:
+            connection.execute(
+                "INSERT INTO lora_definitions(lora_uid, provider_name) "
+                "VALUES (?, ?)",
+                (f"lora-{uuid4().hex}", str(name)),
+            )
+        connection.execute(
+            "ALTER TABLE generation_profile_loras ADD COLUMN lora_uid TEXT"
+        )
+        connection.execute(
+            "UPDATE generation_profile_loras SET lora_uid = ("
+            "SELECT definition.lora_uid FROM lora_definitions AS definition "
+            "WHERE definition.provider_name = generation_profile_loras.lora_name)"
+        )
+        connection.execute(
+            "ALTER TABLE generation_loras ADD COLUMN lora_uid TEXT"
+        )
+        connection.execute(
+            "ALTER TABLE generation_loras ADD COLUMN content_level_snapshot "
+            "TEXT CHECK (content_level_snapshot IS NULL OR "
+            "content_level_snapshot IN (" + levels + "))"
+        )
+        connection.execute(
+            "UPDATE generation_loras SET lora_uid = ("
+            "SELECT definition.lora_uid FROM lora_definitions AS definition "
+            "WHERE definition.provider_name = generation_loras.lora_name)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE image_content_level_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_uid TEXT NOT NULL UNIQUE,
+                image_id INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+                content_level TEXT CHECK (content_level IS NULL OR content_level IN (
+                    'standard', 'sexy', 'lewd', 'nude', 'explicit'
+                )),
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE image_content_level_state (
+                image_id INTEGER PRIMARY KEY
+                    REFERENCES images(id) ON DELETE CASCADE,
+                event_id INTEGER NOT NULL UNIQUE
+                    REFERENCES image_content_level_events(id) ON DELETE CASCADE,
+                override_content_level TEXT NOT NULL CHECK (
+                    override_content_level IN (
+                        'standard', 'sexy', 'lewd', 'nude', 'explicit'
+                    )
+                )
+            )
+            """
+        )
+        rank_tags = {
+            "sexy": (
+                "suggestive",
+                "seductive",
+                "sensual",
+                "lingerie",
+                "nsfw_level_suggestive",
+            ),
+            "lewd": ("lewd", "nsfw_level_partial"),
+            "nude": ("nsfw_level_nude",),
+            "explicit": (
+                "nsfw_level_explicit_exposure",
+                "nsfw_level_explicit_act",
+            ),
+        }
+        for level, tags in rank_tags.items():
+            placeholders = ", ".join("?" for _tag in tags)
+            connection.execute(
+                f"""
+                UPDATE generations
+                SET inferred_content_level = ?
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM prompt_composition_revisions AS membership
+                    JOIN prompt_revisions AS revision
+                      ON revision.id = membership.revision_id
+                    JOIN prompt_components AS component
+                      ON component.id = revision.component_id
+                    JOIN json_each(
+                        CASE WHEN json_valid(component.tags)
+                             THEN component.tags ELSE '[]' END
+                    ) AS tag
+                    WHERE membership.composition_id =
+                          generations.prompt_composition_id
+                      AND lower(CAST(tag.value AS TEXT)) IN ({placeholders})
+                )
+                """,
+                (level, *tags),
+            )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '10' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 10")
+
+    @staticmethod
+    def _upgrade_v10_to_v11(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE image_geometry_projection (
+                image_id INTEGER PRIMARY KEY
+                    REFERENCES images(id) ON DELETE CASCADE,
+                actual_width INTEGER NOT NULL CHECK (actual_width > 0),
+                actual_height INTEGER NOT NULL CHECK (actual_height > 0),
+                aspect_format TEXT NOT NULL CHECK (aspect_format IN (
+                    '2:3', '3:2', '16:9', '9:16', '1:1'
+                )),
+                resolution_class TEXT NOT NULL CHECK (resolution_class IN (
+                    '720', '1080', '2160'
+                )),
+                target_width INTEGER NOT NULL CHECK (target_width > 0),
+                target_height INTEGER NOT NULL CHECK (target_height > 0),
+                is_exact INTEGER NOT NULL CHECK (is_exact IN (0, 1)),
+                classifier_version INTEGER NOT NULL
+                    CHECK (classifier_version > 0),
+                projected_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '11' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 11")
+
+    @staticmethod
+    def _upgrade_v11_to_v12(connection: sqlite3.Connection) -> None:
+        """Add revisioned LoRA catalog facts without inventing old triggers."""
+        connection.execute(
+            "ALTER TABLE lora_definitions ADD COLUMN "
+            "display_name TEXT NOT NULL DEFAULT ''"
+        )
+        connection.execute(
+            "ALTER TABLE lora_definitions ADD COLUMN "
+            "tags TEXT NOT NULL DEFAULT '[]'"
+        )
+        connection.execute(
+            "ALTER TABLE lora_definitions ADD COLUMN "
+            "notes TEXT NOT NULL DEFAULT ''"
+        )
+        connection.execute(
+            "ALTER TABLE lora_definitions ADD COLUMN archived_at TEXT"
+        )
+        connection.execute(
+            "UPDATE lora_definitions SET display_name = provider_name "
+            "WHERE display_name = ''"
+        )
+        connection.execute(
+            """
+            CREATE TABLE lora_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                revision_uid TEXT NOT NULL UNIQUE,
+                lora_definition_id INTEGER NOT NULL
+                    REFERENCES lora_definitions(id) ON DELETE CASCADE,
+                revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+                default_model_strength_milli INTEGER NOT NULL,
+                default_clip_strength_milli INTEGER NOT NULL,
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (lora_definition_id, revision_number),
+                UNIQUE (lora_definition_id, content_hash)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE lora_revision_atom_usages (
+                revision_id INTEGER NOT NULL
+                    REFERENCES lora_revisions(id) ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                PRIMARY KEY (revision_id, scope, position)
+            )
+            """
+        )
+        definitions = connection.execute(
+            "SELECT id, lora_uid FROM lora_definitions ORDER BY id"
+        ).fetchall()
+        for definition_id, lora_uid in definitions:
+            content = f"{1000}\0{1000}\0\0"
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            revision_hash = hashlib.sha256(
+                f"{lora_uid}\0{content_hash}".encode()
+            ).hexdigest()
+            revision_uid = f"lora-revision-{revision_hash}"
+            connection.execute(
+                """
+                INSERT INTO lora_revisions(
+                    revision_uid, lora_definition_id, revision_number,
+                    default_model_strength_milli,
+                    default_clip_strength_milli, content_hash
+                ) VALUES (?, ?, 1, 1000, 1000, ?)
+                """,
+                (revision_uid, int(definition_id), content_hash),
+            )
+        connection.execute(
+            "ALTER TABLE generation_loras ADD COLUMN lora_revision_id INTEGER "
+            "REFERENCES lora_revisions(id)"
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '12' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 12")
+
+    @classmethod
+    def _upgrade_v12_to_v13(
+        cls,
+        connection: sqlite3.Connection,
+        legacy_state: GeneratorStateSnapshot | None,
+    ) -> None:
+        """Add normalized Generator state and optionally import legacy JSON."""
+        connection.execute(
+            """
+            CREATE TABLE playground_generator_state (
+                singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                checkpoint TEXT NOT NULL,
+                sampler TEXT NOT NULL,
+                scheduler TEXT NOT NULL,
+                seed_mode TEXT NOT NULL
+                    CHECK (seed_mode IN ('fixed', 'random')),
+                seed INTEGER NOT NULL,
+                steps_min INTEGER NOT NULL CHECK (steps_min > 0),
+                steps_max INTEGER NOT NULL CHECK (steps_max > 0),
+                cfg_min_milli INTEGER NOT NULL CHECK (cfg_min_milli > 0),
+                cfg_max_milli INTEGER NOT NULL CHECK (cfg_max_milli > 0),
+                cfg_step_milli INTEGER NOT NULL CHECK (cfg_step_milli > 0),
+                denoise_milli INTEGER NOT NULL
+                    CHECK (denoise_milli BETWEEN 0 AND 1000),
+                batch_runs INTEGER NOT NULL CHECK (batch_runs > 0),
+                aspect_format TEXT NOT NULL CHECK (aspect_format IN (
+                    '2:3', '3:2', '16:9', '9:16', '1:1'
+                )),
+                resolution_class TEXT NOT NULL CHECK (resolution_class IN (
+                    '720', '1080', '2160'
+                )),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                CHECK (steps_min <= steps_max),
+                CHECK (cfg_min_milli <= cfg_max_milli)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE playground_generator_prompt_selections (
+                singleton_id INTEGER NOT NULL
+                    REFERENCES playground_generator_state(singleton_id)
+                    ON DELETE CASCADE,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                kind TEXT NOT NULL CHECK (kind IN (
+                    'character', 'scene', 'outfit', 'pose', 'expression',
+                    'lighting', 'modifier'
+                )),
+                mode TEXT NOT NULL CHECK (mode IN ('fixed', 'random', 'off')),
+                component_id INTEGER REFERENCES prompt_components(id),
+                revision_id INTEGER REFERENCES prompt_revisions(id),
+                PRIMARY KEY (singleton_id, position),
+                UNIQUE (singleton_id, kind),
+                CHECK (
+                    (mode = 'fixed' AND component_id IS NOT NULL
+                        AND revision_id IS NOT NULL)
+                    OR (mode != 'fixed' AND component_id IS NULL
+                        AND revision_id IS NULL)
+                )
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE playground_generator_loras (
+                singleton_id INTEGER NOT NULL
+                    REFERENCES playground_generator_state(singleton_id)
+                    ON DELETE CASCADE,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                lora_definition_id INTEGER NOT NULL
+                    REFERENCES lora_definitions(id),
+                lora_revision_id INTEGER NOT NULL
+                    REFERENCES lora_revisions(id),
+                model_strength_milli INTEGER NOT NULL,
+                clip_strength_milli INTEGER NOT NULL,
+                PRIMARY KEY (singleton_id, position),
+                UNIQUE (singleton_id, lora_definition_id, lora_revision_id)
+            )
+            """
+        )
+        if legacy_state is not None:
+            cls._insert_generator_state(connection, legacy_state)
+        connection.execute(
+            "UPDATE schema_metadata SET value = '13' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 13")
+
+    @staticmethod
+    def _upgrade_v13_to_v14(connection: sqlite3.Connection) -> None:
+        """Move LoRA safety classification onto immutable trigger revisions."""
+        connection.execute(
+            "ALTER TABLE lora_revisions ADD COLUMN content_level TEXT "
+            "NOT NULL DEFAULT 'standard' CHECK (content_level IN ("
+            "'standard', 'sexy', 'lewd', 'nude', 'explicit'))"
+        )
+        connection.execute(
+            """
+            UPDATE lora_revisions
+            SET content_level = COALESCE((
+                SELECT definition.content_level
+                FROM lora_definitions AS definition
+                WHERE definition.id = lora_revisions.lora_definition_id
+            ), 'standard')
+            """
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '14' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 14")
+
+    @staticmethod
+    def _upgrade_v14_to_v15(connection: sqlite3.Connection) -> None:
+        """Add exact prompt candidates, generation groups, and promotions."""
+        connection.execute(
+            """
+            CREATE TABLE prompt_component_candidates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_uid TEXT NOT NULL UNIQUE,
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                source_revision_id INTEGER NOT NULL
+                    REFERENCES prompt_revisions(id),
+                candidate_type TEXT NOT NULL CHECK (candidate_type IN (
+                    'manual', 'calculated', 'next_test'
+                )),
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (component_id, content_hash)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE prompt_candidate_atom_usages (
+                candidate_id INTEGER NOT NULL
+                    REFERENCES prompt_component_candidates(id)
+                    ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                PRIMARY KEY (candidate_id, scope, position)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_prompt_candidate_atom ON "
+            "prompt_candidate_atom_usages(atom_id, weight_milli)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE generation_prompt_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_uid TEXT NOT NULL UNIQUE,
+                generation_id INTEGER NOT NULL
+                    REFERENCES generations(id) ON DELETE CASCADE,
+                component_id INTEGER NOT NULL REFERENCES prompt_components(id),
+                source_revision_id INTEGER NOT NULL
+                    REFERENCES prompt_revisions(id),
+                candidate_id INTEGER
+                    REFERENCES prompt_component_candidates(id),
+                kind TEXT NOT NULL,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                content_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (generation_id, position)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_generation_prompt_groups_component "
+            "ON generation_prompt_groups(component_id, generation_id)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE generation_prompt_group_atom_usages (
+                group_id INTEGER NOT NULL
+                    REFERENCES generation_prompt_groups(id) ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                PRIMARY KEY (group_id, scope, position)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_generation_prompt_group_atom "
+            "ON generation_prompt_group_atom_usages(atom_id, weight_milli)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE prompt_component_promotions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                promotion_uid TEXT NOT NULL UNIQUE,
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                revision_id INTEGER NOT NULL REFERENCES prompt_revisions(id),
+                previous_revision_id INTEGER REFERENCES prompt_revisions(id),
+                policy_version TEXT NOT NULL,
+                review_frontier INTEGER NOT NULL CHECK (review_frontier >= 0),
+                independent_image_count INTEGER NOT NULL
+                    CHECK (independent_image_count >= 0),
+                review_count INTEGER NOT NULL CHECK (review_count >= 0),
+                deleted_count INTEGER NOT NULL CHECK (deleted_count >= 0),
+                lower_bound_score REAL,
+                expected_score REAL,
+                average_rating REAL,
+                reason TEXT NOT NULL CHECK (reason IN (
+                    'initial', 'migration_baseline', 'evidence'
+                )),
+                provisional INTEGER NOT NULL CHECK (provisional IN (0, 1)),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_prompt_component_promotions_current "
+            "ON prompt_component_promotions(component_id, id DESC)"
+        )
+        connection.execute(
+            """
+            CREATE TRIGGER prompt_revision_initial_promotion
+            AFTER INSERT ON prompt_revisions
+            WHEN NOT EXISTS (
+                SELECT 1
+                FROM prompt_component_promotions AS promotion
+                WHERE promotion.component_id = NEW.component_id
+            )
+            BEGIN
+                INSERT INTO prompt_component_promotions(
+                    promotion_uid,
+                    component_id,
+                    revision_id,
+                    previous_revision_id,
+                    policy_version,
+                    review_frontier,
+                    independent_image_count,
+                    review_count,
+                    deleted_count,
+                    lower_bound_score,
+                    expected_score,
+                    average_rating,
+                    reason,
+                    provisional
+                ) VALUES (
+                    'prompt-promotion-initial-' || NEW.revision_uid,
+                    NEW.component_id,
+                    NEW.id,
+                    NULL,
+                    'prompt-guidance-v1',
+                    COALESCE((
+                        SELECT value FROM review_clock WHERE singleton_id = 1
+                    ), 0),
+                    0,
+                    0,
+                    0,
+                    NULL,
+                    NULL,
+                    NULL,
+                    'initial',
+                    1
+                );
+            END
+            """
+        )
+        connection.execute(
+            "ALTER TABLE playground_generator_prompt_selections "
+            "ADD COLUMN candidate_id INTEGER "
+            "REFERENCES prompt_component_candidates(id)"
+        )
+        review_frontier = int(
+            connection.execute(
+                "SELECT value FROM review_clock WHERE singleton_id = 1"
+            ).fetchone()[0]
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_component_promotions(
+                promotion_uid,
+                component_id,
+                revision_id,
+                previous_revision_id,
+                policy_version,
+                review_frontier,
+                independent_image_count,
+                review_count,
+                deleted_count,
+                lower_bound_score,
+                expected_score,
+                average_rating,
+                reason,
+                provisional
+            )
+            SELECT
+                'prompt-promotion-v15-baseline-' || component.id || '-' ||
+                    revision.id,
+                component.id,
+                revision.id,
+                NULL,
+                'prompt-guidance-v1',
+                ?,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                NULL,
+                'migration_baseline',
+                1
+            FROM prompt_components AS component
+            JOIN prompt_revisions AS revision
+              ON revision.component_id = component.id
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM prompt_revisions AS newer
+                WHERE newer.component_id = component.id
+                  AND newer.revision_number > revision.revision_number
+            )
+            ORDER BY component.id
+            """,
+            (review_frontier,),
+        )
+        CanonicalSchemaManager._backfill_exact_generation_prompt_groups(
+            connection
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '15' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 15")
+
+    @staticmethod
+    def _upgrade_v15_to_v16(connection: sqlite3.Connection) -> None:
+        """Retain append-only manual catalog variant selections."""
+        connection.execute(
+            """
+            CREATE TABLE prompt_component_manual_variants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                manual_variant_uid TEXT NOT NULL UNIQUE,
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                candidate_id INTEGER NOT NULL
+                    REFERENCES prompt_component_candidates(id),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_prompt_component_manual_variants_latest "
+            "ON prompt_component_manual_variants(component_id, id DESC)"
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_component_manual_variants(
+                manual_variant_uid, component_id, candidate_id, created_at
+            )
+            SELECT
+                'prompt-manual-variant-v16-' || candidate.id,
+                candidate.component_id,
+                candidate.id,
+                candidate.created_at
+            FROM prompt_component_candidates AS candidate
+            WHERE candidate.candidate_type = 'manual'
+            ORDER BY candidate.id
+            """
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '16' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 16")
+
+    @staticmethod
+    def _backfill_exact_generation_prompt_groups(
+        connection: sqlite3.Connection,
+    ) -> None:
+        generations = connection.execute(
+            """
+            SELECT generation.id, generation.generation_uid,
+                   positive_prompt.text, negative_prompt.text,
+                   generation.prompt_composition_id
+            FROM generations AS generation
+            JOIN prompts AS positive_prompt
+              ON positive_prompt.id = generation.positive_prompt_id
+            JOIN prompts AS negative_prompt
+              ON negative_prompt.id = generation.negative_prompt_id
+            WHERE generation.prompt_composition_id IS NOT NULL
+            ORDER BY generation.id
+            """
+        ).fetchall()
+        for (
+            generation_id,
+            generation_uid,
+            positive_text,
+            negative_text,
+            composition_id,
+        ) in generations:
+            memberships = connection.execute(
+                """
+                SELECT revision.id, revision.revision_uid,
+                       revision.component_id, revision.content_hash,
+                       component.component_uid, component.kind,
+                       membership.position
+                FROM prompt_composition_revisions AS membership
+                JOIN prompt_revisions AS revision
+                  ON revision.id = membership.revision_id
+                JOIN prompt_components AS component
+                  ON component.id = revision.component_id
+                WHERE membership.composition_id = ?
+                ORDER BY membership.position
+                """,
+                (composition_id,),
+            ).fetchall()
+            groups: list[
+                tuple[
+                    tuple[PromptAtomUsage, ...],
+                    tuple[PromptAtomUsage, ...],
+                    tuple[object, ...],
+                ]
+            ] = []
+            for membership in memberships:
+                by_scope: dict[str, tuple[PromptAtomUsage, ...]] = {}
+                for scope in ("pos", "neg"):
+                    by_scope[scope] = tuple(
+                        PromptAtomUsage(str(text), int(weight_milli))
+                        for text, weight_milli in connection.execute(
+                            """
+                            SELECT atom.canonical_text, usage.weight_milli
+                            FROM prompt_revision_atom_usages AS usage
+                            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+                            WHERE usage.revision_id = ? AND usage.scope = ?
+                            ORDER BY usage.position
+                            """,
+                            (membership[0], scope),
+                        ).fetchall()
+                    )
+                groups.append((by_scope["pos"], by_scope["neg"], membership))
+            flattened_positive = tuple(
+                atom
+                for positive, _negative, _membership in groups
+                for atom in positive
+            )
+            flattened_negative = tuple(
+                atom
+                for _positive, negative, _membership in groups
+                for atom in negative
+            )
+            if render_prompt_atom_usages(flattened_positive) != str(
+                positive_text
+            ) or render_prompt_atom_usages(flattened_negative) != str(
+                negative_text
+            ):
+                continue
+            for positive, negative, membership in groups:
+                (
+                    revision_id,
+                    _revision_uid,
+                    component_id,
+                    content_hash,
+                    component_uid,
+                    kind,
+                    position,
+                ) = membership
+                group_uid = (
+                    "prompt-group-"
+                    + hashlib.sha256(
+                        (
+                            f"{generation_uid}\0{position}\0"
+                            f"{component_uid}\0{content_hash}"
+                        ).encode()
+                    ).hexdigest()
+                )
+                cursor = connection.execute(
+                    """
+                    INSERT INTO generation_prompt_groups(
+                        group_uid, generation_id, component_id,
+                        source_revision_id, candidate_id, kind, position,
+                        content_hash
+                    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
+                    """,
+                    (
+                        group_uid,
+                        generation_id,
+                        component_id,
+                        revision_id,
+                        kind,
+                        position,
+                        content_hash,
+                    ),
+                )
+                group_id = int(cursor.lastrowid or 0)
+                for scope, atoms in (("pos", positive), ("neg", negative)):
+                    for atom_position, atom in enumerate(atoms):
+                        atom_id = connection.execute(
+                            "SELECT id FROM prompt_atoms "
+                            "WHERE canonical_text = ?",
+                            (atom.text,),
+                        ).fetchone()[0]
+                        connection.execute(
+                            """
+                            INSERT INTO generation_prompt_group_atom_usages(
+                                group_id, atom_id, scope, position, weight_milli
+                            ) VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (
+                                group_id,
+                                atom_id,
+                                scope,
+                                atom_position,
+                                atom.weight_milli,
+                            ),
+                        )
+
+    @staticmethod
+    def _insert_generator_state(
+        connection: sqlite3.Connection,
+        state: GeneratorStateSnapshot,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO playground_generator_state(
+                singleton_id, checkpoint, sampler, scheduler, seed_mode, seed,
+                steps_min, steps_max, cfg_min_milli, cfg_max_milli,
+                cfg_step_milli, denoise_milli, batch_runs,
+                aspect_format, resolution_class
+            ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                state.checkpoint,
+                state.sampler,
+                state.scheduler,
+                state.seed_mode,
+                state.seed,
+                state.steps_min,
+                state.steps_max,
+                state.cfg_min_milli,
+                state.cfg_max_milli,
+                state.cfg_step_milli,
+                state.denoise_milli,
+                state.batch_runs,
+                state.aspect_format,
+                state.resolution_class,
+            ),
+        )
+        for position, selection in enumerate(state.selections):
+            component_id = None
+            revision_id = None
+            if selection.mode == "fixed":
+                row = connection.execute(
+                    """
+                    SELECT component.id, revision.id
+                    FROM prompt_components AS component
+                    JOIN prompt_revisions AS revision
+                      ON revision.component_id = component.id
+                    WHERE component.component_uid = ?
+                      AND revision.revision_uid = ?
+                    """,
+                    (selection.component_uid, selection.revision_uid),
+                ).fetchone()
+                if row is None:
+                    raise CanonicalSchemaValidationError(
+                        "Legacy Generator state references unknown prompt "
+                        f"revision: {selection.revision_uid}"
+                    )
+                component_id, revision_id = int(row[0]), int(row[1])
+            connection.execute(
+                """
+                INSERT INTO playground_generator_prompt_selections(
+                    singleton_id, position, kind, mode,
+                    component_id, revision_id
+                ) VALUES (1, ?, ?, ?, ?, ?)
+                """,
+                (
+                    position,
+                    selection.kind,
+                    selection.mode,
+                    component_id,
+                    revision_id,
+                ),
+            )
+        for position, lora in enumerate(state.loras):
+            row = connection.execute(
+                """
+                SELECT definition.id, revision.id
+                FROM lora_definitions AS definition
+                JOIN lora_revisions AS revision
+                  ON revision.lora_definition_id = definition.id
+                WHERE definition.lora_uid = ? AND revision.revision_uid = ?
+                """,
+                (lora.lora_uid, lora.revision_uid),
+            ).fetchone()
+            if row is None:
+                raise CanonicalSchemaValidationError(
+                    "Legacy Generator state references unknown LoRA revision: "
+                    f"{lora.revision_uid}"
+                )
+            connection.execute(
+                """
+                INSERT INTO playground_generator_loras(
+                    singleton_id, position, lora_definition_id,
+                    lora_revision_id, model_strength_milli,
+                    clip_strength_milli
+                ) VALUES (1, ?, ?, ?, ?, ?)
+                """,
+                (
+                    position,
+                    int(row[0]),
+                    int(row[1]),
+                    lora.model_strength_milli,
+                    lora.clip_strength_milli,
+                ),
+            )
+
+    @staticmethod
+    def _read_legacy_generator_state(
+        source_path: Path | None,
+    ) -> GeneratorStateSnapshot | None:
+        if source_path is None:
+            return None
+        path = Path(source_path).resolve()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise CanonicalSchemaValidationError(
+                f"Legacy Generator state cannot be read: {path}"
+            ) from error
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("generator_v2"), dict
+        ):
+            raise CanonicalSchemaValidationError(
+                "Legacy Generator state is missing generator_v2"
+            )
+        try:
+            return GeneratorStateSnapshot.from_mapping(payload["generator_v2"])
+        except GeneratorStateValidationError as error:
+            raise CanonicalSchemaValidationError(
+                f"Legacy Generator state is invalid: {error}"
+            ) from error
+
+    @staticmethod
     def _legacy_lora_selections(
         payload: str,
     ) -> tuple[tuple[tuple[str, int, int], ...], int]:
@@ -2099,9 +3454,342 @@ class CanonicalSchemaManager:
             "SELECT level FROM workspace_content_levels "
             "WHERE singleton_id = 1 ORDER BY position"
         ).fetchall()
-        if not levels or levels[0] != ("standard",):
+        if not levels:
             raise CanonicalSchemaValidationError(
-                "workspace content levels must start with standard"
+                "workspace must enable at least one content level"
+            )
+
+    @classmethod
+    def _validate_workspace_settings_v10(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        profile_columns = cls._table_column_rows(
+            connection, "generation_profiles"
+        )
+        generation_columns = cls._table_column_rows(connection, "generations")
+        missing = sorted(
+            (_REQUIRED_GENERATION_PROFILE_COLUMNS_V10 - profile_columns.keys())
+            | (_REQUIRED_GENERATION_COLUMNS_V10 - generation_columns.keys())
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical content classification is missing columns: "
+                + ", ".join(missing)
+            )
+
+    @classmethod
+    def _validate_image_geometry_v11(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        columns = cls._table_column_rows(
+            connection, "image_geometry_projection"
+        )
+        missing = sorted(_REQUIRED_IMAGE_GEOMETRY_COLUMNS_V11 - columns.keys())
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Image geometry projection is missing columns: "
+                + ", ".join(missing)
+            )
+
+    @classmethod
+    def _validate_lora_catalog_v12(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        definition_columns = cls._table_column_rows(
+            connection, "lora_definitions"
+        )
+        revision_columns = cls._table_column_rows(connection, "lora_revisions")
+        atom_columns = cls._table_column_rows(
+            connection, "lora_revision_atom_usages"
+        )
+        generation_lora_columns = cls._table_column_rows(
+            connection, "generation_loras"
+        )
+        missing = sorted(
+            (_REQUIRED_LORA_DEFINITION_COLUMNS_V12 - definition_columns.keys())
+            | (_REQUIRED_LORA_REVISION_COLUMNS_V12 - revision_columns.keys())
+            | (_REQUIRED_LORA_REVISION_ATOM_COLUMNS_V12 - atom_columns.keys())
+            | ({"lora_revision_id"} - generation_lora_columns.keys())
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical LoRA catalog is missing columns: "
+                + ", ".join(missing)
+            )
+        orphaned = connection.execute(
+            "SELECT COUNT(*) FROM lora_definitions AS definition "
+            "WHERE NOT EXISTS (SELECT 1 FROM lora_revisions AS revision "
+            "WHERE revision.lora_definition_id = definition.id)"
+        ).fetchone()[0]
+        if int(orphaned):
+            raise CanonicalSchemaValidationError(
+                "Every LoRA definition requires an immutable revision"
+            )
+
+    @classmethod
+    def _validate_lora_catalog_v14(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        revision_columns = cls._table_column_rows(connection, "lora_revisions")
+        missing = sorted(
+            _REQUIRED_LORA_REVISION_COLUMNS_V14 - revision_columns.keys()
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "LoRA trigger revisions are missing required columns: "
+                + ", ".join(missing)
+            )
+        invalid = connection.execute(
+            "SELECT COUNT(*) FROM lora_revisions "
+            "WHERE content_level NOT IN ("
+            "'standard', 'sexy', 'lewd', 'nude', 'explicit')"
+        ).fetchone()[0]
+        if int(invalid):
+            raise CanonicalSchemaValidationError(
+                "LoRA trigger revisions contain invalid content levels"
+            )
+
+    @classmethod
+    def _validate_prompt_variants_v15(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        candidate_columns = cls._table_column_rows(
+            connection, "prompt_component_candidates"
+        )
+        candidate_atom_columns = cls._table_column_rows(
+            connection, "prompt_candidate_atom_usages"
+        )
+        group_columns = cls._table_column_rows(
+            connection, "generation_prompt_groups"
+        )
+        group_atom_columns = cls._table_column_rows(
+            connection, "generation_prompt_group_atom_usages"
+        )
+        promotion_columns = cls._table_column_rows(
+            connection, "prompt_component_promotions"
+        )
+        selection_columns = cls._table_column_rows(
+            connection, "playground_generator_prompt_selections"
+        )
+        missing = sorted(
+            (_REQUIRED_PROMPT_CANDIDATE_COLUMNS_V15 - candidate_columns.keys())
+            | (
+                _REQUIRED_PROMPT_CANDIDATE_ATOM_COLUMNS_V15
+                - candidate_atom_columns.keys()
+            )
+            | (
+                _REQUIRED_GENERATION_PROMPT_GROUP_COLUMNS_V15
+                - group_columns.keys()
+            )
+            | (
+                _REQUIRED_GENERATION_PROMPT_GROUP_ATOM_COLUMNS_V15
+                - group_atom_columns.keys()
+            )
+            | (
+                _REQUIRED_PROMPT_PROMOTION_COLUMNS_V15
+                - promotion_columns.keys()
+            )
+            | (
+                _REQUIRED_GENERATOR_SELECTION_COLUMNS_V15
+                - selection_columns.keys()
+            )
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Prompt variant facts are missing required columns: "
+                + ", ".join(missing)
+            )
+
+        unique_constraints = (
+            (
+                "prompt_component_candidates",
+                (("candidate_uid",), ("component_id", "content_hash")),
+            ),
+            (
+                "generation_prompt_groups",
+                (("group_uid",), ("generation_id", "position")),
+            ),
+            ("prompt_component_promotions", (("promotion_uid",),)),
+        )
+        for table_name, expected_indexes in unique_constraints:
+            indexes = cls._unique_index_columns(connection, table_name)
+            if any(expected not in indexes for expected in expected_indexes):
+                raise CanonicalSchemaValidationError(
+                    f"{table_name} is missing canonical identity constraints"
+                )
+        trigger = connection.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type = 'trigger' "
+            "AND name = 'prompt_revision_initial_promotion'"
+        ).fetchone()
+        if trigger is None:
+            raise CanonicalSchemaValidationError(
+                "Prompt revisions are missing initial promotion enforcement"
+            )
+
+        mismatch_queries = (
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_candidates AS candidate
+            JOIN prompt_revisions AS revision
+              ON revision.id = candidate.source_revision_id
+            WHERE revision.component_id != candidate.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM generation_prompt_groups AS prompt_group
+            JOIN prompt_revisions AS revision
+              ON revision.id = prompt_group.source_revision_id
+            WHERE revision.component_id != prompt_group.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM generation_prompt_groups AS prompt_group
+            JOIN prompt_component_candidates AS candidate
+              ON candidate.id = prompt_group.candidate_id
+            WHERE candidate.component_id != prompt_group.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_promotions AS promotion
+            JOIN prompt_revisions AS revision
+              ON revision.id = promotion.revision_id
+            WHERE revision.component_id != promotion.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_promotions AS promotion
+            JOIN prompt_revisions AS revision
+              ON revision.id = promotion.previous_revision_id
+            WHERE revision.component_id != promotion.component_id
+            """,
+            """
+            SELECT COUNT(*)
+            FROM playground_generator_prompt_selections AS selection
+            JOIN prompt_component_candidates AS candidate
+              ON candidate.id = selection.candidate_id
+            WHERE candidate.component_id != selection.component_id
+            """,
+        )
+        if any(
+            int(connection.execute(query).fetchone()[0])
+            for query in mismatch_queries
+        ):
+            raise CanonicalSchemaValidationError(
+                "Prompt variant facts contain cross-component references"
+            )
+
+        missing_promotions = int(
+            connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM prompt_components AS component
+                WHERE EXISTS (
+                    SELECT 1 FROM prompt_revisions AS revision
+                    WHERE revision.component_id = component.id
+                )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM prompt_component_promotions AS promotion
+                    WHERE promotion.component_id = component.id
+                )
+                """
+            ).fetchone()[0]
+        )
+        if missing_promotions:
+            raise CanonicalSchemaValidationError(
+                "Every revisioned prompt component requires a promotion"
+            )
+
+    @classmethod
+    def _validate_manual_variants_v16(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        columns = cls._table_column_rows(
+            connection, "prompt_component_manual_variants"
+        )
+        missing = sorted(
+            _REQUIRED_PROMPT_MANUAL_VARIANT_COLUMNS_V16 - columns.keys()
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Manual prompt variants are missing required columns: "
+                + ", ".join(missing)
+            )
+        indexes = cls._unique_index_columns(
+            connection, "prompt_component_manual_variants"
+        )
+        if ("manual_variant_uid",) not in indexes:
+            raise CanonicalSchemaValidationError(
+                "Manual prompt variants are missing canonical identity"
+            )
+        mismatched = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_manual_variants AS manual_variant
+            JOIN prompt_component_candidates AS candidate
+              ON candidate.id = manual_variant.candidate_id
+            WHERE candidate.component_id != manual_variant.component_id
+            """
+        ).fetchone()[0]
+        if int(mismatched):
+            raise CanonicalSchemaValidationError(
+                "Manual prompt variants contain cross-component references"
+            )
+
+    @classmethod
+    def _validate_generator_state_v13(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        state_columns = cls._table_column_rows(
+            connection, "playground_generator_state"
+        )
+        selection_columns = cls._table_column_rows(
+            connection, "playground_generator_prompt_selections"
+        )
+        lora_columns = cls._table_column_rows(
+            connection, "playground_generator_loras"
+        )
+        missing = sorted(
+            (_REQUIRED_GENERATOR_STATE_COLUMNS_V13 - state_columns.keys())
+            | (
+                _REQUIRED_GENERATOR_SELECTION_COLUMNS_V13
+                - selection_columns.keys()
+            )
+            | (_REQUIRED_GENERATOR_LORA_COLUMNS_V13 - lora_columns.keys())
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Canonical Generator state is missing columns: "
+                + ", ".join(missing)
+            )
+        mismatched_prompt_revisions = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM playground_generator_prompt_selections AS selection
+            JOIN prompt_revisions AS revision
+              ON revision.id = selection.revision_id
+            WHERE revision.component_id != selection.component_id
+            """
+        ).fetchone()[0]
+        mismatched_lora_revisions = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM playground_generator_loras AS selection
+            JOIN lora_revisions AS revision
+              ON revision.id = selection.lora_revision_id
+            WHERE revision.lora_definition_id != selection.lora_definition_id
+            """
+        ).fetchone()[0]
+        if int(mismatched_prompt_revisions) or int(mismatched_lora_revisions):
+            raise CanonicalSchemaValidationError(
+                "Generator state contains mismatched catalog revisions"
             )
 
     def _is_valid_version(self, version: int) -> bool:
@@ -2122,6 +3810,20 @@ class CanonicalSchemaManager:
                 self._validate_version_seven()
             elif version == 8:
                 self._validate_version_eight()
+            elif version == 9:
+                self._validate_version_nine()
+            elif version == 10:
+                self._validate_version_ten()
+            elif version == 11:
+                self._validate_version_eleven()
+            elif version == 12:
+                self._validate_version_twelve()
+            elif version == 13:
+                self._validate_version_thirteen()
+            elif version == 14:
+                self._validate_version_fourteen()
+            elif version == 15:
+                self._validate_version_fifteen()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):

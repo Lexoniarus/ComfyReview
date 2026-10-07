@@ -5,9 +5,9 @@
 /** @typedef {{render: (facets: any[], selected: string[]) => void, dispose: () => void}} ActiveScopesBoundary */
 /** @typedef {{loading: () => void, render: (items: any[], offset: number) => void, error: (message: string) => void, dispose: () => void}} ImageGridBoundary */
 /** @typedef {{render: (total: number, offset: number, limit: number) => void, dispose: () => void}} PaginationBoundary */
-/** @typedef {{loading: () => void, render: (image: any) => void, error: (message: string) => void, dispose: () => void}} InspectorBoundary */
+/** @typedef {{loading: () => void, render: (image: any) => void, empty: () => void, error: (message: string) => void, dispose: () => void}} InspectorBoundary */
 /** @typedef {{dispose: () => void}} ViewerBoundary */
-/** @typedef {{open: (rail: "scope" | "inspector") => void, dispose: () => void}} RailsBoundary */
+/** @typedef {{open: (rail: "scope" | "inspector") => void, close: (rail: "scope" | "inspector") => void, isOpen: (rail: "scope" | "inspector") => boolean, isDrawerMode: () => boolean, dispose: () => void}} RailsBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, cancelRequests: () => void, dispose: () => void}} RequestBoundary */
 /** @typedef {{api: ApiBoundary, state: ScopeStateBoundary, navigator: ScopeNavigatorBoundary, activeScopes: ActiveScopesBoundary, grid: ImageGridBoundary, pagination: PaginationBoundary, inspector: InspectorBoundary, viewer: ViewerBoundary, rails: RailsBoundary, facetRequests: RequestBoundary, rankingRequests: RequestBoundary, contextRequests: RequestBoundary, root: HTMLElement}} TopWorstDependencies */
 
@@ -33,6 +33,8 @@ export class TopWorstController {
     this.unsubscribe = null;
     /** @type {ScopeUrlState | null} */
     this.currentState = null;
+    /** @type {string | null} */
+    this.selectedImageUid = null;
   }
 
   /** Bind state and load the current surface. */
@@ -51,11 +53,29 @@ export class TopWorstController {
   async refresh(imageUid) {
     if (!this.currentState) return;
     await this.#load(this.currentState);
-    await this.selectImage(imageUid);
+    await this.selectImage(imageUid, false);
   }
 
-  /** @param {string} imageUid */
-  async selectImage(imageUid) {
+  /** Reload rankings after a mutation removed the selected image. */
+  async reload() {
+    if (!this.currentState) return;
+    await this.#load(this.currentState);
+    this.selectedImageUid = null;
+    this.inspector.empty();
+    this.rails.close("inspector");
+  }
+
+  /** @param {string} imageUid @param {boolean} [toggle] */
+  async selectImage(imageUid, toggle = true) {
+    if (
+      toggle &&
+      imageUid === this.selectedImageUid &&
+      this.rails.isDrawerMode() &&
+      this.rails.isOpen("inspector")
+    ) {
+      this.rails.close("inspector");
+      return;
+    }
     this.contextRequests.cancelRequests();
     this.inspector.loading();
     try {
@@ -63,6 +83,7 @@ export class TopWorstController {
         this.api.get(`images/${encodeURIComponent(imageUid)}`, { signal }),
       );
       this.inspector.render(image);
+      this.selectedImageUid = imageUid;
       this.rails.open("inspector");
     } catch (error) {
       if (!isAbortError(error)) {
@@ -119,7 +140,12 @@ export class TopWorstController {
         rankingPayload.limit,
       );
       const count = this.root.querySelector("[data-result-count]");
-      if (count) count.textContent = `${rankingPayload.total} Bilder`;
+      if (count) {
+        count.textContent =
+          rankingPayload.total === 1
+            ? "1 bewertetes Bild"
+            : `${rankingPayload.total} bewertete Bilder`;
+      }
     } catch (error) {
       if (!isAbortError(error)) {
         this.grid.error(errorMessage(error));
@@ -131,12 +157,37 @@ export class TopWorstController {
   #handleAction(event) {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    if (this.#shouldCloseScope(target)) {
+      this.rails.close("scope");
+    }
+    if (this.#shouldCloseInspector(target)) {
+      this.rails.close("inspector");
+    }
     const action = target.closest("[data-surface-action]");
     if (!(action instanceof HTMLElement)) return;
     const value = action.dataset.surfaceAction;
     if (value === "top" || value === "worst") {
       this.state.update({ mode: value });
     }
+  }
+
+  /** @param {Element} target */
+  #shouldCloseInspector(target) {
+    if (!this.rails.isDrawerMode() || !this.rails.isOpen("inspector")) {
+      return false;
+    }
+    if (target.closest("[data-image-inspector], [data-rail-action]")) {
+      return false;
+    }
+    return !target.closest("[data-image-action='select']");
+  }
+
+  /** @param {Element} target */
+  #shouldCloseScope(target) {
+    if (!this.rails.isDrawerMode() || !this.rails.isOpen("scope")) {
+      return false;
+    }
+    return !target.closest("[data-scope-navigator], [data-rail-action]");
   }
 
   /** @param {string} mode */

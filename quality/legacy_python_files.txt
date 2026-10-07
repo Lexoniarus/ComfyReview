@@ -5,7 +5,6 @@ services/__init__.py
 services/playground_common/__init__.py
 services/playground_common/empty_placeholders.py
 services/playground_generator_ui/__init__.py
-services/playground_generator_ui/drafts.py
 services/playground_generator_ui/types.py
 templates.py
 tests/conftest.py

@@ -258,12 +258,16 @@ class NativeComfyUiProvider:
                 checkpoints = values
                 break
         loras = self._enum_values(objects.get("LoraLoader"), "lora_name")
+        upscale_models = self._enum_values(
+            objects.get("UpscaleModelLoader"), "model_name"
+        )
         return ComfyUiCapabilities(
             node_classes=tuple(sorted(str(key) for key in objects)),
             samplers=samplers,
             schedulers=schedulers,
             checkpoints=checkpoints,
             loras=loras,
+            upscale_models=upscale_models,
         )
 
     def _history(self, prompt_id: str) -> dict[str, Any]:
@@ -325,11 +329,16 @@ class NativeComfyUiProvider:
                 continue
             raw_values = group[input_name]
             if isinstance(raw_values, list) and raw_values:
-                candidates = (
-                    raw_values[0]
-                    if isinstance(raw_values[0], list)
-                    else raw_values
-                )
+                candidates = raw_values
+                if isinstance(raw_values[0], list):
+                    candidates = raw_values[0]
+                elif (
+                    raw_values[0] == "COMBO"
+                    and len(raw_values) > 1
+                    and isinstance(raw_values[1], dict)
+                ):
+                    options = raw_values[1].get("options")
+                    candidates = options if isinstance(options, list) else []
                 return tuple(
                     sorted(
                         {

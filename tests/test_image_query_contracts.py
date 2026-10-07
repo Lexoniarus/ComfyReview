@@ -19,6 +19,7 @@ from comfyreview.application.image_queries import (
     ImageQueryValidationError,
     PromptCompositionEvidence,
     PromptSnapshot,
+    ReviewCandidateOrder,
     ReviewCandidateService,
     ReviewSummary,
     ScopeFacet,
@@ -28,10 +29,25 @@ from comfyreview.application.image_queries import (
     WorkflowProvenance,
 )
 from comfyreview.application.playground import PromptRenderer
+from comfyreview.application.workspace_settings import WorkspacePreferences
 
 
 def _draft_overrides() -> DraftOverridePolicy:
     return DraftOverridePolicy(PromptRenderer())
+
+
+class _Preferences:
+    def __init__(self, prioritize: bool = True) -> None:
+        self._value = WorkspacePreferences(
+            review_prioritize_unrated=prioritize
+        )
+
+    def get(self) -> WorkspacePreferences:
+        return self._value
+
+    def save(self, preferences):
+        self._value = preferences
+        return preferences
 
 
 def test_image_query_service_delegates_normalized_canonical_filter() -> None:
@@ -157,11 +173,12 @@ def test_review_candidate_service_returns_unclassified_without_inference() -> (
         def unknown_scope_uids(self, component_uids):
             return ()
 
-        def next_candidate(self, filters):
+        def next_candidate(self, filters, order):
+            assert order is ReviewCandidateOrder.PRIORITIZE_UNRATED
             return context
 
     result = ReviewCandidateService(
-        Repository(), _draft_overrides()
+        Repository(), _draft_overrides(), _Preferences()
     ).next_candidate(ImageFilter())
 
     assert result is not None
@@ -183,11 +200,11 @@ def test_review_candidate_service_returns_none_when_repository_is_empty() -> (
         def unknown_scope_uids(self, component_uids):
             return ()
 
-        def next_candidate(self, filters):
+        def next_candidate(self, filters, order):
             return None
 
     result = ReviewCandidateService(
-        Repository(), _draft_overrides()
+        Repository(), _draft_overrides(), _Preferences(False)
     ).next_candidate(ImageFilter())
 
     assert result is None
@@ -225,7 +242,7 @@ def test_scope_and_candidate_services_reject_unknown_scope_uids() -> None:
         def list_facets(self, filters):
             raise AssertionError(filters)
 
-        def next_candidate(self, filters):
+        def next_candidate(self, filters, order):
             raise AssertionError(filters)
 
     filters = ImageFilter(scopes=ScopeSelection(("unknown", "unknown", "")))
@@ -233,7 +250,7 @@ def test_scope_and_candidate_services_reject_unknown_scope_uids() -> None:
         ScopeFacetService(Repository()).list_facets(filters)
     with pytest.raises(ImageQueryValidationError, match="unknown"):
         ReviewCandidateService(
-            Repository(), _draft_overrides()
+            Repository(), _draft_overrides(), _Preferences()
         ).next_candidate(filters)
 
 

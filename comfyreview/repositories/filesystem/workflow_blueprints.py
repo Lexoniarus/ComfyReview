@@ -104,6 +104,7 @@ class JsonWorkflowBlueprintRepository:
         outputs = payload.get("output_bindings")
         sampler_roles = payload.get("sampler_roles")
         capabilities = payload.get("capability_requirements", [])
+        upscale_models = payload.get("upscale_model_requirements", [])
         lora_chain = payload.get("lora_chain_binding")
         if not isinstance(graph, dict) or not isinstance(roles, dict):
             raise WorkflowCompilationError(
@@ -118,6 +119,10 @@ class JsonWorkflowBlueprintRepository:
         if not isinstance(capabilities, list):
             raise WorkflowCompilationError(
                 "blueprint capabilities are invalid"
+            )
+        if not isinstance(upscale_models, list):
+            raise WorkflowCompilationError(
+                "blueprint upscale-model requirements are invalid"
             )
         try:
             role_bindings = {
@@ -160,6 +165,9 @@ class JsonWorkflowBlueprintRepository:
             sampler_roles=tuple(str(role) for role in sampler_roles),
             capability_requirements=tuple(
                 str(value) for value in capabilities
+            ),
+            upscale_model_requirements=tuple(
+                str(value) for value in upscale_models
             ),
             lora_chain_binding=lora_chain_binding,
         )

@@ -11,7 +11,15 @@ describe("ImageInspector", () => {
     const root = document.createElement("aside");
     document.body.append(root);
     const onCuration = vi.fn();
-    const inspector = new ImageInspector(root, { onCuration });
+    const onContentLevel = vi.fn();
+    const onDelete = vi.fn();
+    const onClose = vi.fn();
+    const inspector = new ImageInspector(root, {
+      onCuration,
+      onContentLevel,
+      onDelete,
+      onClose,
+    });
 
     inspector.setCurationBusy(true);
     inspector.showCurationError("Vorheriger Fehler");
@@ -23,6 +31,14 @@ describe("ImageInspector", () => {
       classification: "unclassified",
       review_summary: { average_rating: 9, rating_count: 2 },
       scopes: [{ kind: "outfit", name: "Sommerkleid" }],
+      loras: [
+        {
+          lora_uid: "lora-style",
+          provider_name: "style.safetensors",
+          model_strength: 0.75,
+          clip_strength: 0.5,
+        },
+      ],
       prompt_snapshot: {
         positive: "portrait",
         negative: "blur",
@@ -46,10 +62,19 @@ describe("ImageInspector", () => {
       output_role: "primary",
       output_index: 0,
       curation: { set_key: "outfit" },
+      content_classification: {
+        inferred_level: "sexy",
+        effective_level: "lewd",
+        override_level: "lewd",
+      },
     });
     inspector.setCurationOptions(["character_face", "outfit", "custom_set"]);
 
     expect(root.textContent).toContain("Unklassifiziert");
+    expect(root.textContent).toContain("LoRA · style.safetensors");
+    expect(
+      root.querySelector('[data-scope-kind="lora"]')?.getAttribute("title"),
+    ).toBe("Model 0,75 · CLIP 0,50");
     expect(root.textContent).toContain("Ø 9,0 / 10 · 2×");
     expect(root.textContent).toContain("Draft-Override");
     expect(root.textContent).toContain("model.safetensors");
@@ -57,6 +82,18 @@ describe("ImageInspector", () => {
     expect(root.textContent).toContain("default-character · v1");
     expect(root.querySelector("img")?.src).toContain("/files/image.png");
     expect(root.textContent).toContain("Vorheriger Fehler");
+    expect(root.textContent).toContain("Automatisch: Sexy");
+    root.querySelector(".inspector-close")?.click();
+    expect(onClose).toHaveBeenCalledOnce();
+
+    inspector.setContentLevelBusy(true);
+    inspector.showContentLevelError("Einstufung fehlgeschlagen");
+    expect(root.textContent).toContain("Einstufung fehlgeschlagen");
+    inspector.setContentLevelBusy(false);
+    root.querySelector("[data-content-action='assign']")?.click();
+    expect(onContentLevel).toHaveBeenCalledWith("image-1", "lewd");
+    root.querySelector("[data-content-action='delete']")?.click();
+    expect(onDelete).toHaveBeenCalledWith("image-1");
 
     inspector.setCurationBusy(false);
     const select = root.querySelector("[data-curation-set]");
@@ -90,6 +127,8 @@ describe("ImageInspector", () => {
     inspector.showCurationError("");
     expect(root.querySelector("[data-curation-status]")?.hidden).toBe(true);
     inspector.dispose();
+    root.querySelector(".inspector-close")?.click();
+    expect(onClose).toHaveBeenCalledOnce();
     root.querySelector("[data-curation-assign]")?.click();
     expect(onCuration).toHaveBeenCalledOnce();
   });

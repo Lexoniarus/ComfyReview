@@ -13,7 +13,7 @@ describe("AnalyticsController", () => {
 
     await fixture.controller.start();
     expect(fixture.api.get).toHaveBeenCalledWith(
-      "analytics/scopes?model=anime&min_n=6&offset=0&limit=24&kind=character",
+      "analytics/scopes?model=anime&offset=0&limit=24&min_n=6&kind=character",
       expect.any(Object),
     );
     const operations = fixture.collection.start.mock.calls[0][2];
@@ -32,7 +32,7 @@ describe("AnalyticsController", () => {
     scene.click();
     await settle();
     expect(fixture.api.get).toHaveBeenLastCalledWith(
-      "analytics/scopes?model=anime&min_n=6&offset=0&limit=24&kind=scene",
+      "analytics/scopes?model=anime&offset=0&limit=24&min_n=6&kind=scene",
       expect.any(Object),
     );
     fixture.minimumSamples.value = "-2";
@@ -53,17 +53,17 @@ describe("AnalyticsController", () => {
   it("uses section defaults and falls back to overview", async () => {
     const overview = createFixture({ section: "unknown" });
     await overview.controller.start();
-    expect(overview.minimumSamples.value).toBe("5");
+    expect(overview.minimumSamples.value).toBe("0");
     expect(overview.api.get).toHaveBeenCalledWith(
-      "analytics/overview?model=&min_n=5&offset=0&limit=24",
+      "analytics/overview",
       expect.any(Object),
     );
 
     const parameters = createFixture({ section: "parameters" });
     await parameters.controller.start();
-    expect(parameters.minimumSamples.value).toBe("10");
+    expect(parameters.minimumSamples.value).toBe("0");
     expect(parameters.api.get).toHaveBeenCalledWith(
-      "analytics/parameters?model=&min_n=10&offset=0&limit=24&view=summary",
+      "analytics/render?model=&offset=0&limit=24&basis=observed&scope=setup&minimum_images=0",
       expect.any(Object),
     );
 
@@ -71,7 +71,7 @@ describe("AnalyticsController", () => {
     await combinations.controller.start();
     expect(combinations.minimumSamples.value).toBe("8");
     expect(combinations.api.get).toHaveBeenCalledWith(
-      "analytics/combinations?model=&min_n=8&offset=0&limit=24&view=prompt",
+      "analytics/combinations?model=&offset=0&limit=24&min_n=8",
       expect.any(Object),
     );
   });
@@ -97,7 +97,7 @@ describe("AnalyticsController", () => {
     invalid.form.dispatchEvent(new Event("submit", { cancelable: true }));
     await settle();
     expect(invalid.api.get).toHaveBeenLastCalledWith(
-      "analytics/overview?model=&min_n=0&offset=0&limit=24",
+      "analytics/overview",
       expect.any(Object),
     );
   });
@@ -105,22 +105,43 @@ describe("AnalyticsController", () => {
   it("loads only the selected analytics view and focused composition details", async () => {
     const fixture = createFixture({
       section: "parameters",
-      search: "?view=values&parameter=cfg",
+      search: "?basis=predicted&scope=parameter&parameter=cfg",
     });
     await fixture.controller.start();
     expect(fixture.api.get).toHaveBeenLastCalledWith(
-      "analytics/parameters?model=&min_n=10&offset=0&limit=24&view=values&parameter=cfg",
+      "analytics/render?model=&offset=0&limit=24&basis=predicted&scope=parameter&minimum_images=0&parameter=cfg",
+      expect.any(Object),
+    );
+
+    const legacyView = document.createElement("button");
+    legacyView.dataset.analyticsView = "observed";
+    legacyView.dataset.analyticsParameter = "steps";
+    fixture.report.append(legacyView);
+    legacyView.click();
+    await settle();
+    expect(fixture.api.get).toHaveBeenLastCalledWith(
+      "analytics/render?model=&offset=0&limit=24&basis=observed&scope=parameter&minimum_images=0&parameter=steps",
+      expect.any(Object),
+    );
+
+    const predicted = document.createElement("button");
+    predicted.dataset.guidanceBasis = "predicted";
+    fixture.report.append(predicted);
+    predicted.click();
+    await settle();
+    expect(fixture.api.get).toHaveBeenLastCalledWith(
+      "analytics/render?model=&offset=0&limit=24&basis=predicted&scope=parameter&minimum_images=0&parameter=steps",
       expect.any(Object),
     );
 
     const checkpoint = document.createElement("button");
-    checkpoint.dataset.analyticsView = "values";
-    checkpoint.dataset.analyticsParameter = "checkpoint";
+    checkpoint.dataset.guidanceScope = "parameter";
+    checkpoint.dataset.guidanceParameter = "checkpoint";
     fixture.report.append(checkpoint);
     checkpoint.click();
     await settle();
     expect(fixture.api.get).toHaveBeenLastCalledWith(
-      "analytics/parameters?model=&min_n=10&offset=0&limit=24&view=values&parameter=checkpoint",
+      "analytics/render?model=&offset=0&limit=24&basis=predicted&scope=parameter&minimum_images=0&parameter=checkpoint",
       expect.any(Object),
     );
     expect(fixture.requests.cancelRequests).toHaveBeenCalled();

@@ -1,17 +1,25 @@
-/** Own the bounded visual evidence strip for one catalog component. */
+import { EvidenceCarousel } from "../components/evidence-carousel.js";
+
+/** Own cyclic visual evidence for one catalog component. */
 export class CatalogEvidenceView {
-  /** @param {{onOpen: (imageUid: string, imageUrl: string) => void}} actions */
+  /** @param {{onOpen: (imageUid: string, imageUrl: string) => void, createGeneratorActions?: (imageUid: string) => HTMLElement}} actions */
   constructor(actions) {
     this.actions = actions;
     this.element = document.createElement("section");
     this.element.className = "catalog-evidence";
-    this.abortController = new AbortController();
+    this.carousel = new EvidenceCarousel({
+      className: "catalog-evidence-strip",
+      onSelect: (item) =>
+        this.actions.onOpen(
+          String(item.image_uid || ""),
+          String(item.image_url || ""),
+        ),
+      createGeneratorActions: actions.createGeneratorActions,
+    });
   }
 
   /** @param {Array<Record<string, any>>} images */
   render(images) {
-    this.abortController.abort();
-    this.abortController = new AbortController();
     this.element.replaceChildren();
     const heading = document.createElement("div");
     heading.className = "catalog-evidence-heading";
@@ -21,8 +29,7 @@ export class CatalogEvidenceView {
     note.textContent = "Kanonisch zugeordnet · nach Bewertung";
     heading.append(title, note);
     this.element.append(heading);
-
-    const visible = images.filter((image) => image.image_url).slice(0, 3);
+    const visible = images.filter((image) => image.image_url);
     if (!visible.length) {
       const empty = document.createElement("p");
       empty.className = "catalog-evidence-empty";
@@ -30,48 +37,13 @@ export class CatalogEvidenceView {
       this.element.append(empty);
       return;
     }
-
-    const strip = document.createElement("div");
-    strip.className = "catalog-evidence-strip";
-    strip.dataset.imageCount = String(visible.length);
-    for (const image of visible) {
-      strip.append(this.#imageButton(image));
-    }
-    this.element.append(strip);
-  }
-
-  /** Release image interaction listeners. */
-  dispose() {
-    this.abortController.abort();
-    this.element.replaceChildren();
-  }
-
-  /** @param {Record<string, any>} evidence */
-  #imageButton(evidence) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "catalog-evidence-image";
-    button.setAttribute("aria-label", "Beispielbild vergrößern");
-    const image = document.createElement("img");
-    image.src = String(evidence.image_url);
-    image.alt = "Kanonisches Beispielbild";
-    image.loading = "lazy";
-    image.decoding = "async";
-    const rating = document.createElement("span");
-    const average = Number(evidence.average_rating);
-    rating.textContent = Number.isFinite(average)
-      ? `Ø ${average.toLocaleString("de-DE", { maximumFractionDigits: 1 })} / 10`
-      : "Noch unbewertet";
-    button.append(image, rating);
-    button.addEventListener(
-      "click",
-      () =>
-        this.actions.onOpen(
-          String(evidence.image_uid || ""),
-          String(evidence.image_url || ""),
-        ),
-      { signal: this.abortController.signal },
+    this.element.append(
+      this.carousel.render(visible, "Kanonisches Beispielbild"),
     );
-    return button;
+  }
+
+  dispose() {
+    this.carousel.dispose();
+    this.element.replaceChildren();
   }
 }

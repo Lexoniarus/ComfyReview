@@ -10,6 +10,7 @@ import pytest
 from comfyreview.application import (
     OutputImageReference,
     OutputPair,
+    PromptPromotionReconcileResult,
     ReviewHistoryEntry,
     ReviewHistoryNotFoundError,
     ReviewHistoryService,
@@ -101,6 +102,18 @@ class _Deletions:
         return self._staged
 
 
+class _PromptPromotions:
+    def __init__(self, scenario: _Scenario) -> None:
+        self._scenario = scenario
+
+    def reconcile_image(
+        self, image_uid: str
+    ) -> PromptPromotionReconcileResult:
+        assert image_uid == "image-native"
+        self._scenario.record("promote")
+        return PromptPromotionReconcileResult(0, 0, 0, ())
+
+
 @dataclass
 class _ReviewFixture:
     scenario: _Scenario
@@ -126,6 +139,7 @@ def _fixture(
     *,
     fail_at: set[str] | None = None,
     sidecarless: bool = False,
+    prompt_promotions: bool = False,
 ) -> _ReviewFixture:
     scenario = _Scenario(fail_at=set(fail_at or ()))
     image = ReviewImage(
@@ -155,6 +169,9 @@ def _fixture(
         reviews=reviews,
         deletions=_Deletions(scenario, staged),
         preserve_deleted_files=True,
+        prompt_promotions=(
+            _PromptPromotions(scenario) if prompt_promotions else None
+        ),
     )
     return _ReviewFixture(
         scenario=scenario,
@@ -198,6 +215,32 @@ def test_review_service_stages_and_finalizes_delete() -> None:
         "review_append",
         "finalize",
     ]
+
+
+def test_review_service_reports_failed_promotion_without_rolling_back() -> (
+    None
+):
+    fixture = _fixture(
+        fail_at={"promote"},
+        prompt_promotions=True,
+    )
+
+    result = fixture.service.submit(fixture.command())
+
+    assert result.promotion_pending is True
+    assert result.review_id == 17
+    assert fixture.scenario.events == ["resolve", "review_append", "promote"]
+
+
+def test_review_service_completes_successful_promotion_reconciliation() -> (
+    None
+):
+    fixture = _fixture(prompt_promotions=True)
+
+    result = fixture.service.submit(fixture.command())
+
+    assert result.promotion_pending is False
+    assert fixture.scenario.events == ["resolve", "review_append", "promote"]
 
 
 @pytest.mark.parametrize("rating", [None, 0, 11])

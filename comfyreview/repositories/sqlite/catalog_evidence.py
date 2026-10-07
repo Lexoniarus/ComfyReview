@@ -74,3 +74,56 @@ class SqliteCatalogEvidenceRepository:
             )
         finally:
             connection.close()
+
+    def list_top_lora_images(
+        self,
+        lora_uid: str,
+        *,
+        limit: int,
+    ) -> tuple[CatalogEvidenceImage, ...]:
+        """Return visible evidence tied to the stable generated LoRA UID."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                f"""
+                WITH candidates AS (
+                    SELECT DISTINCT
+                        image.image_uid,
+                        summary.average_rating,
+                        summary.rating_count
+                    FROM generation_loras AS usage
+                    JOIN generations AS generation
+                      ON generation.id = usage.generation_id
+                    JOIN images AS image
+                      ON image.generation_id = generation.id
+                    LEFT JOIN image_review_summary AS summary
+                      ON summary.image_id = image.id
+                    WHERE usage.lora_uid = ?
+                      AND image.deleted_at IS NULL
+                      AND {content_visibility_predicate()}
+                )
+                SELECT image_uid, average_rating, rating_count
+                FROM candidates
+                ORDER BY
+                    average_rating IS NULL,
+                    average_rating DESC,
+                    rating_count DESC,
+                    image_uid
+                LIMIT ?
+                """,
+                (lora_uid, limit),
+            ).fetchall()
+            return tuple(
+                CatalogEvidenceImage(
+                    image_uid=str(row["image_uid"]),
+                    average_rating=(
+                        float(row["average_rating"])
+                        if row["average_rating"] is not None
+                        else None
+                    ),
+                    rating_count=int(row["rating_count"] or 0),
+                )
+                for row in rows
+            )
+        finally:
+            connection.close()

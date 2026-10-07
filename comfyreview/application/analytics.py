@@ -43,6 +43,21 @@ class PromptMatchPreview:
 
 
 @dataclass(frozen=True, slots=True)
+class PromptFactor:
+    """Describe one component or LoRA factor usable by the Generator."""
+
+    source: str
+    kind: str
+    uid: str
+    name: str
+    revision_uid: str | None = None
+    applicable: bool = True
+    reason: str | None = None
+    model_strength_milli: int | None = None
+    clip_strength_milli: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ObservedPromptCombination:
     """Describe one generated canonical prompt-component combination."""
 
@@ -55,6 +70,16 @@ class ObservedPromptCombination:
     image_count: int
     total_rating_count: int
     best_images: tuple[AnalyticsImage, ...]
+    factors: tuple[PromptFactor, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CharacterCombinationGroup:
+    """Group the strongest observed combinations for one character."""
+
+    character_uid: str
+    character_name: str
+    combinations: tuple[ObservedPromptCombination, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,6 +173,15 @@ class AnalyticsRepository(Protocol):
         limit: int,
     ) -> tuple[ObservedPromptCombination, ...]:
         """Return only combinations represented by canonical generations."""
+        ...
+
+    def list_observed_combinations_by_character(
+        self,
+        *,
+        combo_size: int,
+        limit_per_character: int,
+    ) -> tuple[CharacterCombinationGroup, ...]:
+        """Return ranked observed combinations grouped by character."""
         ...
 
     def latest_review_sequence(self) -> int:
@@ -366,6 +400,20 @@ class AnalyticsService:
         return self._repository.list_observed_combinations(
             combo_size=combo_size,
             limit=max(int(limit), 0),
+        )
+
+    def observed_combinations_by_character(
+        self,
+        *,
+        combo_size: int,
+        limit_per_character: int = 8,
+    ) -> tuple[CharacterCombinationGroup, ...]:
+        """Return one independently ranked combination row per character."""
+        if combo_size not in {2, 3}:
+            raise ValueError("combo_size must be 2 or 3")
+        return self._repository.list_observed_combinations_by_character(
+            combo_size=combo_size,
+            limit_per_character=max(int(limit_per_character), 0),
         )
 
     def latest_review_sequence(self) -> int:

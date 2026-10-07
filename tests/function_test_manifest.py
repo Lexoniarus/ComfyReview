@@ -1,7 +1,199 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.generator_state:GeneratorStateSnapshot.from_mapping": (
+        "tests/test_generator_state.py::"
+        "test_generator_state_snapshot_validates_complete_fixed_references"
+    ),
+    "comfyreview.application.generator_state:GeneratorStateSnapshot.to_mapping": (
+        "tests/test_generator_state.py::"
+        "test_generator_state_round_trips_normalized_catalog_references"
+    ),
+    "comfyreview.application.generator_state:GeneratorStateService.load": (
+        "tests/test_generator_state.py::"
+        "test_generator_state_round_trips_normalized_catalog_references"
+    ),
+    "comfyreview.application.generator_state:GeneratorStateService.save": (
+        "tests/test_generator_state.py::"
+        "test_generator_state_rejects_unstable_ids_and_rolls_back"
+    ),
+    "comfyreview.application.lora_effects:LoraGraphEffectPolicy.effects": (
+        "tests/test_content_classification.py::"
+        "test_lora_graph_effect_policy_ignores_disconnected_and_zero_branches"
+    ),
+    "comfyreview.application.lora_effects:LoraGraphEffectPolicy.active_branches": (
+        "tests/test_default_workflow_blueprint.py::"
+        "test_default_blueprint_v4_wires_ordered_loras_through_model_and_clip"
+    ),
+    "comfyreview.application.lora_effects:CompiledLoraGraphPolicy.validate": (
+        "tests/test_default_workflow_blueprint.py::"
+        "test_default_blueprint_v4_wires_ordered_loras_through_model_and_clip"
+    ),
+    "comfyreview.application.lora_usage:LoraUsagePolicy.evidence": (
+        "tests/test_lora_usage.py::"
+        "test_lora_usage_requires_effect_and_exact_scoped_trigger"
+    ),
+    "comfyreview.application.lora_usage:LoraTriggerEvidence.evidenced": (
+        "tests/test_lora_usage.py::"
+        "test_lora_usage_requires_effect_and_exact_scoped_trigger"
+    ),
+    "comfyreview.application.lora_trigger_validation:LoraTriggerValidationService.validate": (
+        "tests/test_lora_usage.py::"
+        "test_lora_trigger_validation_rejects_removed_revision_triggers"
+    ),
+    "comfyreview.application.image_generator_handoff:ImageGeneratorHandoffService.get": (
+        "tests/test_image_generator_handoff.py::"
+        "test_image_handoff_preserves_ordered_typed_prompt_selections"
+    ),
+    "comfyreview.application.render_guidance:RenderSettings.value": (
+        "tests/test_render_guidance.py::"
+        "test_render_settings_and_capability_values_are_stable"
+    ),
+    "comfyreview.application.render_guidance:RenderSettings.key": (
+        "tests/test_render_guidance.py::"
+        "test_render_settings_and_capability_values_are_stable"
+    ),
+    "comfyreview.application.render_guidance:RenderCapabilitySet.supports": (
+        "tests/test_render_guidance.py::"
+        "test_render_settings_and_capability_values_are_stable"
+    ),
+    "comfyreview.application.analytics_coverage:AnalyticsCoverageService.load": (
+        "tests/test_analytics_coverage.py::"
+        "test_analytics_coverage_reports_diagnostics_without_recommendations"
+    ),
+    "comfyreview.application.render_guidance:RenderGuidanceService.build": (
+        "tests/test_render_guidance.py::"
+        "test_guidance_exposes_four_modes_with_independent_image_support"
+    ),
+    "comfyreview.application.render_guidance:RenderGuidanceService.query": (
+        "tests/test_render_guidance.py::"
+        "test_guidance_query_filters_server_side_and_validates_dimensions"
+    ),
+    "comfyreview.application.prompt_variant_guidance:PromptVariantRecipe.key": (
+        "tests/test_prompt_variant_guidance.py::"
+        "test_guidance_breaks_observed_ties_deterministically"
+    ),
+    "comfyreview.application.prompt_variant_guidance:PromptVariantRecipe.structural_key": (
+        "tests/test_prompt_variant_guidance.py::"
+        "test_guidance_does_not_model_an_unsupported_weight_or_change_structure"
+    ),
+    "comfyreview.application.prompt_variant_guidance:PromptVariantGuidanceService.build": (
+        "tests/test_prompt_variant_guidance.py::"
+        "test_guidance_interpolates_only_between_supported_weight_anchors"
+    ),
+    "comfyreview.application.prompt_variant_promotion:PromptPromotionPolicy.evaluate": (
+        "tests/test_prompt_variant_promotion.py::"
+        "test_promotion_policy_requires_stability_and_hysteresis"
+    ),
+    "comfyreview.application.prompt_variant_promotion:PromptPromotionCoordinator.audit": (
+        "tests/test_prompt_variant_promotion.py::"
+        "test_promotion_coordinator_audits_and_reconciles_bounded_components"
+    ),
+    "comfyreview.application.prompt_variant_promotion:PromptPromotionCoordinator.reconcile_image": (
+        "tests/test_prompt_variant_promotion.py::"
+        "test_promotion_coordinator_audits_and_reconciles_bounded_components"
+    ),
+    "comfyreview.application.prompt_variant_promotion:PromptPromotionCoordinator.reconcile_all": (
+        "tests/test_prompt_variant_promotion.py::"
+        "test_promotion_coordinator_audits_and_reconciles_bounded_components"
+    ),
+    "comfyreview.application.generation_geometry:OutputTier.from_resolution_class": (
+        "tests/test_image_geometry.py::"
+        "test_output_tier_maps_to_resolution_classes"
+    ),
+    "comfyreview.application.generation_geometry:OutputTier.to_resolution_class": (
+        "tests/test_image_geometry.py::"
+        "test_output_tier_maps_to_resolution_classes"
+    ),
+    "comfyreview.application.generation_geometry:GenerationGeometryPolicy.resolve": (
+        "tests/test_content_classification.py::"
+        "test_generation_geometry_policy_resolves_matrix_and_classifies"
+    ),
+    "comfyreview.application.generation_geometry:GenerationGeometryPolicy.classify": (
+        "tests/test_content_classification.py::"
+        "test_generation_geometry_policy_resolves_matrix_and_classifies"
+    ),
+    "comfyreview.application.image_geometry:ImageGeometryProjectionService.project": (
+        "tests/test_image_geometry.py::"
+        "test_geometry_projection_projects_single_image"
+    ),
+    "comfyreview.application.image_geometry:ImageGeometryProjectionService.rebuild": (
+        "tests/test_image_geometry.py::"
+        "test_geometry_rebuild_scans_files_then_atomically_replaces_projection"
+    ),
+    "comfyreview.application.playground_evidence:PlaygroundEvidenceService.find": (
+        "tests/test_image_geometry.py::"
+        "test_playground_evidence_ranks_prompt_and_sampler_independently"
+    ),
+    "comfyreview.application.content_classification:infer_content_level": (
+        "tests/test_content_classification.py::"
+        "test_content_level_inference_uses_strictest_prompt_or_lora"
+    ),
+    "comfyreview.application.content_classification:PromptContentLevelPolicy.read": (
+        "tests/test_content_classification.py::"
+        "test_prompt_content_level_policy_prefers_canonical_and_writes_one_marker"
+    ),
+    "comfyreview.application.content_classification:PromptContentLevelPolicy.write": (
+        "tests/test_content_classification.py::"
+        "test_prompt_content_level_policy_prefers_canonical_and_writes_one_marker"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.list_definitions": (
+        "tests/test_content_classification.py::"
+        "test_lora_catalog_and_selection_policy_require_typed_resolution"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.get_definition": (
+        "tests/test_content_classification.py::"
+        "test_sqlite_lora_catalog_revisions_defaults_triggers_and_archive"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.list_revisions": (
+        "tests/test_content_classification.py::"
+        "test_sqlite_lora_catalog_revisions_defaults_triggers_and_archive"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.create": (
+        "tests/test_content_classification.py::"
+        "test_sqlite_lora_catalog_revisions_defaults_triggers_and_archive"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.update": (
+        "tests/test_content_classification.py::"
+        "test_sqlite_lora_catalog_revisions_defaults_triggers_and_archive"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.set_archived": (
+        "tests/test_content_classification.py::"
+        "test_sqlite_lora_catalog_revisions_defaults_triggers_and_archive"
+    ),
+    "comfyreview.application.content_classification:LoraDraftSelectionService.resolve": (
+        "tests/test_content_classification.py::"
+        "test_lora_draft_selection_uses_exact_revision_and_content_policy"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.classify": (
+        "tests/test_content_classification.py::"
+        "test_lora_catalog_and_selection_policy_require_typed_resolution"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.resolve": (
+        "tests/test_content_classification.py::"
+        "test_lora_catalog_and_selection_policy_require_typed_resolution"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.preview": (
+        "tests/test_content_classification.py::"
+        "test_lora_catalog_and_selection_policy_require_typed_resolution"
+    ),
+    "comfyreview.application.content_classification:LoraCatalogService.reclassify": (
+        "tests/test_content_classification.py::"
+        "test_lora_catalog_and_selection_policy_require_typed_resolution"
+    ),
+    "comfyreview.application.content_classification:LoraSelectionContentPolicy.apply": (
+        "tests/test_content_classification.py::"
+        "test_lora_catalog_and_selection_policy_require_typed_resolution"
+    ),
+    "comfyreview.application.content_classification:ImageContentLevelService.set_level": (
+        "tests/test_content_classification.py::"
+        "test_image_content_level_service_supports_override_and_inherit"
+    ),
     "comfyreview.application.catalog_evidence:CatalogEvidenceService.list_top_images": (
+        "tests/test_catalog_evidence.py::"
+        "test_catalog_evidence_service_validates_bounded_queries"
+    ),
+    "comfyreview.application.catalog_evidence:CatalogEvidenceService.list_top_lora_images": (
         "tests/test_catalog_evidence.py::"
         "test_catalog_evidence_service_validates_bounded_queries"
     ),
@@ -81,6 +273,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_handles_empty_and_observed_queries"
     ),
+    "comfyreview.application.analytics:AnalyticsService.observed_combinations_by_character": (
+        "tests/test_canonical_analytics.py::"
+        "test_analytics_service_handles_empty_and_observed_queries"
+    ),
     "comfyreview.application.analytics:AnalyticsService.prompt_token_statistics": (
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_normalizes_canonical_queries"
@@ -115,11 +311,19 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     ),
     "comfyreview.application.playground:PlaygroundService.prepare_draft": (
         "tests/test_playground_application.py::"
-        "test_playground_service_prepares_draft_without_generation_submission"
+        "test_playground_sqlite_defaults_to_promoted_revision_not_latest_history"
+    ),
+    "comfyreview.application.playground:PlaygroundService.prepare_image_snapshot": (
+        "tests/test_playground_application.py::"
+        "test_playground_service_uses_authoritative_image_snapshot"
     ),
     "comfyreview.application.playground:PlaygroundService.list_available_components": (
         "tests/test_playground_application.py::"
         "test_playground_content_policy_filters_explicit_levels"
+    ),
+    "comfyreview.application.playground:PlaygroundService.list_generator_components": (
+        "tests/test_playground_application.py::"
+        "test_playground_generator_catalog_includes_archived_components"
     ),
     "comfyreview.application.playground:PromptContentPolicy.filter": (
         "tests/test_playground_application.py::"
@@ -133,9 +337,13 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_playground_application.py::"
         "test_playground_service_restores_exact_revisions_and_compositions"
     ),
+    "comfyreview.application.playground:PlaygroundService.resolve_composition_selection": (
+        "tests/test_playground_application.py::"
+        "test_playground_service_resolves_ordered_exact_composition_selections"
+    ),
     "comfyreview.application.playground:PlaygroundService.confirm_draft": (
         "tests/test_playground_application.py::"
-        "test_playground_service_revalidates_confirmed_draft_and_derives_revisions"
+        "test_playground_service_confirms_exact_historical_and_archived_revisions"
     ),
     "comfyreview.application.playground_generation:PlaygroundGenerationPolicy.build_request": (
         "tests/test_playground_generation.py::"
@@ -157,6 +365,22 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_generation_service.py::"
         "test_generation_service_wait_maps_external_state"
     ),
+    "comfyreview.application.generation:GenerationService.observe": (
+        "tests/test_generation_service.py::"
+        "test_generation_service_observes_without_resubmitting"
+    ),
+    "comfyreview.application.generation_lifecycle:GenerationLifecycleCoordinator.run_once": (
+        "tests/test_generation_lifecycle.py::"
+        "test_lifecycle_coordinator_recovers_local_interrupted_states"
+    ),
+    "comfyreview.application.generation_lifecycle:GenerationLifecycleWorker.start": (
+        "tests/test_generation_lifecycle.py::"
+        "test_lifecycle_worker_owns_one_thread_and_stops_cleanly"
+    ),
+    "comfyreview.application.generation_lifecycle:GenerationLifecycleWorker.stop": (
+        "tests/test_generation_lifecycle.py::"
+        "test_lifecycle_worker_owns_one_thread_and_stops_cleanly"
+    ),
     "comfyreview.application.generation_reconciliation:GenerationReconciliationService.reconcile": (
         "tests/test_generation_reconciliation.py::"
         "test_reconciliation_completes_from_already_persisted_outputs"
@@ -164,6 +388,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     "comfyreview.application.generation_outputs:GenerationOutputCollector.collect": (
         "tests/test_generation_outputs.py::"
         "test_output_collector_maps_expected_nodes_and_actual_batch_indexes"
+    ),
+    "comfyreview.application.generation_outputs:GenerationOutputCollector.collect_descriptors": (
+        "tests/test_generation_outputs.py::"
+        "test_output_collector_maps_expected_nodes_and_actual_batch_indexes"
+    ),
+    "comfyreview.application.generation_outputs:GenerationOutputRecoveryService.recover": (
+        "tests/test_generation_outputs.py::"
+        "test_output_recovery_uses_canonical_collector_mapping"
     ),
     "comfyreview.application.generation_outputs:GenerationOutputCollector.outputs_complete": (
         "tests/test_generation_outputs.py::"
@@ -233,9 +465,25 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_prompt_catalog.py::"
         "test_prompt_catalog_service_updates_metadata_and_revision_atomically"
     ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.materialize_candidate": (
+        "tests/test_prompt_catalog.py::"
+        "test_catalog_materializes_only_weight_changes_for_calculated_candidates"
+    ),
+    "comfyreview.application.prompt_catalog:PromptCatalogService.get_candidate": (
+        "tests/test_prompt_catalog.py::"
+        "test_catalog_materializes_only_weight_changes_for_calculated_candidates"
+    ),
     "comfyreview.application.prompt_catalog:prompt_revision_identity": (
         "tests/test_prompt_catalog.py::"
         "test_prompt_revision_identity_is_content_and_component_stable"
+    ),
+    "comfyreview.application.prompt_catalog:PromptComponent.standard_revision": (
+        "tests/test_prompt_catalog.py::"
+        "test_sqlite_prompt_catalog_preserves_revisions_and_archive_state"
+    ),
+    "comfyreview.application.prompt_catalog:prompt_candidate_identity": (
+        "tests/test_prompt_catalog.py::"
+        "test_sqlite_prompt_catalog_preserves_revisions_and_archive_state"
     ),
     "comfyreview.application.prompt_catalog:prompt_composition_identity": (
         "tests/test_prompt_catalog.py::"
@@ -251,7 +499,11 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     ),
     "comfyreview.application.arena:ArenaService.next_pair": (
         "tests/test_canonical_ranking_arena.py::"
-        "test_arena_service_selects_forward_then_reverse_pair"
+        "test_arena_service_rotates_before_selecting_reverse_pair"
+    ),
+    "comfyreview.application.arena:FairArenaPairingPolicy.select": (
+        "tests/test_canonical_ranking_arena.py::"
+        "test_arena_service_rotates_before_selecting_reverse_pair"
     ),
     "comfyreview.application.arena:ArenaService.record_decision": (
         "tests/test_canonical_ranking_arena.py::"
@@ -299,15 +551,11 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     ),
     "comfyreview.application.workspace_settings:WorkspacePreferencesService.get": (
         "tests/test_workspace_settings.py::"
-        "test_workspace_preferences_service_validates_and_sets_default_profile"
-    ),
-    "comfyreview.application.workspace_settings:WorkspacePreferencesService.set_default_profile": (
-        "tests/test_workspace_settings.py::"
-        "test_workspace_preferences_service_validates_and_sets_default_profile"
+        "test_workspace_preferences_service_validates_and_ignores_dormant_profile"
     ),
     "comfyreview.application.workspace_settings:WorkspacePreferencesService.update": (
         "tests/test_workspace_settings.py::"
-        "test_workspace_preferences_service_validates_and_sets_default_profile"
+        "test_workspace_preferences_service_validates_and_ignores_dormant_profile"
     ),
     "comfyreview.application.runtime_diagnostics:RuntimeDiagnosticsService.inspect": (
         "tests/test_workspace_settings.py::"

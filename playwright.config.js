@@ -18,7 +18,12 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: {
+          args: ["--host-resolver-rules=MAP comfyreview.test 127.0.0.1"],
+        },
+      },
     },
   ],
   outputDir: "test-results/playwright",

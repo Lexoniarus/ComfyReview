@@ -95,5 +95,6 @@ def record_arena_decision(
             "winner_image_uid": result.winner_image_uid,
             "winner_rating": result.winner_rating,
             "loser_rating": result.loser_rating,
+            "promotion_pending": result.promotion_pending,
         }
     )

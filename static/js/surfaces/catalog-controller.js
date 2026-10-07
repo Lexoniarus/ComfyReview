@@ -1,6 +1,6 @@
 /** @typedef {{get: (path: string, options?: {signal?: AbortSignal}) => Promise<any>, post: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>, put: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>, patch: (path: string, body: unknown, options?: {signal?: AbortSignal}) => Promise<any>}} ApiBoundary */
-/** @typedef {{render: (components: any[]) => void, select: (uid: string) => void, dispose: () => void}} BrowserBoundary */
-/** @typedef {{create: () => void, render: (component: any, revisions: any[]) => void, setBusy: (busy: boolean) => void, dispose: () => void}} EditorBoundary */
+/** @typedef {{render: (components: any[]) => void, select: (uid: string) => void, selectedCatalogKind: () => string, dispose: () => void}} BrowserBoundary */
+/** @typedef {{create: (catalogKind?: string) => void, render: (component: any, revisions: any[]) => void, setBusy: (busy: boolean) => void, dispose: () => void}} EditorBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, cancelRequests: () => void, dispose: () => void}} RequestBoundary */
 /** @typedef {{api: ApiBoundary, browser: BrowserBoundary, editor: EditorBoundary, requests: RequestBoundary, newButton: HTMLButtonElement, status: HTMLElement}} CatalogDependencies */
 
@@ -15,6 +15,7 @@ export class CatalogController {
     this.newButton = dependencies.newButton;
     this.status = dependencies.status;
     this.currentUid = "";
+    this.currentKind = "component";
     this.abortController = new AbortController();
   }
 
@@ -29,33 +30,40 @@ export class CatalogController {
   /** Open the empty component form. */
   create() {
     this.currentUid = "";
+    this.currentKind = this.browser.selectedCatalogKind?.() || "component";
     this.browser.select("");
-    this.editor.create();
-    this.status.textContent = "Neuer Katalogbaustein";
+    this.editor.create(this.currentKind);
+    this.status.textContent =
+      this.currentKind === "lora" ? "Neue LoRA" : "Neuer Katalogbaustein";
   }
 
   /** @param {string} componentUid */
-  async select(componentUid) {
+  async select(componentUid, catalogKind = "component") {
     this.requests.cancelRequests();
     this.status.textContent = "Revisionen werden geladen …";
     try {
+      const segment = catalogKind === "lora" ? "loras" : "components";
       const [component, revisions] = await this.requests.run((signal) =>
         Promise.all([
           this.api.get(
-            `catalog/components/${encodeURIComponent(componentUid)}`,
+            `catalog/${segment}/${encodeURIComponent(componentUid)}`,
             {
               signal,
             },
           ),
           this.api.get(
-            `catalog/components/${encodeURIComponent(componentUid)}/revisions`,
+            `catalog/${segment}/${encodeURIComponent(componentUid)}/revisions`,
             { signal },
           ),
         ]),
       );
       this.currentUid = componentUid;
+      this.currentKind = catalogKind;
       this.browser.select(componentUid);
-      this.editor.render(component, revisions.revisions || []);
+      this.editor.render(
+        { ...component, catalog_kind: catalogKind },
+        revisions.revisions || [],
+      );
       this.status.textContent = "Katalogeintrag geladen";
     } catch (error) {
       this.status.textContent = errorMessage(error);
@@ -67,17 +75,25 @@ export class CatalogController {
     this.editor.setBusy(true);
     this.status.textContent = "Katalogeintrag wird gespeichert …";
     try {
+      const isLora =
+        payload.catalog_kind === "lora" || this.currentKind === "lora";
+      const segment = isLora ? "loras" : "components";
+      const body = { ...payload };
+      delete body.catalog_kind;
       const component = await this.requests.run((signal) =>
         this.currentUid
           ? this.api.put(
-              `catalog/components/${encodeURIComponent(this.currentUid)}`,
-              payload,
+              `catalog/${segment}/${encodeURIComponent(this.currentUid)}`,
+              body,
               { signal },
             )
-          : this.api.post("catalog/components", payload, { signal }),
+          : this.api.post(`catalog/${segment}`, body, { signal }),
       );
       await this.#reload();
-      await this.select(component.component_uid);
+      await this.select(
+        String(component.component_uid || component.lora_uid),
+        isLora ? "lora" : "component",
+      );
       this.status.textContent = "Katalogeintrag gespeichert";
     } catch (error) {
       this.status.textContent = errorMessage(error);
@@ -93,13 +109,16 @@ export class CatalogController {
     try {
       const component = await this.requests.run((signal) =>
         this.api.patch(
-          `catalog/components/${encodeURIComponent(this.currentUid)}`,
+          `catalog/${this.currentKind === "lora" ? "loras" : "components"}/${encodeURIComponent(this.currentUid)}`,
           { archived },
           { signal },
         ),
       );
       await this.#reload();
-      await this.select(component.component_uid);
+      await this.select(
+        String(component.component_uid || component.lora_uid),
+        this.currentKind,
+      );
       this.status.textContent = archived
         ? "Katalogeintrag archiviert"
         : "Katalogeintrag wiederhergestellt";
@@ -120,11 +139,28 @@ export class CatalogController {
 
   async #reload() {
     try {
-      const payload = await this.requests.run((signal) =>
-        this.api.get("catalog/components?include_archived=true", { signal }),
+      const [componentPayload, loraPayload] = await this.requests.run(
+        (signal) =>
+          Promise.all([
+            this.api.get("catalog/components?include_archived=true", {
+              signal,
+            }),
+            this.api.get("catalog/loras?include_archived=true", { signal }),
+          ]),
       );
-      this.browser.render(payload.components || []);
-      this.status.textContent = `${(payload.components || []).length} Katalogeinträge`;
+      const components = componentPayload.components || [];
+      const loras = (loraPayload.loras || []).map(
+        (/** @type {any} */ lora) => ({
+          ...lora,
+          catalog_kind: "lora",
+          kind: "lora",
+          component_uid: lora.lora_uid,
+          component_key: lora.provider_name,
+          name: lora.display_name,
+        }),
+      );
+      this.browser.render([...components, ...loras]);
+      this.status.textContent = `${components.length} Prompt-Bausteine · ${loras.length} LoRAs`;
     } catch (error) {
       this.status.textContent = errorMessage(error);
     }

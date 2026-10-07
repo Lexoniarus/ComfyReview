@@ -58,6 +58,7 @@ class GenerationSummary:
     started_at: str | None
     completed_at: str | None
     output_count: int
+    failure_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -11,13 +11,16 @@ import pytest
 from comfyreview.application import (
     ArenaCompetitor,
     ArenaDecision,
+    ArenaImageRotation,
     ArenaPair,
+    ArenaPairingHistory,
     ArenaQuery,
     ArenaResult,
     ArenaService,
     ArenaValidationError,
     ImageContextQueryService,
     ImageQuery,
+    PromptPromotionReconcileResult,
     RankedImage,
     RankingQuery,
     RankingService,
@@ -73,16 +76,18 @@ class _ArenaRepository:
         self,
         *,
         directions: frozenset[tuple[str, str]] = frozenset(),
+        rotations: tuple[ArenaImageRotation, ...] = (),
     ) -> None:
         self.directions = directions
+        self.rotations = rotations
         self.saved: ArenaDecision | None = None
 
-    def list_played_directions(
+    def pairing_history(
         self,
         image_uids: tuple[str, ...],
-    ) -> frozenset[tuple[str, str]]:
+    ) -> ArenaPairingHistory:
         assert image_uids
-        return self.directions
+        return ArenaPairingHistory(self.directions, self.rotations)
 
     def get_competitors(
         self,
@@ -119,6 +124,19 @@ class _ImageContexts:
             (),
             {"entries": self.images, "query": query},
         )()
+
+
+class _FailingPromptPromotions:
+    def __init__(self) -> None:
+        self.image_uids: list[str] = []
+
+    def reconcile_image(
+        self, image_uid: str
+    ) -> PromptPromotionReconcileResult:
+        self.image_uids.append(image_uid)
+        if image_uid == "left":
+            raise RuntimeError("promotion failed")
+        return PromptPromotionReconcileResult(0, 0, 0, ())
 
 
 def _arena_service(
@@ -186,28 +204,59 @@ def test_ranking_service_supports_worst_and_unsorted_filters() -> None:
     assert service.list_images(RankingQuery(limit=-1)) == ()
 
 
-def test_arena_service_selects_forward_then_reverse_pair() -> None:
+def test_arena_service_rotates_before_selecting_reverse_pair() -> None:
     images = (
         _image("a", average=9.0),
         _image("b", average=8.0),
+        _image("c", average=7.0),
     )
     query = ImageQuery()
     forward = _arena_service(_ArenaRepository(), images).next_pair(
         ArenaQuery(query)
     )
-    reverse = _arena_service(
-        _ArenaRepository(directions=frozenset({("a", "b")})), images
+    rotated = _arena_service(
+        _ArenaRepository(
+            directions=frozenset({("a", "b")}),
+            rotations=(
+                ArenaImageRotation("a", 1),
+                ArenaImageRotation("b", 1),
+                ArenaImageRotation("c", None),
+            ),
+        ),
+        images,
     ).next_pair(ArenaQuery(query))
     complete = _arena_service(
-        _ArenaRepository(directions=frozenset({("a", "b"), ("b", "a")})),
+        _ArenaRepository(
+            directions=frozenset(
+                (left.image_uid, right.image_uid)
+                for left in images
+                for right in images
+                if left.image_uid != right.image_uid
+            )
+        ),
         images,
     ).next_pair(ArenaQuery(query))
 
     assert isinstance(forward, ArenaPair)
     assert (forward.left.image_uid, forward.right.image_uid) == ("a", "b")
-    assert isinstance(reverse, ArenaPair)
-    assert (reverse.left.image_uid, reverse.right.image_uid) == ("b", "a")
+    assert isinstance(rotated, ArenaPair)
+    assert (rotated.left.image_uid, rotated.right.image_uid) == ("c", "a")
     assert complete is None
+
+
+def test_arena_service_uses_reverse_after_the_pair_rotates_back() -> None:
+    images = (
+        _image("a", average=9.0),
+        _image("b", average=8.0),
+    )
+
+    pair = _arena_service(
+        _ArenaRepository(directions=frozenset({("a", "b")})),
+        images,
+    ).next_pair(ArenaQuery(ImageQuery()))
+
+    assert isinstance(pair, ArenaPair)
+    assert (pair.left.image_uid, pair.right.image_uid) == ("b", "a")
 
 
 def test_arena_service_records_clamped_target_ratings() -> None:
@@ -222,6 +271,25 @@ def test_arena_service_records_clamped_target_ratings() -> None:
     assert result.winner_rating == 10
     assert result.loser_rating == 1
     assert repository.saved is not None
+
+
+def test_arena_reports_failed_promotion_after_atomic_decision() -> None:
+    repository = _ArenaRepository()
+    promotions = _FailingPromptPromotions()
+    service = ArenaService(
+        images=cast(ImageContextQueryService, _ImageContexts(())),
+        repository=repository,
+        prompt_promotions=promotions,
+    )
+
+    result = service.record_decision(
+        RecordArenaDecisionCommand("left", "right", "left")
+    )
+
+    assert result.promotion_pending is True
+    assert result.match_uid == "match"
+    assert repository.saved is not None
+    assert promotions.image_uids == ["left", "right"]
 
 
 @pytest.mark.parametrize(
@@ -331,9 +399,9 @@ def test_sqlite_ranking_and_arena_use_canonical_facts_atomically(
     assert [image.image_uid for image in images] == ["left", "right"]
     assert all(image.json_path is None for image in images)
     assert result.winner_image_uid == "left"
-    assert arena.list_played_directions(("left", "right")) == frozenset(
-        {("left", "right")}
-    )
+    history = arena.pairing_history(("left", "right"))
+    assert history.played_directions == frozenset({("left", "right")})
+    assert {item.image_uid for item in history.rotations} == {"left", "right"}
     with sqlite3.connect(database_path) as connection:
         assert (
             connection.execute(

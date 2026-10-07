@@ -134,6 +134,7 @@ def _summary(row: sqlite3.Row) -> GenerationSummary:
         started_at=_text(row["started_at"]),
         completed_at=_text(row["completed_at"]),
         output_count=int(row["output_count"]),
+        failure_reason=_metadata_text(metadata, "last_error"),
     )
 
 

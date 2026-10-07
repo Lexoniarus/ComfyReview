@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Final, Protocol
 
 from comfyreview.application.generation import GenerationLoraSelection
+from comfyreview.application.generation_geometry import OutputTier
 
 
 class WorkspaceSettingsValidationError(ValueError):
@@ -62,6 +63,7 @@ class GenerationProfile:
     batch_size: int
     image_width: int = 1024
     image_height: int = 1024
+    output_tier: OutputTier = OutputTier.FULL_HD_1080
     loras: tuple[GenerationLoraSelection, ...] = ()
     archived: bool = False
     is_default: bool = False
@@ -75,8 +77,7 @@ class WorkspacePreferences:
     motion: str = "system"
     analytics_page_size: int = 24
     default_generation_profile_uid: str | None = None
-    review_unrated_only: bool = True
-    review_max_attempts: int = 50
+    review_prioritize_unrated: bool = True
     default_curation_set_key: str | None = None
     curation_set_order: tuple[str, ...] = ()
     enabled_content_levels: tuple[ContentLevel, ...] = (ContentLevel.STANDARD,)
@@ -124,23 +125,31 @@ class GenerationProfileIdentitySource(Protocol):
         ...
 
 
+class ProfileLoraContentPolicy(Protocol):
+    """Resolve canonical LoRA policy snapshots for editable profiles."""
+
+    def apply(
+        self, selections: tuple[GenerationLoraSelection, ...]
+    ) -> tuple[GenerationLoraSelection, ...]: ...
+
+
 class WorkspacePreferencesService:
     """Validate and coordinate workspace preference changes."""
 
     def __init__(
         self,
         repository: PreferencesRepository,
-        profiles: GenerationProfileRepository,
         *,
         curation_set_keys: tuple[str, ...],
     ) -> None:
         self._repository = repository
-        self._profiles = profiles
         self._curation_set_keys = curation_set_keys
 
     def get(self) -> WorkspacePreferences:
         """Return the current validated preferences."""
-        preferences = self._repository.get()
+        preferences = replace(
+            self._repository.get(), default_generation_profile_uid=None
+        )
         self._validate(preferences)
         return preferences
 
@@ -148,23 +157,9 @@ class WorkspacePreferencesService:
         self, preferences: WorkspacePreferences
     ) -> WorkspacePreferences:
         """Validate and persist one complete preference replacement."""
-        self._validate(preferences)
-        return self._repository.save(preferences)
-
-    def set_default_profile(self, profile_uid: str) -> WorkspacePreferences:
-        """Select one active profile as the workspace default."""
-        profile = self._profiles.get(profile_uid)
-        if profile.archived:
-            raise WorkspaceSettingsValidationError(
-                "archived profile cannot be the default"
-            )
-        current = self._repository.get()
-        updated = replace(
-            current,
-            default_generation_profile_uid=profile.profile_uid,
-        )
-        self._validate(updated)
-        return self._repository.save(updated)
+        normalized = replace(preferences, default_generation_profile_uid=None)
+        self._validate(normalized)
+        return self._repository.save(normalized)
 
     def _validate(self, preferences: WorkspacePreferences) -> None:
         if preferences.density not in {"comfortable", "compact"}:
@@ -175,14 +170,10 @@ class WorkspacePreferencesService:
             raise WorkspaceSettingsValidationError(
                 "invalid analytics page size"
             )
-        if preferences.review_max_attempts < 1:
-            raise WorkspaceSettingsValidationError(
-                "review attempts must be positive"
-            )
         levels = preferences.enabled_content_levels
-        if not levels or levels[0] is not ContentLevel.STANDARD:
+        if not levels:
             raise WorkspaceSettingsValidationError(
-                "content levels must start with standard"
+                "at least one content level must be enabled"
             )
         if len(set(levels)) != len(levels):
             raise WorkspaceSettingsValidationError(
@@ -211,14 +202,6 @@ class WorkspacePreferencesService:
             raise WorkspaceSettingsValidationError(
                 "default curation set is unknown"
             )
-        if preferences.default_generation_profile_uid is not None:
-            profile = self._profiles.get(
-                preferences.default_generation_profile_uid
-            )
-            if profile.archived:
-                raise WorkspaceSettingsValidationError(
-                    "archived profile cannot be the default"
-                )
 
 
 class GenerationProfileService:
@@ -228,9 +211,11 @@ class GenerationProfileService:
         self,
         repository: GenerationProfileRepository,
         identities: GenerationProfileIdentitySource,
+        lora_content: ProfileLoraContentPolicy | None = None,
     ) -> None:
         self._repository = repository
         self._identities = identities
+        self._lora_content = lora_content
 
     def list_profiles(self) -> tuple[GenerationProfile, ...]:
         """Return profiles with repository-defined deterministic ordering."""
@@ -244,6 +229,10 @@ class GenerationProfileService:
             archived=False,
             is_default=False,
         )
+        if created.loras and self._lora_content is not None:
+            created = replace(
+                created, loras=self._lora_content.apply(created.loras)
+            )
         self._validate(created)
         return self._repository.save(created)
 
@@ -255,6 +244,10 @@ class GenerationProfileService:
             archived=existing.archived,
             is_default=existing.is_default,
         )
+        if updated.loras and self._lora_content is not None:
+            updated = replace(
+                updated, loras=self._lora_content.apply(updated.loras)
+            )
         self._validate(updated)
         return self._repository.save(updated)
 

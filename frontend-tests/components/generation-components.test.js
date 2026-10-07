@@ -58,12 +58,21 @@ describe("Generation lifecycle components", () => {
   it("renders safe detail, all outputs and reconciliation action", () => {
     const root = document.createElement("div");
     const onReconcile = vi.fn();
-    const detail = new GenerationDetail(root, { onReconcile });
+    const createGeneratorActions = vi.fn(() => document.createElement("menu"));
+    const detail = new GenerationDetail(root, {
+      onReconcile,
+      createGeneratorActions,
+    });
     const generation = generationDetail();
 
     detail.render(generation);
     expect(root.textContent).toContain("default-character · v1");
+    expect(root.textContent).toContain("ComfyUiNotFoundError");
+    expect(root.querySelector("button").textContent).toBe(
+      "Auftrag / Output abgleichen",
+    );
     expect(root.querySelectorAll("figure")).toHaveLength(2);
+    expect(createGeneratorActions).toHaveBeenCalledTimes(2);
     expect(root.querySelector("img").getAttribute("src")).toBe(
       "/files/image-1.png",
     );
@@ -101,6 +110,7 @@ function generationDetail() {
     blueprint_uid: "default-character",
     blueprint_version: 1,
     graph_hash: "graph-hash",
+    failure_reason: "ComfyUiNotFoundError",
     positive_prompt: "positive <script>alert(1)</script>",
     negative_prompt: "negative",
     outputs: [

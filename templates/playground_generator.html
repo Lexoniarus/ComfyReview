@@ -1,6 +1,6 @@
 {% extends "_v2_base.html" %} {% set page_title = "Playground · ComfyReview" %}
 {% set active_nav = "playground" %} {% block styles %}
-<link rel="stylesheet" href="/static/css/v2/playground.css" />
+<link rel="stylesheet" href="/static/css/v2/playground.css?v=20261005-guidance1" />
 {% endblock %} {% block content %}
 <div class="playground-shell" data-v2-surface="playground">
   <header class="v2-panel playground-header">
@@ -17,14 +17,6 @@
     >
   </header>
 
-  <section
-    class="v2-panel playground-combinations"
-    aria-label="Top-Kombinationen"
-    data-top-combinations
-  >
-    <p class="muted">Top-Kombinationen werden geladen …</p>
-  </section>
-
   <div class="playground-workspace">
     <section
       class="v2-panel playground-selection"
@@ -35,12 +27,22 @@
           <p class="playground-kicker">01 · Auswahl</p>
           <h2 id="selection-title">Prompt-Bausteine</h2>
         </div>
-        <label class="seed-field">
-          Prompt-Auswahl-Seed
-          <input type="number" value="17" data-selection-seed />
-        </label>
       </div>
       <div data-prompt-modes></div>
+    </section>
+
+    <section
+      class="v2-panel playground-generation"
+      aria-labelledby="generation-title"
+    >
+      <div class="playground-section-heading">
+        <div>
+          <p class="playground-kicker">02 · Ausgabe</p>
+          <h2 id="generation-title">Generierungseinstellungen</h2>
+        </div>
+      </div>
+      <div data-generation-controls></div>
+      <section class="render-guidance-panel" data-render-guidance></section>
       <button class="primary-button" type="button" data-prepare-draft>
         Entwurf erstellen
       </button>
@@ -49,30 +51,17 @@
     <section class="v2-panel playground-draft" aria-labelledby="draft-title">
       <div class="playground-section-heading">
         <div>
-          <p class="playground-kicker">02 · Snapshot</p>
+          <p class="playground-kicker">03 · Snapshot und Beispiele</p>
           <h2 id="draft-title">Generierungsentwurf</h2>
         </div>
         <span class="draft-state" data-draft-state>Kein Entwurf</span>
       </div>
       <div data-draft-preview>
         <p class="playground-empty">
-          Wähle deine Modi und erstelle einen Entwurf. Manuelle Änderungen
-          bleiben Draft-Overrides und verändern keine Katalogrevision.
+          Wähle Prompt-Bausteine und Generierungseinstellungen. Der Server
+          erstellt anschließend einen reproduzierbaren Entwurf.
         </p>
       </div>
-    </section>
-
-    <aside
-      class="v2-panel playground-generation"
-      aria-labelledby="generation-title"
-    >
-      <div class="playground-section-heading">
-        <div>
-          <p class="playground-kicker">03 · Ausgabe</p>
-          <h2 id="generation-title">Generierung</h2>
-        </div>
-      </div>
-      <div data-generation-controls></div>
       <button
         class="primary-button"
         type="button"
@@ -86,12 +75,16 @@
         data-generation-result
         aria-live="polite"
       ></div>
-    </aside>
+    </section>
   </div>
+  <dialog class="image-viewer" data-image-viewer aria-label="Bildansicht">
+    <button class="icon-button" type="button" data-viewer-close aria-label="Bildansicht schließen">×</button>
+    <img alt="Vergrößertes Beispielbild" />
+  </dialog>
 </div>
 {% endblock %} {% block scripts %}
 <script
   type="module"
-  src="/static/js/entries/playground.js?v=20261002"
+  src="/static/js/entries/playground.js?v=20261005-guidance1"
 ></script>
 {% endblock %}

@@ -14,13 +14,21 @@ from comfyreview.application import (
     ComfyUiOutputDescriptor,
     CompiledOutputBinding,
     DuplicateGenerationOutputError,
+    GenerationGeometryPolicy,
     GenerationOutput,
     GenerationOutputCollector,
+    GenerationOutputError,
+    GenerationOutputRecoveryPlan,
+    GenerationOutputRecoveryService,
+    ImageGeometrySource,
     MissingGenerationOutputError,
     UnexpectedGenerationOutputError,
     generation_output_identity,
 )
-from comfyreview.providers import LocalGenerationOutputSource
+from comfyreview.providers import (
+    LocalGenerationOutputRecoverySource,
+    LocalGenerationOutputSource,
+)
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteGenerationOutputRepository,
@@ -76,6 +84,29 @@ class _Repository:
         assert generation_uid == "generation-1"
         return self.saved is not None
 
+    def recovery_plan(self, generation_uid):
+        assert generation_uid == "generation-1"
+        return GenerationOutputRecoveryPlan(
+            "recovery",
+            "generation-1",
+            self.bindings,
+        )
+
+
+class _Projection:
+    def __init__(self) -> None:
+        self.sources: list[ImageGeometrySource] = []
+
+    def project(self, source: ImageGeometrySource):
+        self.sources.append(source)
+        return GenerationGeometryPolicy().classify(source.image_uid, 720, 1080)
+
+
+class _RecoverySource:
+    def discover(self, plan):
+        assert plan.filename_prefix == "generation-1"
+        return (_descriptor("save", 0, "generation-1_00001_.png"),)
+
 
 def _descriptor(
     node_id: str, index: int, filename: str
@@ -92,6 +123,7 @@ def test_output_collector_maps_expected_nodes_and_actual_batch_indexes() -> (
             CompiledOutputBinding("detail", "save-b"),
         )
     )
+    projection = _Projection()
     collector = GenerationOutputCollector(
         comfyui=_ComfyUi(
             (
@@ -102,6 +134,7 @@ def test_output_collector_maps_expected_nodes_and_actual_batch_indexes() -> (
         ),
         source=_Source(),
         repository=repository,
+        image_geometry=projection,
     )
 
     outputs = collector.collect("generation-1", "prompt-1")
@@ -116,6 +149,9 @@ def test_output_collector_maps_expected_nodes_and_actual_batch_indexes() -> (
     assert outputs[0].image_uid == generation_output_identity(
         "generation-1", "save-a", 0, "hash-a.png"
     )
+    assert projection.sources == [
+        ImageGeometrySource(item.image_uid, item.path) for item in outputs
+    ]
 
 
 @pytest.mark.parametrize(
@@ -226,6 +262,64 @@ def test_local_output_source_validates_boundary_and_hashes_content(
         )
 
 
+def test_local_output_recovery_source_requires_one_exact_png(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    directory = output_root / "playground" / "Hero"
+    directory.mkdir(parents=True)
+    expected = directory / "generation-1_00001_.png"
+    expected.write_bytes(b"png")
+    (directory / "other.png").write_bytes(b"other")
+    source = LocalGenerationOutputRecoverySource(output_root)
+    plan = GenerationOutputRecoveryPlan(
+        "playground/Hero",
+        "generation-1",
+        (CompiledOutputBinding("primary", "save"),),
+    )
+
+    descriptors = source.discover(plan)
+
+    assert descriptors == (
+        ComfyUiOutputDescriptor(
+            "save",
+            0,
+            expected.name,
+            "playground/Hero",
+            "output",
+        ),
+    )
+    (directory / "generation-1_00002_.png").write_bytes(b"duplicate")
+    with pytest.raises(DuplicateGenerationOutputError, match="ambiguous"):
+        source.discover(plan)
+    with pytest.raises(GenerationOutputError, match="escapes"):
+        source.discover(
+            GenerationOutputRecoveryPlan(
+                "../outside",
+                "generation-1",
+                plan.bindings,
+            )
+        )
+
+
+def test_output_recovery_uses_canonical_collector_mapping() -> None:
+    repository = _Repository((CompiledOutputBinding("primary", "save"),))
+    collector = GenerationOutputCollector(
+        comfyui=_ComfyUi(()),
+        source=_Source(),
+        repository=repository,
+    )
+
+    outputs = GenerationOutputRecoveryService(
+        source=_RecoverySource(),
+        repository=repository,
+        collector=collector,
+    ).recover("generation-1")
+
+    assert outputs == repository.saved
+    assert outputs[0].role == "primary"
+
+
 def _generation(database_path: Path, metadata: object) -> None:
     with sqlite3.connect(database_path) as connection:
         connection.executemany(
@@ -254,7 +348,13 @@ def test_sqlite_output_repository_is_idempotent_and_detects_conflicts(
     CanonicalSchemaManager(database_path).prepare_startup()
     _generation(
         database_path,
-        {"output_bindings": [{"role": "primary", "node_id": "save"}]},
+        {
+            "output_bindings": [{"role": "primary", "node_id": "save"}],
+            "output_policy": {
+                "output_subdirectory": "playground/Hero",
+                "filename_prefix": "generation-1",
+            },
+        },
     )
     repository = SqliteGenerationOutputRepository(database_path)
     output = GenerationOutput(
@@ -263,6 +363,13 @@ def test_sqlite_output_repository_is_idempotent_and_detects_conflicts(
 
     assert repository.expected_bindings("generation-1") == (
         CompiledOutputBinding("primary", "save"),
+    )
+    assert repository.recovery_plan("generation-1") == (
+        GenerationOutputRecoveryPlan(
+            "playground/Hero",
+            "generation-1",
+            (CompiledOutputBinding("primary", "save"),),
+        )
     )
     assert repository.save_outputs("generation-1", (output,)) == (output,)
     assert repository.save_outputs("generation-1", (output,)) == (output,)

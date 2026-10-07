@@ -13,11 +13,17 @@ from comfyreview.application.generation import (
     GenerationMutationError,
     GenerationOutputPolicy,
     GenerationPort,
+    GenerationPromptGroup,
     GenerationPromptSnapshot,
     GenerationRequest,
     GenerationSamplerSettings,
     GenerationSubmission,
     GenerationValidationError,
+)
+from comfyreview.application.generation_geometry import (
+    AspectFormat,
+    GenerationGeometryPolicy,
+    ResolutionClass,
 )
 from comfyreview.application.playground import RenderedPrompt
 
@@ -33,10 +39,11 @@ class PlaygroundGenerationDraft:
     sampler: GenerationSamplerSettings
     output_subdirectory: str
     loras: tuple[GenerationLoraSelection, ...] = ()
+    prompt_groups: tuple[GenerationPromptGroup, ...] = ()
     blueprint_uid: str | None = None
     blueprint_version: int | None = None
-    image_width: int | None = None
-    image_height: int | None = None
+    aspect_format: AspectFormat = AspectFormat.SQUARE_1_1
+    resolution_class: ResolutionClass = ResolutionClass.FULL_HD_1080
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +211,13 @@ class PlaygroundGenerationPolicy:
         output_subdirectory = self._output_subdirectory(
             draft.output_subdirectory
         )
+        geometry = GenerationGeometryPolicy().resolve(
+            draft.aspect_format,
+            draft.resolution_class,
+        )
+        canvas = GenerationCanvas(
+            geometry.source_width, geometry.source_height
+        )
         return GenerationRequest(
             prompt=GenerationPromptSnapshot(
                 positive_text=draft.prompt.positive_text,
@@ -211,6 +225,7 @@ class PlaygroundGenerationPolicy:
                 revision_uids=draft.prompt.revision_uids,
                 positive_atoms=draft.prompt.positive_atoms,
                 negative_atoms=draft.prompt.negative_atoms,
+                prompt_groups=draft.prompt_groups,
             ),
             blueprint_uid=draft.blueprint_uid or self._blueprint_uid,
             blueprint_version=(
@@ -231,18 +246,9 @@ class PlaygroundGenerationPolicy:
                 expected_roles=self._expected_output_roles,
             ),
             loras=draft.loras,
-            canvas=self._canvas(draft),
+            canvas=canvas,
+            geometry=geometry,
         )
-
-    @staticmethod
-    def _canvas(draft: PlaygroundGenerationDraft) -> GenerationCanvas | None:
-        if draft.image_width is None and draft.image_height is None:
-            return None
-        if draft.image_width is None or draft.image_height is None:
-            raise GenerationValidationError(
-                "image width and height must be provided together"
-            )
-        return GenerationCanvas(draft.image_width, draft.image_height)
 
     @staticmethod
     def _required(value: str, field: str) -> str:

@@ -18,17 +18,12 @@ if (root instanceof HTMLElement) {
     const view = new SettingsView(content, {
       onPreferencesSave: (/** @type {Record<string, any>} */ payload) =>
         void controller?.savePreferences(payload),
-      onProfileSave: (
-        /** @type {string | null} */ uid,
-        /** @type {Record<string, any>} */ payload,
-      ) => void controller?.saveProfile(uid, payload),
-      onProfileArchive: (
-        /** @type {string} */ uid,
-        /** @type {boolean} */ archived,
-      ) => void controller?.archiveProfile(uid, archived),
-      onProfileDefault: (/** @type {string} */ uid) =>
-        void controller?.defaultProfile(uid),
       onComfyUiCheck: () => void controller?.checkComfyUi(),
+      onLoraClassify: (providerName, contentLevel) =>
+        void controller?.classifyLora(providerName, contentLevel),
+      onLoraPreview: (uid) => void controller?.previewLora(uid),
+      onLoraApply: (uid, revision) =>
+        void controller?.reclassifyLora(uid, revision),
     });
     controller = new SettingsController({
       api: new ApiClient(),

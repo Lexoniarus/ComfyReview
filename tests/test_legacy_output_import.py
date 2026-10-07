@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import struct
 from pathlib import Path
 
 import pytest
@@ -93,7 +94,12 @@ def _write_source(output_root: Path) -> tuple[Path, Path]:
     png_path = output_root / "image.png"
     json_path = output_root / "image.json"
     output_root.mkdir(parents=True, exist_ok=True)
-    png_path.write_bytes(b"png-image")
+    png_path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + struct.pack(">I", 13)
+        + b"IHDR"
+        + struct.pack(">II", 2160, 3240)
+    )
     json_path.write_text(
         json.dumps(
             {
@@ -599,6 +605,8 @@ def test_legacy_output_import_cli_reports_counts(
     progress = json.loads(captured.err)
     assert output["new_images"] == 1
     assert output["enriched_images"] == 0
+    assert output["geometry_projected"] == 1
+    assert output["geometry_diagnostics"] == []
     assert progress["event"] == "legacy_output_import.backup_created"
     assert progress["backup_path"] == output["backup_path"]
     assert Path(output["backup_path"]).is_file()

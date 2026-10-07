@@ -66,13 +66,29 @@ export class GenerationProfileEditor {
       resolution,
       this.#number("image_width", "Breite", value.image_width, "8"),
       this.#number("image_height", "Höhe", value.image_height, "8"),
+      this.#select(
+        "output_tier",
+        "Finale Ausgabe",
+        [
+          { value: "hd_720", label: "720p" },
+          { value: "full_hd_1080", label: "1080p" },
+          { value: "uhd_4k", label: "4K / 2160p" },
+        ],
+        value.output_tier || "full_hd_1080",
+      ),
     );
     this.fields
       .get("resolution_preset")
       ?.addEventListener("change", () => this.#applyResolutionPreset(), {
         signal: this.abortController.signal,
       });
-    this.loras.render(value.loras || [], capabilities.loras || []);
+    this.loras.render(
+      value.loras || [],
+      (capabilities.lora_definitions || []).filter(
+        (/** @type {Record<string, any>} */ definition) =>
+          definition.latest_revision?.content_level,
+      ),
+    );
     const actions = document.createElement("div");
     actions.className = "settings-actions";
     const save = actionButton("Speichern");
@@ -115,7 +131,7 @@ export class GenerationProfileEditor {
     return {
       name: this.#text("name"),
       blueprint_uid: "default-character",
-      blueprint_version: 3,
+      blueprint_version: 4,
       checkpoint: this.#text("checkpoint"),
       sampler: this.#text("sampler"),
       scheduler: this.#text("scheduler"),
@@ -132,6 +148,7 @@ export class GenerationProfileEditor {
       batch_size: this.#integer("batch_size"),
       image_width: this.#integer("image_width"),
       image_height: this.#integer("image_height"),
+      output_tier: this.#text("output_tier"),
       loras: this.loras.value(),
     };
   }
@@ -233,6 +250,7 @@ function newProfile(capabilities) {
     batch_size: 1,
     image_width: 1024,
     image_height: 1024,
+    output_tier: "full_hd_1080",
     archived: false,
     is_default: false,
     loras: [],

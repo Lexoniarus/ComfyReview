@@ -9,7 +9,9 @@ import pytest
 from comfyreview.application import (
     ComfyUiCapabilities,
     ComfyUiConnectionError,
+    ComfyUiError,
     ComfyUiJobStatus,
+    ComfyUiNotFoundError,
     ComfyUiProtocolError,
     ComfyUiRejectionError,
     ComfyUiSubmission,
@@ -18,6 +20,7 @@ from comfyreview.application import (
     GenerationLoraSelection,
     GenerationMutationError,
     GenerationOutputPolicy,
+    GenerationPromptGroup,
     GenerationPromptSnapshot,
     GenerationReconciliationRequired,
     GenerationRecord,
@@ -26,9 +29,12 @@ from comfyreview.application import (
     GenerationValidationError,
     WorkflowBlueprint,
     WorkflowCompiler,
+    WorkflowConnection,
     WorkflowInputBinding,
+    WorkflowLoraChainBinding,
     WorkflowOutputBinding,
 )
+from comfyreview.domain import PromptAtomUsage
 
 
 def _blueprint() -> WorkflowBlueprint:
@@ -36,9 +42,16 @@ def _blueprint() -> WorkflowBlueprint:
         blueprint_uid="portrait",
         version=1,
         graph={
-            "positive": {"inputs": {"text": ""}},
+            "model": {"inputs": {}},
+            "positive": {"inputs": {"text": "", "clip": ["model", 1]}},
             "negative": {"inputs": {"text": ""}},
-            "save": {"inputs": {"subfolder": "", "prefix": ""}},
+            "save": {
+                "inputs": {
+                    "subfolder": "",
+                    "prefix": "",
+                    "model": ["model", 0],
+                }
+            },
         },
         role_bindings={
             "positive_prompt": WorkflowInputBinding("positive", "text"),
@@ -49,6 +62,12 @@ def _blueprint() -> WorkflowBlueprint:
         output_bindings=(WorkflowOutputBinding("primary", "save"),),
         sampler_roles=(),
         capability_requirements=("SaveImage",),
+        lora_chain_binding=WorkflowLoraChainBinding(
+            model_source=WorkflowConnection("model", 0),
+            clip_source=WorkflowConnection("model", 1),
+            model_targets=(WorkflowInputBinding("save", "model"),),
+            clip_targets=(WorkflowInputBinding("positive", "clip"),),
+        ),
     )
 
 
@@ -72,9 +91,11 @@ class _Blueprints:
         self,
         events: list[str],
         requirements: tuple[str, ...] = ("SaveImage",),
+        upscale_models: tuple[str, ...] = (),
     ) -> None:
         self.events = events
         self.requirements = requirements
+        self.upscale_models = upscale_models
 
     def get(self, blueprint_uid, version):
         self.events.append("blueprint")
@@ -82,6 +103,7 @@ class _Blueprints:
         return replace(
             _blueprint(),
             capability_requirements=self.requirements,
+            upscale_model_requirements=self.upscale_models,
         )
 
 
@@ -114,6 +136,10 @@ class _Generations:
         assert generation_uid == "generation-1"
         return self.record
 
+    def list_active(self, limit):
+        del limit
+        return (self.record,)
+
     def mark_submitting(self, generation_uid):
         return self._set("submitting", "submitting")
 
@@ -142,18 +168,29 @@ class _ComfyUi:
         *,
         submit_error: Exception | None = None,
         wait_result: ComfyUiJobStatus | Exception | None = None,
+        observe_result: ComfyUiJobStatus | Exception | None = None,
         capabilities: tuple[str, ...] = ("SaveImage",),
         loras: tuple[str, ...] = (),
+        upscale_models: tuple[str, ...] = (),
     ) -> None:
         self.events = events
         self.submit_error = submit_error
         self.wait_result = wait_result
+        self.observe_result = observe_result
         self.capabilities = capabilities
         self.loras = loras
+        self.upscale_models = upscale_models
 
     def discover_capabilities(self):
         self.events.append("capabilities")
-        return ComfyUiCapabilities(self.capabilities, (), (), (), self.loras)
+        return ComfyUiCapabilities(
+            self.capabilities,
+            (),
+            (),
+            (),
+            self.loras,
+            self.upscale_models,
+        )
 
     def submit(self, compiled_graph):
         self.events.append("external_submit")
@@ -174,7 +211,12 @@ class _ComfyUi:
         return self.wait_result
 
     def get_status(self, prompt_id):
-        raise AssertionError(prompt_id)
+        self.events.append("external_status")
+        assert prompt_id == "prompt-1"
+        if isinstance(self.observe_result, Exception):
+            raise self.observe_result
+        assert self.observe_result is not None
+        return self.observe_result
 
     def fetch_outputs(self, prompt_id):
         raise AssertionError(prompt_id)
@@ -201,22 +243,59 @@ class _Outputs:
         return False
 
 
+class _LoraContent:
+    def __init__(self) -> None:
+        self.called = False
+
+    def apply(self, selections):
+        self.called = True
+        return tuple(
+            replace(
+                item,
+                position=position,
+                lora_uid="lora-style",
+                content_level="sexy",
+            )
+            for position, item in enumerate(selections)
+        )
+
+
 def _service(
     *,
     generations: _Generations,
     comfyui: _ComfyUi,
     events: list[str],
     requirements: tuple[str, ...] = ("SaveImage",),
+    upscale_models: tuple[str, ...] = (),
     output_error: Exception | None = None,
+    lora_content=None,
+    lora_triggers=None,
+    lora_graph_policy=None,
 ) -> GenerationService:
     return GenerationService(
-        blueprints=_Blueprints(events, requirements),
+        blueprints=_Blueprints(events, requirements, upscale_models),
         compiler=WorkflowCompiler(),
         generations=generations,
         comfyui=comfyui,
         outputs=_Outputs(events, output_error),
         identities=_Identities(),
+        lora_content=lora_content,
+        lora_triggers=lora_triggers,
+        lora_graph_policy=lora_graph_policy,
     )
+
+
+class _InvalidLoraGraph:
+    def validate(self, graph, selections):
+        from comfyreview.application import LoraGraphValidationError
+
+        raise LoraGraphValidationError("disconnected")
+
+
+class _MissingLoraTrigger:
+    def validate(self, selections, positive_atoms, negative_atoms):
+        del selections, positive_atoms, negative_atoms
+        raise ValueError("lora_trigger_required: style trigger")
 
 
 def test_generation_service_submits_without_open_external_transaction() -> (
@@ -245,6 +324,75 @@ def test_generation_service_submits_without_open_external_transaction() -> (
         "external_submit",
         "submitted",
     ]
+
+
+def test_generation_service_resolves_lora_content_before_compilation() -> None:
+    events: list[str] = []
+    policy = _LoraContent()
+    result = _service(
+        generations=_Generations(events),
+        comfyui=_ComfyUi(events, loras=("style.safetensors",)),
+        events=events,
+        lora_content=policy,
+    ).submit(
+        replace(
+            _request(),
+            loras=(
+                GenerationLoraSelection("style.safetensors", 1000, 1000, 0),
+            ),
+        )
+    )
+
+    assert policy.called is True
+    assert result.status == "submitted"
+
+
+def test_generation_service_rejects_invalid_lora_graph_before_persistence() -> (
+    None
+):
+    events: list[str] = []
+    generations = _Generations(events)
+    service = _service(
+        generations=generations,
+        comfyui=_ComfyUi(events, loras=("style.safetensors",)),
+        events=events,
+        lora_graph_policy=_InvalidLoraGraph(),
+    )
+    request = replace(
+        _request(),
+        loras=(GenerationLoraSelection("style.safetensors", 1000, 1000, 0),),
+    )
+
+    with pytest.raises(GenerationValidationError, match="lora_graph_invalid"):
+        service.submit(request)
+
+    assert "prepare" not in events
+    assert "external_submit" not in events
+
+
+def test_generation_service_rejects_missing_lora_trigger_before_persistence() -> (
+    None
+):
+    events: list[str] = []
+    generations = _Generations(events)
+    service = _service(
+        generations=generations,
+        comfyui=_ComfyUi(events, loras=("style.safetensors",)),
+        events=events,
+        lora_triggers=_MissingLoraTrigger(),
+    )
+    request = replace(
+        _request(),
+        loras=(GenerationLoraSelection("style.safetensors", 1000, 1000, 0),),
+    )
+
+    with pytest.raises(
+        GenerationValidationError, match="lora_trigger_required"
+    ):
+        service.submit(request)
+
+    assert "prepare" not in events
+    assert "external_submit" not in events
 
 
 @pytest.mark.parametrize(
@@ -284,6 +432,23 @@ def test_generation_service_submits_without_open_external_transaction() -> (
             replace(_request(), canvas=GenerationCanvas(65, 1024)),
             "image dimensions",
         ),
+        (
+            replace(
+                _request(),
+                prompt=replace(
+                    _request().prompt,
+                    prompt_groups=(
+                        GenerationPromptGroup(
+                            kind="character",
+                            component_uid="character-a",
+                            revision_uid="revision-a",
+                            position=1,
+                        ),
+                    ),
+                ),
+            ),
+            "prompt group positions",
+        ),
     ),
 )
 def test_generation_service_validates_before_dependencies(
@@ -299,6 +464,91 @@ def test_generation_service_validates_before_dependencies(
     assert events == []
 
 
+@pytest.mark.parametrize(
+    ("group", "positive_atoms", "negative_atoms", "message"),
+    (
+        (
+            GenerationPromptGroup("", "component-a", "revision-a", 0),
+            (),
+            (),
+            "prompt group kind",
+        ),
+        (
+            GenerationPromptGroup("character", "", "revision-a", 0),
+            (),
+            (),
+            "component_uid",
+        ),
+        (
+            GenerationPromptGroup("character", "component-a", "", 0),
+            (),
+            (),
+            "revision_uid",
+        ),
+        (
+            GenerationPromptGroup(
+                "character",
+                "component-a",
+                "revision-a",
+                0,
+                candidate_uid="",
+            ),
+            (),
+            (),
+            "candidate_uid",
+        ),
+        (
+            GenerationPromptGroup(
+                "character",
+                "component-a",
+                "revision-a",
+                0,
+                positive_atoms=(PromptAtomUsage("other", 1000),),
+            ),
+            (PromptAtomUsage("hero", 1000),),
+            (),
+            "rendered prompt atoms",
+        ),
+        (
+            GenerationPromptGroup(
+                "character",
+                "component-a",
+                "revision-a",
+                0,
+                negative_atoms=(PromptAtomUsage("other", 1000),),
+            ),
+            (),
+            (PromptAtomUsage("blur", 1000),),
+            "rendered prompt atoms",
+        ),
+    ),
+)
+def test_generation_service_validates_exact_prompt_group_contract(
+    group: GenerationPromptGroup,
+    positive_atoms: tuple[PromptAtomUsage, ...],
+    negative_atoms: tuple[PromptAtomUsage, ...],
+    message: str,
+) -> None:
+    request = replace(
+        _request(),
+        prompt=GenerationPromptSnapshot(
+            "hero",
+            "blur",
+            ("revision-a",),
+            positive_atoms,
+            negative_atoms,
+            (group,),
+        ),
+    )
+
+    with pytest.raises(GenerationValidationError, match=message):
+        _service(
+            generations=_Generations([]),
+            comfyui=_ComfyUi([]),
+            events=[],
+        ).submit(request)
+
+
 def test_generation_service_rejects_unavailable_and_duplicate_loras() -> None:
     events: list[str] = []
     unavailable = replace(
@@ -311,7 +561,7 @@ def test_generation_service_rejects_unavailable_and_duplicate_loras() -> None:
             comfyui=_ComfyUi(events, loras=("available.safetensors",)),
             events=events,
         ).submit(unavailable)
-    assert events == ["capabilities"]
+    assert events == ["blueprint", "capabilities"]
 
     events.clear()
     duplicate = replace(
@@ -337,6 +587,19 @@ def test_generation_service_requires_blueprint_capabilities() -> None:
             comfyui=_ComfyUi(events, capabilities=()),
             events=events,
         ).submit(_request())
+    assert events == ["blueprint", "capabilities"]
+
+
+def test_generation_service_requires_blueprint_upscale_model() -> None:
+    events: list[str] = []
+    with pytest.raises(GenerationValidationError, match="upscale models"):
+        _service(
+            events=events,
+            generations=_Generations(events),
+            comfyui=_ComfyUi(events, upscale_models=()),
+            upscale_models=("example-upscaler.pth",),
+        ).submit(_request())
+
     assert events == ["blueprint", "capabilities"]
 
 
@@ -511,6 +774,102 @@ def test_generation_service_collects_outputs_before_marking_complete() -> None:
 
     assert result.status == "completed"
     assert events[-2:] == ["collect", "completed"]
+
+
+@pytest.mark.parametrize(
+    ("observed", "expected_status", "last_event"),
+    (
+        (
+            ComfyUiJobStatus("prompt-1", "running", False, False),
+            "running",
+            "running",
+        ),
+        (
+            ComfyUiJobStatus("prompt-1", "completed", True, False),
+            "completed",
+            "completed",
+        ),
+        (
+            ComfyUiJobStatus("prompt-1", "failed", False, True, "bad"),
+            "failed",
+            "failed",
+        ),
+        (ComfyUiConnectionError("offline"), "submitted", "external_status"),
+        (ComfyUiTimeoutError("timeout"), "submitted", "external_status"),
+        (
+            ComfyUiNotFoundError("unknown"),
+            "reconciliation_required",
+            "reconcile",
+        ),
+        (
+            ComfyUiError("unexpected"),
+            "reconciliation_required",
+            "reconcile",
+        ),
+    ),
+)
+def test_generation_service_observes_without_resubmitting(
+    observed,
+    expected_status,
+    last_event,
+) -> None:
+    events: list[str] = []
+    generations = _Generations(events)
+    generations.record = GenerationRecord(
+        "generation-1", "submitted", "prompt-1"
+    )
+    service = _service(
+        generations=generations,
+        comfyui=_ComfyUi(events, observe_result=observed),
+        events=events,
+    )
+
+    result = service.observe("generation-1")
+
+    assert result.status == expected_status
+    assert events[-1] == last_event
+    assert "external_submit" not in events
+
+
+def test_generation_service_rejects_observation_without_prompt_identity() -> (
+    None
+):
+    events: list[str] = []
+    generations = _Generations(events)
+    generations.record = GenerationRecord("generation-1", "submitted", None)
+    service = _service(
+        generations=generations,
+        comfyui=_ComfyUi(events),
+        events=events,
+    )
+
+    with pytest.raises(GenerationValidationError):
+        service.observe("generation-1")
+
+
+def test_generation_service_keeps_an_already_running_observation_stable() -> (
+    None
+):
+    events: list[str] = []
+    generations = _Generations(events)
+    generations.record = GenerationRecord(
+        "generation-1", "running", "prompt-1"
+    )
+    service = _service(
+        generations=generations,
+        comfyui=_ComfyUi(
+            events,
+            observe_result=ComfyUiJobStatus(
+                "prompt-1", "running", False, False
+            ),
+        ),
+        events=events,
+    )
+
+    result = service.observe("generation-1")
+
+    assert result.status == "running"
+    assert events[-1] == "external_status"
 
 
 def test_generation_service_marks_failed_collection_for_reconciliation() -> (
