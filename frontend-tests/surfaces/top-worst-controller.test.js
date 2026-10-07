@@ -51,11 +51,17 @@ describe("TopWorstController", () => {
     expect(fixture.rails.close).toHaveBeenCalledWith("inspector");
     await fixture.controller.refresh("image/1");
     expect(fixture.grid.render).toHaveBeenCalledTimes(2);
-    fixture.root.querySelector("[data-image-inspector]")?.click();
-    fixture.root.querySelector("[data-image-action='select']")?.click();
-    expect(fixture.rails.close).toHaveBeenCalledTimes(1);
+    fixture.rails.open("scope");
+    fixture.root.querySelector("[data-scope-navigator]")?.click();
+    fixture.root.querySelector("[data-rail-action]")?.click();
     fixture.root.click();
-    expect(fixture.rails.close).toHaveBeenCalledTimes(2);
+    expect(fixture.rails.close).toHaveBeenCalledWith("scope");
+    fixture.rails.open("inspector");
+    fixture.root.querySelector("[data-image-inspector]")?.click();
+    fixture.root.querySelector("[data-rail-action]")?.click();
+    fixture.root.querySelector("[data-image-action='select']")?.click();
+    fixture.root.click();
+    expect(fixture.rails.close).toHaveBeenCalledWith("inspector");
     await fixture.controller.reload();
     expect(fixture.grid.render).toHaveBeenCalledTimes(3);
     expect(fixture.inspector.empty).toHaveBeenCalledOnce();
@@ -117,7 +123,9 @@ function createFixture(options = {}) {
     "beforeend",
     "<button data-surface-action='top'></button>" +
       "<button data-surface-action='worst'></button>" +
+      "<button data-rail-action='scope'></button>" +
       "<button data-image-action='select' data-image-uid='image-1'></button>" +
+      "<aside data-scope-navigator></aside>" +
       "<aside data-image-inspector></aside>" +
       "<span data-result-count></span>",
   );
@@ -166,15 +174,16 @@ function createFixture(options = {}) {
     dispose: vi.fn(),
   };
   const viewer = { dispose: vi.fn() };
-  let inspectorOpen = false;
+  const openRails = new Set();
   const rails = {
-    open: vi.fn(() => {
-      inspectorOpen = true;
+    open: vi.fn((rail) => {
+      openRails.clear();
+      openRails.add(rail);
     }),
-    close: vi.fn(() => {
-      inspectorOpen = false;
+    close: vi.fn((rail) => {
+      openRails.delete(rail);
     }),
-    isOpen: vi.fn(() => inspectorOpen),
+    isOpen: vi.fn((rail) => openRails.has(rail)),
     isDrawerMode: vi.fn(() => true),
     dispose: vi.fn(),
   };

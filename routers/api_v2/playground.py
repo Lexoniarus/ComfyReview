@@ -65,7 +65,13 @@ class PlaygroundDraftRequest(BaseModel):
 class PlaygroundPromptSource(BaseModel):
     """Select exactly one authoritative prompt source mode."""
 
-    mode: Literal["selection", "revisions", "composition", "image_snapshot"]
+    mode: Literal[
+        "selection",
+        "revisions",
+        "composition",
+        "image_snapshot",
+        "image_adapted",
+    ]
     revision_uids: list[str] = Field(default_factory=list)
     composition_uid: str | None = None
     image_uid: str | None = None
@@ -111,6 +117,7 @@ class PromptRenderPreviewRequest(BaseModel):
 
     positive_atoms: list[PromptAtomRequest]
     negative_atoms: list[PromptAtomRequest]
+    loras: list[PlaygroundDraftLora] = Field(default_factory=list)
 
 
 class PlaygroundEvidenceRequest(PlaygroundDraftGenerationSettings):
@@ -198,7 +205,12 @@ def playground_capabilities(request: Request) -> JSONResponse:
                     "available": item.provider_name in discovery.loras,
                 }
                 for item in definitions
-                if item.content_level is not None and not item.archived
+                if item.latest_revision is not None
+                and (
+                    item.latest_revision.positive_atoms
+                    or item.latest_revision.negative_atoms
+                )
+                and not item.archived
             ],
             "upscale_models": discovery.upscale_models,
             "defaults": {
@@ -216,10 +228,10 @@ def playground_capabilities(request: Request) -> JSONResponse:
 
 @router.get("/playground/components")
 def playground_components(request: Request) -> JSONResponse:
-    """Return active components allowed by workspace content policy."""
+    """Return generator-selectable active and historical components."""
     components = get_application_container(
         request
-    ).playground_service.list_available_components()
+    ).playground_service.list_generator_components()
     return JSONResponse(
         {"components": [component_response(item) for item in components]}
     )
@@ -338,6 +350,27 @@ def prepare_playground_draft(
             source_handoff = container.image_generator_handoffs.get(image_uid)
             draft = service.prepare_image_snapshot(
                 container.image_contexts.get_image(image_uid),
+                overrides=overrides,
+            )
+        elif source_mode == "image_adapted":
+            if source_revisions or source_composition:
+                raise PromptSelectionError(
+                    "adapted image cannot include another prompt source"
+                )
+            image_uid = (
+                payload.prompt_source.image_uid
+                if payload.prompt_source is not None
+                else None
+            )
+            if not image_uid:
+                raise PromptSelectionError("image_uid is required")
+            source_handoff = container.image_generator_handoffs.get(image_uid)
+            if source_handoff.prompt_setup.availability != "complete":
+                raise PromptSelectionError(
+                    "source image prompt attribution is incomplete"
+                )
+            draft = service.prepare_draft(
+                selection_command(payload, concrete_seed),
                 overrides=overrides,
             )
         elif source_mode == "composition":
@@ -486,6 +519,7 @@ def prepare_playground_draft(
                     for item in source_handoff.prompt_setup.loras
                 ]
                 if source_handoff is not None
+                and source_mode == "image_snapshot"
                 else [
                     {
                         "lora_uid": group.selection.lora_uid,
@@ -514,14 +548,39 @@ def render_playground_preview(
 ) -> JSONResponse:
     """Render draft atoms without persisting or submitting a generation."""
     try:
-        positive, negative = get_application_container(
-            request
-        ).prompt_renderer.render_atoms(
-            atom_usages(payload.positive_atoms),
-            atom_usages(payload.negative_atoms),
+        container = get_application_container(request)
+        positive_atoms = atom_usages(payload.positive_atoms)
+        negative_atoms = atom_usages(payload.negative_atoms)
+        resolved = container.lora_drafts.resolve(
+            tuple(
+                GenerationLoraSelection(
+                    name="",
+                    model_strength_milli=round(item.model_strength * 1000),
+                    clip_strength_milli=round(item.clip_strength * 1000),
+                    position=position,
+                    lora_uid=item.lora_uid,
+                    revision_uid=item.revision_uid,
+                )
+                for position, item in enumerate(payload.loras)
+            )
         )
-    except PromptCatalogValidationError as error:
-        return error_response(400, "invalid_prompt_atoms", str(error))
+        if resolved:
+            container.lora_triggers.validate(
+                tuple(item.selection for item in resolved),
+                positive_atoms,
+                negative_atoms,
+            )
+        positive, negative = container.prompt_renderer.render_atoms(
+            positive_atoms,
+            negative_atoms,
+        )
+    except (ContentClassificationError, PromptCatalogValidationError) as error:
+        code = (
+            "lora_trigger_required"
+            if str(error).startswith("lora_trigger_required")
+            else "invalid_prompt_atoms"
+        )
+        return error_response(400, code, str(error))
     return JSONResponse(
         {"positive_prompt": positive, "negative_prompt": negative}
     )

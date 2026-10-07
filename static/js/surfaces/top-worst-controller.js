@@ -157,6 +157,9 @@ export class TopWorstController {
   #handleAction(event) {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    if (this.#shouldCloseScope(target)) {
+      this.rails.close("scope");
+    }
     if (this.#shouldCloseInspector(target)) {
       this.rails.close("inspector");
     }
@@ -177,6 +180,14 @@ export class TopWorstController {
       return false;
     }
     return !target.closest("[data-image-action='select']");
+  }
+
+  /** @param {Element} target */
+  #shouldCloseScope(target) {
+    if (!this.rails.isDrawerMode() || !this.rails.isOpen("scope")) {
+      return false;
+    }
+    return !target.closest("[data-scope-navigator], [data-rail-action]");
   }
 
   /** @param {string} mode */

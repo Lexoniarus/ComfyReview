@@ -154,12 +154,15 @@ describe("Settings components", () => {
     const contentBoxes = root.querySelectorAll("input[type='checkbox']");
     expect(contentBoxes[0].disabled).toBe(true);
     contentBoxes[1].click();
+    expect(contentBoxes[0].disabled).toBe(false);
+    contentBoxes[0].click();
     root
       .querySelector("form")
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     expect(actions.onPreferencesSave).toHaveBeenLastCalledWith(
-      expect.objectContaining({ enabled_content_levels: ["standard", "sexy"] }),
+      expect.objectContaining({ enabled_content_levels: ["sexy"] }),
     );
+    expect(contentBoxes[1].disabled).toBe(true);
     expect(loraRows[0].textContent).toContain("sexy");
     expect(root.textContent).not.toContain("Stufe speichern");
 
@@ -227,7 +230,10 @@ function capabilities() {
       {
         lora_uid: "lora-detail",
         provider_name: "detail.safetensors",
-        content_level: "sexy",
+        latest_revision: {
+          revision_uid: "revision-detail",
+          content_level: "sexy",
+        },
         revision: 2,
       },
     ],

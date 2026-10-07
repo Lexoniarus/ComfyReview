@@ -171,9 +171,9 @@ class WorkspacePreferencesService:
                 "invalid analytics page size"
             )
         levels = preferences.enabled_content_levels
-        if not levels or levels[0] is not ContentLevel.STANDARD:
+        if not levels:
             raise WorkspaceSettingsValidationError(
-                "content levels must start with standard"
+                "at least one content level must be enabled"
             )
         if len(set(levels)) != len(levels):
             raise WorkspaceSettingsValidationError(

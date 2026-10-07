@@ -22,7 +22,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -584,6 +584,10 @@ _REQUIRED_OBJECTS_V13 = {
     "playground_generator_prompt_selections": "table",
     "playground_generator_loras": "table",
 }
+_REQUIRED_OBJECTS_V14 = dict(_REQUIRED_OBJECTS_V13)
+_REQUIRED_LORA_REVISION_COLUMNS_V14 = _REQUIRED_LORA_REVISION_COLUMNS_V12 | {
+    "content_level"
+}
 _REQUIRED_GENERATOR_STATE_COLUMNS_V13 = {
     "singleton_id",
     "checkpoint",
@@ -667,10 +671,10 @@ class CanonicalSchemaManager:
         if current_version == SCHEMA_VERSION:
             self._validate_existing()
             return CanonicalSchemaReport(schema_version=SCHEMA_VERSION)
-        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}:
+        if current_version not in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1 through 12, or "
+                f"{current_version}; expected 1 through 13, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -696,8 +700,10 @@ class CanonicalSchemaManager:
             self._validate_version_ten()
         elif current_version == 11:
             self._validate_version_eleven()
-        else:
+        elif current_version == 12:
             self._validate_version_twelve()
+        else:
+            self._validate_version_thirteen()
 
         legacy_generator_state = self._read_legacy_generator_state(
             legacy_generator_state_path
@@ -737,7 +743,11 @@ class CanonicalSchemaManager:
                     self._upgrade_v10_to_v11(connection)
                 if current_version <= 11:
                     self._upgrade_v11_to_v12(connection)
-                self._upgrade_v12_to_v13(connection, legacy_generator_state)
+                if current_version <= 12:
+                    self._upgrade_v12_to_v13(
+                        connection, legacy_generator_state
+                    )
+                self._upgrade_v13_to_v14(connection)
                 connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
@@ -864,6 +874,9 @@ class CanonicalSchemaManager:
                 connection.commit()
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v12_to_v13(connection, None)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v13_to_v14(connection)
                 connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
@@ -1087,6 +1100,21 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_thirteen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 13:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 13 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V13)
+            self._validate_metadata_version(connection, 13)
+            self._validate_lora_catalog_v12(connection)
+            self._validate_generator_state_v13(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -1095,7 +1123,7 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V13)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V14)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
@@ -1107,6 +1135,7 @@ class CanonicalSchemaManager:
         self._validate_image_geometry_v11(connection)
         self._validate_lora_catalog_v12(connection)
         self._validate_generator_state_v13(connection)
+        self._validate_lora_catalog_v14(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -2140,6 +2169,30 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 13")
 
     @staticmethod
+    def _upgrade_v13_to_v14(connection: sqlite3.Connection) -> None:
+        """Move LoRA safety classification onto immutable trigger revisions."""
+        connection.execute(
+            "ALTER TABLE lora_revisions ADD COLUMN content_level TEXT "
+            "NOT NULL DEFAULT 'standard' CHECK (content_level IN ("
+            "'standard', 'sexy', 'lewd', 'nude', 'explicit'))"
+        )
+        connection.execute(
+            """
+            UPDATE lora_revisions
+            SET content_level = COALESCE((
+                SELECT definition.content_level
+                FROM lora_definitions AS definition
+                WHERE definition.id = lora_revisions.lora_definition_id
+            ), 'standard')
+            """
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '14' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 14")
+
+    @staticmethod
     def _insert_generator_state(
         connection: sqlite3.Connection,
         state: GeneratorStateSnapshot,
@@ -2841,9 +2894,9 @@ class CanonicalSchemaManager:
             "SELECT level FROM workspace_content_levels "
             "WHERE singleton_id = 1 ORDER BY position"
         ).fetchall()
-        if not levels or levels[0] != ("standard",):
+        if not levels:
             raise CanonicalSchemaValidationError(
-                "workspace content levels must start with standard"
+                "workspace must enable at least one content level"
             )
 
     @classmethod
@@ -2914,6 +2967,30 @@ class CanonicalSchemaManager:
         if int(orphaned):
             raise CanonicalSchemaValidationError(
                 "Every LoRA definition requires an immutable revision"
+            )
+
+    @classmethod
+    def _validate_lora_catalog_v14(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        revision_columns = cls._table_column_rows(connection, "lora_revisions")
+        missing = sorted(
+            _REQUIRED_LORA_REVISION_COLUMNS_V14 - revision_columns.keys()
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "LoRA trigger revisions are missing required columns: "
+                + ", ".join(missing)
+            )
+        invalid = connection.execute(
+            "SELECT COUNT(*) FROM lora_revisions "
+            "WHERE content_level NOT IN ("
+            "'standard', 'sexy', 'lewd', 'nude', 'explicit')"
+        ).fetchone()[0]
+        if int(invalid):
+            raise CanonicalSchemaValidationError(
+                "LoRA trigger revisions contain invalid content levels"
             )
 
     @classmethod
@@ -2992,6 +3069,8 @@ class CanonicalSchemaManager:
                 self._validate_version_eleven()
             elif version == 12:
                 self._validate_version_twelve()
+            elif version == 13:
+                self._validate_version_thirteen()
             else:
                 self._validate_existing()
         except (CanonicalSchemaValidationError, sqlite3.DatabaseError):

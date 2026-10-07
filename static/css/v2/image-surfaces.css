@@ -87,6 +87,22 @@
   font-size: var(--font-size-caption);
 }
 
+.ranking-scope .v2-panel-heading,
+.arena-scope .v2-panel-heading,
+.review-scope .v2-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.scope-close {
+  display: none;
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
 .scope-classification select {
   width: 100%;
   padding: 0.45rem 0.55rem;
@@ -336,6 +352,11 @@
     var(--scope-outfit) 50%,
     var(--color-border)
   );
+}
+
+.scope-chip[data-scope-kind="lora"] {
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--line));
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 }
 
 .image-grid-status,
@@ -597,6 +618,10 @@
   }
 
   .ranking-inspector .inspector-close {
+    display: inline-grid;
+  }
+
+  .scope-close {
     display: inline-grid;
   }
 }

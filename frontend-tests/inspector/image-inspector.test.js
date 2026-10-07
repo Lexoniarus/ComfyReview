@@ -31,6 +31,14 @@ describe("ImageInspector", () => {
       classification: "unclassified",
       review_summary: { average_rating: 9, rating_count: 2 },
       scopes: [{ kind: "outfit", name: "Sommerkleid" }],
+      loras: [
+        {
+          lora_uid: "lora-style",
+          provider_name: "style.safetensors",
+          model_strength: 0.75,
+          clip_strength: 0.5,
+        },
+      ],
       prompt_snapshot: {
         positive: "portrait",
         negative: "blur",
@@ -63,6 +71,10 @@ describe("ImageInspector", () => {
     inspector.setCurationOptions(["character_face", "outfit", "custom_set"]);
 
     expect(root.textContent).toContain("Unklassifiziert");
+    expect(root.textContent).toContain("LoRA · style.safetensors");
+    expect(
+      root.querySelector('[data-scope-kind="lora"]')?.getAttribute("title"),
+    ).toBe("Model 0,75 · CLIP 0,50");
     expect(root.textContent).toContain("Ø 9,0 / 10 · 2×");
     expect(root.textContent).toContain("Draft-Override");
     expect(root.textContent).toContain("model.safetensors");

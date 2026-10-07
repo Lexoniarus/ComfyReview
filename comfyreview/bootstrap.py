@@ -37,6 +37,7 @@ from comfyreview.application import (
     LoraCatalogService,
     LoraDraftSelectionService,
     LoraSelectionContentPolicy,
+    LoraTriggerValidationService,
     OutputImageCatalog,
     PlaygroundEvidenceService,
     PlaygroundGenerationPolicy,
@@ -172,6 +173,7 @@ class ApplicationContainer:
     runtime_diagnostics: RuntimeDiagnosticsService
     lora_catalog: LoraCatalogService
     lora_drafts: LoraDraftSelectionService
+    lora_triggers: LoraTriggerValidationService
     image_content_levels: ImageContentLevelService
 
 
@@ -206,6 +208,7 @@ def build_application_container(
         SqliteLoraCatalogRepository(configured.canonical_database_path)
     )
     lora_content = LoraSelectionContentPolicy(lora_catalog)
+    lora_triggers = LoraTriggerValidationService(lora_catalog)
     preferences_repository = SqliteWorkspacePreferencesRepository(
         configured.canonical_database_path
     )
@@ -284,6 +287,7 @@ def build_application_container(
         outputs=generation_output_collector,
         identities=UuidGenerationIdentitySource(),
         lora_content=lora_content,
+        lora_triggers=lora_triggers,
         lora_graph_policy=CompiledLoraGraphPolicy(),
     )
     generation_reconciliation = GenerationReconciliationService(
@@ -436,6 +440,7 @@ def build_application_container(
         lora_drafts=LoraDraftSelectionService(
             lora_catalog, preferences_repository
         ),
+        lora_triggers=lora_triggers,
         image_content_levels=ImageContentLevelService(
             SqliteImageContentLevelRepository(
                 configured.canonical_database_path

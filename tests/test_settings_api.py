@@ -15,12 +15,24 @@ from comfyreview.application import (
     GenerationProfile,
     LoraDefinition,
     LoraReclassificationImpact,
+    LoraRevision,
     RuntimeConfigurationSnapshot,
     RuntimeDiagnostics,
     WorkspacePreferences,
     WorkspaceSettingsValidationError,
 )
 from routers.api_v2.settings import router
+
+
+def _lora_revision(level: ContentLevel, number: int) -> LoraRevision:
+    return LoraRevision(
+        f"revision-{number}",
+        number,
+        1000,
+        1000,
+        level,
+        f"hash-{number}",
+    )
 
 
 class _Preferences:
@@ -114,7 +126,11 @@ class _Diagnostics:
 class _LoraCatalog:
     def __init__(self) -> None:
         self.definition = LoraDefinition(
-            "lora-style", "style.safetensors", ContentLevel.SEXY, 2
+            "lora-style",
+            "style.safetensors",
+            ContentLevel.SEXY,
+            2,
+            latest_revision=_lora_revision(ContentLevel.SEXY, 2),
         )
         self.error: Exception | None = None
 
@@ -127,7 +143,11 @@ class _LoraCatalog:
         if self.error is not None:
             raise self.error
         self.definition = LoraDefinition(
-            "lora-style", provider_name, content_level, 3
+            "lora-style",
+            provider_name,
+            content_level,
+            3,
+            latest_revision=_lora_revision(content_level, 3),
         )
         return self.definition
 
@@ -157,7 +177,7 @@ def test_settings_api_reads_and_updates_canonical_preferences() -> None:
             "review_prioritize_unrated": False,
             "default_curation_set_key": "favorites",
             "curation_set_order": ["favorites", "archive"],
-            "enabled_content_levels": ["standard", "sexy"],
+            "enabled_content_levels": ["sexy"],
         },
     )
 
@@ -176,7 +196,6 @@ def test_settings_api_reads_and_updates_canonical_preferences() -> None:
         is False
     )
     assert container.workspace_preferences.value.enabled_content_levels == (
-        ContentLevel.STANDARD,
         ContentLevel.SEXY,
     )
 
@@ -228,7 +247,7 @@ def test_settings_api_classifies_loras_and_reclassifies_history() -> None:
     )
 
     assert classified.status_code == 200
-    assert classified.json()["content_level"] == "nude"
+    assert classified.json()["latest_revision"]["content_level"] == "nude"
     assert preview.json()["image_count"] == 5
     assert preview.json()["manual_override_count"] == 1
     assert applied.json()["revision"] == 3

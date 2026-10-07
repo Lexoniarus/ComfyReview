@@ -217,7 +217,7 @@ Validate or explicitly upgrade the canonical database:
 ```bash
 python -m comfyreview canonical-db validate
 python -m comfyreview canonical-db upgrade \
-  --output data/comfyreview-v13.sqlite3 \
+  --output data/comfyreview-v14.sqlite3 \
   --backup-dir data/backups/canonical \
   --generator-state data/ui_state/playground_generator_last.json
 python -m comfyreview canonical-db rebuild-image-geometry
@@ -265,18 +265,20 @@ an explicit new-database operation:
 
 ```bash
 python -m comfyreview legacy-provenance audit \
-  --curation migrations/legacy-provenance-curation-v1.json
+  --curation migrations/legacy-provenance-curation-v2.json
 python -m comfyreview legacy-provenance recover \
-  --output data/rehearsals/comfyreview-legacy-provenance-v1.sqlite3
+  --output data/rehearsals/comfyreview-legacy-provenance-v2.sqlite3
 ```
 
 The audit distinguishes embedded recipe evidence, exact catalog matches and
 curated prompt reconstruction. Recovery refuses to overwrite its source,
+requires zero unattributed prompt atoms and zero ambiguous LoRA bindings,
 validates the completed output database and leaves existing current catalog
-revisions unchanged as the latest revisions. Recovered one-off components are
-archived rather than added to the active catalog.
+revisions unchanged as the latest revisions. Recognizable historical variants
+become prior revisions of their real component; no generic remainder component
+is created.
 
-The active application schema is v13. Prompt Catalog revisions and Playground drafts expose
+The active application schema is v14. Prompt Catalog revisions and Playground drafts expose
 ordered positive/negative atom rows with separate numeric weights. Rendered
 whole prompts remain exact provenance snapshots produced by the server; they
 are not a second editable source of truth. Schema v8 stores typed workspace
@@ -294,11 +296,18 @@ nullable rather than being assigned invented current triggers. Schema v13
 stores the Generator's render/seed singleton, prompt-role selections and
 ordered revision-pinned LoRAs in the same canonical database. The optional
 `--generator-state` input imports a validated legacy `generator_v2` snapshot
-only during the explicit copy migration. Standard content visibility is
+only during the explicit copy migration. Schema v14 moves LoRA content
+classification onto the immutable trigger revision. Normalized LoRA usage is
+retained only when its loader is graph-effective and at least one exact
+revision trigger occurs in the matching final prompt scope. Triggerless raw
+loader nodes remain technical provenance but cannot raise an image's content
+level. Standard content visibility is
 enforced by canonical repository queries across
 Top/Worst, Review, Arena, Scopes, Analytics, Catalog evidence and Playground;
 the browser does not reimplement that policy. Existing older databases require
 the explicit backed-up `canonical-db upgrade` command before startup.
+Settings may enable any non-empty subset of the five levels, including a view
+that excludes `Standard`; at least one level must remain enabled.
 
 Generation profiles are no longer an active runtime or HTTP concept; their
 tables remain dormant only for migration compatibility. The Generator owns
@@ -307,13 +316,13 @@ directly. Blueprint v4 executes `VAEDecode -> 4x-AnimeSharp -> ImageSharpen ->
 Lanczos ImageScale -> SaveImage`; missing required nodes or the fixed upscale
 model block submission before a generation is persisted. Settings lists LoRA
 status and links to the single editor in Catalog. Detected LoRAs remain
-separate from their canonical classification. A LoRA is
-selectable only after receiving one workspace-wide content level; detected but
-unclassified files are shown as `Nicht eingestuft`, never as an implied
-Standard selection. Only loader branches connected to a consumed sampler model
-or CLIP input with a non-zero branch strength become normalized generation
-usage. Disconnected historical nodes remain raw provenance but do not affect
-content classification. Top/Worst includes every live image with at least one
+separate from their canonical classification. A LoRA is selectable only when
+its selected revision owns trigger atoms and a typed content level. Detected
+or triggerless historical revisions are visible but cannot be submitted. Only
+loader branches connected to a consumed sampler model or CLIP input with a
+non-zero branch strength and evidenced by a scoped revision trigger become
+normalized generation usage. Disconnected or triggerless historical nodes
+remain raw provenance but do not affect content classification. Top/Worst includes every live image with at least one
 rating, can override an image to any of the five content levels, return it to
 automatic inference, or invoke the existing UID-based delete workflow.
 
@@ -497,12 +506,19 @@ the generation's persisted directory and filename prefix.
 Analytics uses the same `render-guidance-v1` calculation. Every Review,
 Top/Worst, Arena, Analytics, Catalog, Generations and Playground evidence
 action navigates directly through the shared Generator handoff codec.
-Prompt/LoRA handoffs replace the visible “01 Auswahl” state while render-only
-handoffs leave it untouched. There is no tray, toast event or hidden prompt
-snapshot, and no draft exists until “Entwurf erstellen” is pressed. Successful
-handoffs clean their URL parameters; rejected handoffs keep the prior state
-and display the error in the Generator. LoRA revision triggers enter the
-positive prompt exactly once.
+Prompt/LoRA handoffs replace the visible “01 Auswahl” state with fully
+catalog-bound, normally editable component and ordered LoRA controls, while
+render-only handoffs leave it untouched. There is no tray, toast event or
+hidden prompt editor, and no draft exists until “Entwurf erstellen” is
+pressed. Exact image handoffs may restore archived historical component
+revisions; those entries are labelled `Archiv`, remain manually editable and
+are never candidates for random selection. Image cards and inspectors expose
+normalized trigger-evidenced LoRAs alongside component scopes. Successful
+handoffs clean their URL parameters; rejected handoffs
+keep the prior state and display the error in the Generator. LoRA revision
+triggers enter the matching positive or negative prompt exactly once. Removing
+every trigger of a selected LoRA blocks preview and submission before
+persistence.
 
 </details>
 

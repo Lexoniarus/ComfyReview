@@ -396,11 +396,6 @@ def lora_response(definition: LoraDefinition) -> dict[str, object]:
         "display_name": definition.display_name or definition.provider_name,
         "tags": definition.tags,
         "notes": definition.notes,
-        "content_level": (
-            definition.content_level.value
-            if definition.content_level is not None
-            else None
-        ),
         "revision": definition.revision,
         "archived": definition.archived,
         "latest_revision": (
@@ -414,6 +409,7 @@ def lora_revision_response(revision: LoraRevision) -> dict[str, object]:
     return {
         "revision_uid": revision.revision_uid,
         "revision_number": revision.revision_number,
+        "content_level": revision.content_level.value,
         "default_model_strength": (
             revision.default_model_strength_milli / 1000
         ),

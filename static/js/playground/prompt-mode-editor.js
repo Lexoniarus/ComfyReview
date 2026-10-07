@@ -228,8 +228,12 @@ export class PromptModeEditor {
     mode.value = kind === "character" ? "fixed" : "random";
     const component = document.createElement("select");
     component.setAttribute("aria-label", `${label}: Katalogeintrag`);
-    for (const item of components.filter((item) => item.kind === kind))
-      component.append(option(String(item.component_uid), String(item.name)));
+    for (const item of components.filter((item) => item.kind === kind)) {
+      const suffix = item.archived ? " · Archiv" : "";
+      component.append(
+        option(String(item.component_uid), `${String(item.name)}${suffix}`),
+      );
+    }
     component.disabled = mode.value !== "fixed";
     const evidence = document.createElement("div");
     evidence.className = "prompt-reference";

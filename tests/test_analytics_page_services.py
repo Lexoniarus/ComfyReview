@@ -296,6 +296,7 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
         "average_rating": 8.5,
         "image_count": 1,
         "rating_count": 4,
+        "factors": [],
         "best_images": [
             {
                 "image_uid": "",

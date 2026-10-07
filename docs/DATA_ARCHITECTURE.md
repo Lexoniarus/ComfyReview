@@ -1,6 +1,6 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v13 is implemented. Images, reviews, Arena, Curation,
+Status: canonical schema v14 is implemented. Images, reviews, Arena, Curation,
 revisioned prompts and native generation outputs are on the active refactor
 branch, 2026-10-07. Catalog
 authoring and Playground drafts use structured prompt atoms; workspace
@@ -23,10 +23,10 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v13
+## 2. Canonical schema v14
 
 The canonical database uses explicit schema metadata and foreign keys. Schema
-v13 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
+v14 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
 output provenance, v7 normalized prompt-revision atom usages, v8 workspace
 settings/generation profiles, v9 content/canvas settings and v10 output/content
 classification facts:
@@ -50,12 +50,14 @@ classification facts:
 - explicit width/height on generation profiles and concrete generations;
 - profile output tier plus concrete generation target width/height;
 - canonical `lora_definitions` with stable UID, current provider filename,
-  display metadata, workspace content level and archive state;
+  display metadata, dormant legacy content field and archive state;
 - immutable `lora_revisions` plus ordered normalized trigger-atom usages and
-  default Model/CLIP strengths;
+  default Model/CLIP strengths, with the typed content level owned by the
+  revision;
 - normalized `generation_loras` recording stable LoRA identity, filename and
   content-level snapshot actually used, with an exact revision link for new
-  generations and nullable history where no revision is provable;
+  generations; after v14 provenance recovery every retained normalized usage
+  has an exact revision and scoped trigger proof;
 - inferred generation content level;
 - append-only `image_content_level_events` and rebuildable
   `image_content_level_state` for manual overrides;
@@ -67,7 +69,7 @@ classification facts:
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
 a v3-to-v4, v4-to-v5, v5-to-v6, v6-to-v7, v7-to-v8, v8-to-v9, v9-to-v10,
-v10-to-v11, v11-to-v12 or v12-to-v13 migration. The explicit,
+v10-to-v11, v11-to-v12, v12-to-v13 or v13-to-v14 migration. The explicit,
 backed-up command is:
 
 ```text
@@ -149,9 +151,55 @@ Curation and Delete therefore work for canonical PNGs without sidecars.
 The canonical prompt catalog preserves authored material independently
 of whether it has already produced an image. A stable prompt component owns
 immutable prompt revisions. Each revision owns ordered positive and negative
-atom usages. Atom text and numeric weight are separate values; changing text,
-weight or order creates a new revision. Display name, tags and notes remain
-mutable catalog metadata.
+atom usages.
+
+### Known critical semantic defect: atom identity and experimental weight
+
+The current schema and catalog write path incorrectly treat an atom's numeric
+weight as authored prompt-revision truth. Consequently, changing only a weight
+can append a component revision even though the atom and the component's
+structural content are unchanged. This behavior must not be extended or used
+as the basis for future atom recommendations. Correcting it is a high-priority
+data-architecture slice and is not yet implemented.
+
+The required target semantics are:
+
+- a prompt atom has stable identity based on its normalized semantic content;
+  changing that content creates a different atom;
+- a component revision records structural authored truth: atom membership,
+  positive/negative role, order and explicit structural constraints;
+- changing an atom membership or replacing one atom with another creates a
+  component revision, while changing a weight for one Playground experiment
+  does not;
+- every generation records the actual atom usage, including atom identity,
+  weight, scope, position and the source component/revision or other explicit
+  source layer;
+- reviews contribute rebuildable evidence about an atom-weight observation in
+  its recorded context. They never mutate the atom, component or revision;
+- recommendations are calculated estimates with support and uncertainty, not
+  new catalog facts and not proof that one atom caused an image rating.
+
+For example, Aiko using the same atom at weights `0.8`, `1.0` and `1.2` is one
+atom and one unchanged structural Character revision with three observed
+generation usages. Replacing that atom's text creates a new atom and, because
+the Character's membership changed, a new Character revision.
+
+`prompt_atoms` already separates canonical atom text from weights stored on
+usage relations, and generated prompt memberships already retain actual
+weights. However, `prompt_revision_atom_usages` still includes weight in
+revision content, and `atom_learning_stats` is keyed only by atom, prompt
+scope, model branch and weight. It does not preserve Character/component,
+component revision, composition or other Playground context. Edited Playground
+groups are also flattened into final positive/negative atom arrays at
+submission, so an edited usage no longer has authoritative per-atom source
+attribution. These partial mechanisms are insufficient for the target model.
+
+The corrective slice must preserve existing images, rendered prompt snapshots,
+reviews and provenance. Any schema transition must use the normal explicit
+backup/new-output/validation workflow; it must not rewrite the active database
+in place or invent source attribution for ambiguous history.
+
+Display name, tags and notes remain mutable catalog metadata.
 
 `positive_text` and `negative_text` remain immutable renderer-produced
 snapshots for provenance and compatibility. They are not writable catalog
@@ -170,8 +218,10 @@ selection and rendering now consume exact catalog revisions and retain their
 UIDs in each draft. A manual draft edit changes only its structured copy. It
 does not create or mutate a revision. Preview and submission use the same
 server-side renderer. Playground submission uses the native
-`GenerationService`, preserves structured usages, exact rendered snapshots and
-revision IDs, and does not dual-write legacy generation state.
+`GenerationService`, preserves flattened structured usages, exact rendered
+snapshots and selected revision IDs, and does not dual-write legacy generation
+state. The missing authoritative mapping from each edited generation usage to
+its source component/revision is part of the critical corrective slice above.
 
 Legacy prompt migration is explicit:
 
@@ -215,8 +265,8 @@ unlinked: two have ambiguous expression evidence and fourteen have no
 sufficient catalog evidence. There were no conflicts. These are observed data
 results, not hard-coded importer expectations.
 
-The later legacy-provenance recovery does not change schema v12. It completes
-retained generation relationships from three explicitly labelled evidence
+The v14 legacy-provenance recovery completes retained generation relationships
+from three explicitly labelled evidence
 classes: the embedded immutable generation recipe, unique exact snapshot
 matches and a reviewed curation manifest. The commands are intentionally
 separate:
@@ -228,11 +278,13 @@ python -m comfyreview legacy-provenance recover --output NEW_DATABASE
 
 The report is bound to the source database and optional curation file by
 SHA-256. `recover` refuses an in-place target, copies the source through the
-SQLite backup API, applies all revisions and composition links in one
+SQLite backup API, applies all revisions, composition links and evidenced LoRA
+bindings in one
 transaction, validates the result and only then installs the requested output
 file. Existing revision UIDs and contents are untouched. Recovered historical
-revisions are numbered below the pre-existing latest revision; reviewed
-one-off components are inserted archived. Rendered generation prompts remain
+revisions are numbered below the pre-existing latest revision; recognizable
+variants become prior revisions of their real component and no remainder
+component is created. Rendered generation prompts remain
 immutable unless the reviewed curation contains an explicit, source-hash-bound
 fragment correction; recovery then creates a new normalized prompt row and
 relinks only the named generations. Review facts, image identity and
@@ -264,7 +316,7 @@ constants.
 Schema v8 stores one typed workspace-preference row plus an ordered list of
 visible Curation sets. Preferences affect presentation/session defaults; they
 do not rewrite review or curation facts. Generation-profile rows and their
-ordered LoRA relations remain dormant migration compatibility in v13. They are
+ordered LoRA relations remain dormant migration compatibility in v14. They are
 not read by the active runtime, Settings, Playground or V2 API.
 
 New generations persist the concrete LoRA stack used after validation and
@@ -272,10 +324,10 @@ compilation. Capability discovery supplies available names, while the
 `WorkflowCompiler` alone inserts the ordered loader chain into Blueprint v2.
 The ComfyUI provider still receives only a compiled graph. A normalized
 generation LoRA must have at least one non-zero model or CLIP branch connected
-to a sampler-consumed graph path. Historical `loras_json` is retained as raw
-provenance, including disconnected nodes; the explicit audit/recovery path
-imports only graph-effective values and reports unsupported values rather than
-inventing normalized facts.
+to a sampler-consumed graph path and at least one exact trigger from its bound
+revision in the matching final prompt scope. Historical `loras_json` is
+retained as raw provenance, including disconnected or triggerless nodes; the
+explicit audit/recovery path normalizes only fully evidenced values.
 
 Schema v9 adds an ordered content-level relation and validated image width and
 height fields. Without another schema change, every prompt component now stores
@@ -287,19 +339,22 @@ facets, Analytics, Catalog evidence and Playground from the immutable
 generation-level snapshot plus an optional image override. Later catalog edits
 therefore never change historical image visibility implicitly.
 
-Schema v10 makes LoRA classification canonical. Newly discovered provider
-filenames are not usable by a generation request until they have a catalog
-content level. Every generation snapshots each selected LoRA's stable UID,
-resolved filename and level for reproducibility. Its inferred level is the
-maximum of all authored component levels and selected LoRA snapshots. Catalog
-edits affect new generations immediately but do not rewrite history.
+Schema v10 makes stable LoRA identity and generation snapshots canonical.
+Schema v14 makes the immutable trigger revision the classification owner.
+Newly discovered provider filenames are not usable until an available revision
+has trigger atoms and a typed content level. Every retained normalized usage
+snapshots stable UID, exact revision, resolved filename and revision level. Its
+inferred level is the maximum of all authored component levels and only those
+LoRA snapshots whose graph branch and scoped trigger were both evidenced.
+Catalog edits affect new generations and do not silently rewrite history.
 
 Schema v12 gives those definitions immutable functional revisions. Triggers
 use the same canonical weighted atom model as Prompt Catalog content. Changing
 triggers or default strengths appends a revision; display name, tags and notes
 remain mutable metadata. Generation requests carry stable LoRA and revision
 UIDs, while the server resolves the provider filename. Historical usage
-without proof of a revision remains `NULL` and uses its stored prompt snapshot.
+without proof remains only in raw graph provenance; v14 recovery removes it
+from the normalized `generation_loras` relation.
 
 Schema v13 moves the current Generator controls into normalized canonical
 relations. Scalar render/seed settings have one singleton owner; prompt rows
@@ -309,19 +364,38 @@ replace all three parts in one transaction. The previous JSON state is not a
 runtime fallback and can be read only by the explicit v12-to-v13 copy
 migration after strict `generator_v2` validation.
 
+Schema v14 moves the typed LoRA content level onto `lora_revisions`. The old
+definition field is retained only so older copy migrations remain readable.
+New generation rows require an exact revision and snapshot its level only after
+the compiled graph and final scoped prompt prove real use. The offline
+provenance recovery applies the same rule to history and refuses promotion
+unless every active prompt atom and every retained LoRA binding is unambiguous.
+
+The live 2026-10-07 promotion copied the v12 runtime through v13 and v14 into a
+new database before replacement. Its bound audit covered 414 generations and
+393 active images, reported zero unattributed or over-attributed atoms and zero
+ambiguous LoRA bindings, and retained 19 exact trigger-evidenced LoRA usages.
+It removed 832 unsupported normalized usage rows while preserving the stored
+raw graphs. Independent validation reported `integrity_check = ok`, no foreign
+key errors, no retained null LoRA revision and complete editable handoffs for
+all 393 active images when all content levels were enabled. The unchanged v12
+source remains as the promotion backup.
+
 Historical reclassification is a separate two-step operation: preview returns
 the affected generation/image counts and catalog revision, and apply requires
-that exact revision in one transaction. A stale revision or any write failure
-rolls the operation back. Existing manual image overrides remain untouched.
+that exact revision in one transaction. It rebuilds every snapshot from its
+bound immutable revision rather than copying the current catalog level across
+history. A stale revision or any write failure rolls the operation back.
+Existing manual image overrides remain untouched.
 Manual changes append an immutable event and update or remove the current
 projection atomically. The effective level is the override when one exists,
 otherwise the inferred generation level.
 
 Prompt-catalog repair uses the separate `content-levels audit/recover`
-workflow. Its versioned curation enumerates all 791 active and archived stable
+workflow. Its versioned curation enumerates all 803 active and archived stable
 component UIDs and binds each decision to the latest revision UID and content
 hash. The audit binds database and curation hashes and previews component,
-generation and image transitions. Recovery copies the source into a new v11
+generation and image transitions. Recovery copies the source into a new
 database, updates canonical markers and generation snapshots, and removes
 graph-inactive LoRA selections from the normalized relation in one short
 transaction. Raw workflow provenance, source data and manual overrides remain
@@ -436,7 +510,7 @@ added content/canvas settings. That verified live database's `user_version` is 9
 `integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
 pre-v7 backup remains schema v6 with all 729 revisions.
 
-The application requires schema v13. No older database is silently changed at
+The application requires schema v14. No older database is silently changed at
 startup. `canonical-db upgrade` first migrates and validates a new database
 file and preserves the source; installation of the validated output is a
 separate controlled step.

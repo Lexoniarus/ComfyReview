@@ -9,9 +9,10 @@ const numericFields = [
 
 /** @typedef {{kind: string, component_uid: string, revision_uid?: string | null}} PromptScopeSource */
 /** @typedef {{kind: string, component_uid: string, revision_uid?: string | null}} PromptCombinationSelection */
+/** @typedef {{selections: PromptCombinationSelection[], loras: Record<string, unknown>[]}} PromptCombinationPayload */
 /** @typedef {{checkpoint?: string, sampler?: string, scheduler?: string, aspectFormat?: string, resolutionClass?: string, seedMode?: string, seed?: number, steps_min?: number, steps_max?: number, cfg_min?: number, cfg_max?: number, denoise?: number}} RenderSettingsIntent */
-/** @typedef {{kind: "image-prompt", imageUid: string} | {kind: "image-render", imageUid: string} | {kind: "composition", compositionUid: string} | {kind: "scope", scope: PromptScopeSource} | {kind: "combination", selections: PromptCombinationSelection[]} | {kind: "render-settings", settings: RenderSettingsIntent} | {kind: "parameter", parameter: string, value: string}} GeneratorHandoff */
-/** @typedef {RenderSettingsIntent & {promptCompositionUid?: string, promptScope?: PromptScopeSource, promptCombination?: PromptCombinationSelection[], promptImageUid?: string, renderImageUid?: string}} PlaygroundIntent */
+/** @typedef {{kind: "image-prompt", imageUid: string} | {kind: "image-render", imageUid: string} | {kind: "composition", compositionUid: string} | {kind: "scope", scope: PromptScopeSource} | {kind: "combination", selections: PromptCombinationSelection[] | PromptCombinationPayload} | {kind: "render-settings", settings: RenderSettingsIntent} | {kind: "parameter", parameter: string, value: string}} GeneratorHandoff */
+/** @typedef {RenderSettingsIntent & {promptCompositionUid?: string, promptScope?: PromptScopeSource, promptCombination?: PromptCombinationSelection[] | PromptCombinationPayload, promptImageUid?: string, renderImageUid?: string}} PlaygroundIntent */
 
 /** @param {HTMLElement} element @returns {GeneratorHandoff | null} */
 export function intentFromAnalyticsAction(element) {

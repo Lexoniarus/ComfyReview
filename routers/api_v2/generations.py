@@ -275,7 +275,12 @@ def submit_generation(
         PromptCatalogValidationError,
         StopIteration,
     ) as error:
-        return error_response(400, "invalid_generation", str(error))
+        code = (
+            "lora_trigger_required"
+            if str(error).startswith("lora_trigger_required")
+            else "invalid_generation"
+        )
+        return error_response(400, code, str(error))
     if batch.failures:
         return error_response(
             500,

@@ -14,6 +14,7 @@ describe("Combination prompt projection", () => {
         },
       ]),
     ).toEqual({
+      loras: [],
       selections: [
         {
           kind: "scene",

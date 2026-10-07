@@ -29,6 +29,18 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_default_workflow_blueprint.py::"
         "test_default_blueprint_v4_wires_ordered_loras_through_model_and_clip"
     ),
+    "comfyreview.application.lora_usage:LoraUsagePolicy.evidence": (
+        "tests/test_lora_usage.py::"
+        "test_lora_usage_requires_effect_and_exact_scoped_trigger"
+    ),
+    "comfyreview.application.lora_usage:LoraTriggerEvidence.evidenced": (
+        "tests/test_lora_usage.py::"
+        "test_lora_usage_requires_effect_and_exact_scoped_trigger"
+    ),
+    "comfyreview.application.lora_trigger_validation:LoraTriggerValidationService.validate": (
+        "tests/test_lora_usage.py::"
+        "test_lora_trigger_validation_rejects_removed_revision_triggers"
+    ),
     "comfyreview.application.image_generator_handoff:ImageGeneratorHandoffService.get": (
         "tests/test_image_generator_handoff.py::"
         "test_image_handoff_preserves_ordered_typed_prompt_selections"
@@ -280,6 +292,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     "comfyreview.application.playground:PlaygroundService.list_available_components": (
         "tests/test_playground_application.py::"
         "test_playground_content_policy_filters_explicit_levels"
+    ),
+    "comfyreview.application.playground:PlaygroundService.list_generator_components": (
+        "tests/test_playground_application.py::"
+        "test_playground_generator_catalog_includes_archived_components"
     ),
     "comfyreview.application.playground:PromptContentPolicy.filter": (
         "tests/test_playground_application.py::"

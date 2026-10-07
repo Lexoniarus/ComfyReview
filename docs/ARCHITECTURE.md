@@ -1,7 +1,7 @@
 # ComfyReview Architecture
 
 Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, schema-v13 application support and Frontend V2
+analytics, native Generation, schema-v14 application support and Frontend V2
 including Settings are implemented on the active feature branch, 2026-10-07.
 Final user acceptance and integration review remain open.
 
@@ -41,7 +41,7 @@ only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v13 is the active
+The canonical database has an explicit schema version. Schema v14 is the active
 shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
 catalog, records v6 native output roles/content hashes, normalizes ordered
 prompt-revision atom usages in v7 and adds workspace preferences, generation
@@ -71,6 +71,12 @@ and ordered LoRA rows reference exact stable definitions and immutable
 revisions with Model/CLIP strengths in milli-units. The old UI JSON is an
 optional explicit migration source, never a runtime repository.
 
+Schema v14 makes the immutable LoRA trigger revision the owner of its typed
+content level. A normalized generation LoRA must reference that exact revision,
+be graph-effective on Model or CLIP and have at least one exact trigger in the
+matching final prompt scope. The former definition-level content field is
+dormant migration compatibility, not an application or HTTP truth.
+
 Canonical v4 facts include:
 
 - images and generation provenance;
@@ -82,12 +88,17 @@ Canonical v5 additionally includes stable prompt components, immutable prompt
 revisions, explicit compositions and source mappings for audited legacy
 imports. Catalog metadata can change without rewriting revision content.
 Schema v7 makes ordered positive/negative atom usages with separate numeric
-weights the authored revision truth. Rendered whole-prompt columns remain
-derived immutable snapshots, not writable API inputs.
+weights part of authored revision truth. That weight/revision coupling is now
+a known semantic defect, not the target architecture: experimental Playground
+weights belong to concrete generation usages and derived evidence rather than
+to structural component identity. The urgent correction is specified in
+`DATA_ARCHITECTURE.md` and tracked in `REFACTOR_PLAN.md`; it is not yet
+implemented. Rendered whole-prompt columns remain derived immutable snapshots,
+not writable API inputs.
 
 Schema v8 introduced workspace preferences and generation profiles. The
 profile tables and generation profile columns remain dormant migration
-compatibility in v13, but no active container service, V2 endpoint, Settings
+compatibility in v14, but no active container service, V2 endpoint, Settings
 surface or Playground flow reads them. Generations still record the exact
 LoRAs they actually used. A loader is normalized only when a non-zero model or
 CLIP branch reaches a consumed sampler input. Historical `loras_json` and raw
@@ -101,9 +112,10 @@ read model. Services and browser surfaces do not duplicate OR/AND or content
 visibility semantics, and no path, prompt substring or image inspection is
 used to infer a missing level at runtime.
 
-Schema v10 separates automatic and manual classification. Automatic generation
-classification is the strictest level from authored prompt-component tags and
-the content-level snapshots of all graph-effective selected LoRAs. A current image override,
+Schema v10 separates automatic and manual classification. In the current v14
+runtime, automatic generation classification is the strictest level from
+authored prompt-component tags and the content-level snapshots of
+graph-effective, trigger-evidenced LoRA revisions. A current image override,
 when present, wins in either direction. One shared SQLite visibility predicate
 uses the effective level for Ranking, Review, Arena, Scope, Analytics and
 evidence queries. Historical LoRA snapshots change only through an explicit,
@@ -321,7 +333,7 @@ validated before persistence or submission.
 ## 9. Schema lifecycle
 
 Runtime startup validates only the supported canonical schema; it never
-upgrades an unsupported database silently. Canonical v3 through v13
+upgrades an unsupported database silently. Canonical v3 through v14
 changes are available only through `python -m comfyreview canonical-db
 upgrade --output PATH` and are backed up. The v3-to-v4 step migrates writable legacy review
 state into events, projects delete tombstones and replaces old tables with
@@ -353,6 +365,13 @@ database. `--generator-state PATH` may import one strictly validated
 field abort the output migration. The v12 source remains byte-identical and
 runtime startup refuses it until an operator promotes the validated v13 copy.
 
+The v13-to-v14 step adds the revision-owned LoRA content level and backfills
+each immutable revision from its legacy definition value. The separate
+hash-bound `legacy-provenance audit/recover` workflow then proves exact trigger
+usage, removes only unsupported normalized LoRA rows, recomputes affected
+generation levels and requires zero unattributed atoms and zero ambiguous LoRA
+bindings before its copied output can be promoted.
+
 `CompiledLoraGraphPolicy` runs after semantic v4 compilation and before any
 generation row or ComfyUI submission. It requires one ordered loader per
 selection, exact provider filenames/weights, an unbroken Model route to the
@@ -365,6 +384,11 @@ reported as inconsistent canonical data rather than normalized. Existing
 parallel component/revision ID lists remain compatibility fields. Revision IDs
 resolve the immutable prompt atom usages; historical generation prompt
 snapshots remain separate provenance and are not used as a substitute.
+For a complete image handoff, those exact historical revisions populate the
+normal editable Generator slots and ordered LoRA controls. Unchanged handoffs
+render from the authoritative image snapshot; after an explicit slot edit,
+`image_adapted` replaces only that group on the server. Incomplete attribution
+remains viewable as a snapshot but cannot claim editable provenance.
 
 The older multi-file schema lifecycle remains centralized in
 `comfyreview.repositories.sqlite.legacy_schema`. Its explicit
@@ -388,10 +412,13 @@ The canonical cutover is intentionally not the end of the wider refactor.
   `PromptModeEditor` owns each prompt kind's mode, component UID and optional
   immutable revision UID. Fixed selections persist and submit that exact UID;
   old states without one and deliberate component changes use the catalog's
-  current latest revision. The browser treats restored revision UIDs as opaque
-  bindings because its catalog contains only latest revisions; authoritative
-  existence and component ownership validation remains in the Application
-  layer. Random/off choices carry no revision binding. Browser prompt handoffs
+  current latest revision. The Generator catalog includes active components
+  plus archived historical components required by exact image handoffs; the
+  latter are visibly marked and remain excluded from all random candidates.
+  The browser treats restored revision UIDs as opaque bindings;
+  authoritative existence, component ownership and content validation remain
+  in the Application layer. Random/off choices carry no revision binding.
+  Browser prompt handoffs
   have no direct draft-reference path: every supported Image, Scope,
   Composition and Top Combination action navigates directly to the Generator
   and applies to the ordinary visible state before explicit draft creation.
@@ -400,6 +427,9 @@ The canonical cutover is intentionally not the end of the wider refactor.
   replacement and persists the ordinary snapshot before removing the handoff
   URL parameters. Rejected or unpersisted applications restore the prior state
   and retain those parameters. Applying a handoff does not create a draft.
+  Canonical image summaries expose normalized, revision-bound LoRA usages so
+  shared cards and inspectors show the same LoRA factors that the handoff
+  applies; raw or triggerless loader provenance is not presented as usage.
   Analytics Scope actions carry only a typed component/revision source and
   patch that prompt kind; Analytics Composition actions carry only the
   composition UID, resolve its exact ordered revisions through one
@@ -487,6 +517,37 @@ Edits affect a draft copy, can be reordered/reset, and never mutate the source
 revision. The legacy HTML form adapter may parse the supported combined-string
 grammar at its explicit compatibility boundary; it does not reintroduce a
 whole-string application contract.
+
+#### Known critical correction: source-aware atom-weight observations
+
+The current boundary correctly reuses one `prompt_atoms` identity when only a
+weight changes, but it does not carry that distinction through the complete
+catalog and learning model. Catalog revision hashes still include weights, and
+the Generator flattens edited Character, Outfit, Scene and other prompt groups
+into positive/negative arrays before persistence. The selected revision list
+therefore identifies the chosen structural sources, while the actual edited
+atom usages no longer identify which source group contributed each usage.
+
+The target boundary must keep three concepts separate:
+
+1. stable atom identity for normalized semantic content;
+2. structural component revisions for atom membership, role and order;
+3. immutable generation atom usages for the actual weight and explicit source
+   context used by one generation.
+
+Changing an atom's semantic content creates a new atom and, where it changes a
+component membership, a new component revision. Adjusting the same atom's
+weight in the Playground creates only a generation observation. Reviews feed a
+rebuildable, context-aware estimator; they do not revise catalog facts.
+
+The present `atom_learning_stats` projection is insufficient because its key
+contains atom, positive/negative scope, model branch and weight only. The
+replacement or successor projection must be derivable from canonical
+generation/review facts and support Character/component scope plus relevant
+recorded generation context without eagerly materializing a Cartesian product.
+Historical facts with ambiguous atom-source attribution remain explicitly
+unknown rather than being guessed. This correction is required before atom
+weight recommendations are treated as product behavior.
 
 ### 10.3 Canonical analytics boundaries
 

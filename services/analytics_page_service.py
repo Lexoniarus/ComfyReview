@@ -432,6 +432,28 @@ class AnalyticsPageService:
                 "combo_key": item.combo_key,
                 "component_uids": list(item.component_uids),
                 "component_names": list(item.component_names),
+                "factors": [
+                    {
+                        "source": factor.source,
+                        "kind": factor.kind,
+                        "uid": factor.uid,
+                        "name": factor.name,
+                        "revision_uid": factor.revision_uid,
+                        "applicable": factor.applicable,
+                        "reason": factor.reason,
+                        "model_strength": (
+                            factor.model_strength_milli / 1000
+                            if factor.model_strength_milli is not None
+                            else None
+                        ),
+                        "clip_strength": (
+                            factor.clip_strength_milli / 1000
+                            if factor.clip_strength_milli is not None
+                            else None
+                        ),
+                    }
+                    for factor in item.factors
+                ],
                 "label": item.label,
                 "average_rating": item.average_rating,
                 "image_count": item.image_count,

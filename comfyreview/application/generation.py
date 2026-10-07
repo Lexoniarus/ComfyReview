@@ -218,6 +218,17 @@ class GenerationLoraContentPolicy(Protocol):
     ) -> tuple[GenerationLoraSelection, ...]: ...
 
 
+class GenerationLoraTriggerPolicy(Protocol):
+    """Require exact trigger evidence for every selected LoRA revision."""
+
+    def validate(
+        self,
+        selections: tuple[GenerationLoraSelection, ...],
+        positive_atoms: tuple[PromptAtomUsage, ...],
+        negative_atoms: tuple[PromptAtomUsage, ...],
+    ) -> None: ...
+
+
 class GenerationOutputCollection(Protocol):
     """Persist outputs after ComfyUI reports successful completion."""
 
@@ -245,6 +256,7 @@ class GenerationService:
         outputs: GenerationOutputCollection,
         identities: GenerationIdentitySource,
         lora_content: GenerationLoraContentPolicy | None = None,
+        lora_triggers: GenerationLoraTriggerPolicy | None = None,
         lora_graph_policy: CompiledLoraGraphPolicy | None = None,
     ) -> None:
         self._blueprints = blueprints
@@ -254,6 +266,7 @@ class GenerationService:
         self._outputs = outputs
         self._identities = identities
         self._lora_content = lora_content
+        self._lora_triggers = lora_triggers
         self._lora_graph_policy = lora_graph_policy
         self._logger = logging.getLogger("comfyreview.generation")
 
@@ -263,6 +276,15 @@ class GenerationService:
             request = replace(
                 request, loras=self._lora_content.apply(request.loras)
             )
+        if request.loras and self._lora_triggers is not None:
+            try:
+                self._lora_triggers.validate(
+                    request.loras,
+                    request.prompt.positive_atoms,
+                    request.prompt.negative_atoms,
+                )
+            except ValueError as error:
+                raise GenerationValidationError(str(error)) from error
         self._validate(request)
         blueprint = self._blueprints.get(
             request.blueprint_uid,

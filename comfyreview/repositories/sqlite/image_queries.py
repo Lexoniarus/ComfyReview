@@ -21,6 +21,7 @@ from comfyreview.application.image_queries import (
     ImageClassification,
     ImageContext,
     ImageFilter,
+    ImageLoraUsage,
     ImageOrder,
     ImagePage,
     ImageQuery,
@@ -422,8 +423,13 @@ def _map_context_rows(
         return ()
     image_ids = tuple(int(row["image_id"]) for row in rows)
     scopes_by_image = _load_scopes(connection, image_ids)
+    loras_by_image = _load_loras(connection, image_ids)
     return tuple(
-        _map_context(row, scopes_by_image.get(int(row["image_id"]), ()))
+        _map_context(
+            row,
+            scopes_by_image.get(int(row["image_id"]), ()),
+            loras_by_image.get(int(row["image_id"]), ()),
+        )
         for row in rows
     )
 
@@ -477,9 +483,47 @@ def _load_scopes(
     return {image_id: tuple(items) for image_id, items in grouped.items()}
 
 
+def _load_loras(
+    connection: sqlite3.Connection,
+    image_ids: tuple[int, ...],
+) -> dict[int, tuple[ImageLoraUsage, ...]]:
+    placeholders = ", ".join("?" for _image_id in image_ids)
+    rows = connection.execute(
+        f"""
+        SELECT image.id AS image_id, selection.position,
+               selection.lora_uid, revision.revision_uid,
+               selection.lora_name, selection.model_strength_milli,
+               selection.clip_strength_milli
+        FROM images AS image
+        JOIN generation_loras AS selection
+          ON selection.generation_id = image.generation_id
+        JOIN lora_revisions AS revision
+          ON revision.id = selection.lora_revision_id
+        WHERE image.id IN ({placeholders})
+          AND selection.lora_uid IS NOT NULL
+        ORDER BY image.id, selection.position
+        """,
+        image_ids,
+    ).fetchall()
+    grouped: dict[int, list[ImageLoraUsage]] = {}
+    for row in rows:
+        grouped.setdefault(int(row["image_id"]), []).append(
+            ImageLoraUsage(
+                lora_uid=str(row["lora_uid"]),
+                revision_uid=str(row["revision_uid"]),
+                provider_name=str(row["lora_name"]),
+                position=int(row["position"]),
+                model_strength_milli=int(row["model_strength_milli"]),
+                clip_strength_milli=int(row["clip_strength_milli"]),
+            )
+        )
+    return {image_id: tuple(items) for image_id, items in grouped.items()}
+
+
 def _map_context(
     row: sqlite3.Row,
     scope_records: tuple[tuple[ImageScope, str, str], ...],
+    loras: tuple[ImageLoraUsage, ...],
 ) -> ImageContext:
     scopes = tuple(record[0] for record in scope_records)
     positive = str(row["positive_prompt"] or "")
@@ -537,6 +581,7 @@ def _map_context(
             if row["set_key"] is not None
             else None
         ),
+        loras=loras,
         content=ImageContentClassification(
             inferred_level=ContentLevel(str(row["inferred_content_level"])),
             effective_level=ContentLevel(

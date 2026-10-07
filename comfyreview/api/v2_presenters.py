@@ -78,6 +78,17 @@ class ImageResponseMapper:
             "generation_uid": image.generation_uid,
             "classification": image.classification.value,
             "scopes": [self.scope(scope) for scope in image.scopes],
+            "loras": [
+                {
+                    "lora_uid": lora.lora_uid,
+                    "revision_uid": lora.revision_uid,
+                    "provider_name": lora.provider_name,
+                    "position": lora.position,
+                    "model_strength": lora.model_strength_milli / 1000,
+                    "clip_strength": lora.clip_strength_milli / 1000,
+                }
+                for lora in image.loras
+            ],
             "review_summary": {
                 "current_rating": image.review.current_rating,
                 "rating_count": image.review.rating_count,

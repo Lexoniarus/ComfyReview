@@ -322,32 +322,22 @@ def test_playground_fixed_revision_rejects_missing_identity_parts(
 
 
 @pytest.mark.parametrize(
-    ("component_uid", "revision_uid", "component_archived", "message"),
+    ("component_uid", "revision_uid", "message"),
     (
         (
             "character-a",
             "revision-scene",
-            False,
             "does not belong to component",
         ),
-        ("character-a", "missing-revision", False, "unknown prompt revision"),
-        (
-            "character-a",
-            "revision-character-archived",
-            True,
-            "unknown active prompt component",
-        ),
+        ("character-a", "missing-revision", "unknown prompt revision"),
     ),
 )
 def test_playground_fixed_revision_rejects_invalid_revision_binding(
     component_uid: str,
     revision_uid: str,
-    component_archived: bool,
     message: str,
 ) -> None:
-    character = _component(
-        "character-a", "character", archived=component_archived
-    )
+    character = _component("character-a", "character")
     scene = _component("scene-a", "scene")
     archived_projection = replace(
         character,
@@ -385,6 +375,83 @@ def test_playground_fixed_revision_rejects_invalid_revision_binding(
                 character_revision_uid=revision_uid,
             )
         )
+
+
+def test_playground_fixed_revision_accepts_archived_historical_component() -> (
+    None
+):
+    character = _component(
+        "character-a",
+        "character",
+        positive="historical character",
+        archived=True,
+    )
+    historical = replace(
+        character,
+        latest_revision=replace(
+            character.latest_revision,
+            revision_uid="revision-character-archived",
+        ),
+    )
+    catalog = _CatalogService(
+        (character,),
+        exact_revisions=(historical,),
+    )
+
+    draft = _service(catalog).prepare_draft(
+        PromptSelectionCommand(
+            "character-a",
+            disabled_kinds=(
+                "scene",
+                "outfit",
+                "pose",
+                "expression",
+                "lighting",
+                "modifier",
+            ),
+            character_revision_uid="revision-character-archived",
+        )
+    )
+
+    assert draft.prompt.positive_text == "historical character"
+    assert draft.selection.components[0].component.archived is True
+
+
+def test_playground_fixed_revision_requires_current_component_identity() -> (
+    None
+):
+    orphaned = _component("character-orphaned", "character")
+    catalog = _CatalogService((), exact_revisions=(orphaned,))
+
+    with pytest.raises(PromptSelectionError, match="unknown prompt component"):
+        _service(catalog).prepare_draft(
+            PromptSelectionCommand(
+                "character-orphaned",
+                disabled_kinds=(
+                    "scene",
+                    "outfit",
+                    "pose",
+                    "expression",
+                    "lighting",
+                    "modifier",
+                ),
+                character_revision_uid=(orphaned.latest_revision.revision_uid),
+            )
+        )
+
+
+def test_playground_generator_catalog_includes_archived_components() -> None:
+    service = _service(_CatalogService(_catalog()))
+
+    available = service.list_available_components()
+    generator = service.list_generator_components()
+
+    assert "scene-archived" not in {
+        component.component_uid for component in available
+    }
+    assert "scene-archived" in {
+        component.component_uid for component in generator
+    }
 
 
 def test_playground_random_character_keeps_latest_catalog_revision() -> None:
@@ -438,7 +505,7 @@ def test_playground_exact_revision_does_not_bypass_content_policy() -> None:
 
     with pytest.raises(
         PromptSelectionError,
-        match="unknown active prompt component",
+        match="disabled content level",
     ):
         _service(catalog).prepare_draft(
             PromptSelectionCommand(
@@ -964,7 +1031,13 @@ class _CatalogService:
         include_archived: bool = False,
     ) -> tuple[PromptComponent, ...]:
         self.calls.append(include_archived)
-        return self.components
+        if include_archived:
+            return self.components
+        return tuple(
+            component
+            for component in self.components
+            if not component.archived
+        )
 
     def list_components_for_revisions(
         self,

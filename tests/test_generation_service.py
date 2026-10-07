@@ -267,6 +267,7 @@ def _service(
     upscale_models: tuple[str, ...] = (),
     output_error: Exception | None = None,
     lora_content=None,
+    lora_triggers=None,
     lora_graph_policy=None,
 ) -> GenerationService:
     return GenerationService(
@@ -277,6 +278,7 @@ def _service(
         outputs=_Outputs(events, output_error),
         identities=_Identities(),
         lora_content=lora_content,
+        lora_triggers=lora_triggers,
         lora_graph_policy=lora_graph_policy,
     )
 
@@ -286,6 +288,12 @@ class _InvalidLoraGraph:
         from comfyreview.application import LoraGraphValidationError
 
         raise LoraGraphValidationError("disconnected")
+
+
+class _MissingLoraTrigger:
+    def validate(self, selections, positive_atoms, negative_atoms):
+        del selections, positive_atoms, negative_atoms
+        raise ValueError("lora_trigger_required: style trigger")
 
 
 def test_generation_service_submits_without_open_external_transaction() -> (
@@ -354,6 +362,31 @@ def test_generation_service_rejects_invalid_lora_graph_before_persistence() -> (
     )
 
     with pytest.raises(GenerationValidationError, match="lora_graph_invalid"):
+        service.submit(request)
+
+    assert "prepare" not in events
+    assert "external_submit" not in events
+
+
+def test_generation_service_rejects_missing_lora_trigger_before_persistence() -> (
+    None
+):
+    events: list[str] = []
+    generations = _Generations(events)
+    service = _service(
+        generations=generations,
+        comfyui=_ComfyUi(events, loras=("style.safetensors",)),
+        events=events,
+        lora_triggers=_MissingLoraTrigger(),
+    )
+    request = replace(
+        _request(),
+        loras=(GenerationLoraSelection("style.safetensors", 1000, 1000, 0),),
+    )
+
+    with pytest.raises(
+        GenerationValidationError, match="lora_trigger_required"
+    ):
         service.submit(request)
 
     assert "prepare" not in events

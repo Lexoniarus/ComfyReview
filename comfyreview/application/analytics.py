@@ -43,6 +43,21 @@ class PromptMatchPreview:
 
 
 @dataclass(frozen=True, slots=True)
+class PromptFactor:
+    """Describe one component or LoRA factor usable by the Generator."""
+
+    source: str
+    kind: str
+    uid: str
+    name: str
+    revision_uid: str | None = None
+    applicable: bool = True
+    reason: str | None = None
+    model_strength_milli: int | None = None
+    clip_strength_milli: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ObservedPromptCombination:
     """Describe one generated canonical prompt-component combination."""
 
@@ -55,6 +70,7 @@ class ObservedPromptCombination:
     image_count: int
     total_rating_count: int
     best_images: tuple[AnalyticsImage, ...]
+    factors: tuple[PromptFactor, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

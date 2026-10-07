@@ -32,7 +32,7 @@ export class LoraStackEditor {
             default_clip_strength: Number(
               item.latest_revision?.default_clip_strength ?? 1,
             ),
-            content_level: item.content_level || null,
+            content_level: item.latest_revision?.content_level || null,
             available: item.available !== false,
           },
     );

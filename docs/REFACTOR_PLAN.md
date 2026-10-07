@@ -1,6 +1,6 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover, structured prompt catalog, schema-v13
+Status: the canonical backend cutover, structured prompt catalog, schema-v14
 data migration and Frontend V2 overhaul are implemented on
 `feature/lora-catalog-handoff`, 2026-10-07. Analytics collections are bounded,
 Playground handoffs are explicit, generation profiles are dormant migration
@@ -338,7 +338,7 @@ constants.
 - Blueprint v4 owns the fixed AnimeSharp/sharpen/Lanczos output path and maps
   only semantic target geometry roles; capability validation blocks missing
   nodes or `example-upscaler.pth` before persistence/submission;
-- Settings classifies detected LoRAs workspace-wide and offers explicit,
+- Settings creates classified LoRA trigger revisions and offers explicit,
   revision-checked preview/apply commands for historical reclassification;
 - unclassified LoRAs cannot be added to a Playground request;
 - Top/Worst can raise, lower or inherit an image level and reuses the existing
@@ -440,10 +440,79 @@ constants.
 - Playwright proves exact LoRA weights through reload, draft, generation row,
   compiled loader and Fake-ComfyUI submission, with one trigger atom.
 
+### Complete prompt attribution and trigger-based LoRA safety (implemented)
+
+- schema v14 places content level on the immutable LoRA trigger revision; the
+  definition-level field is dormant migration compatibility;
+- `LoraUsagePolicy` requires both graph effect and an exact trigger in the
+  matching positive/negative final-prompt scope; weights may differ;
+- preview and submission reject a selected LoRA with all revision triggers
+  removed before any generation persistence or ComfyUI call;
+- hash-bound `legacy-provenance audit/recover` creates recognizable historical
+  component and LoRA revisions, removes unsupported normalized LoRA rows,
+  recomputes inferred levels and requires zero unattributed atoms or ambiguous
+  bindings;
+- complete image handoff replaces all seven component controls and the ordered
+  LoRA layer with normal editable catalog state; unchanged input uses the
+  authoritative snapshot and an explicit edit switches to `image_adapted`;
+- Top-2/Top-3 are observed factors per character, where the character is the
+  group and Scene, Outfit, Pose, Expression, Lighting, Modifier and evidenced
+  LoRAs are the ranked factors.
+- the explicit live promotion on 2026-10-07 preserved the v12 source, upgraded
+  through v13 and v14, audited 414 generations with no unattributed atoms or
+  ambiguous LoRA bindings, retained 19 evidenced LoRA usages and verified
+  complete editable handoffs for all 393 active images;
+- the closing shared gate passed 638 Python tests, 159 frontend tests and 12
+  Playwright scenarios with 100% Python-Core and frontend statement coverage.
+
+### Urgent corrective slice: atom identity and weight evidence (planned)
+
+Status: required as soon as possible; documented on 2026-10-07, not yet
+implemented or validated.
+
+The structured-prompt slice made atom text and numeric weight separate columns,
+but it incorrectly made both values part of immutable component-revision
+truth. That conflates a stable atom with an experimental Playground usage and
+fragments component history when only a weight changes. The existing
+`atom_learning_stats` projection also lacks Character/component, component
+revision and composition context, while edited prompt groups are flattened
+before generation persistence and lose authoritative per-atom source
+attribution.
+
+The corrective slice must establish these invariants:
+
+- normalized semantic content identifies an atom; changed content creates a
+  different atom;
+- component revisions change for structural atom membership, role or order,
+  not for a per-generation weight experiment;
+- every new generation persists actual atom weight plus explicit source layer,
+  component and revision context where applicable;
+- review/delete events produce rebuildable contextual atom-weight evidence and
+  never mutate catalog facts;
+- calculated recommendations expose support and uncertainty and do not claim
+  causal proof from whole-image ratings;
+- observed contexts are queried or projected from real generations without a
+  precomputed Cartesian product;
+- legacy source attribution is preserved only when provable and otherwise
+  remains explicitly unknown;
+- the schema migration writes and validates a new database, preserves images,
+  generations, rendered prompt snapshots, reviews and stable identities, and
+  never overwrites the source database in place.
+
+Before implementation, the slice requires an explicit domain contract and
+migration design covering catalog-authored defaults or constraints, duplicate
+atoms across selected components, LoRA trigger sources, draft additions and
+removals, historical overridden prompts and the context dimensions allowed in
+the estimator. Completion requires behavior, rollback, migration, architecture
+and analytics tests plus the complete shared quality gate.
+
 ## Final acceptance remaining
 
-The implementation slices and automated integration gates are complete. The
-live database upgrade/rebuild and real Blueprint-v4 Portrait/Landscape ComfyUI
+The previously completed implementation slices and their automated integration
+gates remain valid for their stated scope, but the project is not at final
+architectural acceptance while the urgent atom identity/weight correction
+above remains planned. The live database upgrade/rebuild and real Blueprint-v4
+Portrait/Landscape ComfyUI
 smokes were completed successfully on 2026-10-05. On 2026-10-06 the owned
 lifecycle worker completed the newest retained ComfyUI job, and the four jobs
 whose history had expired were recovered through the explicit strict output
@@ -456,9 +525,10 @@ The acceptance audit additionally repaired 165 historical generation snapshots
 for the already-classified Explicit `example-lora-2.safetensors` LoRA
 through the existing revision-checked preview/apply service. No name-based LoRA
 heuristic or unreviewed bulk reclassification was introduced.
-The generator dead-path audit and automated acceptance are complete. Remaining
-integration work is limited to user-facing visual acceptance and opening the
-replacement pull request. No automatic merge is planned.
+The generator dead-path audit and its automated acceptance are complete. In
+addition to user-facing visual acceptance and opening the replacement pull
+request, final integration now requires the corrective atom-identity and
+weight-evidence slice above. No automatic merge is planned.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the

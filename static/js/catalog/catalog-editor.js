@@ -210,7 +210,7 @@ export class CatalogEditor {
     const contentLevel = selectField(
       "Inhaltsstufe",
       contentLevels,
-      lora?.content_level || "standard",
+      lora?.latest_revision?.content_level || "standard",
     );
     const tags = textField(
       "Tags, komma-getrennt",

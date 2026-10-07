@@ -201,6 +201,41 @@ describe("Playground browser components", () => {
     editor.dispose();
   });
 
+  it("restores archived catalog components and labels them explicitly", () => {
+    const root = document.createElement("div");
+    const editor = new PromptModeEditor(root);
+    const archivedScene = {
+      ...component("scene-legacy", "scene", "Legacy Rooftop"),
+      archived: true,
+    };
+
+    editor.render([components[0], archivedScene]);
+    expect(
+      editor.applyState({
+        selections: [
+          {
+            kind: "character",
+            mode: "fixed",
+            component_uid: "character-a",
+            revision_uid: "revision-character-a-latest",
+          },
+          {
+            kind: "scene",
+            mode: "fixed",
+            component_uid: "scene-legacy",
+            revision_uid: "revision-scene-legacy-latest",
+          },
+        ],
+        loras: [],
+      }),
+    ).toEqual([]);
+
+    const sceneRow = root.querySelector('.prompt-mode-row[data-kind="scene"]');
+    expect(sceneRow.querySelectorAll("select")[1].value).toBe("scene-legacy");
+    expect(sceneRow.textContent).toContain("Legacy Rooftop · Archiv");
+    editor.dispose();
+  });
+
   it("applies a Combination patch with latest revisions and preserves other roles", () => {
     const root = document.createElement("div");
     const editor = new PromptModeEditor(root);
@@ -1247,7 +1282,11 @@ describe("Playground browser components", () => {
           image_count: 2,
           rating_count: 4,
           average_rating: 8.5,
-          component_uids: ["character-a", "scene-a"],
+          factors: [
+            promptFactor("character", "character-a"),
+            promptFactor("scene", "scene-a"),
+            promptFactor("outfit", "outfit-a"),
+          ],
           best_images: [
             { url: "best.png" },
             { url: "second.png" },
@@ -1257,6 +1296,11 @@ describe("Playground browser components", () => {
         },
         {
           label: "Hina + Park",
+          factors: [
+            promptFactor("character", "character-b"),
+            promptFactor("scene", "scene-b"),
+            promptFactor("pose", "pose-b"),
+          ],
           best_images: [{ url: "" }, { url: "hina.png" }],
         },
         null,
@@ -1265,7 +1309,9 @@ describe("Playground browser components", () => {
     });
 
     expect(root.textContent).toContain("Top 2er-Kombinationen");
-    expect(root.textContent).toContain("Charakter + Szene + Outfit");
+    expect(root.textContent).toContain(
+      "Zwei tatsächlich gemeinsam verwendete Faktoren",
+    );
     expect(root.textContent).toContain("Aiko + Rooftop");
     expect(root.textContent).toContain("2 Bilder · 4 Bewertungen · Ø 8,5 / 10");
     expect(root.textContent).toContain("Noch keine ausreichend belegten");
@@ -1366,13 +1412,30 @@ describe("Playground browser components", () => {
           two_component: [
             {
               label: "Aiko + Rooftop",
-              component_uids: ["character-a", "scene-a"],
+              factors: [
+                promptFactor("character", "character-a"),
+                promptFactor("scene", "scene-a"),
+                promptFactor("outfit", "outfit-a"),
+              ],
             },
           ],
           three_component: [
             {
               label: "Aiko + Rooftop + Uniform",
-              component_uids: ["character-a", "scene-a", "outfit-a"],
+              factors: [
+                promptFactor("character", "character-a"),
+                promptFactor("scene", "scene-a"),
+                promptFactor("outfit", "outfit-a"),
+                {
+                  source: "lora",
+                  kind: "lora",
+                  uid: "lora-style",
+                  revision_uid: "lora-style-current",
+                  applicable: true,
+                  model_strength: 0.8,
+                  clip_strength: 0.7,
+                },
+              ],
             },
           ],
         },
@@ -1387,18 +1450,32 @@ describe("Playground browser components", () => {
     expect(actions[0].dataset.promptCombination).toBeUndefined();
     const twoComponentIntent = {
       kind: "combination",
-      selections: [
-        { kind: "character", component_uid: "character-a", revision_uid: null },
-        { kind: "scene", component_uid: "scene-a", revision_uid: null },
-      ],
+      selections: {
+        selections: [
+          promptSelection("character", "character-a"),
+          promptSelection("scene", "scene-a"),
+          promptSelection("outfit", "outfit-a"),
+        ],
+        loras: [],
+      },
     };
     const threeComponentIntent = {
       kind: "combination",
-      selections: [
-        { kind: "character", component_uid: "character-a", revision_uid: null },
-        { kind: "scene", component_uid: "scene-a", revision_uid: null },
-        { kind: "outfit", component_uid: "outfit-a", revision_uid: null },
-      ],
+      selections: {
+        selections: [
+          promptSelection("character", "character-a"),
+          promptSelection("scene", "scene-a"),
+          promptSelection("outfit", "outfit-a"),
+        ],
+        loras: [
+          {
+            lora_uid: "lora-style",
+            revision_uid: "lora-style-current",
+            model_strength: 0.8,
+            clip_strength: 0.7,
+          },
+        ],
+      },
     };
     actions[0].click();
     actions[1].click();
@@ -1416,7 +1493,15 @@ describe("Playground browser components", () => {
     const navigator = { open: vi.fn(), openIntent: vi.fn() };
     const view = new TopCombinationsView(root, navigator);
     view.render({
-      two_component: [{ component_uids: ["character-a", "scene-a"] }],
+      two_component: [
+        {
+          factors: [
+            promptFactor("character", "character-a"),
+            promptFactor("scene", "scene-a"),
+            promptFactor("outfit", "outfit-a"),
+          ],
+        },
+      ],
     });
     const action = root.querySelector(
       ".playground-combination-generator-action",
@@ -1434,21 +1519,59 @@ describe("Playground browser components", () => {
     const view = new TopCombinationsView(root, navigator);
     view.render({
       two_component: [
-        { component_uids: ["character-a"] },
-        { component_uids: ["character-a", " "] },
+        { factors: [promptFactor("character", "character-a")] },
+        {
+          factors: [
+            promptFactor("character", "character-a"),
+            { source: "component", kind: "scene", uid: "" },
+            promptFactor("outfit", "outfit-a"),
+          ],
+        },
+        {
+          factors: [
+            promptFactor("character", "character-a"),
+            { ...promptFactor("scene", "scene-a"), applicable: false },
+            promptFactor("outfit", "outfit-a"),
+          ],
+        },
+        {
+          factors: [
+            promptFactor("character", "character-a"),
+            { source: "unknown", uid: "unknown-a" },
+            promptFactor("outfit", "outfit-a"),
+          ],
+        },
+        {
+          factors: [
+            promptFactor("character", "character-a"),
+            { source: "lora", kind: "lora", uid: "lora-without-revision" },
+            promptFactor("outfit", "outfit-a"),
+          ],
+        },
       ],
-      three_component: [{ component_uids: ["character-a", "scene-a"] }],
+      three_component: [
+        { factors: [promptFactor("character", "character-a")] },
+      ],
     });
 
     const rejectedActions = root.querySelectorAll(
       ".playground-combination-handoff-error",
     );
-    expect(rejectedActions).toHaveLength(3);
+    expect(rejectedActions).toHaveLength(6);
     expect(root.textContent).toContain(
-      "Generator-Handoff abgewiesen: Erwartet werden exakt 2 Komponenten.",
+      "Generator-Handoff abgewiesen: Die Kombination ist unvollständig.",
     );
     expect(root.textContent).toContain(
-      "Generator-Handoff abgewiesen: Komponente für scene fehlt.",
+      "Generator-Handoff abgewiesen: Komponentenfaktor fehlt.",
+    );
+    expect(root.textContent).toContain(
+      "Generator-Handoff abgewiesen: Faktor nicht verfügbar",
+    );
+    expect(root.textContent).toContain(
+      "Generator-Handoff abgewiesen: Unbekannter Faktor.",
+    );
+    expect(root.textContent).toContain(
+      "Generator-Handoff abgewiesen: LoRA-Faktor fehlt.",
     );
     expect(root.querySelector("[data-prompt-combination]")).toBeNull();
     root.querySelectorAll("button").forEach((button) => button.click());
@@ -1466,6 +1589,24 @@ function component(componentUid, kind, name) {
       revision_uid: `revision-${componentUid}-latest`,
       revision_number: 1,
     },
+  };
+}
+
+function promptFactor(kind, uid) {
+  return {
+    source: "component",
+    kind,
+    uid,
+    revision_uid: `revision-${uid}`,
+    applicable: true,
+  };
+}
+
+function promptSelection(kind, componentUid) {
+  return {
+    kind,
+    component_uid: componentUid,
+    revision_uid: `revision-${componentUid}`,
   };
 }
 

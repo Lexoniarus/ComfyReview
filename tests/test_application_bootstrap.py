@@ -28,6 +28,7 @@ from comfyreview.application import (
     ImageGeneratorHandoffService,
     LoraCatalogService,
     LoraDraftSelectionService,
+    LoraTriggerValidationService,
     OutputImageReadModel,
     PlaygroundEvidenceService,
     PlaygroundGenerationSweepPolicy,
@@ -193,6 +194,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         runtime_diagnostics=cast(RuntimeDiagnosticsService, object()),
         lora_catalog=cast(LoraCatalogService, object()),
         lora_drafts=cast(LoraDraftSelectionService, object()),
+        lora_triggers=cast(LoraTriggerValidationService, object()),
         image_content_levels=cast(ImageContentLevelService, object()),
     )
 

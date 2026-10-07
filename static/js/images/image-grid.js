@@ -119,6 +119,15 @@ function imageCard(item, rank, createGeneratorActions) {
     chip.textContent = String(scope.name || "");
     scopes.append(chip);
   }
+  for (const lora of /** @type {Array<Record<string, unknown>>} */ (
+    item.loras || []
+  ).slice(0, 1)) {
+    const chip = document.createElement("span");
+    chip.className = "scope-chip";
+    chip.dataset.scopeKind = "lora";
+    chip.textContent = `LoRA · ${String(lora.provider_name || lora.lora_uid || "Unbekannt")}`;
+    scopes.append(chip);
+  }
   const expand = document.createElement("button");
   expand.type = "button";
   expand.className = "icon-button";

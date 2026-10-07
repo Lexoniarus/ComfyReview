@@ -258,7 +258,27 @@ class ContentLevelAuditor:
             ORDER BY generation.id
             """
         ):
-            inactive_positions = _inactive_lora_positions(row)
+            stored_positions = {
+                int(item[0])
+                for item in connection.execute(
+                    "SELECT position FROM generation_loras "
+                    "WHERE generation_id = ?",
+                    (int(row["id"]),),
+                )
+            }
+            inactive_positions = tuple(
+                sorted(
+                    (
+                        set(_inactive_lora_positions(row))
+                        | set(
+                            _unevidenced_lora_positions(
+                                connection, int(row["id"])
+                            )
+                        )
+                    )
+                    & stored_positions
+                )
+            )
             levels = [ContentLevel.STANDARD]
             levels.extend(
                 curated[str(member[0])]
@@ -521,6 +541,45 @@ def _inactive_lora_positions(row: sqlite3.Row) -> tuple[int, ...]:
         if node_id and node_id not in effective_node_ids:
             inactive.append(position)
     return tuple(inactive)
+
+
+def _unevidenced_lora_positions(
+    connection: sqlite3.Connection,
+    generation_id: int,
+) -> tuple[int, ...]:
+    """Return selections without an exact scoped trigger in the prompt."""
+    rows = connection.execute(
+        """
+        SELECT selection.position, selection.lora_revision_id,
+               EXISTS (
+                   SELECT 1
+                   FROM lora_revision_atom_usages AS trigger
+                   JOIN prompt_atoms AS trigger_atom
+                     ON trigger_atom.id = trigger.atom_id
+                   JOIN generations AS generation ON generation.id = ?
+                   JOIN prompt_memberships AS membership
+                     ON membership.prompt_id = CASE trigger.scope
+                         WHEN 'pos' THEN generation.positive_prompt_id
+                         ELSE generation.negative_prompt_id
+                     END
+                   JOIN prompt_atoms AS prompt_atom
+                     ON prompt_atom.id = membership.atom_id
+                   WHERE trigger.revision_id = selection.lora_revision_id
+                     AND lower(trim(prompt_atom.canonical_text)) =
+                         lower(trim(trigger_atom.canonical_text))
+               ) AS trigger_evidenced
+        FROM generation_loras AS selection
+        WHERE selection.generation_id = ?
+        ORDER BY selection.position
+        """,
+        (generation_id, generation_id),
+    ).fetchall()
+    return tuple(
+        int(row["position"])
+        for row in rows
+        if row["lora_revision_id"] is None
+        or not bool(row["trigger_evidenced"])
+    )
 
 
 def _generation_graph(row: sqlite3.Row) -> dict[str, Any] | None:

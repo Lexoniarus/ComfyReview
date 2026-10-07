@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -36,6 +37,8 @@ class ImageGenerationFacts:
 
     sampler_stages: tuple[GenerationStageSummary, ...]
     loras: tuple[ImageLoraSnapshot, ...]
+    attributed_positive_atoms: tuple[PromptAtomUsage, ...] = ()
+    attributed_negative_atoms: tuple[PromptAtomUsage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,13 +143,26 @@ class ImageGeneratorHandoffService:
                 and lora.provider_name not in available_loras
             ):
                 prompt_issues.append(f"lora_unavailable:{lora.provider_name}")
-        availability = (
-            "grouped"
-            if image.scopes and not image.prompt_snapshot.draft_overridden
-            else "exact"
-            if image.scopes
-            else "snapshot_only"
+        positive_atoms = prompt_atom_usages_from_text(
+            image.prompt_snapshot.positive
         )
+        negative_atoms = prompt_atom_usages_from_text(
+            image.prompt_snapshot.negative
+        )
+        complete = (
+            bool(selections)
+            and self._atoms_match(
+                positive_atoms,
+                facts.attributed_positive_atoms,
+            )
+            and self._atoms_match(
+                negative_atoms,
+                facts.attributed_negative_atoms,
+            )
+        )
+        if not complete:
+            prompt_issues.append("unattributed_prompt_atoms")
+        availability = "complete" if complete else "snapshot_only"
         prompt = PromptSetupHandoff(
             source_image_uid=image.image_uid,
             availability=availability,
@@ -155,12 +171,8 @@ class ImageGeneratorHandoffService:
                 scope.component_uid for scope in image.scopes
             ),
             revision_uids=tuple(scope.revision_uid for scope in image.scopes),
-            positive_atoms=prompt_atom_usages_from_text(
-                image.prompt_snapshot.positive
-            ),
-            negative_atoms=prompt_atom_usages_from_text(
-                image.prompt_snapshot.negative
-            ),
+            positive_atoms=positive_atoms,
+            negative_atoms=negative_atoms,
             draft_overridden=image.prompt_snapshot.draft_overridden,
             loras=loras,
             issues=tuple(dict.fromkeys(prompt_issues)),
@@ -264,6 +276,18 @@ class ImageGeneratorHandoffService:
                 )
             )
         return tuple(result)
+
+    @staticmethod
+    def _atoms_match(
+        prompt: tuple[PromptAtomUsage, ...],
+        attributed: tuple[PromptAtomUsage, ...],
+    ) -> bool:
+        def key(atom: PromptAtomUsage) -> str:
+            return " ".join(atom.text.casefold().split())
+
+        return Counter(key(atom) for atom in prompt) == Counter(
+            key(atom) for atom in attributed
+        )
 
     def _availability(
         self,

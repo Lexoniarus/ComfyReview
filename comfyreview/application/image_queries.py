@@ -196,6 +196,18 @@ class CurationSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ImageLoraUsage:
+    """Expose one normalized, graph-effective LoRA used by a generation."""
+
+    lora_uid: str
+    revision_uid: str
+    provider_name: str
+    position: int
+    model_strength_milli: int
+    clip_strength_milli: int
+
+
+@dataclass(frozen=True, slots=True)
 class ImageContext:
     """Expose canonical image facts without HTTP or local-path contracts."""
 
@@ -211,6 +223,7 @@ class ImageContext:
     output_index: int
     review: ReviewSummary
     curation: CurationSummary | None
+    loras: tuple[ImageLoraUsage, ...] = ()
     content: ImageContentClassification = ImageContentClassification(
         inferred_level=ContentLevel.STANDARD,
         effective_level=ContentLevel.STANDARD,

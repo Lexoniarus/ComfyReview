@@ -2,6 +2,11 @@ import { generatorPromptKinds } from "./prompt-kind-contract.js";
 
 /** @param {Record<string, any>} promptSetup */
 export function imagePromptState(promptSetup) {
+  if (String(promptSetup.availability || "") !== "complete") {
+    throw new Error(
+      "Das Bild besitzt noch keine vollständige kataloggebundene Prompt-Zuordnung.",
+    );
+  }
   if (!Array.isArray(promptSetup.selections)) {
     throw new Error("Typed Prompt-Selections fehlen.");
   }
@@ -47,13 +52,21 @@ export function scopePromptPatch(selection) {
   };
 }
 
-/** @param {unknown} selections */
-export function combinationPromptPatch(selections) {
-  if (!Array.isArray(selections) || selections.length === 0) {
+/** @param {unknown} selections @param {Array<Record<string, any>>} [currentLoras] */
+export function combinationPromptPatch(selections, currentLoras = []) {
+  const source =
+    selections && typeof selections === "object" && !Array.isArray(selections)
+      ? /** @type {Record<string, any>} */ (selections)
+      : null;
+  const components = Array.isArray(selections)
+    ? selections
+    : source?.selections;
+  const loras = Array.isArray(source?.loras) ? source.loras : [];
+  if (!Array.isArray(components) || components.length === 0) {
     throw new Error("Combination enthält keine Prompt-Auswahlen.");
   }
   const selectedKinds = new Set();
-  const projectedSelections = selections.map((selection) => {
+  const projectedSelections = components.map((selection) => {
     const kind = String(selection?.kind || "");
     if (!generatorPromptKinds.includes(kind)) {
       throw new Error(`Unbekannte Prompt-Rolle: ${kind || "ohne Kind"}`);
@@ -81,7 +94,15 @@ export function combinationPromptPatch(selections) {
       revision_uid: revisionUid ?? null,
     };
   });
-  return { selections: projectedSelections };
+  const mergedLoras = [...currentLoras];
+  for (const lora of loras) {
+    const index = mergedLoras.findIndex(
+      (candidate) => candidate.lora_uid === lora.lora_uid,
+    );
+    if (index >= 0) mergedLoras[index] = lora;
+    else mergedLoras.push(lora);
+  }
+  return { selections: projectedSelections, loras: mergedLoras };
 }
 
 /**

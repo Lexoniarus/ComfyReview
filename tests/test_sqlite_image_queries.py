@@ -88,6 +88,7 @@ def test_sqlite_image_context_exposes_exact_scopes_and_prompt_evidence(
     tmp_path: Path,
 ) -> None:
     database_path = _seed_scope_database(tmp_path)
+    _insert_lora_usage(database_path, "generation-image-1")
     repository = SqliteImageContextRepository(database_path)
 
     exact = repository.get_image("image-1")
@@ -106,6 +107,12 @@ def test_sqlite_image_context_exposes_exact_scopes_and_prompt_evidence(
     assert exact.workflow.graph_hash == "graph-1"
     assert exact.curation is not None
     assert exact.curation.set_key == "favorites"
+    assert len(exact.loras) == 1
+    assert exact.loras[0].lora_uid == "lora-style"
+    assert exact.loras[0].revision_uid == "lora-revision-style"
+    assert exact.loras[0].provider_name == "style.safetensors"
+    assert exact.loras[0].model_strength_milli == 750
+    assert exact.loras[0].clip_strength_milli == 500
     assert overridden is not None
     assert overridden.prompt_snapshot.draft_overridden is False
     policy = DraftOverridePolicy(PromptRenderer())
@@ -649,3 +656,56 @@ def _insert_prompt(
             (scope, prompt_hash, text),
         ).fetchone()[0]
     )
+
+
+def _insert_lora_usage(database_path: Path, generation_uid: str) -> None:
+    connection = sqlite3.connect(database_path)
+    try:
+        definition_id = int(
+            connection.execute(
+                """
+                INSERT INTO lora_definitions(
+                    lora_uid, provider_name, content_level, display_name,
+                    tags, notes
+                ) VALUES (
+                    'lora-style', 'style.safetensors', 'standard',
+                    'Style', '[]', ''
+                ) RETURNING id
+                """
+            ).fetchone()[0]
+        )
+        revision_id = int(
+            connection.execute(
+                """
+                INSERT INTO lora_revisions(
+                    revision_uid, lora_definition_id, revision_number,
+                    default_model_strength_milli,
+                    default_clip_strength_milli, content_hash, content_level
+                ) VALUES (
+                    'lora-revision-style', ?, 1, 1000, 1000,
+                    'lora-hash', 'standard'
+                ) RETURNING id
+                """,
+                (definition_id,),
+            ).fetchone()[0]
+        )
+        generation_id = int(
+            connection.execute(
+                "SELECT id FROM generations WHERE generation_uid = ?",
+                (generation_uid,),
+            ).fetchone()[0]
+        )
+        connection.execute(
+            """
+            INSERT INTO generation_loras(
+                generation_id, position, lora_name,
+                model_strength_milli, clip_strength_milli, lora_uid,
+                content_level_snapshot, lora_revision_id
+            ) VALUES (?, 0, 'style.safetensors', 750, 500,
+                      'lora-style', 'standard', ?)
+            """,
+            (generation_id, revision_id),
+        )
+        connection.commit()
+    finally:
+        connection.close()

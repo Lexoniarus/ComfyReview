@@ -4,7 +4,7 @@
 /** @typedef {{render: (draft: any, draftUid: string) => void, clear: () => void, promptPayload: () => any, renderSnapshots: (payload: any) => void, renderEvidence: (payload: any) => void, generationPayload: (settings: any) => any, dispose: () => void}} DraftBoundary */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
 /** @typedef {{render: (payload: any) => void, renderLoading: (message?: string) => void, dispose: () => void}} GuidanceBoundary */
-/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, persistence: {load: () => Promise<any>, schedule: () => void, flush: () => Promise<any>, dispose: () => void}, handoffApplier: {apply: (intent: Record<string, any>) => Promise<{applied: boolean, rejected: string[]}>}, draftSession: {isReady: boolean, invalidate: () => void, prepare: (operation: (signal: AbortSignal) => Promise<Record<string, any>>) => Promise<Record<string, any>>, submit: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>}} PlaygroundDependencies */
+/** @typedef {{api: ApiBoundary, modes: ModesBoundary, controls: ControlsBoundary, draft: DraftBoundary, guidance: GuidanceBoundary, requests: RequestBoundary, previewRequests: RequestBoundary & {cancelRequests: () => void}, guidanceRequests: RequestBoundary & {cancelRequests: () => void, schedule: (callback: () => void, delay: number) => number | null, cancel: (timer: number | null) => void}, persistence: {load: () => Promise<any>, schedule: () => void, flush: () => Promise<any>, dispose: () => void}, handoffApplier: {apply: (intent: Record<string, any>) => Promise<{applied: boolean, rejected: string[], promptSourceImageUid: string | null}>}, draftSession: {isReady: boolean, invalidate: () => void, prepare: (operation: (signal: AbortSignal) => Promise<Record<string, any>>) => Promise<Record<string, any>>, submit: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}, prepareButton: HTMLButtonElement, submitButton: HTMLButtonElement, status: HTMLElement, result: HTMLElement, intent?: Record<string, any>}} PlaygroundDependencies */
 
 /** Orchestrate catalog draft preparation and native generation submission. */
 export class PlaygroundController {
@@ -29,6 +29,8 @@ export class PlaygroundController {
     this.abortController = new AbortController();
     this.guidanceTimer = null;
     this.guidancePayload = null;
+    this.promptSourceImageUid = null;
+    this.imagePromptEdited = false;
     /** @type {"observed" | "predicted"} */
     this.guidanceBasis = "observed";
   }
@@ -101,6 +103,8 @@ export class PlaygroundController {
         ...(this.controls.applyState(savedState) || []),
       ];
       const handoff = await this.handoffApplier.apply(this.intent);
+      this.promptSourceImageUid = handoff.promptSourceImageUid;
+      this.imagePromptEdited = false;
       const rejected = [...stateRejected, ...handoff.rejected];
       await this.refreshGuidance();
       this.status.textContent = rejected.length
@@ -180,14 +184,7 @@ export class PlaygroundController {
     this.status.textContent = "Prompt wird zusammengestellt …";
     try {
       const draft = await this.draftSession.prepare((signal) =>
-        this.api.post(
-          "playground/drafts",
-          {
-            ...this.modes.value(),
-            generation: this.controls.draftValue(),
-          },
-          { signal },
-        ),
+        this.api.post("playground/drafts", this.#draftRequest(), { signal }),
       );
       this.controls.useConcreteSeed(Number(draft.seed));
       this.modes.showResolvedComponents(draft.components || []);
@@ -255,6 +252,7 @@ export class PlaygroundController {
 
   /** Persist prompt controls after the user changes them. */
   promptSettingsChanged() {
+    if (this.promptSourceImageUid) this.imagePromptEdited = true;
     this.invalidateDraft();
     this.status.textContent = "Änderungen erkannt – Entwurf neu erstellen";
     this.persistence.schedule();
@@ -276,6 +274,32 @@ export class PlaygroundController {
     this.submitButton.disabled = busy || !this.draftSession.isReady;
     this.modes.setBusy(busy);
     this.controls.setBusy(busy);
+  }
+
+  #draftRequest() {
+    const generation = this.controls.draftValue();
+    if (!this.promptSourceImageUid) {
+      return { ...this.modes.value(), generation };
+    }
+    if (!this.imagePromptEdited) {
+      return {
+        selections: [],
+        loras: [],
+        prompt_source: {
+          mode: "image_snapshot",
+          image_uid: this.promptSourceImageUid,
+        },
+        generation,
+      };
+    }
+    return {
+      ...this.modes.value(),
+      prompt_source: {
+        mode: "image_adapted",
+        image_uid: this.promptSourceImageUid,
+      },
+      generation,
+    };
   }
 }
 

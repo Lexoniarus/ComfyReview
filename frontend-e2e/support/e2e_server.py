@@ -89,7 +89,21 @@ class BrowserTestRuntime:
                 name="Aiko",
                 positive_text="aiko",
             )
-            self._insert_lora(connection)
+            outfit_revision_id = self._insert_component(
+                connection,
+                kind="outfit",
+                component_uid="component-outfit-e2e",
+                name="Test Outfit",
+                positive_text="test outfit",
+            )
+            pose_revision_id = self._insert_component(
+                connection,
+                kind="pose",
+                component_uid="component-pose-e2e",
+                name="Test Pose",
+                positive_text="test pose",
+            )
+            lora_revision_id = self._insert_lora(connection)
             self._insert_component(
                 connection,
                 kind="outfit",
@@ -104,6 +118,9 @@ class BrowserTestRuntime:
                     connection,
                     index=index,
                     character_revision_id=character_revision_id,
+                    outfit_revision_id=outfit_revision_id,
+                    pose_revision_id=pose_revision_id,
+                    lora_revision_id=lora_revision_id,
                     negative_prompt_id=negative_prompt_id,
                     first_sequence=sequence,
                 )
@@ -117,6 +134,9 @@ class BrowserTestRuntime:
         *,
         index: int,
         character_revision_id: int,
+        outfit_revision_id: int,
+        pose_revision_id: int,
+        lora_revision_id: int,
         negative_prompt_id: int,
         first_sequence: int,
     ) -> int:
@@ -128,6 +148,17 @@ class BrowserTestRuntime:
             name=scene_name,
             positive_text=f"test scene {index + 1:02d}",
         )
+        if index == 0:
+            connection.execute(
+                """
+                UPDATE prompt_components
+                SET archived_at = '2026-01-01 00:00:00'
+                WHERE id = (
+                    SELECT component_id FROM prompt_revisions WHERE id = ?
+                )
+                """,
+                (scene_revision_id,),
+            )
         composition_uid = f"composition-e2e-{index + 1:02d}"
         composition_id = self._last_row_id(
             connection.execute(
@@ -144,10 +175,19 @@ class BrowserTestRuntime:
             (
                 (composition_id, character_revision_id, "character", 0),
                 (composition_id, scene_revision_id, "scene", 1),
+                (composition_id, outfit_revision_id, "outfit", 2),
+                (composition_id, pose_revision_id, "pose", 3),
             ),
         )
+        positive_text = (
+            f"aiko, test scene {index + 1:02d}, test outfit, test pose"
+        )
+        if index == 0:
+            positive_text += ", detail trigger"
         positive_prompt_id = self._insert_prompt(
-            connection, "pos", f"aiko, test scene {index + 1:02d}"
+            connection,
+            "pos",
+            positive_text,
         )
         setup_index = index // 10
         checkpoint = f"NetaYume-e2e-{setup_index + 1}.safetensors"
@@ -220,6 +260,20 @@ class BrowserTestRuntime:
             """,
             (generation_id, 1000 + index, steps, cfg, sampler),
         )
+        if index == 0:
+            connection.execute(
+                """
+                INSERT INTO generation_loras(
+                    generation_id, position, lora_name,
+                    model_strength_milli, clip_strength_milli,
+                    lora_uid, content_level_snapshot, lora_revision_id
+                ) VALUES (
+                    ?, 0, 'character-detail.safetensors', 800, 600,
+                    'lora-e2e-detail', 'standard', ?
+                )
+                """,
+                (generation_id, lora_revision_id),
+            )
         sequence = first_sequence
         for rating_index in range(8):
             sequence += 1
@@ -250,7 +304,9 @@ class BrowserTestRuntime:
         positive_text: str,
         content_level: str = "standard",
     ) -> int:
-        negative_text = "bad anatomy" if kind == "character" else ""
+        negative_text = (
+            "bad anatomy, low quality" if kind == "character" else ""
+        )
         component_id = BrowserTestRuntime._last_row_id(
             connection.execute(
                 """
@@ -295,21 +351,22 @@ class BrowserTestRuntime:
             (revision_id, atom_id),
         )
         if negative_text:
-            negative_atom_id = BrowserTestRuntime._insert_atom(
-                connection, negative_text
-            )
-            connection.execute(
-                """
-                INSERT INTO prompt_revision_atom_usages(
-                    revision_id, atom_id, scope, position, weight_milli
-                ) VALUES (?, ?, 'neg', 0, 1000)
-                """,
-                (revision_id, negative_atom_id),
-            )
+            for position, text in enumerate(negative_text.split(", ")):
+                negative_atom_id = BrowserTestRuntime._insert_atom(
+                    connection, text
+                )
+                connection.execute(
+                    """
+                    INSERT INTO prompt_revision_atom_usages(
+                        revision_id, atom_id, scope, position, weight_milli
+                    ) VALUES (?, ?, 'neg', ?, 1000)
+                    """,
+                    (revision_id, negative_atom_id, position),
+                )
         return revision_id
 
     @staticmethod
-    def _insert_lora(connection: sqlite3.Connection) -> None:
+    def _insert_lora(connection: sqlite3.Connection) -> int:
         definition_id = BrowserTestRuntime._last_row_id(
             connection.execute(
                 """
@@ -348,6 +405,7 @@ class BrowserTestRuntime:
             """,
             (revision_id, atom_id),
         )
+        return revision_id
 
     @staticmethod
     def _insert_prompt(

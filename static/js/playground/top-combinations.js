@@ -2,7 +2,7 @@ import { EvidenceCarousel } from "../components/evidence-carousel.js";
 import { CyclicCardRail } from "../components/cyclic-card-rail.js";
 import { createGeneratorHandoffAction } from "./generator-handoff-action.js";
 
-/** @typedef {{openIntent: (intent: {kind: "combination", selections: Array<{kind: string, component_uid: string, revision_uid: string | null}>}) => void}} PlaygroundIntentNavigatorBoundary */
+/** @typedef {import("./playground-intent.js").GeneratorHandoffNavigator} PlaygroundIntentNavigatorBoundary */
 
 /** Render the two canonical Playground evidence groups. */
 export class TopCombinationsView {
@@ -24,10 +24,9 @@ export class TopCombinationsView {
     const groups = characterGroups(payload);
     const twoComponent = combinationCollection(
       "Top 2er-Kombinationen",
-      "Charakter + Szene · getrennt nach Charakter",
+      "Zwei tatsächlich gemeinsam verwendete Faktoren · getrennt nach Charakter",
       groups,
       "two_component",
-      ["character", "scene"],
       this.evidenceCarousels,
       this.createGeneratorActions,
       this.navigator,
@@ -35,10 +34,9 @@ export class TopCombinationsView {
     );
     const threeComponent = combinationCollection(
       "Top 3er-Kombinationen",
-      "Charakter + Szene + Outfit · getrennt nach Charakter",
+      "Drei tatsächlich gemeinsam verwendete Faktoren · getrennt nach Charakter",
       groups,
       "three_component",
-      ["character", "scene", "outfit"],
       this.evidenceCarousels,
       this.createGeneratorActions,
       this.navigator,
@@ -69,13 +67,12 @@ export class TopCombinationsView {
   }
 }
 
-/** @param {string} title @param {string} subtitle @param {Record<string, any>[]} groups @param {"two_component" | "three_component"} field @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
+/** @param {string} title @param {string} subtitle @param {Record<string, any>[]} groups @param {"two_component" | "three_component"} field @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
 function combinationCollection(
   title,
   subtitle,
   groups,
   field,
-  kinds,
   evidenceCarousels,
   createGeneratorActions,
   navigator,
@@ -99,7 +96,6 @@ function combinationCollection(
       characterCombinationRow(
         group,
         rows,
-        kinds,
         evidenceCarousels,
         createGeneratorActions,
         navigator,
@@ -116,11 +112,10 @@ function combinationCollection(
   return section;
 }
 
-/** @param {Record<string, any>} group @param {unknown[]} rows @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
+/** @param {Record<string, any>} group @param {unknown[]} rows @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
 function characterCombinationRow(
   group,
   rows,
-  kinds,
   evidenceCarousels,
   createGeneratorActions,
   navigator,
@@ -142,7 +137,6 @@ function characterCombinationRow(
     grid.append(
       combinationCard(
         recordValue(value),
-        kinds,
         evidenceCarousels,
         createGeneratorActions,
         navigator,
@@ -171,10 +165,9 @@ function carouselButton(direction, label, glyph) {
   return button;
 }
 
-/** @param {Record<string, any>} row @param {string[]} kinds @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
+/** @param {Record<string, any>} row @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
 function combinationCard(
   row,
-  kinds,
   evidenceCarousels,
   createGeneratorActions,
   navigator,
@@ -207,7 +200,7 @@ function combinationCard(
   const action = createGeneratorHandoffAction("combination", {
     className: "playground-combination-generator-action",
   });
-  const source = combinationSource(row.component_uids, kinds);
+  const source = combinationSource(row.factors);
   if (source.selections) {
     action.addEventListener(
       "click",
@@ -233,26 +226,42 @@ function combinationCard(
   return card;
 }
 
-/** @param {unknown} value @param {string[]} kinds */
-function combinationSource(value, kinds) {
-  if (!Array.isArray(value) || value.length !== kinds.length) {
-    return {
-      error: `Erwartet werden exakt ${kinds.length} Komponenten.`,
-    };
+/** @param {unknown} value */
+function combinationSource(value) {
+  if (!Array.isArray(value) || value.length < 3) {
+    return { error: "Die Kombination ist unvollständig." };
   }
   const selections = [];
-  for (const [index, kind] of kinds.entries()) {
-    const componentUid = value[index];
-    if (typeof componentUid !== "string" || !componentUid.trim()) {
-      return { error: `Komponente für ${kind} fehlt.` };
+  const loras = [];
+  for (const rawFactor of value) {
+    const factor = recordValue(rawFactor);
+    if (factor.applicable === false) {
+      return { error: String(factor.reason || "Faktor nicht verfügbar") };
     }
-    selections.push({
-      kind,
-      component_uid: componentUid.trim(),
-      revision_uid: null,
-    });
+    if (factor.source === "component") {
+      const kind = String(factor.kind || "");
+      const uid = String(factor.uid || "");
+      if (!kind || !uid) return { error: "Komponentenfaktor fehlt." };
+      selections.push({
+        kind,
+        component_uid: uid,
+        revision_uid: factor.revision_uid || null,
+      });
+    } else if (factor.source === "lora") {
+      const uid = String(factor.uid || "");
+      const revisionUid = String(factor.revision_uid || "");
+      if (!uid || !revisionUid) return { error: "LoRA-Faktor fehlt." };
+      loras.push({
+        lora_uid: uid,
+        revision_uid: revisionUid,
+        model_strength: Number(factor.model_strength ?? 1),
+        clip_strength: Number(factor.clip_strength ?? 1),
+      });
+    } else {
+      return { error: "Unbekannter Faktor." };
+    }
   }
-  return { selections };
+  return { selections: { selections, loras } };
 }
 
 /** @param {Record<string, any>} payload */

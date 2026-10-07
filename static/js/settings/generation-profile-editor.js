@@ -86,7 +86,7 @@ export class GenerationProfileEditor {
       value.loras || [],
       (capabilities.lora_definitions || []).filter(
         (/** @type {Record<string, any>} */ definition) =>
-          definition.content_level,
+          definition.latest_revision?.content_level,
       ),
     );
     const actions = document.createElement("div");

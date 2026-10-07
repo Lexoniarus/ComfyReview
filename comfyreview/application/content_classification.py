@@ -120,6 +120,7 @@ class LoraRevision:
     revision_number: int
     default_model_strength_milli: int
     default_clip_strength_milli: int
+    content_level: ContentLevel
     content_hash: str
     positive_atoms: tuple[PromptAtomUsage, ...] = ()
     negative_atoms: tuple[PromptAtomUsage, ...] = ()
@@ -164,6 +165,7 @@ class LoraRevisionDraft:
     revision_uid: str
     default_model_strength_milli: int
     default_clip_strength_milli: int
+    content_level: ContentLevel
     content_hash: str
     positive_atoms: tuple[PromptAtomUsage, ...]
     negative_atoms: tuple[PromptAtomUsage, ...]
@@ -252,7 +254,7 @@ class ImageContentLevelRepository(Protocol):
 
 
 class LoraCatalogService:
-    """Validate and coordinate workspace-wide LoRA content policies."""
+    """Validate and coordinate revision-scoped LoRA catalog policies."""
 
     def __init__(self, repository: LoraCatalogRepository) -> None:
         self._repository = repository
@@ -274,6 +276,7 @@ class LoraCatalogService:
                 normalized.provider_name,
                 normalized.default_model_strength_milli,
                 normalized.default_clip_strength_milli,
+                normalized.content_level,
                 normalized.positive_atoms,
                 normalized.negative_atoms,
             ),
@@ -287,6 +290,7 @@ class LoraCatalogService:
                 normalized.lora_uid,
                 normalized.default_model_strength_milli,
                 normalized.default_clip_strength_milli,
+                normalized.content_level,
                 normalized.positive_atoms,
                 normalized.negative_atoms,
             ),
@@ -372,6 +376,7 @@ class LoraCatalogService:
         identity: str,
         model_strength: int,
         clip_strength: int,
+        content_level: ContentLevel,
         positive_atoms: tuple[PromptAtomUsage, ...],
         negative_atoms: tuple[PromptAtomUsage, ...],
     ) -> LoraRevisionDraft:
@@ -386,6 +391,7 @@ class LoraCatalogService:
             raise ContentClassificationError(str(error)) from error
         content = (
             f"{int(model_strength)}\0{int(clip_strength)}"
+            f"\0{ContentLevel(content_level).value}"
             f"\0{positive}\0{negative}"
         )
         content_hash = hashlib.sha256(content.encode()).hexdigest()
@@ -396,6 +402,7 @@ class LoraCatalogService:
             revision_uid=f"lora-revision-{revision_hash}",
             default_model_strength_milli=int(model_strength),
             default_clip_strength_milli=int(clip_strength),
+            content_level=ContentLevel(content_level),
             content_hash=content_hash,
             positive_atoms=tuple(positive_atoms),
             negative_atoms=tuple(negative_atoms),
@@ -455,10 +462,6 @@ class LoraDraftSelectionService:
             assert selection.lora_uid is not None
             assert selection.revision_uid is not None
             definition = self._catalog.get_definition(selection.lora_uid)
-            if definition.content_level not in enabled:
-                raise ContentClassificationError(
-                    "LoRA uses a disabled content level"
-                )
             revision = next(
                 (
                     item
@@ -471,6 +474,10 @@ class LoraDraftSelectionService:
             )
             if revision is None:
                 raise ContentClassificationError("unknown LoRA revision")
+            if revision.content_level not in enabled:
+                raise ContentClassificationError(
+                    "LoRA uses a disabled content level"
+                )
             result.append(
                 LoraDraftSelection(
                     selection=selection,

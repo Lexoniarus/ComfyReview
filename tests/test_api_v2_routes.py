@@ -31,9 +31,11 @@ from comfyreview.application import (
     ImageContext,
     ImageContextNotFoundError,
     ImageGeneratorHandoffValidationError,
+    ImageLoraUsage,
     ImagePage,
     ImageScope,
     LoraDefinition,
+    LoraRevision,
     ManualPromptSelection,
     PlaygroundDraft,
     PlaygroundEvidence,
@@ -249,6 +251,16 @@ class _LoraCatalog:
                 "style.safetensors",
                 ContentLevel.LEWD,
                 1,
+                latest_revision=LoraRevision(
+                    "lora-revision-style",
+                    1,
+                    1000,
+                    1000,
+                    ContentLevel.LEWD,
+                    "hash",
+                    prompt_atom_usages_from_text("style trigger"),
+                    (),
+                ),
             ),
         )
 
@@ -269,6 +281,15 @@ class _LoraDrafts:
             )
             for selection in selections
         )
+
+
+class _LoraTriggers:
+    def validate(self, selections, positive_atoms, negative_atoms):
+        del selections, negative_atoms
+        if not any(atom.text == "style trigger" for atom in positive_atoms):
+            raise ContentClassificationError(
+                "lora_trigger_required: style trigger"
+            )
 
 
 class _Arena:
@@ -395,6 +416,9 @@ class _Playground:
 
     def list_available_components(self):
         return (_prompt_component(),)
+
+    def list_generator_components(self):
+        return self.list_available_components()
 
     def prepare_draft(self, command, *, overrides=None):
         self.command = command
@@ -876,6 +900,16 @@ def test_v2_scope_and_ranking_reads_use_canonical_query_services() -> None:
         rankings.json()["items"][0]["image_url"] == "/files/output/image-1.png"
     )
     assert "prompt_snapshot" not in rankings.json()["items"][0]
+    assert rankings.json()["items"][0]["loras"] == [
+        {
+            "lora_uid": "lora-style",
+            "revision_uid": "lora-revision-style",
+            "provider_name": "style.safetensors",
+            "position": 0,
+            "model_strength": 0.75,
+            "clip_strength": 0.5,
+        }
+    ]
     assert container.image_contexts.query.filters.minimum_rating_count == 1
 
 
@@ -1127,10 +1161,20 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
                 "display_name": "style.safetensors",
                 "tags": [],
                 "notes": "",
-                "content_level": "lewd",
                 "revision": 1,
                 "archived": False,
-                "latest_revision": None,
+                "latest_revision": {
+                    "revision_uid": "lora-revision-style",
+                    "revision_number": 1,
+                    "content_level": "lewd",
+                    "default_model_strength": 1.0,
+                    "default_clip_strength": 1.0,
+                    "content_hash": "hash",
+                    "positive_atoms": [
+                        {"text": "style trigger", "weight": 1.0}
+                    ],
+                    "negative_atoms": [],
+                },
                 "available": True,
             }
         ],
@@ -1511,6 +1555,24 @@ def test_v2_playground_draft_appends_selected_lora_triggers() -> None:
         {"text": "style trigger", "weight": 1.0}
     ]
 
+    missing_trigger = client.post(
+        "/api/v2/playground/render-preview",
+        json={
+            "positive_atoms": [{"text": "rendered positive", "weight": 1.0}],
+            "negative_atoms": [],
+            "loras": [
+                {
+                    "lora_uid": "lora-style",
+                    "revision_uid": "lora-revision-style",
+                    "model_strength": 0.8,
+                    "clip_strength": 0.7,
+                }
+            ],
+        },
+    )
+    assert missing_trigger.status_code == 400
+    assert missing_trigger.json()["error"]["code"] == ("lora_trigger_required")
+
 
 def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
     None
@@ -1812,6 +1874,7 @@ def _client() -> tuple[TestClient, SimpleNamespace]:
         workflow_defaults=_WorkflowDefaults(),
         lora_catalog=_LoraCatalog(),
         lora_drafts=_LoraDrafts(),
+        lora_triggers=_LoraTriggers(),
         analytics_pages=_AnalyticsPages(),
         analytics_coverage=_AnalyticsCoverage(),
         render_guidance=render_guidance,
@@ -1845,4 +1908,14 @@ def _context(image_uid: str = "image-1") -> ImageContext:
         output_index=0,
         review=ReviewSummary(9, 2, 8.5),
         curation=None,
+        loras=(
+            ImageLoraUsage(
+                lora_uid="lora-style",
+                revision_uid="lora-revision-style",
+                provider_name="style.safetensors",
+                position=0,
+                model_strength_milli=750,
+                clip_strength_milli=500,
+            ),
+        ),
     )

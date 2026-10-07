@@ -368,15 +368,21 @@ def test_sqlite_content_classification_preserves_history_and_manual_override(
         )
     catalog = SqliteLoraCatalogRepository(database_path)
     definition = catalog.classify("unsafe.safetensors", ContentLevel.NUDE)
+    assert definition.latest_revision is not None
     with sqlite3.connect(database_path) as connection:
+        revision_id = connection.execute(
+            "SELECT id FROM lora_revisions WHERE revision_uid = ?",
+            (definition.latest_revision.revision_uid,),
+        ).fetchone()[0]
         connection.execute(
             """
             INSERT INTO generation_loras(
                 generation_id, position, lora_name, lora_uid,
-                model_strength_milli, clip_strength_milli
-            ) VALUES (?, 0, 'unsafe.safetensors', ?, 1000, 1000)
+                model_strength_milli, clip_strength_milli,
+                lora_revision_id, content_level_snapshot
+            ) VALUES (?, 0, 'unsafe.safetensors', ?, 1000, 1000, ?, 'standard')
             """,
-            (generation_id, definition.lora_uid),
+            (generation_id, definition.lora_uid, revision_id),
         )
 
     image_repository = SqliteImageContentLevelRepository(database_path)
@@ -453,8 +459,9 @@ def test_sqlite_lora_catalog_revisions_defaults_triggers_and_archive(
         )
     )
     assert metadata.latest_revision is not None
-    assert metadata.latest_revision.revision_uid == first_revision_uid
-    assert len(service.list_revisions(created.lora_uid)) == 1
+    assert metadata.latest_revision.revision_uid != first_revision_uid
+    assert metadata.latest_revision.content_level is ContentLevel.LEWD
+    assert len(service.list_revisions(created.lora_uid)) == 2
 
     revised = service.update(
         UpdateLoraDefinitionCommand(
@@ -472,8 +479,8 @@ def test_sqlite_lora_catalog_revisions_defaults_triggers_and_archive(
         )
     )
     assert revised.latest_revision is not None
-    assert revised.latest_revision.revision_number == 2
-    assert len(service.list_revisions(created.lora_uid)) == 2
+    assert revised.latest_revision.revision_number == 3
+    assert len(service.list_revisions(created.lora_uid)) == 3
 
     archived = service.set_archived(created.lora_uid, archived=True)
     assert archived.archived is True

@@ -21,7 +21,7 @@ for (const viewport of VIEWPORTS) {
 
     await page.goto("/top_pictures?min_n=1");
     await expect(page.locator(".image-card").first()).toBeVisible();
-    await expect(page.locator("[data-scope-kind-tab]")).toHaveCount(3);
+    await expect(page.locator("[data-scope-kind-tab]")).toHaveCount(4);
     await expect(page.locator("[data-scope-uid]")).toHaveCount(1);
     await assertContained(page, viewport.width);
     if ([820, 1180].includes(viewport.width)) {
@@ -91,6 +91,14 @@ test("Top/Worst inspector closes and scrolls as an iPad drawer", async ({
   const shell = page.locator("[data-v2-surface='top-worst']");
   const firstImage = page.locator("[data-image-action='select']").first();
   const inspector = page.locator("[data-image-inspector]");
+  await page.getByRole("button", { name: "Bereiche", exact: true }).click();
+  await expect(shell).toHaveClass(/is-scope-open/);
+  await page.getByRole("button", { name: "Bereiche schließen" }).click();
+  await expect(shell).not.toHaveClass(/is-scope-open/);
+  await page.getByRole("button", { name: "Bereiche", exact: true }).click();
+  await page.mouse.click(700, 180);
+  await expect(shell).not.toHaveClass(/is-scope-open/);
+
   await firstImage.click();
   await expect(shell).toHaveClass(/is-inspector-open/);
   await expect(
@@ -125,6 +133,76 @@ test("Top/Worst inspector closes and scrolls as an iPad drawer", async ({
   await page.getByRole("button", { name: "Bilddetails schließen" }).click();
   await expect(shell).not.toHaveClass(/is-inspector-open/);
   expect(errors).toEqual([]);
+});
+
+test("historical image handoff restores archived scopes and LoRA", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await page.goto("/top_pictures?min_n=1");
+
+  const card = page.locator(".image-card").filter({
+    has: page.locator(
+      '[data-image-action="select"][data-image-uid="image-e2e-01"]',
+    ),
+  });
+  await expect(card).toContainText("LoRA · character-detail.safetensors");
+  await card.getByRole("button", { name: "Im Generator verwenden" }).click();
+  await card.getByRole("button", { name: "Prompt & LoRAs übernehmen" }).click();
+
+  await expect(page).toHaveURL(/\/playground\/generator$/);
+  const sceneRow = page.locator('.prompt-mode-row[data-kind="scene"]');
+  await expect(sceneRow.locator("select").first()).toHaveValue("fixed");
+  await expect(sceneRow.locator("select").nth(1)).toHaveValue(
+    "component-scene-01",
+  );
+  await expect(sceneRow).toContainText("Testszene 01 · Archiv");
+  for (const kind of ["outfit", "pose"]) {
+    await expect(
+      page.locator(`.prompt-mode-row[data-kind="${kind}"] select`).first(),
+    ).toHaveValue("fixed");
+  }
+  for (const kind of ["expression", "lighting", "modifier"]) {
+    await expect(
+      page.locator(`.prompt-mode-row[data-kind="${kind}"] select`).first(),
+    ).toHaveValue("off");
+  }
+  await expect(page.locator(".prompt-lora-layer")).toContainText(
+    "Character Detail",
+  );
+  expect(errors).toEqual([]);
+});
+
+test("content settings allow excluding Standard but never every level", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Inhaltsstufen" }).click();
+  const standard = page.getByLabel("Standard", { exact: true });
+  const sexy = page.getByLabel("Sexy", { exact: true });
+  await expect(standard).toBeChecked();
+  await expect(standard).toBeDisabled();
+  await sexy.check();
+  await expect(standard).toBeEnabled();
+  await standard.uncheck();
+  await expect(sexy).toBeDisabled();
+  await page.getByRole("button", { name: "Speichern" }).click();
+  await expect(page.locator("[data-settings-status]")).toHaveText(
+    "Gespeichert.",
+  );
+
+  await standard.check();
+  await sexy.uncheck();
+  await page.getByRole("button", { name: "Speichern" }).click();
+  await expect(page.locator("[data-settings-status]")).toHaveText(
+    "Gespeichert.",
+  );
 });
 
 async function assertContained(page, expectedWidth) {

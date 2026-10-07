@@ -421,7 +421,31 @@ describe("PlaygroundController", () => {
     expect(fixture.api.post).toHaveBeenCalledWith(
       "playground/drafts",
       {
+        selections: [],
+        loras: [],
+        prompt_source: {
+          mode: "image_snapshot",
+          image_uid: "image-prompt",
+        },
+        generation: expect.any(Object),
+      },
+      expect.any(Object),
+    );
+    fixture.controller.promptSettingsChanged();
+    await fixture.controller.prepare();
+    expect(fixture.api.post).toHaveBeenLastCalledWith(
+      "playground/evidence",
+      expect.any(Object),
+      expect.any(Object),
+    );
+    expect(fixture.api.post).toHaveBeenCalledWith(
+      "playground/drafts",
+      {
         ...promptSelectionState,
+        prompt_source: {
+          mode: "image_adapted",
+          image_uid: "image-prompt",
+        },
         generation: expect.any(Object),
       },
       expect.any(Object),
@@ -1030,6 +1054,7 @@ describe("PlaygroundController", () => {
         ...selection,
         mode: "fixed",
       })),
+      loras: [{ lora_uid: "existing-lora" }],
     });
     const appliedByKind = new Map(
       fixture.modes
@@ -1566,8 +1591,17 @@ function createFixture(options = {}) {
         const imageUid = decodeURIComponent(
           path.slice("images/".length, -"/generator-handoff".length),
         );
+        const handoff = options.images?.[imageUid] || options.image || {};
         return Promise.resolve(
-          options.images?.[imageUid] || options.image || {},
+          handoff.prompt_setup
+            ? {
+                ...handoff,
+                prompt_setup: {
+                  availability: "complete",
+                  ...handoff.prompt_setup,
+                },
+              }
+            : handoff,
         );
       }
       return Promise.resolve(

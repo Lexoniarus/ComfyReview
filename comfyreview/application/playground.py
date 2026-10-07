@@ -367,6 +367,7 @@ class PromptSelectionPolicy:
                 catalog,
                 component_uid,
                 "character",
+                allow_archived=(component_uid in revisions_by_component),
             )
             return revisions_by_component.get(
                 component.component_uid,
@@ -400,6 +401,9 @@ class PromptSelectionPolicy:
                 catalog,
                 selection.component_uid,
                 selection.kind,
+                allow_archived=(
+                    selection.component_uid in revisions_by_component
+                ),
             )
             manual[selection.kind] = revisions_by_component.get(
                 component.component_uid,
@@ -443,9 +447,11 @@ class PromptSelectionPolicy:
         catalog: dict[str, PromptComponent],
         component_uid: str,
         expected_kind: str,
+        *,
+        allow_archived: bool = False,
     ) -> PromptComponent:
         component = catalog.get(str(component_uid or "").strip())
-        if component is None or component.archived:
+        if component is None or (component.archived and not allow_archived):
             raise PromptSelectionError(
                 f"unknown active prompt component: {component_uid}"
             )
@@ -652,6 +658,14 @@ class PlaygroundService:
             self._preferences.get().enabled_content_levels,
         )
 
+    def list_generator_components(self) -> tuple[PromptComponent, ...]:
+        """Return active and historical components usable by exact revision."""
+        components = self._catalog.list_components(include_archived=True)
+        return self._content_policy.filter(
+            components,
+            self._preferences.get().enabled_content_levels,
+        )
+
     def prepare_draft(
         self,
         command: PromptSelectionCommand,
@@ -661,11 +675,19 @@ class PlaygroundService:
         """Select concrete revisions and render a non-persisting draft."""
         components = self.list_available_components()
         fixed_revisions = self._resolve_exact_fixed_revisions(
-            components,
             command,
         )
+        selection_components = {
+            component.component_uid: component for component in components
+        }
+        selection_components.update(
+            {
+                selected.component.component_uid: selected.component
+                for selected in fixed_revisions
+            }
+        )
         selection = self._selection_policy.select(
-            components,
+            tuple(selection_components.values()),
             command,
             fixed_revisions,
         )
@@ -676,7 +698,6 @@ class PlaygroundService:
 
     def _resolve_exact_fixed_revisions(
         self,
-        components: tuple[PromptComponent, ...],
         command: PromptSelectionCommand,
     ) -> tuple[SelectedPromptComponent, ...]:
         requests = [
@@ -713,12 +734,16 @@ class PlaygroundService:
         revisions = self._catalog.list_components_for_revisions(
             tuple(revision_uid for _, _, revision_uid in exact_requests)
         )
+        self._require_allowed(revisions)
         revisions_by_uid = {
             component.latest_revision.revision_uid: component
             for component in revisions
         }
-        components_by_uid = {
-            component.component_uid: component for component in components
+        current_by_uid = {
+            component.component_uid: component
+            for component in self._catalog.list_components(
+                include_archived=True
+            )
         }
         selected_revisions: list[SelectedPromptComponent] = []
         for kind, component_uid, revision_uid in exact_requests:
@@ -727,27 +752,23 @@ class PlaygroundService:
                 raise PromptSelectionError(
                     f"unknown prompt revision: {revision_uid}"
                 )
-            active_component = components_by_uid.get(component_uid)
-            if active_component is None:
-                raise PromptSelectionError(
-                    f"unknown active prompt component: {component_uid}"
-                )
-            if exact_component.component_uid != active_component.component_uid:
+            if exact_component.component_uid != component_uid:
                 raise PromptSelectionError(
                     "prompt revision does not belong to component "
-                    f"{active_component.component_uid}"
+                    f"{component_uid}"
+                )
+            current_component = current_by_uid.get(component_uid)
+            if current_component is None:
+                raise PromptSelectionError(
+                    f"unknown prompt component: {component_uid}"
                 )
             if exact_component.kind != kind:
                 raise PromptSelectionError(
                     f"prompt revision component is not {kind}"
                 )
-            if exact_component.archived:
-                raise PromptSelectionError(
-                    f"unknown active prompt component: {component_uid}"
-                )
             selected_revisions.append(
                 SelectedPromptComponent(
-                    active_component,
+                    current_component,
                     exact_component.latest_revision,
                 )
             )

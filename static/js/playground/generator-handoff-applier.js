@@ -19,7 +19,8 @@ export class GeneratorHandoffApplier {
 
   /** @param {Record<string, any>} intent */
   async apply(intent) {
-    if (!hasHandoff(intent)) return { applied: false, rejected: [] };
+    if (!hasHandoff(intent))
+      return { applied: false, rejected: [], promptSourceImageUid: null };
     const previousPrompt = this.modes.value();
     const previousControls = this.controls.stateValue();
     try {
@@ -61,12 +62,19 @@ export class GeneratorHandoffApplier {
       } catch (error) {
         return {
           applied: true,
+          promptSourceImageUid:
+            typedSource?.type === "image" ? typedSource.imageUid : null,
           rejected: [
             `URL konnte nicht bereinigt werden: ${errorMessage(error)}`,
           ],
         };
       }
-      return { applied: true, rejected: [] };
+      return {
+        applied: true,
+        rejected: [],
+        promptSourceImageUid:
+          typedSource?.type === "image" ? typedSource.imageUid : null,
+      };
     } catch (error) {
       const restoreIssues = [];
       try {
@@ -87,6 +95,7 @@ export class GeneratorHandoffApplier {
           : [errorMessage(error)];
       return {
         applied: false,
+        promptSourceImageUid: null,
         rejected: [
           ...rejected,
           ...restoreIssues.map((item) => `Rollback: ${item}`),
@@ -110,7 +119,11 @@ export class GeneratorHandoffApplier {
       return compositionPromptState(handoff.selections);
     }
     if (source.type === "combination") {
-      return combinationPromptPatch(source.selections);
+      const current = this.modes.value();
+      return combinationPromptPatch(
+        source.selections,
+        Array.isArray(current.loras) ? current.loras : [],
+      );
     }
     return scopePromptPatch(source.scope);
   }

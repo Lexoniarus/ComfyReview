@@ -9,6 +9,7 @@ from comfyreview.application.analytics import (
     CharacterCombinationGroup,
     CompositionStatistic,
     ObservedPromptCombination,
+    PromptFactor,
     PromptMatchPreview,
     PromptTokenStatistic,
     ScopeStatistic,
@@ -187,6 +188,7 @@ from comfyreview.application.image_queries import (
     ImageContextQueryService,
     ImageContextRepository,
     ImageFilter,
+    ImageLoraUsage,
     ImageOrder,
     ImagePage,
     ImageQuery,
@@ -217,6 +219,13 @@ from comfyreview.application.lora_effects import (
     LoraGraphEffect,
     LoraGraphEffectPolicy,
     LoraGraphValidationError,
+)
+from comfyreview.application.lora_trigger_validation import (
+    LoraTriggerValidationService,
+)
+from comfyreview.application.lora_usage import (
+    LoraTriggerEvidence,
+    LoraUsagePolicy,
 )
 from comfyreview.application.output_images import (
     CanonicalOutputImageRecord,
@@ -510,6 +519,7 @@ __all__ = [
     "ImageContextQueryService",
     "ImageContextRepository",
     "ImageFilter",
+    "ImageLoraUsage",
     "ImagePage",
     "ImageQuery",
     "ImageOrder",
@@ -531,6 +541,9 @@ __all__ = [
     "LoraGraphValidationError",
     "LoraReclassificationImpact",
     "LoraSelectionContentPolicy",
+    "LoraTriggerEvidence",
+    "LoraTriggerValidationService",
+    "LoraUsagePolicy",
     "infer_content_level",
     "ManualPromptSelection",
     "MissingGenerationOutputError",
@@ -560,6 +573,7 @@ __all__ = [
     "PreparedGeneration",
     "PromptCatalogReader",
     "PromptDraftOverrides",
+    "PromptFactor",
     "PromptCatalogRepository",
     "PromptCatalogService",
     "PromptCatalogValidationError",

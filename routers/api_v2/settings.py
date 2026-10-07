@@ -38,7 +38,7 @@ class WorkspacePreferencesRequest(BaseModel):
 
 
 class LoraClassificationRequest(BaseModel):
-    """Assign a workspace-wide content level to one ComfyUI LoRA."""
+    """Create a classified trigger revision for one ComfyUI LoRA."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -222,9 +222,14 @@ def lora_definition_response(
     return {
         "lora_uid": definition.lora_uid,
         "provider_name": definition.provider_name,
-        "content_level": (
-            definition.content_level.value
-            if definition.content_level is not None
+        "latest_revision": (
+            {
+                "revision_uid": definition.latest_revision.revision_uid,
+                "content_level": (
+                    definition.latest_revision.content_level.value
+                ),
+            }
+            if definition.latest_revision is not None
             else None
         ),
         "revision": definition.revision,

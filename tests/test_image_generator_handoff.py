@@ -220,10 +220,11 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
         repository=_Facts(facts),
         capabilities=_Capabilities(),
     ).get("image-1")
-    assert handoff.prompt_setup.availability == "grouped"
+    assert handoff.prompt_setup.availability == "snapshot_only"
     assert handoff.prompt_setup.component_uids == ("character-a",)
     assert handoff.prompt_setup.issues == (
         "lora_unavailable:missing.safetensors",
+        "unattributed_prompt_atoms",
     )
     assert handoff.render_setup.applicable is False
     assert handoff.render_setup.seed is None
@@ -246,7 +247,10 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
         repository=_Facts(ImageGenerationFacts((stage,), ())),
         capabilities=_UnavailableCapabilities(),
     ).get("image-1")
-    assert offline.prompt_setup.issues == ("capabilities_unavailable",)
+    assert offline.prompt_setup.issues == (
+        "capabilities_unavailable",
+        "unattributed_prompt_atoms",
+    )
     assert offline.render_setup.applicable is False
 
 

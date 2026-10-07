@@ -47,7 +47,12 @@ export class SettingsView {
     form.className = "settings-form";
     const grid = document.createElement("div");
     grid.className = "settings-form-grid";
-    const fields = preferenceFields(section, preferences, data);
+    const fields = preferenceFields(
+      section,
+      preferences,
+      data,
+      this.abortController.signal,
+    );
     for (const descriptor of fields) grid.append(descriptor.wrapper);
     const save = actionButton("Speichern");
     save.type = "submit";
@@ -99,8 +104,9 @@ export class SettingsView {
       title.textContent = name;
       const level = document.createElement("span");
       level.className = "settings-lora-status";
-      level.textContent = definition?.content_level || "Nicht eingestuft";
-      row.dataset.classification = definition?.content_level
+      level.textContent =
+        definition?.latest_revision?.content_level || "Nicht eingestuft";
+      row.dataset.classification = definition?.latest_revision?.content_level
         ? "classified"
         : "unclassified";
       row.append(title, level);
@@ -162,10 +168,12 @@ export class SettingsView {
   }
 }
 
-/** @param {string} section @param {Record<string, any>} preferences @param {Record<string, any>} data */
-function preferenceFields(section, preferences, data) {
+/** @param {string} section @param {Record<string, any>} preferences @param {Record<string, any>} data @param {AbortSignal} signal */
+function preferenceFields(section, preferences, data, signal) {
   if (section === "content") {
-    return [contentLevelField(preferences.enabled_content_levels || [])];
+    return [
+      contentLevelField(preferences.enabled_content_levels || [], signal),
+    ];
   }
   if (section === "review") {
     return [
@@ -225,8 +233,8 @@ function preferenceFields(section, preferences, data) {
   ];
 }
 
-/** @param {Array<string>} selected */
-function contentLevelField(selected) {
+/** @param {Array<string>} selected @param {AbortSignal} signal */
+function contentLevelField(selected, signal) {
   const wrapper = document.createElement("fieldset");
   wrapper.className = "settings-content-levels";
   const legend = document.createElement("legend");
@@ -245,12 +253,25 @@ function contentLevelField(selected) {
     const control = document.createElement("input");
     control.type = "checkbox";
     control.value = value;
-    control.checked = value === "standard" || selected.includes(value);
-    control.disabled = value === "standard";
+    control.checked = selected.includes(value);
     row.append(control, document.createTextNode(label));
     wrapper.append(row);
     controls.push(control);
   }
+  const note = document.createElement("p");
+  note.className = "muted";
+  note.textContent = "Mindestens eine Inhaltsstufe muss aktiv bleiben.";
+  wrapper.append(note);
+  const reflectRequiredSelection = () => {
+    const checked = controls.filter((control) => control.checked);
+    for (const control of controls) {
+      control.disabled = control.checked && checked.length === 1;
+    }
+  };
+  for (const control of controls) {
+    control.addEventListener("click", reflectRequiredSelection, { signal });
+  }
+  reflectRequiredSelection();
   return {
     name: "enabled_content_levels",
     wrapper,

@@ -22,7 +22,7 @@ from comfyreview.application.content_classification import (
 )
 from comfyreview.application.generation import GenerationLoraSelection
 from comfyreview.application.workspace_settings import ContentLevel
-from comfyreview.domain import PromptAtomUsage
+from comfyreview.domain import PromptAtomUsage, render_prompt_atom_usages
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
     connect_read_only,
@@ -38,7 +38,7 @@ SELECT
     definition.display_name,
     definition.tags,
     definition.notes,
-    definition.content_level,
+    definition.content_level AS legacy_content_level,
     definition.revision AS definition_revision,
     definition.archived_at,
     revision.id AS revision_id,
@@ -46,6 +46,7 @@ SELECT
     revision.revision_number,
     revision.default_model_strength_milli,
     revision.default_clip_strength_milli,
+    revision.content_level,
     revision.content_hash,
     COALESCE((
         SELECT json_group_array(json_object(
@@ -265,7 +266,7 @@ class SqliteLoraCatalogRepository:
                     ),
                 )
                 content_hash = hashlib.sha256(
-                    f"{1000}\0{1000}\0\0".encode()
+                    f"{1000}\0{1000}\0{content_level.value}\0\0".encode()
                 ).hexdigest()
                 self._insert_revision(
                     connection,
@@ -277,6 +278,7 @@ class SqliteLoraCatalogRepository:
                         ),
                         default_model_strength_milli=1000,
                         default_clip_strength_milli=1000,
+                        content_level=content_level,
                         content_hash=content_hash,
                         positive_atoms=(),
                         negative_atoms=(),
@@ -284,12 +286,48 @@ class SqliteLoraCatalogRepository:
                 )
             else:
                 lora_uid = str(existing["lora_uid"])
+                current = connection.execute(
+                    _LATEST_LORA_SELECT + " AND definition.lora_uid = ?",
+                    (lora_uid,),
+                ).fetchone()
+                assert current is not None
                 connection.execute(
                     "UPDATE lora_definitions SET content_level = ?, "
                     "revision = revision + 1, updated_at = datetime('now') "
                     "WHERE lora_uid = ?",
                     (content_level.value, lora_uid),
                 )
+                if str(current["content_level"]) != content_level.value:
+                    positive = self._atoms(current["positive_atoms_json"])
+                    negative = self._atoms(current["negative_atoms_json"])
+                    content = (
+                        f"{int(current['default_model_strength_milli'])}\0"
+                        f"{int(current['default_clip_strength_milli'])}\0"
+                        f"{content_level.value}\0"
+                        f"{self._render(positive)}\0{self._render(negative)}"
+                    )
+                    content_hash = hashlib.sha256(content.encode()).hexdigest()
+                    number = int(current["revision_number"]) + 1
+                    self._insert_revision(
+                        connection,
+                        definition_id=int(current["definition_id"]),
+                        revision_number=number,
+                        revision=LoraRevisionDraft(
+                            revision_uid=self._revision_uid(
+                                lora_uid, content_hash
+                            ),
+                            default_model_strength_milli=int(
+                                current["default_model_strength_milli"]
+                            ),
+                            default_clip_strength_milli=int(
+                                current["default_clip_strength_milli"]
+                            ),
+                            content_level=content_level,
+                            content_hash=content_hash,
+                            positive_atoms=positive,
+                            negative_atoms=negative,
+                        ),
+                    )
             result = self._get(connection, lora_uid)
             connection.commit()
         return result
@@ -313,11 +351,7 @@ class SqliteLoraCatalogRepository:
                         + " AND definition.provider_name = ?",
                         (selection.name,),
                     ).fetchone()
-                if (
-                    row is None
-                    or row["content_level"] is None
-                    or row["archived_at"] is not None
-                ):
+                if row is None or row["archived_at"] is not None:
                     raise ContentClassificationError(
                         f"LoRA requires content classification: {selection.name}"
                     )
@@ -366,11 +400,10 @@ class SqliteLoraCatalogRepository:
                     "LoRA classification changed after impact preview"
                 )
             definition = connection.execute(
-                "SELECT content_level FROM lora_definitions "
-                "WHERE lora_uid = ?",
+                _LATEST_LORA_SELECT + " AND definition.lora_uid = ?",
                 (lora_uid,),
             ).fetchone()
-            if definition is None or definition["content_level"] is None:
+            if definition is None:
                 raise ContentClassificationError(
                     "LoRA requires content classification"
                 )
@@ -378,14 +411,17 @@ class SqliteLoraCatalogRepository:
                 int(row[0])
                 for row in connection.execute(
                     "SELECT DISTINCT generation_id FROM generation_loras "
-                    "WHERE lora_uid = ?",
+                    "WHERE lora_uid = ? AND lora_revision_id IS NOT NULL",
                     (lora_uid,),
                 ).fetchall()
             )
             connection.execute(
-                "UPDATE generation_loras SET content_level_snapshot = ? "
-                "WHERE lora_uid = ?",
-                (str(definition["content_level"]), lora_uid),
+                "UPDATE generation_loras "
+                "SET content_level_snapshot = ("
+                "SELECT revision.content_level FROM lora_revisions AS revision "
+                "WHERE revision.id = generation_loras.lora_revision_id) "
+                "WHERE lora_uid = ? AND lora_revision_id IS NOT NULL",
+                (lora_uid,),
             )
             for generation_id in generation_ids:
                 level = self._inferred_level(connection, generation_id)
@@ -410,7 +446,7 @@ class SqliteLoraCatalogRepository:
         generation_count = int(
             connection.execute(
                 "SELECT COUNT(DISTINCT generation_id) FROM generation_loras "
-                "WHERE lora_uid = ?",
+                "WHERE lora_uid = ? AND lora_revision_id IS NOT NULL",
                 (lora_uid,),
             ).fetchone()[0]
         )
@@ -423,6 +459,7 @@ class SqliteLoraCatalogRepository:
             LEFT JOIN image_content_level_state AS state
               ON state.image_id = image.id
             WHERE selection.lora_uid = ?
+              AND selection.lora_revision_id IS NOT NULL
             """,
             (lora_uid,),
         ).fetchone()
@@ -500,6 +537,7 @@ class SqliteLoraCatalogRepository:
             default_clip_strength_milli=int(
                 row["default_clip_strength_milli"]
             ),
+            content_level=ContentLevel(str(row["content_level"])),
             content_hash=str(row["content_hash"]),
             positive_atoms=SqliteLoraCatalogRepository._atoms(
                 row["positive_atoms_json"]
@@ -532,8 +570,8 @@ class SqliteLoraCatalogRepository:
             INSERT INTO lora_revisions(
                 revision_uid, lora_definition_id, revision_number,
                 default_model_strength_milli,
-                default_clip_strength_milli, content_hash
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                default_clip_strength_milli, content_level, content_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 revision.revision_uid,
@@ -541,6 +579,7 @@ class SqliteLoraCatalogRepository:
                 revision_number,
                 revision.default_model_strength_milli,
                 revision.default_clip_strength_milli,
+                revision.content_level.value,
                 revision.content_hash,
             ),
         )
@@ -605,6 +644,10 @@ class SqliteLoraCatalogRepository:
     @staticmethod
     def _tags_json(values: tuple[str, ...]) -> str:
         return json.dumps(values, ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _render(values: tuple[PromptAtomUsage, ...]) -> str:
+        return render_prompt_atom_usages(values)
 
     @staticmethod
     def _revision_uid(lora_uid: str, content_hash: str) -> str:

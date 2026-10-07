@@ -9,9 +9,9 @@ ES-module Frontend V2.
 
 ## Implemented state
 
-- canonical schema v13 with stable image/generation identity, rebuildable PNG
-  geometry classification, immutable LoRA functional revisions and normalized
-  Generator state;
+- canonical schema v14 with stable image/generation identity, rebuildable PNG
+  geometry classification, immutable content-bearing LoRA trigger revisions
+  and normalized Generator state;
 - append-only Review events and rebuildable current-state/ranking views;
 - UID-based Arena with history-derived fair rotation, and UID-based Curation;
 - audited, idempotent historical Output, Prompt, Feature and Composition
@@ -58,9 +58,11 @@ provider owns only transport, job state, capabilities and raw output
 descriptors.
 
 Generation is rejected before persistence or submission when required nodes or
-`example-upscaler.pth` are unavailable. Detected LoRAs require one workspace-wide
-classification before use. New generation content level is the strictest of
-prompt-component and LoRA evidence; a manual image override wins until it is
+`example-upscaler.pth` are unavailable. A selected LoRA requires an exact
+content-bearing trigger revision. It counts only when its loader is
+graph-effective and at least one revision trigger occurs in the matching final
+prompt scope. New generation content level is the strictest of prompt-component
+and evidenced LoRA-revision facts; a manual image override wins until it is
 explicitly returned to automatic inference.
 
 Blueprint v4 also rejects a selected LoRA unless its exact provider file,
@@ -138,6 +140,13 @@ track. Every source action navigates directly through one typed handoff owner.
 Prompt/LoRA handoffs replace visible “01 Auswahl” controls, render handoffs
 replace only render settings, and neither creates a draft. There is no
 tab-local tray, global staging event or duplicate toast owner.
+Exact image handoffs also restore archived historical component revisions into
+the ordinary editable slots. They are labelled as archived and remain excluded
+from random selection. Top/Worst cards and inspectors show normalized,
+trigger-evidenced LoRA usages alongside component scopes. Content preferences
+accept every non-empty subset of the five levels, including exclusion of
+Standard, and the tablet scope rail is dismissible by its close action or an
+outside tap.
 
 Schema v12 was promoted to the live runtime database on 2026-10-06 through a
 separately created and validated output database. The previous schema-v11
@@ -145,11 +154,15 @@ runtime database remains unchanged as a named backup. All 12 existing LoRA
 definitions received one immutable basis revision; historical generation
 usages retained nullable revision provenance where it could not be proved.
 
-Schema v13 is implemented on `feature/lora-catalog-handoff`. Its explicit copy
-migration preserves v12, optionally imports a strictly validated
-`generator_v2` JSON snapshot and is never run by startup. Promotion of a live
-v13 output remains an operator action; this status does not claim that the
-currently configured local runtime database has been promoted.
+Schema v14 was promoted to the live runtime database on 2026-10-07 through the
+explicit v12-to-v13-to-v14 copy path. The byte-identical v12 source remains in
+the named promotion backup. The hash-bound provenance recovery audited 414
+generations with zero unattributed atoms, zero over-attributed atoms and zero
+ambiguous LoRA bindings. It retained 19 graph-effective, trigger-evidenced LoRA
+usages with exact revision links and removed 832 unsupported normalized rows;
+their raw graphs remain unchanged. All 393 active images produce a complete
+editable Prompt handoff when their content levels are visible. The validated
+runtime contains 803 catalog components and is served on LAN port 8002.
 
 The live ComfyUI acceptance submitted and completed one generation with one
 LoRA and one generation with two ordered LoRAs. Both produced exact 720×720
@@ -160,8 +173,8 @@ both outputs canonically.
 
 ## Remaining acceptance
 
-The implementation slice is complete on `feature/lora-catalog-handoff`. The
-full shared quality gate is green: 632 Python tests, 159 frontend tests and 12
+The implementation slice is complete on the active refactor branch. The full
+shared quality gate is green: 638 Python tests, 159 frontend tests and 12
 Playwright acceptance tests pass, with 100% Python-Core and frontend statement
 coverage.
 On 2026-10-05 the live v10 database was backed up, upgraded to v11 and

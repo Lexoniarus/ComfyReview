@@ -512,6 +512,9 @@ def _run_legacy_provenance(options: argparse.Namespace) -> int:
             "created_revisions": recovery_result.created_revisions,
             "relinked_generations": recovery_result.relinked_generations,
             "corrected_prompts": recovery_result.corrected_prompts,
+            "created_lora_revisions": (recovery_result.created_lora_revisions),
+            "bound_lora_usages": recovery_result.bound_lora_usages,
+            "removed_lora_usages": recovery_result.removed_lora_usages,
         }
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     return 0

@@ -16,7 +16,11 @@ from comfyreview.application import (
     CollectionPage,
     CompositionAnalyticsService,
     CompositionStatistic,
+    ContentLevel,
+    CreateLoraDefinitionCommand,
+    LoraCatalogService,
     ObservedPromptCombination,
+    PromptFactor,
     PromptMatchPreview,
     PromptTokenStatistic,
     RenderAnalyticsService,
@@ -27,11 +31,13 @@ from comfyreview.application import (
     ScopeStatistic,
     normalize_page,
 )
+from comfyreview.domain import prompt_atom_usage
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
     SqliteCompositionAnalyticsRepository,
+    SqliteLoraCatalogRepository,
     SqliteRenderAnalyticsRepository,
 )
 
@@ -774,9 +780,9 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         model_branch="",
         limit_per_value=3,
     )
-    observed = repository.list_observed_combinations(combo_size=3, limit=8)
+    observed = repository.list_observed_combinations(combo_size=2, limit=8)
     observed_by_character = repository.list_observed_combinations_by_character(
-        combo_size=3,
+        combo_size=2,
         limit_per_character=8,
     )
     selected = repository.list_selected_prompt_token_statistics(
@@ -806,8 +812,11 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
     assert parameter_images["20"][0].rating_count == 1
     assert observed == (
         ObservedPromptCombination(
-            combo_key="component-1|component-2|component-3",
-            combo_size=3,
+            combo_key=(
+                "component:component-1|component:component-2|"
+                "component:component-3"
+            ),
+            combo_size=2,
             component_uids=("component-1", "component-2", "component-3"),
             component_names=("Alice", "Rooftop", "Red Coat"),
             label="Alice + Rooftop + Red Coat",
@@ -821,6 +830,29 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
                     average_rating=8.0,
                     rating_count=1,
                     image_uid="image-1",
+                ),
+            ),
+            factors=(
+                PromptFactor(
+                    source="component",
+                    kind="character",
+                    uid="component-1",
+                    name="Alice",
+                    revision_uid="revision-1",
+                ),
+                PromptFactor(
+                    source="component",
+                    kind="scene",
+                    uid="component-2",
+                    name="Rooftop",
+                    revision_uid="revision-2",
+                ),
+                PromptFactor(
+                    source="component",
+                    kind="outfit",
+                    uid="component-3",
+                    name="Red Coat",
+                    revision_uid="revision-3",
                 ),
             ),
         ),
@@ -840,6 +872,75 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
             model_branch="",
             limit_per_value=1,
         )
+
+
+def test_observed_character_combinations_include_evidenced_lora_factors(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _insert_analytics_fixture(database_path, tmp_path)
+    loras = LoraCatalogService(SqliteLoraCatalogRepository(database_path))
+    definition = loras.create(
+        CreateLoraDefinitionCommand(
+            provider_name="style.safetensors",
+            display_name="Style",
+            content_level=ContentLevel.SEXY,
+            tags=(),
+            notes="",
+            default_model_strength_milli=800,
+            default_clip_strength_milli=700,
+            positive_atoms=(prompt_atom_usage("style trigger", 1.0),),
+            negative_atoms=(),
+        )
+    )
+    assert definition.latest_revision is not None
+    second_png = tmp_path / "second.png"
+    second_png.write_bytes(b"png")
+    with sqlite3.connect(database_path) as connection:
+        revision_id = connection.execute(
+            "SELECT id FROM lora_revisions WHERE revision_uid = ?",
+            (definition.latest_revision.revision_uid,),
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO generation_loras(
+                generation_id, position, lora_name, lora_uid,
+                model_strength_milli, clip_strength_milli,
+                content_level_snapshot, lora_revision_id
+            ) VALUES (1, 0, ?, ?, 800, 700, 'sexy', ?)
+            """,
+            (definition.provider_name, definition.lora_uid, revision_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO images(
+                image_uid, generation_id, output_node_id, output_index,
+                png_path
+            ) VALUES ('image-2', 1, 'save', 1, ?)
+            """,
+            (str(second_png),),
+        )
+
+    combinations = SqliteAnalyticsRepository(
+        database_path
+    ).list_observed_combinations(combo_size=2, limit=10)
+
+    lora_combinations = [
+        item
+        for item in combinations
+        if any(factor.source == "lora" for factor in item.factors)
+    ]
+    assert len(lora_combinations) == 2
+    assert all(item.factors[0].kind == "character" for item in combinations)
+    assert all(item.image_count == 2 for item in combinations)
+    assert all(
+        next(
+            factor for factor in item.factors if factor.source == "lora"
+        ).revision_uid
+        == definition.latest_revision.revision_uid
+        for item in lora_combinations
+    )
 
 
 def test_sqlite_analytics_apply_workspace_content_visibility(

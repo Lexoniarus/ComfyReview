@@ -76,12 +76,15 @@ test("unsecured LAN-style origin prepares a server draft and submits it", async 
   );
   await expect(
     page.locator("[data-draft-preview] [data-atom-text]"),
-  ).toHaveCount(4);
+  ).toHaveCount(5);
   const atomValues = await page
     .locator("[data-draft-preview] [data-atom-text]")
     .evaluateAll((elements) => elements.map((element) => element.value));
   expect(atomValues.filter((value) => value === "detail trigger")).toHaveLength(
     1,
+  );
+  expect(atomValues).toEqual(
+    expect.arrayContaining(["bad anatomy", "low quality"]),
   );
   await expect(
     page.getByRole("button", { name: "An ComfyUI senden" }),

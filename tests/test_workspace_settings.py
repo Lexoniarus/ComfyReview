@@ -297,7 +297,7 @@ def test_workspace_preferences_service_rejects_unknown_or_duplicate_values() -> 
         WorkspacePreferences(curation_set_order=("keep", "keep")),
         WorkspacePreferences(curation_set_order=("unknown",)),
         WorkspacePreferences(default_curation_set_key="unknown"),
-        WorkspacePreferences(enabled_content_levels=(ContentLevel.SEXY,)),
+        WorkspacePreferences(enabled_content_levels=()),
         WorkspacePreferences(
             enabled_content_levels=(
                 ContentLevel.STANDARD,
@@ -315,6 +315,28 @@ def test_workspace_preferences_service_rejects_unknown_or_duplicate_values() -> 
     for preferences in invalid_preferences:
         with pytest.raises(WorkspaceSettingsValidationError):
             service.update(preferences)
+
+
+def test_workspace_preferences_allow_standard_to_be_disabled() -> None:
+    repository = _Preferences(WorkspacePreferences())
+    service = WorkspacePreferencesService(
+        repository,
+        curation_set_keys=("keep",),
+    )
+
+    saved = service.update(
+        WorkspacePreferences(
+            enabled_content_levels=(
+                ContentLevel.SEXY,
+                ContentLevel.LEWD,
+            )
+        )
+    )
+
+    assert saved.enabled_content_levels == (
+        ContentLevel.SEXY,
+        ContentLevel.LEWD,
+    )
 
 
 def test_sqlite_settings_repositories_persist_profiles_and_preferences(

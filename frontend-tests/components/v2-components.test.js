@@ -50,6 +50,11 @@ describe("V2 view components", () => {
     ).toBe("true");
     expect(onToggle).toHaveBeenCalledWith("character-a");
     expect(onClassification).toHaveBeenCalledWith("unclassified");
+    expect(
+      root
+        .querySelector("[data-rail-action='scope']")
+        ?.getAttribute("aria-label"),
+    ).toBe("Bereiche schließen");
     root.querySelector("[data-scope-kind-tab='scene']")?.click();
     expect(root.textContent).toContain("Strand");
     expect(root.textContent).not.toContain("<Aiko>");
@@ -109,6 +114,12 @@ describe("V2 view components", () => {
       image_url: "/files/image-1.png",
       review_summary: { average_rating: 8.25, rating_count: 3 },
       scopes: [{ kind: "character", name: "Aiko" }],
+      loras: [
+        {
+          lora_uid: "lora-style",
+          provider_name: "style.safetensors",
+        },
+      ],
     };
 
     grid.loading();
@@ -123,6 +134,7 @@ describe("V2 view components", () => {
 
     expect(root.textContent).toContain("#5");
     expect(root.textContent).toContain("Ø 8,3 / 10");
+    expect(root.textContent).toContain("LoRA · style.safetensors");
     expect(onSelect).toHaveBeenCalledWith("image-1");
     expect(onExpand).toHaveBeenCalledWith("image-1", "/files/image-1.png");
     grid.render([], 0);

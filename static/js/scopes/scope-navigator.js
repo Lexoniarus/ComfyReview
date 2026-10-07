@@ -78,7 +78,15 @@ export class ScopeNavigator {
     this.root.replaceChildren();
     const heading = document.createElement("div");
     heading.className = "v2-panel-heading";
-    heading.textContent = "Bereiche";
+    const headingText = document.createElement("span");
+    headingText.textContent = "Bereiche";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "icon-button scope-close";
+    close.dataset.railAction = "scope";
+    close.setAttribute("aria-label", "Bereiche schließen");
+    close.textContent = "×";
+    heading.append(headingText, close);
     this.root.append(
       heading,
       classificationControl(this.classification),

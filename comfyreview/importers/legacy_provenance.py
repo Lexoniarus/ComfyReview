@@ -6,17 +6,25 @@ import hashlib
 import json
 import os
 import sqlite3
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from comfyreview.application import (
+    ContentLevel,
     PromptCompositionMembership,
+    PromptContentLevelPolicy,
     imported_prompt_component_uid,
     prompt_composition_identity,
     prompt_revision_identity,
 )
-from comfyreview.domain import prompt_atom_usages_from_text
+from comfyreview.application.lora_effects import LoraGraphEffectPolicy
+from comfyreview.domain import (
+    PromptAtomUsage,
+    prompt_atom_usages_from_text,
+    render_prompt_atom_usages,
+)
 from comfyreview.repositories.sqlite import CanonicalSchemaManager
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
@@ -58,6 +66,9 @@ class LegacyProvenanceRecoveryResult:
     created_revisions: int
     relinked_generations: int
     corrected_prompts: int
+    created_lora_revisions: int = 0
+    bound_lora_usages: int = 0
+    removed_lora_usages: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +91,21 @@ class _Generation:
     raw_metadata_json: str | None
     created_at: str
     composition_uid: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _LoraRevisionSnapshot:
+    """Carry one reviewed historical LoRA trigger revision."""
+
+    alias: str
+    lora_uid: str
+    revision_uid: str
+    content_hash: str
+    content_level: ContentLevel
+    default_model_strength_milli: int
+    default_clip_strength_milli: int
+    positive_atoms: tuple[PromptAtomUsage, ...]
+    negative_atoms: tuple[PromptAtomUsage, ...]
 
 
 class LegacyProvenanceAuditor:
@@ -110,9 +136,14 @@ class LegacyProvenanceAuditor:
             candidates: dict[str, _RevisionSnapshot] = {}
             items: list[dict[str, Any]] = []
             for generation in generations:
-                recipe = _recipe_memberships(
-                    generation,
-                    components=components,
+                stored_memberships = stored.get(generation.generation_uid, ())
+                recipe = (
+                    None
+                    if stored_memberships
+                    else _recipe_memberships(
+                        generation,
+                        components=components,
+                    )
                 )
                 if recipe is not None:
                     for snapshot in recipe:
@@ -130,13 +161,12 @@ class LegacyProvenanceAuditor:
                 else:
                     memberships, ambiguous_slots = _exact_memberships(
                         generation,
-                        stored.get(generation.generation_uid, ()),
+                        stored_memberships,
                         revisions,
                     )
                     evidence = (
                         "exact_snapshot_enrichment"
-                        if memberships
-                        != stored.get(generation.generation_uid, ())
+                        if memberships != stored_memberships
                         else "unchanged"
                     )
                 items.append(
@@ -156,6 +186,35 @@ class LegacyProvenanceAuditor:
                     components=components,
                     candidates=candidates,
                 )
+            curated_lora_revisions = _curated_lora_revisions(
+                connection,
+                curation,
+            )
+            lora_revisions = _read_lora_revisions(connection)
+            for lora_snapshot in curated_lora_revisions:
+                lora_revisions.setdefault(lora_snapshot.lora_uid, []).append(
+                    lora_snapshot
+                )
+            items, lora_bindings, removed_loras = _audit_attribution(
+                connection,
+                generations=generations,
+                items=items,
+                component_revisions=(*revisions, *candidates.values()),
+                lora_revisions=lora_revisions,
+            )
+            items = _recover_curated_atom_ownership(
+                generations=generations,
+                items=items,
+                component_revisions=(*revisions, *candidates.values()),
+                candidates=candidates,
+                ownership=_curated_atom_ownership(curation),
+            )
+            items = _recover_character_residual_revisions(
+                generations=generations,
+                items=items,
+                component_revisions=(*revisions, *candidates.values()),
+                candidates=candidates,
+            )
         finally:
             connection.close()
 
@@ -180,6 +239,26 @@ class LegacyProvenanceAuditor:
             "revision_candidates": len(candidates),
             "component_candidates": sum(
                 bool(item.get("recovered")) for item in components.values()
+            ),
+            "unattributed_atoms": sum(
+                len(item["unattributed_positive_atoms"])
+                + len(item["unattributed_negative_atoms"])
+                for item in items
+            ),
+            "overattributed_atoms": sum(
+                len(item["overattributed_positive_atoms"])
+                + len(item["overattributed_negative_atoms"])
+                for item in items
+            ),
+            "ambiguous_lora_bindings": sum(
+                len(item["ambiguous_lora_positions"]) for item in items
+            ),
+            "bound_lora_usages": len(lora_bindings),
+            "removed_lora_usages": len(removed_loras),
+            "lora_revision_candidates": len(curated_lora_revisions),
+            "character_residual_generations": sum(
+                bool(item.get("recovered_character_residual_revision"))
+                for item in items
             ),
         }
         payload: dict[str, Any] = {
@@ -206,6 +285,11 @@ class LegacyProvenanceAuditor:
                     ),
                 )
             ],
+            "lora_revisions": [
+                _lora_revision_payload(item) for item in curated_lora_revisions
+            ],
+            "lora_bindings": lora_bindings,
+            "removed_lora_usages": removed_loras,
             "generations": items,
         }
         if self._curation_path is not None:
@@ -260,6 +344,9 @@ class LegacyProvenanceRecovery:
         created = 0
         relinked = 0
         corrected = 0
+        created_lora_revisions = 0
+        bound_loras = 0
+        removed_loras = 0
         try:
             connection = connect_existing(temporary, rows=True)
             try:
@@ -273,10 +360,21 @@ class LegacyProvenanceRecovery:
                     connection,
                     payload["generations"],
                 )
+                _rebuild_prompt_memberships(connection)
                 relinked = _relink_generations(
                     connection,
                     payload["generations"],
                 )
+                created_lora_revisions = _insert_recovered_lora_revisions(
+                    connection,
+                    payload["lora_revisions"],
+                )
+                bound_loras, removed_loras = _apply_lora_usage_recovery(
+                    connection,
+                    payload["lora_bindings"],
+                    payload["removed_lora_usages"],
+                )
+                _recompute_inferred_content_levels(connection)
                 connection.commit()
             except Exception:
                 connection.rollback()
@@ -293,6 +391,9 @@ class LegacyProvenanceRecovery:
             created_revisions=created,
             relinked_generations=relinked,
             corrected_prompts=corrected,
+            created_lora_revisions=created_lora_revisions,
+            bound_lora_usages=bound_loras,
+            removed_lora_usages=removed_loras,
         )
 
     def _load_report(self, report_path: Path) -> dict[str, Any]:
@@ -329,9 +430,25 @@ class LegacyProvenanceRecovery:
             not isinstance(payload.get("components"), list)
             or not isinstance(payload.get("revisions"), list)
             or not isinstance(payload.get("generations"), list)
+            or not isinstance(payload.get("lora_revisions"), list)
+            or not isinstance(payload.get("lora_bindings"), list)
+            or not isinstance(payload.get("removed_lora_usages"), list)
         ):
             raise LegacyProvenanceValidationError(
                 "Legacy provenance audit structure is invalid"
+            )
+        summary = payload.get("summary")
+        if not isinstance(summary, dict) or any(
+            int(summary.get(field, -1)) != 0
+            for field in (
+                "ambiguous",
+                "unattributed_atoms",
+                "overattributed_atoms",
+                "ambiguous_lora_bindings",
+            )
+        ):
+            raise LegacyProvenanceValidationError(
+                "Legacy provenance recovery requires zero unresolved evidence"
             )
         return payload
 
@@ -639,12 +756,12 @@ def _exact_memberships(
             selected[slot] = next(iter(matches))
         elif len(matches) > 1:
             ambiguous.append(slot)
+    ordered_slots = tuple(slot for slot in _SLOT_ORDER if slot in selected)
     memberships = tuple(
         PromptCompositionMembership(
             slot=slot, position=position, revision_uid=selected[slot]
         )
-        for position, slot in enumerate(_SLOT_ORDER)
-        if slot in selected
+        for position, slot in enumerate(ordered_slots)
     )
     return memberships, tuple(ambiguous)
 
@@ -673,6 +790,763 @@ def _contains_sequence(container: str, candidate: str) -> bool:
         container_atoms[start : start + width] == candidate_atoms
         for start in range(len(container_atoms) - width + 1)
     )
+
+
+def _curated_lora_revisions(
+    connection: sqlite3.Connection,
+    curation: dict[str, Any] | None,
+) -> tuple[_LoraRevisionSnapshot, ...]:
+    """Validate optional reviewed historical LoRA trigger revisions."""
+    values = curation.get("lora_revisions", []) if curation else []
+    if not isinstance(values, list):
+        raise LegacyProvenanceValidationError(
+            "Legacy provenance LoRA revisions must be a list"
+        )
+    known = {
+        str(row["lora_uid"])
+        for row in connection.execute("SELECT lora_uid FROM lora_definitions")
+    }
+    aliases: set[str] = set()
+    snapshots: list[_LoraRevisionSnapshot] = []
+    for value in values:
+        if not isinstance(value, dict):
+            raise LegacyProvenanceValidationError(
+                "Legacy provenance LoRA revision must be an object"
+            )
+        alias = str(value.get("alias") or "").strip()
+        lora_uid = str(value.get("lora_uid") or "").strip()
+        if not alias or alias in aliases or lora_uid not in known:
+            raise LegacyProvenanceValidationError(
+                "Legacy provenance LoRA revision identity is invalid"
+            )
+        aliases.add(alias)
+        try:
+            content_level = ContentLevel(str(value.get("content_level")))
+        except ValueError as error:
+            raise LegacyProvenanceValidationError(
+                f"Legacy LoRA content level is invalid: {alias}"
+            ) from error
+        model_strength = int(value.get("default_model_strength_milli", 1000))
+        clip_strength = int(value.get("default_clip_strength_milli", 1000))
+        if not -10000 <= model_strength <= 10000 or not (
+            -10000 <= clip_strength <= 10000
+        ):
+            raise LegacyProvenanceValidationError(
+                f"Legacy LoRA default strength is invalid: {alias}"
+            )
+        positive = prompt_atom_usages_from_text(
+            str(value.get("positive_text") or "")
+        )
+        negative = prompt_atom_usages_from_text(
+            str(value.get("negative_text") or "")
+        )
+        if not positive and not negative:
+            raise LegacyProvenanceValidationError(
+                f"Legacy LoRA trigger revision is empty: {alias}"
+            )
+        content = (
+            f"{model_strength}\0{clip_strength}\0{content_level.value}"
+            f"\0{render_prompt_atom_usages(positive)}"
+            f"\0{render_prompt_atom_usages(negative)}"
+        )
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        revision_hash = hashlib.sha256(
+            f"{lora_uid}\0{content_hash}".encode()
+        ).hexdigest()
+        snapshots.append(
+            _LoraRevisionSnapshot(
+                alias=alias,
+                lora_uid=lora_uid,
+                revision_uid=f"lora-revision-{revision_hash}",
+                content_hash=content_hash,
+                content_level=content_level,
+                default_model_strength_milli=model_strength,
+                default_clip_strength_milli=clip_strength,
+                positive_atoms=positive,
+                negative_atoms=negative,
+            )
+        )
+    return tuple(snapshots)
+
+
+def _read_lora_revisions(
+    connection: sqlite3.Connection,
+) -> dict[str, list[_LoraRevisionSnapshot]]:
+    grouped: dict[str, list[_LoraRevisionSnapshot]] = {}
+    rows = connection.execute(
+        """
+        SELECT definition.lora_uid, revision.id, revision.revision_uid,
+               revision.default_model_strength_milli,
+               revision.default_clip_strength_milli,
+               revision.content_level, revision.content_hash
+        FROM lora_revisions AS revision
+        JOIN lora_definitions AS definition
+          ON definition.id = revision.lora_definition_id
+        ORDER BY definition.id, revision.revision_number
+        """
+    ).fetchall()
+    for row in rows:
+        atoms = connection.execute(
+            """
+            SELECT usage.scope, atom.canonical_text, usage.weight_milli
+            FROM lora_revision_atom_usages AS usage
+            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+            WHERE usage.revision_id = ?
+            ORDER BY usage.scope, usage.position
+            """,
+            (int(row["id"]),),
+        ).fetchall()
+        positive = tuple(
+            PromptAtomUsage(
+                str(item["canonical_text"]), int(item["weight_milli"])
+            )
+            for item in atoms
+            if str(item["scope"]) == "pos"
+        )
+        negative = tuple(
+            PromptAtomUsage(
+                str(item["canonical_text"]), int(item["weight_milli"])
+            )
+            for item in atoms
+            if str(item["scope"]) == "neg"
+        )
+        uid = str(row["lora_uid"])
+        grouped.setdefault(uid, []).append(
+            _LoraRevisionSnapshot(
+                alias=str(row["revision_uid"]),
+                lora_uid=uid,
+                revision_uid=str(row["revision_uid"]),
+                content_hash=str(row["content_hash"]),
+                content_level=ContentLevel(str(row["content_level"])),
+                default_model_strength_milli=int(
+                    row["default_model_strength_milli"]
+                ),
+                default_clip_strength_milli=int(
+                    row["default_clip_strength_milli"]
+                ),
+                positive_atoms=positive,
+                negative_atoms=negative,
+            )
+        )
+    return grouped
+
+
+def _audit_attribution(
+    connection: sqlite3.Connection,
+    *,
+    generations: tuple[_Generation, ...],
+    items: list[dict[str, Any]],
+    component_revisions: tuple[_RevisionSnapshot, ...],
+    lora_revisions: dict[str, list[_LoraRevisionSnapshot]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Prove complete atom attribution and normalized LoRA usage."""
+    revisions = {item.revision_uid: item for item in component_revisions}
+    items_by_uid = {str(item["generation_uid"]): item for item in items}
+    bindings: list[dict[str, Any]] = []
+    removals: list[dict[str, Any]] = []
+    for generation in generations:
+        item = items_by_uid[generation.generation_uid]
+        positive_text, negative_text = _audited_prompt_texts(generation, item)
+        positive_atoms = prompt_atom_usages_from_text(positive_text)
+        negative_atoms = prompt_atom_usages_from_text(negative_text)
+        attributed_positive: list[PromptAtomUsage] = []
+        attributed_negative: list[PromptAtomUsage] = []
+        lora_positive: list[PromptAtomUsage] = []
+        lora_negative: list[PromptAtomUsage] = []
+        for membership in item["memberships"]:
+            revision = revisions.get(str(membership["revision_uid"]))
+            if revision is None:
+                raise LegacyProvenanceValidationError(
+                    "Audited composition references an unknown revision"
+                )
+            attributed_positive.extend(
+                prompt_atom_usages_from_text(revision.positive_text)
+            )
+            attributed_negative.extend(
+                prompt_atom_usages_from_text(revision.negative_text)
+            )
+        generation_row = connection.execute(
+            """
+            SELECT id, raw_metadata_json, workflow_json, loras_json
+            FROM generations WHERE generation_uid = ?
+            """,
+            (generation.generation_uid,),
+        ).fetchone()
+        if generation_row is None:
+            raise LegacyProvenanceValidationError(
+                "Generation disappeared during provenance audit"
+            )
+        effective_positions = _effective_lora_positions(generation_row)
+        ambiguous_positions: list[int] = []
+        selections = connection.execute(
+            """
+            SELECT selection.position, selection.lora_uid,
+                   revision.revision_uid
+            FROM generation_loras AS selection
+            LEFT JOIN lora_revisions AS revision
+              ON revision.id = selection.lora_revision_id
+            WHERE selection.generation_id = ?
+            ORDER BY selection.position
+            """,
+            (int(generation_row["id"]),),
+        ).fetchall()
+        for selection in selections:
+            position = int(selection["position"])
+            lora_uid = str(selection["lora_uid"] or "")
+            existing_revision_uid = (
+                str(selection["revision_uid"])
+                if selection["revision_uid"] is not None
+                else None
+            )
+            if position not in effective_positions:
+                removals.append(
+                    _removed_lora_payload(
+                        generation.generation_uid,
+                        position,
+                        lora_uid,
+                        existing_revision_uid,
+                        "graph_inactive",
+                    )
+                )
+                continue
+            candidates = [
+                revision
+                for revision in lora_revisions.get(lora_uid, [])
+                if _revision_triggers_match(
+                    revision,
+                    positive_atoms=positive_atoms,
+                    negative_atoms=negative_atoms,
+                )
+            ]
+            existing = next(
+                (
+                    revision
+                    for revision in candidates
+                    if revision.revision_uid == existing_revision_uid
+                ),
+                None,
+            )
+            selected: _LoraRevisionSnapshot | None = existing
+            if selected is None:
+                selected = _most_specific_lora_revision(candidates)
+            if selected is None and candidates:
+                ambiguous_positions.append(position)
+                continue
+            if selected is None:
+                removals.append(
+                    _removed_lora_payload(
+                        generation.generation_uid,
+                        position,
+                        lora_uid,
+                        existing_revision_uid,
+                        "trigger_absent",
+                    )
+                )
+                continue
+            bindings.append(
+                {
+                    "generation_uid": generation.generation_uid,
+                    "position": position,
+                    "lora_uid": lora_uid,
+                    "source_revision_uid": existing_revision_uid,
+                    "target_revision_uid": selected.revision_uid,
+                    "content_level": selected.content_level.value,
+                }
+            )
+            attributed_positive.extend(selected.positive_atoms)
+            attributed_negative.extend(selected.negative_atoms)
+            lora_positive.extend(selected.positive_atoms)
+            lora_negative.extend(selected.negative_atoms)
+        item["ambiguous_lora_positions"] = ambiguous_positions
+        item["_lora_positive_atoms"] = [
+            {"text": atom.text, "weight_milli": atom.weight_milli}
+            for atom in lora_positive
+        ]
+        item["_lora_negative_atoms"] = [
+            {"text": atom.text, "weight_milli": atom.weight_milli}
+            for atom in lora_negative
+        ]
+        item["unattributed_positive_atoms"] = _unattributed_atoms(
+            positive_atoms,
+            attributed_positive,
+        )
+        item["unattributed_negative_atoms"] = _unattributed_atoms(
+            negative_atoms,
+            attributed_negative,
+        )
+        item["overattributed_positive_atoms"] = _overattributed_atoms(
+            positive_atoms,
+            attributed_positive,
+        )
+        item["overattributed_negative_atoms"] = _overattributed_atoms(
+            negative_atoms,
+            attributed_negative,
+        )
+    return items, bindings, removals
+
+
+def _curated_atom_ownership(
+    curation: dict[str, Any] | None,
+) -> dict[tuple[str, str], str]:
+    values = curation.get("atom_ownership", []) if curation else []
+    if not isinstance(values, list):
+        raise LegacyProvenanceValidationError(
+            "Legacy provenance atom ownership must be a list"
+        )
+    result: dict[tuple[str, str], str] = {}
+    for value in values:
+        if not isinstance(value, dict):
+            raise LegacyProvenanceValidationError(
+                "Legacy provenance atom ownership entry is invalid"
+            )
+        scope = str(value.get("scope") or "").strip()
+        text = " ".join(str(value.get("text") or "").casefold().split())
+        owner = str(value.get("owner_slot") or "").strip()
+        key = (scope, text)
+        if (
+            scope not in {"pos", "neg"}
+            or not text
+            or owner not in _SLOT_ORDER
+            or key in result
+        ):
+            raise LegacyProvenanceValidationError(
+                "Legacy provenance atom ownership is incomplete or duplicated"
+            )
+        result[key] = owner
+    return result
+
+
+def _recover_curated_atom_ownership(
+    *,
+    generations: tuple[_Generation, ...],
+    items: list[dict[str, Any]],
+    component_revisions: tuple[_RevisionSnapshot, ...],
+    candidates: dict[str, _RevisionSnapshot],
+    ownership: dict[tuple[str, str], str],
+) -> list[dict[str, Any]]:
+    """Resolve reviewed cross-component duplicate atoms without rest groups."""
+    revisions = {item.revision_uid: item for item in component_revisions}
+    generations_by_uid = {item.generation_uid: item for item in generations}
+    for item in items:
+        generation = generations_by_uid[str(item["generation_uid"])]
+        for scope, field in (
+            ("pos", "overattributed_positive_atoms"),
+            ("neg", "overattributed_negative_atoms"),
+        ):
+            unresolved: list[dict[str, object]] = []
+            for extra in item[field]:
+                text = " ".join(str(extra["text"]).casefold().split())
+                owner = ownership.get((scope, text))
+                if owner is None:
+                    unresolved.append(extra)
+                    continue
+                matching: list[tuple[dict[str, Any], _RevisionSnapshot]] = []
+                for membership in item["memberships"]:
+                    revision = revisions.get(str(membership["revision_uid"]))
+                    atoms = (
+                        prompt_atom_usages_from_text(revision.positive_text)
+                        if revision is not None and scope == "pos"
+                        else prompt_atom_usages_from_text(
+                            revision.negative_text
+                        )
+                        if revision is not None
+                        else ()
+                    )
+                    if revision is not None and any(
+                        _atom_text(atom) == text for atom in atoms
+                    ):
+                        matching.append((membership, revision))
+                owners = [
+                    pair for pair in matching if pair[0]["slot"] == owner
+                ]
+                nonowners = [
+                    pair for pair in matching if pair[0]["slot"] != owner
+                ]
+                if len(owners) != 1 or len(nonowners) != 1:
+                    unresolved.append(extra)
+                    continue
+                membership, revision = nonowners[0]
+                positive = list(
+                    prompt_atom_usages_from_text(revision.positive_text)
+                )
+                negative = list(
+                    prompt_atom_usages_from_text(revision.negative_text)
+                )
+                target = positive if scope == "pos" else negative
+                removed = False
+                filtered: list[PromptAtomUsage] = []
+                for atom in target:
+                    if not removed and _atom_text(atom) == text:
+                        removed = True
+                        continue
+                    filtered.append(atom)
+                if not removed:
+                    unresolved.append(extra)
+                    continue
+                if scope == "pos":
+                    positive = filtered
+                else:
+                    negative = filtered
+                positive_text = render_prompt_atom_usages(tuple(positive))
+                negative_text = render_prompt_atom_usages(tuple(negative))
+                revision_uid, content_hash = prompt_revision_identity(
+                    revision.component_uid,
+                    positive_text,
+                    negative_text,
+                )
+                recovered = _RevisionSnapshot(
+                    component_uid=revision.component_uid,
+                    component_key=revision.component_key,
+                    slot=revision.slot,
+                    revision_uid=revision_uid,
+                    positive_text=positive_text,
+                    negative_text=negative_text,
+                    content_hash=content_hash,
+                    first_seen_at=generation.created_at,
+                )
+                _merge_revision_candidate(candidates, recovered)
+                revisions[revision_uid] = recovered
+                membership["revision_uid"] = revision_uid
+            item[field] = unresolved
+        memberships = tuple(
+            PromptCompositionMembership(
+                slot=str(value["slot"]),
+                position=int(value["position"]),
+                revision_uid=str(value["revision_uid"]),
+            )
+            for value in item["memberships"]
+        )
+        item["target_composition_uid"] = prompt_composition_identity(
+            memberships
+        )
+    return items
+
+
+def _recover_character_residual_revisions(
+    *,
+    generations: tuple[_Generation, ...],
+    items: list[dict[str, Any]],
+    component_revisions: tuple[_RevisionSnapshot, ...],
+    candidates: dict[str, _RevisionSnapshot],
+) -> list[dict[str, Any]]:
+    """Fold reviewed historical compiler atoms into character predecessors."""
+    revisions = {item.revision_uid: item for item in component_revisions}
+    generations_by_uid = {item.generation_uid: item for item in generations}
+    for item in items:
+        lora_positive_payload = item.pop("_lora_positive_atoms", [])
+        lora_negative_payload = item.pop("_lora_negative_atoms", [])
+        positive_residual = item["unattributed_positive_atoms"]
+        negative_residual = item["unattributed_negative_atoms"]
+        positive_excess = item["overattributed_positive_atoms"]
+        negative_excess = item["overattributed_negative_atoms"]
+        if (
+            not positive_residual
+            and not negative_residual
+            and not positive_excess
+            and not negative_excess
+            or item["ambiguous_lora_positions"]
+        ):
+            continue
+        membership = next(
+            (
+                value
+                for value in item["memberships"]
+                if value["slot"] == "character"
+            ),
+            None,
+        )
+        if membership is None:
+            continue
+        base = revisions.get(str(membership["revision_uid"]))
+        generation = generations_by_uid[str(item["generation_uid"])]
+        if base is None:
+            continue
+        positive_text, negative_text = _audited_prompt_texts(generation, item)
+        other_positive: list[PromptAtomUsage] = []
+        other_negative: list[PromptAtomUsage] = []
+        for value in item["memberships"]:
+            if value["slot"] == "character":
+                continue
+            other = revisions.get(str(value["revision_uid"]))
+            if other is None:
+                continue
+            other_positive.extend(
+                prompt_atom_usages_from_text(other.positive_text)
+            )
+            other_negative.extend(
+                prompt_atom_usages_from_text(other.negative_text)
+            )
+        other_positive.extend(_payload_atoms(lora_positive_payload))
+        other_negative.extend(_payload_atoms(lora_negative_payload))
+        positive_atoms = _historical_character_atoms(
+            prompt_atom_usages_from_text(positive_text),
+            prompt_atom_usages_from_text(base.positive_text),
+            positive_residual,
+            other_positive,
+        )
+        negative_atoms = _historical_character_atoms(
+            prompt_atom_usages_from_text(negative_text),
+            prompt_atom_usages_from_text(base.negative_text),
+            negative_residual,
+            other_negative,
+        )
+        recovered_positive = render_prompt_atom_usages(positive_atoms)
+        recovered_negative = render_prompt_atom_usages(negative_atoms)
+        revision_uid, content_hash = prompt_revision_identity(
+            base.component_uid,
+            recovered_positive,
+            recovered_negative,
+        )
+        snapshot = _RevisionSnapshot(
+            component_uid=base.component_uid,
+            component_key=base.component_key,
+            slot="character",
+            revision_uid=revision_uid,
+            positive_text=recovered_positive,
+            negative_text=recovered_negative,
+            content_hash=content_hash,
+            first_seen_at=generation.created_at,
+        )
+        _merge_revision_candidate(candidates, snapshot)
+        revisions[revision_uid] = snapshot
+        membership["revision_uid"] = revision_uid
+        memberships = tuple(
+            PromptCompositionMembership(
+                slot=str(value["slot"]),
+                position=int(value["position"]),
+                revision_uid=str(value["revision_uid"]),
+            )
+            for value in item["memberships"]
+        )
+        item["target_composition_uid"] = prompt_composition_identity(
+            memberships
+        )
+        item["recovered_character_residual_revision"] = True
+        final_positive = [*positive_atoms, *other_positive]
+        final_negative = [*negative_atoms, *other_negative]
+        prompt_positive = prompt_atom_usages_from_text(positive_text)
+        prompt_negative = prompt_atom_usages_from_text(negative_text)
+        item["unattributed_positive_atoms"] = _unattributed_atoms(
+            prompt_positive, final_positive
+        )
+        item["unattributed_negative_atoms"] = _unattributed_atoms(
+            prompt_negative, final_negative
+        )
+        item["overattributed_positive_atoms"] = _overattributed_atoms(
+            prompt_positive, final_positive
+        )
+        item["overattributed_negative_atoms"] = _overattributed_atoms(
+            prompt_negative, final_negative
+        )
+    return items
+
+
+def _historical_character_atoms(
+    prompt_atoms: tuple[PromptAtomUsage, ...],
+    character_atoms: tuple[PromptAtomUsage, ...],
+    residual_atoms: list[dict[str, object]],
+    other_atoms: list[PromptAtomUsage],
+) -> tuple[PromptAtomUsage, ...]:
+    required = Counter(_atom_text(item) for item in character_atoms)
+    required.update(
+        str(item["text"]).strip().casefold() for item in residual_atoms
+    )
+    remaining = Counter(_atom_text(item) for item in prompt_atoms)
+    for text in (_atom_text(item) for item in other_atoms):
+        if remaining[text] > 0:
+            remaining[text] -= 1
+    selected: list[PromptAtomUsage] = []
+    for atom in prompt_atoms:
+        text = _atom_text(atom)
+        if required[text] <= 0 or remaining[text] <= 0:
+            continue
+        selected.append(atom)
+        required[text] -= 1
+        remaining[text] -= 1
+    return tuple(selected)
+
+
+def _payload_atoms(values: list[dict[str, object]]) -> list[PromptAtomUsage]:
+    return [
+        PromptAtomUsage(str(item["text"]), int(str(item["weight_milli"])))
+        for item in values
+    ]
+
+
+def _audited_prompt_texts(
+    generation: _Generation,
+    item: dict[str, Any],
+) -> tuple[str, str]:
+    correction = item.get("prompt_correction") or {}
+    return (
+        str(
+            (correction.get("positive") or {}).get("target_text")
+            or generation.positive_text
+        ),
+        str(
+            (correction.get("negative") or {}).get("target_text")
+            or generation.negative_text
+        ),
+    )
+
+
+def _effective_lora_positions(row: sqlite3.Row) -> set[int]:
+    graph = _stored_generation_graph(row)
+    if graph is None:
+        return set()
+    effects = {
+        effect.node_id for effect in LoraGraphEffectPolicy().effects(graph)
+    }
+    try:
+        selections = json.loads(str(row["loras_json"] or "[]"))
+    except json.JSONDecodeError:
+        return set()
+    if not isinstance(selections, list):
+        return set()
+    return {
+        position
+        for position, selection in enumerate(selections)
+        if isinstance(selection, dict)
+        and str(selection.get("node_id") or "") in effects
+    }
+
+
+def _stored_generation_graph(row: sqlite3.Row) -> dict[str, Any] | None:
+    try:
+        metadata = json.loads(str(row["raw_metadata_json"] or "{}"))
+    except json.JSONDecodeError:
+        metadata = {}
+    if isinstance(metadata, dict):
+        for key in ("comfy_prompt_graph", "prompt_graph"):
+            graph = metadata.get(key)
+            if isinstance(graph, dict):
+                return graph
+    try:
+        graph = json.loads(str(row["workflow_json"] or "{}"))
+    except json.JSONDecodeError:
+        return None
+    return graph if isinstance(graph, dict) else None
+
+
+def _revision_triggers_match(
+    revision: _LoraRevisionSnapshot,
+    *,
+    positive_atoms: tuple[PromptAtomUsage, ...],
+    negative_atoms: tuple[PromptAtomUsage, ...],
+) -> bool:
+    triggers = (*revision.positive_atoms, *revision.negative_atoms)
+    if not triggers:
+        return False
+    positive = Counter(_atom_text(item) for item in positive_atoms)
+    negative = Counter(_atom_text(item) for item in negative_atoms)
+    return all(
+        positive[text] >= count
+        for text, count in Counter(
+            _atom_text(item) for item in revision.positive_atoms
+        ).items()
+    ) and all(
+        negative[text] >= count
+        for text, count in Counter(
+            _atom_text(item) for item in revision.negative_atoms
+        ).items()
+    )
+
+
+def _most_specific_lora_revision(
+    candidates: list[_LoraRevisionSnapshot],
+) -> _LoraRevisionSnapshot | None:
+    if not candidates:
+        return None
+    specificity = max(
+        len(item.positive_atoms) + len(item.negative_atoms)
+        for item in candidates
+    )
+    strongest = [
+        item
+        for item in candidates
+        if len(item.positive_atoms) + len(item.negative_atoms) == specificity
+    ]
+    return strongest[0] if len(strongest) == 1 else None
+
+
+def _unattributed_atoms(
+    prompt_atoms: tuple[PromptAtomUsage, ...],
+    attributed_atoms: list[PromptAtomUsage],
+) -> list[dict[str, object]]:
+    remaining = Counter(_atom_text(item) for item in prompt_atoms)
+    for text in (_atom_text(item) for item in attributed_atoms):
+        if remaining[text] > 0:
+            remaining[text] -= 1
+    output: list[dict[str, object]] = []
+    for atom in prompt_atoms:
+        text = _atom_text(atom)
+        if remaining[text] <= 0:
+            continue
+        output.append({"text": atom.text, "weight_milli": atom.weight_milli})
+        remaining[text] -= 1
+    return output
+
+
+def _overattributed_atoms(
+    prompt_atoms: tuple[PromptAtomUsage, ...],
+    attributed_atoms: list[PromptAtomUsage],
+) -> list[dict[str, object]]:
+    remaining = Counter(_atom_text(item) for item in attributed_atoms)
+    for text in (_atom_text(item) for item in prompt_atoms):
+        if remaining[text] > 0:
+            remaining[text] -= 1
+    output: list[dict[str, object]] = []
+    for atom in attributed_atoms:
+        text = _atom_text(atom)
+        if remaining[text] <= 0:
+            continue
+        output.append({"text": atom.text, "weight_milli": atom.weight_milli})
+        remaining[text] -= 1
+    return output
+
+
+def _atom_text(atom: PromptAtomUsage) -> str:
+    return atom.text.strip().casefold()
+
+
+def _removed_lora_payload(
+    generation_uid: str,
+    position: int,
+    lora_uid: str,
+    revision_uid: str | None,
+    reason: str,
+) -> dict[str, object]:
+    return {
+        "generation_uid": generation_uid,
+        "position": position,
+        "lora_uid": lora_uid,
+        "source_revision_uid": revision_uid,
+        "reason": reason,
+    }
+
+
+def _lora_revision_payload(
+    snapshot: _LoraRevisionSnapshot,
+) -> dict[str, object]:
+    return {
+        "alias": snapshot.alias,
+        "lora_uid": snapshot.lora_uid,
+        "revision_uid": snapshot.revision_uid,
+        "content_hash": snapshot.content_hash,
+        "content_level": snapshot.content_level.value,
+        "default_model_strength_milli": (
+            snapshot.default_model_strength_milli
+        ),
+        "default_clip_strength_milli": snapshot.default_clip_strength_milli,
+        "positive_atoms": [
+            {"text": item.text, "weight_milli": item.weight_milli}
+            for item in snapshot.positive_atoms
+        ],
+        "negative_atoms": [
+            {"text": item.text, "weight_milli": item.weight_milli}
+            for item in snapshot.negative_atoms
+        ],
+    }
 
 
 def _load_curation(path: Path | None) -> dict[str, Any] | None:
@@ -798,14 +1672,16 @@ def _apply_curation(
                         f"generation {generation_uid}"
                     )
                 selected[snapshot.slot] = snapshot.revision_uid
+            ordered_slots = tuple(
+                slot for slot in _SLOT_ORDER if slot in selected
+            )
             memberships = tuple(
                 PromptCompositionMembership(
                     slot=slot,
                     position=position,
                     revision_uid=selected[slot],
                 )
-                for position, slot in enumerate(_SLOT_ORDER)
-                if slot in selected
+                for position, slot in enumerate(ordered_slots)
             )
             item["target_composition_uid"] = prompt_composition_identity(
                 memberships
@@ -893,6 +1769,11 @@ def _apply_prompt_text_correction(
     if hashlib.sha256(source_text.encode("utf-8")).hexdigest() != (
         expected_sha256
     ):
+        if (
+            source_text.count(old_fragment) == 0
+            and source_text.count(new_fragment) == 1
+        ):
+            return source_text
         raise LegacyProvenanceValidationError(
             f"Legacy provenance {scope} prompt checksum mismatch"
         )
@@ -1398,6 +2279,48 @@ def _ensure_prompt(
     return int(row["id"])
 
 
+def _rebuild_prompt_memberships(connection: sqlite3.Connection) -> None:
+    """Rebuild normalized prompt atoms from every canonical prompt snapshot."""
+    prompts = connection.execute(
+        "SELECT id, text FROM prompts ORDER BY id"
+    ).fetchall()
+    for prompt in prompts:
+        prompt_id = int(prompt["id"])
+        connection.execute(
+            "DELETE FROM prompt_memberships WHERE prompt_id = ?",
+            (prompt_id,),
+        )
+        for position, atom in enumerate(
+            prompt_atom_usages_from_text(str(prompt["text"]))
+        ):
+            connection.execute(
+                "INSERT OR IGNORE INTO prompt_atoms(canonical_text) VALUES (?)",
+                (atom.text,),
+            )
+            atom_row = connection.execute(
+                "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                (atom.text,),
+            ).fetchone()
+            if atom_row is None:
+                raise LegacyProvenanceValidationError(
+                    "Recovered prompt atom disappeared"
+                )
+            connection.execute(
+                """
+                INSERT INTO prompt_memberships(
+                    prompt_id, atom_id, position, weight_milli, raw_text
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    prompt_id,
+                    int(atom_row["id"]),
+                    position,
+                    atom.weight_milli,
+                    render_prompt_atom_usages((atom,)),
+                ),
+            )
+
+
 def _relink_generations(
     connection: sqlite3.Connection,
     items: list[dict[str, Any]],
@@ -1510,6 +2433,258 @@ def _ensure_composition(
                 "Recovered composition membership collision"
             )
     return composition_id
+
+
+def _insert_recovered_lora_revisions(
+    connection: sqlite3.Connection,
+    items: list[dict[str, Any]],
+) -> int:
+    """Insert reviewed historical revisions before each active revision."""
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        grouped.setdefault(str(item["lora_uid"]), []).append(item)
+    created = 0
+    for lora_uid, definitions in grouped.items():
+        definition = connection.execute(
+            "SELECT id FROM lora_definitions WHERE lora_uid = ?",
+            (lora_uid,),
+        ).fetchone()
+        if definition is None:
+            raise LegacyProvenanceValidationError(
+                "Recovered LoRA definition disappeared"
+            )
+        definition_id = int(definition["id"])
+        new_items = [
+            item
+            for item in definitions
+            if connection.execute(
+                "SELECT 1 FROM lora_revisions WHERE revision_uid = ?",
+                (str(item["revision_uid"]),),
+            ).fetchone()
+            is None
+        ]
+        if not new_items:
+            continue
+        new_items.sort(key=lambda item: str(item["alias"]))
+        shift = len(new_items)
+        existing = connection.execute(
+            "SELECT id, revision_number FROM lora_revisions "
+            "WHERE lora_definition_id = ? ORDER BY revision_number",
+            (definition_id,),
+        ).fetchall()
+        connection.execute(
+            "UPDATE lora_revisions SET revision_number = revision_number + 1000000 "
+            "WHERE lora_definition_id = ?",
+            (definition_id,),
+        )
+        for number, item in enumerate(new_items, start=1):
+            cursor = connection.execute(
+                """
+                INSERT INTO lora_revisions(
+                    revision_uid, lora_definition_id, revision_number,
+                    default_model_strength_milli,
+                    default_clip_strength_milli, content_level,
+                    content_hash, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (
+                    str(item["revision_uid"]),
+                    definition_id,
+                    number,
+                    int(item["default_model_strength_milli"]),
+                    int(item["default_clip_strength_milli"]),
+                    str(item["content_level"]),
+                    str(item["content_hash"]),
+                ),
+            )
+            revision_id = int(cursor.lastrowid or 0)
+            _insert_lora_revision_atoms(
+                connection,
+                revision_id,
+                "pos",
+                item["positive_atoms"],
+            )
+            _insert_lora_revision_atoms(
+                connection,
+                revision_id,
+                "neg",
+                item["negative_atoms"],
+            )
+            created += 1
+        for row in existing:
+            connection.execute(
+                "UPDATE lora_revisions SET revision_number = ? WHERE id = ?",
+                (int(row["revision_number"]) + shift, int(row["id"])),
+            )
+    return created
+
+
+def _insert_lora_revision_atoms(
+    connection: sqlite3.Connection,
+    revision_id: int,
+    scope: str,
+    atoms: list[dict[str, Any]],
+) -> None:
+    for position, atom in enumerate(atoms):
+        text = str(atom["text"])
+        connection.execute(
+            "INSERT OR IGNORE INTO prompt_atoms(canonical_text) VALUES (?)",
+            (text,),
+        )
+        atom_row = connection.execute(
+            "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+            (text,),
+        ).fetchone()
+        if atom_row is None:
+            raise LegacyProvenanceValidationError(
+                "Recovered LoRA trigger atom disappeared"
+            )
+        connection.execute(
+            """
+            INSERT INTO lora_revision_atom_usages(
+                revision_id, atom_id, scope, position, weight_milli
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                revision_id,
+                int(atom_row["id"]),
+                scope,
+                position,
+                int(atom["weight_milli"]),
+            ),
+        )
+
+
+def _apply_lora_usage_recovery(
+    connection: sqlite3.Connection,
+    bindings: list[dict[str, Any]],
+    removals: list[dict[str, Any]],
+) -> tuple[int, int]:
+    bound = 0
+    for item in bindings:
+        generation = connection.execute(
+            "SELECT id FROM generations WHERE generation_uid = ?",
+            (str(item["generation_uid"]),),
+        ).fetchone()
+        revision = connection.execute(
+            "SELECT id FROM lora_revisions WHERE revision_uid = ?",
+            (str(item["target_revision_uid"]),),
+        ).fetchone()
+        if generation is None or revision is None:
+            raise LegacyProvenanceValidationError(
+                "Audited LoRA usage target disappeared"
+            )
+        current = connection.execute(
+            """
+            SELECT selection.lora_uid, revision.revision_uid
+            FROM generation_loras AS selection
+            LEFT JOIN lora_revisions AS revision
+              ON revision.id = selection.lora_revision_id
+            WHERE selection.generation_id = ? AND selection.position = ?
+            """,
+            (int(generation["id"]), int(item["position"])),
+        ).fetchone()
+        observed_revision = (
+            str(current["revision_uid"])
+            if current is not None and current["revision_uid"] is not None
+            else None
+        )
+        if (
+            current is None
+            or str(current["lora_uid"] or "") != str(item["lora_uid"])
+            or observed_revision != item.get("source_revision_uid")
+        ):
+            raise LegacyProvenanceValidationError(
+                "Audited LoRA usage changed after provenance audit"
+            )
+        connection.execute(
+            """
+            UPDATE generation_loras
+            SET lora_revision_id = ?, content_level_snapshot = ?
+            WHERE generation_id = ? AND position = ?
+            """,
+            (
+                int(revision["id"]),
+                str(item["content_level"]),
+                int(generation["id"]),
+                int(item["position"]),
+            ),
+        )
+        bound += 1
+    removed = 0
+    for item in removals:
+        generation = connection.execute(
+            "SELECT id FROM generations WHERE generation_uid = ?",
+            (str(item["generation_uid"]),),
+        ).fetchone()
+        if generation is None:
+            raise LegacyProvenanceValidationError(
+                "Audited LoRA removal generation disappeared"
+            )
+        current = connection.execute(
+            "SELECT lora_uid FROM generation_loras "
+            "WHERE generation_id = ? AND position = ?",
+            (int(generation["id"]), int(item["position"])),
+        ).fetchone()
+        if current is None or str(current["lora_uid"] or "") != str(
+            item["lora_uid"]
+        ):
+            raise LegacyProvenanceValidationError(
+                "Audited LoRA removal changed after provenance audit"
+            )
+        connection.execute(
+            "DELETE FROM generation_loras WHERE generation_id = ? AND position = ?",
+            (int(generation["id"]), int(item["position"])),
+        )
+        removed += 1
+    return bound, removed
+
+
+def _recompute_inferred_content_levels(
+    connection: sqlite3.Connection,
+) -> None:
+    policy = PromptContentLevelPolicy()
+    order = tuple(ContentLevel)
+    for generation in connection.execute(
+        "SELECT id FROM generations ORDER BY id"
+    ).fetchall():
+        levels = [ContentLevel.STANDARD]
+        for row in connection.execute(
+            """
+            SELECT component.tags
+            FROM prompt_composition_revisions AS membership
+            JOIN prompt_revisions AS revision ON revision.id = membership.revision_id
+            JOIN prompt_components AS component ON component.id = revision.component_id
+            JOIN generations AS generation
+              ON generation.prompt_composition_id = membership.composition_id
+            WHERE generation.id = ?
+            """,
+            (int(generation["id"]),),
+        ).fetchall():
+            try:
+                tags_value = json.loads(str(row["tags"] or "[]"))
+            except json.JSONDecodeError:
+                tags_value = []
+            tags = (
+                tuple(str(value) for value in tags_value)
+                if isinstance(tags_value, list)
+                else ()
+            )
+            levels.append(policy.read(tags).content_level)
+        levels.extend(
+            ContentLevel(str(row["content_level_snapshot"]))
+            for row in connection.execute(
+                "SELECT content_level_snapshot FROM generation_loras "
+                "WHERE generation_id = ?",
+                (int(generation["id"]),),
+            ).fetchall()
+            if row["content_level_snapshot"] is not None
+        )
+        level = max(levels, key=order.index)
+        connection.execute(
+            "UPDATE generations SET inferred_content_level = ? WHERE id = ?",
+            (level.value, int(generation["id"])),
+        )
 
 
 def _file_sha256(path: Path) -> str:

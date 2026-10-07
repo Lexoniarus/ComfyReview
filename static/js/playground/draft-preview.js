@@ -84,6 +84,9 @@ export class DraftPreview {
     return {
       positive_atoms: this.#atoms("positive"),
       negative_atoms: this.#atoms("negative"),
+      loras: Array.isArray(this.draft?.loras)
+        ? this.draft.loras.map(generationLoraPayload)
+        : [],
     };
   }
 
