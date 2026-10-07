@@ -20,6 +20,7 @@ from comfyreview.application import (
     GenerationLoraSelection,
     GenerationMutationError,
     GenerationOutputPolicy,
+    GenerationPromptGroup,
     GenerationPromptSnapshot,
     GenerationReconciliationRequired,
     GenerationRecord,
@@ -429,6 +430,23 @@ def test_generation_service_rejects_missing_lora_trigger_before_persistence() ->
         (
             replace(_request(), canvas=GenerationCanvas(65, 1024)),
             "image dimensions",
+        ),
+        (
+            replace(
+                _request(),
+                prompt=replace(
+                    _request().prompt,
+                    prompt_groups=(
+                        GenerationPromptGroup(
+                            kind="character",
+                            component_uid="character-a",
+                            revision_uid="revision-a",
+                            position=1,
+                        ),
+                    ),
+                ),
+            ),
+            "prompt group positions",
         ),
     ),
 )

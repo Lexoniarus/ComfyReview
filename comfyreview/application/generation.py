@@ -42,6 +42,19 @@ class GenerationReconciliationRequired(GenerationMutationError):
 
 
 @dataclass(frozen=True, slots=True)
+class GenerationPromptGroup:
+    """Bind exact prompt atoms to one component revision and candidate."""
+
+    kind: str
+    component_uid: str
+    revision_uid: str
+    position: int
+    positive_atoms: tuple[PromptAtomUsage, ...] = ()
+    negative_atoms: tuple[PromptAtomUsage, ...] = ()
+    candidate_uid: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationPromptSnapshot:
     """Keep rendered prompts and the exact catalog revisions used."""
 
@@ -50,6 +63,7 @@ class GenerationPromptSnapshot:
     revision_uids: tuple[str, ...]
     positive_atoms: tuple[PromptAtomUsage, ...] = ()
     negative_atoms: tuple[PromptAtomUsage, ...] = ()
+    prompt_groups: tuple[GenerationPromptGroup, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -535,6 +549,7 @@ class GenerationService:
             raise GenerationValidationError("positive prompt is required")
         if not request.prompt.negative_text.strip():
             raise GenerationValidationError("negative prompt is required")
+        cls._validate_prompt_groups(request.prompt)
         if tuple(lora.position for lora in request.loras) != tuple(
             range(len(request.loras))
         ):
@@ -549,6 +564,35 @@ class GenerationService:
                     raise GenerationValidationError(
                         "image dimensions must be multiples of 8 between 64 and 4096"
                     )
+
+    @classmethod
+    def _validate_prompt_groups(cls, prompt: GenerationPromptSnapshot) -> None:
+        groups = prompt.prompt_groups
+        if not groups:
+            return
+        if tuple(group.position for group in groups) != tuple(
+            range(len(groups))
+        ):
+            raise GenerationValidationError(
+                "prompt group positions must be contiguous"
+            )
+        for group in groups:
+            cls._required(group.kind, "prompt group kind")
+            cls._required(group.component_uid, "prompt group component_uid")
+            cls._required(group.revision_uid, "prompt group revision_uid")
+            if group.candidate_uid is not None:
+                cls._required(
+                    group.candidate_uid, "prompt group candidate_uid"
+                )
+        for scope in ("positive_atoms", "negative_atoms"):
+            grouped = tuple(
+                atom for group in groups for atom in getattr(group, scope)
+            )
+            complete = getattr(prompt, scope)
+            if complete[: len(grouped)] != grouped:
+                raise GenerationValidationError(
+                    "prompt groups do not match the rendered prompt atoms"
+                )
 
     @staticmethod
     def _required(value: str, field: str) -> str:

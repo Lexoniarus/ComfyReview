@@ -14,6 +14,7 @@ from comfyreview.application import (
     GenerationLoraSelection,
     GenerationMutationError,
     GenerationNotFoundError,
+    GenerationPromptGroup,
     GenerationQueryValidationError,
     GenerationSamplerSettings,
     GenerationSummary,
@@ -73,6 +74,14 @@ class PromptRevisionSelectionRequest(BaseModel):
     revision_uid: str
 
 
+class GenerationPromptGroupRequest(PromptRevisionSelectionRequest):
+    """Carry the exact edited atoms for one selected prompt component."""
+
+    candidate_uid: str | None = None
+    positive_atoms: list[PromptAtomRequest] = Field(default_factory=list)
+    negative_atoms: list[PromptAtomRequest] = Field(default_factory=list)
+
+
 class PlaygroundGenerationRequest(BaseModel):
     """Submit reviewed domain intent without workflow graph semantics."""
 
@@ -80,6 +89,9 @@ class PlaygroundGenerationRequest(BaseModel):
 
     draft_uid: str
     prompt_selections: list[PromptRevisionSelectionRequest] = Field(
+        default_factory=list
+    )
+    prompt_groups: list[GenerationPromptGroupRequest] = Field(
         default_factory=list
     )
     source_image_uid: str | None = None
@@ -180,8 +192,24 @@ def submit_generation(
     try:
         positive_atoms = atom_usages(payload.positive_atoms)
         negative_atoms = atom_usages(payload.negative_atoms)
+        prompt_groups = tuple(
+            GenerationPromptGroup(
+                kind=group.kind,
+                component_uid=group.component_uid,
+                revision_uid=group.revision_uid,
+                candidate_uid=group.candidate_uid,
+                position=position,
+                positive_atoms=atom_usages(group.positive_atoms),
+                negative_atoms=atom_usages(group.negative_atoms),
+            )
+            for position, group in enumerate(payload.prompt_groups)
+        )
         source_loras: tuple[GenerationLoraSelection, ...] | None = None
         if payload.source_image_uid:
+            if prompt_groups:
+                raise PromptSelectionError(
+                    "historical image snapshots cannot include prompt_groups"
+                )
             handoff = container.image_generator_handoffs.get(
                 payload.source_image_uid
             )
@@ -206,6 +234,31 @@ def submit_generation(
                 for position, item in enumerate(handoff.prompt_setup.loras)
             )
         else:
+            expected_groups = tuple(
+                (item.kind, item.component_uid, item.revision_uid)
+                for item in payload.prompt_selections
+            )
+            actual_groups = tuple(
+                (item.kind, item.component_uid, item.revision_uid)
+                for item in prompt_groups
+            )
+            if actual_groups != expected_groups:
+                raise PromptSelectionError(
+                    "prompt_groups must match prompt_selections exactly"
+                )
+            for scope, complete in (
+                ("positive_atoms", positive_atoms),
+                ("negative_atoms", negative_atoms),
+            ):
+                grouped = tuple(
+                    atom
+                    for group in prompt_groups
+                    for atom in getattr(group, scope)
+                )
+                if complete[: len(grouped)] != grouped:
+                    raise PromptSelectionError(
+                        "prompt_groups do not match the rendered prompt"
+                    )
             confirmed = container.playground_service.confirm_draft(
                 ConfirmPlaygroundDraftCommand(
                     prompt_selections=tuple(
@@ -270,6 +323,7 @@ def submit_generation(
                     for position, item in enumerate(payload.loras)
                 )
             ),
+            prompt_groups=prompt_groups,
         )
         drafts = container.playground_generation_sweeps.expand(
             draft,

@@ -513,6 +513,22 @@ def prepare_playground_draft(
                     for group in lora_groups
                 ]
             ),
+            "prompt_groups": [
+                {
+                    "component_uid": selected.component.component_uid,
+                    "revision_uid": selected.revision.revision_uid,
+                    "candidate_uid": None,
+                    "kind": selected.component.kind,
+                    "name": selected.component.name,
+                    "positive_atoms": atom_response(
+                        selected.revision.positive_atoms
+                    ),
+                    "negative_atoms": atom_response(
+                        selected.revision.negative_atoms
+                    ),
+                }
+                for selected in draft.selection.components
+            ],
             "loras": (
                 [
                     {

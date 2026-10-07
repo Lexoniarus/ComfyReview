@@ -1686,6 +1686,22 @@ def test_v2_generation_submission_uses_reviewed_snapshot_and_stable_revisions() 
                 "revision_uid": "revision-scene-old",
             },
         ],
+        "prompt_groups": [
+            {
+                "kind": "character",
+                "component_uid": "character-a",
+                "revision_uid": "revision-character-old",
+                "positive_atoms": [{"text": "edited positive", "weight": 1.0}],
+                "negative_atoms": [{"text": "edited negative", "weight": 1.0}],
+            },
+            {
+                "kind": "scene",
+                "component_uid": "scene-a",
+                "revision_uid": "revision-scene-old",
+                "positive_atoms": [],
+                "negative_atoms": [],
+            },
+        ],
         "positive_atoms": [{"text": "edited positive", "weight": 1.0}],
         "negative_atoms": [{"text": "edited negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
@@ -1754,6 +1770,15 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
                 "revision_uid": "revision-missing",
             }
         ],
+        "prompt_groups": [
+            {
+                "kind": "character",
+                "component_uid": "missing",
+                "revision_uid": "revision-missing",
+                "positive_atoms": [{"text": "positive", "weight": 1.0}],
+                "negative_atoms": [{"text": "negative", "weight": 1.0}],
+            }
+        ],
         "positive_atoms": [{"text": "positive", "weight": 1.0}],
         "negative_atoms": [{"text": "negative", "weight": 1.0}],
         "checkpoint": "model.safetensors",
@@ -1781,6 +1806,22 @@ def test_v2_generation_submission_surfaces_validation_and_submit_failures() -> (
             "kind": "scene",
             "component_uid": "scene-a",
             "revision_uid": "revision-scene-a",
+        },
+    ]
+    payload["prompt_groups"] = [
+        {
+            "kind": "character",
+            "component_uid": "character-a",
+            "revision_uid": "revision-character-a",
+            "positive_atoms": [{"text": "positive", "weight": 1.0}],
+            "negative_atoms": [{"text": "negative", "weight": 1.0}],
+        },
+        {
+            "kind": "scene",
+            "component_uid": "scene-a",
+            "revision_uid": "revision-scene-a",
+            "positive_atoms": [],
+            "negative_atoms": [],
         },
     ]
     bad_sweep = {

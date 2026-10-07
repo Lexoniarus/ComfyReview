@@ -9,16 +9,18 @@ from pathlib import Path
 
 from comfyreview.application import (
     ContentLevel,
+    GenerationPromptGroup,
     GenerationRecord,
     PreparedGeneration,
     PromptCompositionMembership,
     infer_content_level,
     prompt_composition_identity,
+    prompt_revision_identity,
 )
 from comfyreview.application.content_classification import (
     PromptContentLevelPolicy,
 )
-from comfyreview.domain import parse_prompt_atoms
+from comfyreview.domain import parse_prompt_atoms, render_prompt_atom_usages
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
     connect_read_only,
@@ -152,6 +154,12 @@ class SqliteGenerationRepository:
                 ),
             )
             generation_id = int(cursor.lastrowid or 0)
+            self._persist_prompt_groups(
+                connection,
+                generation_id,
+                generation.generation_uid,
+                generation.request.prompt.prompt_groups,
+            )
             for order, stage in enumerate(
                 generation.compiled_workflow.sampler_stages
             ):
@@ -515,6 +523,170 @@ class SqliteGenerationRepository:
                     ),
                 )
         return prompt_id
+
+    @classmethod
+    def _persist_prompt_groups(
+        cls,
+        connection: sqlite3.Connection,
+        generation_id: int,
+        generation_uid: str,
+        groups: tuple[GenerationPromptGroup, ...],
+    ) -> None:
+        for group in groups:
+            source = connection.execute(
+                """
+                SELECT component.id AS component_id,
+                       component.kind AS kind,
+                       revision.id AS revision_id
+                FROM prompt_components AS component
+                JOIN prompt_revisions AS revision
+                  ON revision.component_id = component.id
+                WHERE component.component_uid = ?
+                  AND revision.revision_uid = ?
+                """,
+                (group.component_uid, group.revision_uid),
+            ).fetchone()
+            if source is None or str(source["kind"]) != group.kind:
+                raise RuntimeError(
+                    "Prompt group source revision does not match"
+                )
+            _revision_uid, content_hash = prompt_revision_identity(
+                group.component_uid,
+                render_prompt_atom_usages(group.positive_atoms),
+                render_prompt_atom_usages(group.negative_atoms),
+            )
+            candidate_id = cls._candidate_id(
+                connection,
+                group,
+                int(source["component_id"]),
+                int(source["revision_id"]),
+                content_hash,
+            )
+            group_uid = (
+                "prompt-group-"
+                + hashlib.sha256(
+                    (
+                        f"{generation_uid}\0{group.position}\0"
+                        f"{group.component_uid}\0{content_hash}"
+                    ).encode()
+                ).hexdigest()
+            )
+            cursor = connection.execute(
+                """
+                INSERT INTO generation_prompt_groups(
+                    group_uid, generation_id, component_id,
+                    source_revision_id, candidate_id, kind, position,
+                    content_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    group_uid,
+                    generation_id,
+                    int(source["component_id"]),
+                    int(source["revision_id"]),
+                    candidate_id,
+                    group.kind,
+                    group.position,
+                    content_hash,
+                ),
+            )
+            group_id = int(cursor.lastrowid or 0)
+            for scope, atoms in (
+                ("pos", group.positive_atoms),
+                ("neg", group.negative_atoms),
+            ):
+                for position, atom in enumerate(atoms):
+                    atom_id = cls._ensure_atom_id(connection, atom.text)
+                    connection.execute(
+                        """
+                        INSERT INTO generation_prompt_group_atom_usages(
+                            group_id, atom_id, scope, position, weight_milli
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            group_id,
+                            atom_id,
+                            scope,
+                            position,
+                            atom.weight_milli,
+                        ),
+                    )
+
+    @classmethod
+    def _candidate_id(
+        cls,
+        connection: sqlite3.Connection,
+        group: GenerationPromptGroup,
+        component_id: int,
+        revision_id: int,
+        content_hash: str,
+    ) -> int | None:
+        if group.candidate_uid is None:
+            return None
+        candidate = connection.execute(
+            """
+            SELECT id, component_id, source_revision_id, content_hash
+            FROM prompt_component_candidates
+            WHERE candidate_uid = ?
+            """,
+            (group.candidate_uid,),
+        ).fetchone()
+        if candidate is None:
+            raise RuntimeError("Unknown prompt component candidate")
+        if (
+            int(candidate["component_id"]) != component_id
+            or int(candidate["source_revision_id"]) != revision_id
+            or str(candidate["content_hash"]) != content_hash
+        ):
+            raise RuntimeError("Prompt candidate does not match its group")
+        expected = tuple(
+            (scope, position, atom.text, atom.weight_milli)
+            for scope, atoms in (
+                ("pos", group.positive_atoms),
+                ("neg", group.negative_atoms),
+            )
+            for position, atom in enumerate(atoms)
+        )
+        observed = tuple(
+            (
+                str(row["scope"]),
+                int(row["position"]),
+                str(row["canonical_text"]),
+                int(row["weight_milli"]),
+            )
+            for row in connection.execute(
+                """
+                SELECT usage.scope, usage.position, atom.canonical_text,
+                       usage.weight_milli
+                FROM prompt_candidate_atom_usages AS usage
+                JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+                WHERE usage.candidate_id = ?
+                ORDER BY CASE usage.scope WHEN 'pos' THEN 0 ELSE 1 END,
+                         usage.position
+                """,
+                (int(candidate["id"]),),
+            ).fetchall()
+        )
+        if observed != expected:
+            raise RuntimeError("Prompt candidate atoms do not match its group")
+        return int(candidate["id"])
+
+    @staticmethod
+    def _ensure_atom_id(
+        connection: sqlite3.Connection,
+        canonical_text: str,
+    ) -> int:
+        connection.execute(
+            "INSERT OR IGNORE INTO prompt_atoms(canonical_text) VALUES (?)",
+            (canonical_text,),
+        )
+        row = connection.execute(
+            "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+            (canonical_text,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("Prompt atom could not be persisted")
+        return int(row["id"])
 
     @staticmethod
     def _ensure_composition(

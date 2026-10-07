@@ -2523,11 +2523,155 @@ class CanonicalSchemaManager:
             """,
             (review_frontier,),
         )
+        CanonicalSchemaManager._backfill_exact_generation_prompt_groups(
+            connection
+        )
         connection.execute(
             "UPDATE schema_metadata SET value = '15' "
             "WHERE key = 'schema_version'"
         )
         connection.execute("PRAGMA user_version = 15")
+
+    @staticmethod
+    def _backfill_exact_generation_prompt_groups(
+        connection: sqlite3.Connection,
+    ) -> None:
+        generations = connection.execute(
+            """
+            SELECT generation.id, generation.generation_uid,
+                   positive_prompt.text, negative_prompt.text,
+                   generation.prompt_composition_id
+            FROM generations AS generation
+            JOIN prompts AS positive_prompt
+              ON positive_prompt.id = generation.positive_prompt_id
+            JOIN prompts AS negative_prompt
+              ON negative_prompt.id = generation.negative_prompt_id
+            WHERE generation.prompt_composition_id IS NOT NULL
+            ORDER BY generation.id
+            """
+        ).fetchall()
+        for (
+            generation_id,
+            generation_uid,
+            positive_text,
+            negative_text,
+            composition_id,
+        ) in generations:
+            memberships = connection.execute(
+                """
+                SELECT revision.id, revision.revision_uid,
+                       revision.component_id, revision.content_hash,
+                       component.component_uid, component.kind,
+                       membership.position
+                FROM prompt_composition_revisions AS membership
+                JOIN prompt_revisions AS revision
+                  ON revision.id = membership.revision_id
+                JOIN prompt_components AS component
+                  ON component.id = revision.component_id
+                WHERE membership.composition_id = ?
+                ORDER BY membership.position
+                """,
+                (composition_id,),
+            ).fetchall()
+            groups: list[
+                tuple[
+                    tuple[PromptAtomUsage, ...],
+                    tuple[PromptAtomUsage, ...],
+                    tuple[object, ...],
+                ]
+            ] = []
+            for membership in memberships:
+                by_scope: dict[str, tuple[PromptAtomUsage, ...]] = {}
+                for scope in ("pos", "neg"):
+                    by_scope[scope] = tuple(
+                        PromptAtomUsage(str(text), int(weight_milli))
+                        for text, weight_milli in connection.execute(
+                            """
+                            SELECT atom.canonical_text, usage.weight_milli
+                            FROM prompt_revision_atom_usages AS usage
+                            JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+                            WHERE usage.revision_id = ? AND usage.scope = ?
+                            ORDER BY usage.position
+                            """,
+                            (membership[0], scope),
+                        ).fetchall()
+                    )
+                groups.append((by_scope["pos"], by_scope["neg"], membership))
+            flattened_positive = tuple(
+                atom
+                for positive, _negative, _membership in groups
+                for atom in positive
+            )
+            flattened_negative = tuple(
+                atom
+                for _positive, negative, _membership in groups
+                for atom in negative
+            )
+            if render_prompt_atom_usages(flattened_positive) != str(
+                positive_text
+            ) or render_prompt_atom_usages(flattened_negative) != str(
+                negative_text
+            ):
+                continue
+            for positive, negative, membership in groups:
+                (
+                    revision_id,
+                    _revision_uid,
+                    component_id,
+                    content_hash,
+                    component_uid,
+                    kind,
+                    position,
+                ) = membership
+                group_uid = (
+                    "prompt-group-"
+                    + hashlib.sha256(
+                        (
+                            f"{generation_uid}\0{position}\0"
+                            f"{component_uid}\0{content_hash}"
+                        ).encode()
+                    ).hexdigest()
+                )
+                cursor = connection.execute(
+                    """
+                    INSERT INTO generation_prompt_groups(
+                        group_uid, generation_id, component_id,
+                        source_revision_id, candidate_id, kind, position,
+                        content_hash
+                    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
+                    """,
+                    (
+                        group_uid,
+                        generation_id,
+                        component_id,
+                        revision_id,
+                        kind,
+                        position,
+                        content_hash,
+                    ),
+                )
+                group_id = int(cursor.lastrowid or 0)
+                for scope, atoms in (("pos", positive), ("neg", negative)):
+                    for atom_position, atom in enumerate(atoms):
+                        atom_id = connection.execute(
+                            "SELECT id FROM prompt_atoms "
+                            "WHERE canonical_text = ?",
+                            (atom.text,),
+                        ).fetchone()[0]
+                        connection.execute(
+                            """
+                            INSERT INTO generation_prompt_group_atom_usages(
+                                group_id, atom_id, scope, position, weight_milli
+                            ) VALUES (?, ?, ?, ?, ?)
+                            """,
+                            (
+                                group_id,
+                                atom_id,
+                                scope,
+                                atom_position,
+                                atom.weight_milli,
+                            ),
+                        )
 
     @staticmethod
     def _insert_generator_state(

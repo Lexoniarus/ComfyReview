@@ -1046,6 +1046,7 @@ describe("Playground browser components", () => {
         groups: [
           {
             component_uid: "character-a",
+            revision_uid: "revision-character-old",
             kind: "character",
             name: "Aiko",
             positive_atoms: [{ text: "positive", weight: 1 }],
@@ -1127,6 +1128,16 @@ describe("Playground browser components", () => {
           },
         ],
         positive_atoms: [{ text: "edited", weight: 1 }],
+        prompt_groups: [
+          {
+            kind: "character",
+            component_uid: "character-a",
+            revision_uid: "revision-character-old",
+            candidate_uid: null,
+            positive_atoms: [{ text: "edited", weight: 1 }],
+            negative_atoms: [{ text: "negative", weight: 1 }],
+          },
+        ],
         loras: [
           {
             name: "style.safetensors",

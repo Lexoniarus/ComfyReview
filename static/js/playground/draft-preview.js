@@ -19,6 +19,8 @@ export class DraftPreview {
     this.draftUid = "";
     /** @type {Array<{scope: "positive" | "negative", editor: PromptAtomEditor}>} */
     this.editors = [];
+    /** @type {Array<{source: Record<string, any>, positive: PromptAtomEditor, negative: PromptAtomEditor}>} */
+    this.groupEditors = [];
     this.positiveSnapshot = document.createElement("pre");
     this.negativeSnapshot = document.createElement("pre");
     this.evidenceRoot = document.createElement("section");
@@ -158,6 +160,7 @@ export class DraftPreview {
         component_uid: selection.component_uid,
         revision_uid: selection.revision_uid,
       })),
+      prompt_groups: this.#promptGroups(),
       source_image_uid: this.draft.source_image_uid || null,
       positive_atoms: this.#atoms("positive"),
       negative_atoms: this.#atoms("negative"),
@@ -183,6 +186,8 @@ export class DraftPreview {
     const title = document.createElement("h3");
     title.textContent = String(group.name || group.kind || "Baustein");
     section.append(title);
+    /** @type {Record<string, PromptAtomEditor>} */
+    const groupEditors = {};
     for (const [scope, label, values] of [
       ["positive", "Positiv", group.positive_atoms || []],
       ["negative", "Negativ", group.negative_atoms || []],
@@ -191,9 +196,34 @@ export class DraftPreview {
         this.#updateState(true),
       );
       this.editors.push({ scope, editor });
+      groupEditors[scope] = editor;
       section.append(editor.element);
     }
+    this.groupEditors.push({
+      source: group,
+      positive: groupEditors.positive,
+      negative: groupEditors.negative,
+    });
     return section;
+  }
+
+  #promptGroups() {
+    return this.groupEditors
+      .filter(
+        ({ source }) =>
+          source.kind !== "lora" &&
+          source.kind !== "image_snapshot" &&
+          source.component_uid &&
+          source.revision_uid,
+      )
+      .map(({ source, positive, negative }) => ({
+        kind: String(source.kind),
+        component_uid: String(source.component_uid),
+        revision_uid: String(source.revision_uid),
+        candidate_uid: source.candidate_uid || null,
+        positive_atoms: positive.value(),
+        negative_atoms: negative.value(),
+      }));
   }
 
   /** @param {"positive" | "negative"} scope */
@@ -226,6 +256,7 @@ export class DraftPreview {
   #disposeEditors() {
     for (const item of this.editors) item.editor.dispose();
     this.editors = [];
+    this.groupEditors = [];
   }
 
   /** @param {Array<Record<string, any>>} items */

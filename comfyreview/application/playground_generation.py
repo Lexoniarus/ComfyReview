@@ -13,6 +13,7 @@ from comfyreview.application.generation import (
     GenerationMutationError,
     GenerationOutputPolicy,
     GenerationPort,
+    GenerationPromptGroup,
     GenerationPromptSnapshot,
     GenerationRequest,
     GenerationSamplerSettings,
@@ -38,6 +39,7 @@ class PlaygroundGenerationDraft:
     sampler: GenerationSamplerSettings
     output_subdirectory: str
     loras: tuple[GenerationLoraSelection, ...] = ()
+    prompt_groups: tuple[GenerationPromptGroup, ...] = ()
     blueprint_uid: str | None = None
     blueprint_version: int | None = None
     aspect_format: AspectFormat = AspectFormat.SQUARE_1_1
@@ -223,6 +225,7 @@ class PlaygroundGenerationPolicy:
                 revision_uids=draft.prompt.revision_uids,
                 positive_atoms=draft.prompt.positive_atoms,
                 negative_atoms=draft.prompt.negative_atoms,
+                prompt_groups=draft.prompt_groups,
             ),
             blueprint_uid=draft.blueprint_uid or self._blueprint_uid,
             blueprint_version=(

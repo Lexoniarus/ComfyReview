@@ -1094,9 +1094,59 @@ def test_version_fourteen_upgrade_adds_prompt_variant_facts_and_baseline(
             INSERT INTO prompt_revisions(
                 revision_uid, component_id, revision_number,
                 positive_text, negative_text, content_hash
-            ) VALUES ('revision-v14-latest', ?, 2, '', '', 'prompt-v14-hash')
+            ) VALUES (
+                'revision-v14-latest', ?, 2, 'hero', 'blur', 'prompt-v14-hash'
+            )
             """,
             (component_id,),
+        )
+        revision_id = connection.execute(
+            "SELECT id FROM prompt_revisions "
+            "WHERE revision_uid = 'revision-v14-latest'"
+        ).fetchone()[0]
+        for scope, text in (("pos", "hero"), ("neg", "blur")):
+            connection.execute(
+                "INSERT OR IGNORE INTO prompt_atoms(canonical_text) VALUES (?)",
+                (text,),
+            )
+            atom_id = connection.execute(
+                "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                (text,),
+            ).fetchone()[0]
+            connection.execute(
+                "INSERT INTO prompt_revision_atom_usages("
+                "revision_id, atom_id, scope, position, weight_milli) "
+                "VALUES (?, ?, ?, 0, 1000)",
+                (revision_id, atom_id, scope),
+            )
+        exact_composition_id = connection.execute(
+            "INSERT INTO prompt_compositions(composition_uid) "
+            "VALUES ('composition-exact')"
+        ).lastrowid
+        ambiguous_composition_id = connection.execute(
+            "INSERT INTO prompt_compositions(composition_uid) "
+            "VALUES ('composition-ambiguous')"
+        ).lastrowid
+        old_revision_id = connection.execute(
+            "SELECT id FROM prompt_revisions "
+            "WHERE revision_uid = 'revision-v12'"
+        ).fetchone()[0]
+        connection.execute(
+            "INSERT INTO prompt_composition_revisions("
+            "composition_id, revision_id, slot, position) "
+            "VALUES (?, ?, 'character', 0)",
+            (exact_composition_id, revision_id),
+        )
+        connection.execute(
+            "INSERT INTO prompt_composition_revisions("
+            "composition_id, revision_id, slot, position) "
+            "VALUES (?, ?, 'character', 0)",
+            (ambiguous_composition_id, old_revision_id),
+        )
+        connection.execute(
+            "UPDATE generations SET prompt_composition_id = CASE id "
+            "WHEN 1 THEN ? WHEN 2 THEN ? END WHERE id IN (1, 2)",
+            (exact_composition_id, ambiguous_composition_id),
         )
         connection.commit()
     source_before = source.read_bytes()
@@ -1149,6 +1199,13 @@ def test_version_fourteen_upgrade_adds_prompt_variant_facts_and_baseline(
             )
         }
         assert "candidate_id" in selection_columns
+        assert connection.execute(
+            "SELECT generation_id, kind, position "
+            "FROM generation_prompt_groups"
+        ).fetchall() == [(1, "character", 0)]
+        assert connection.execute(
+            "SELECT COUNT(*) FROM generation_prompt_group_atom_usages"
+        ).fetchone() == (2,)
 
 
 def test_version_fourteen_upgrade_failure_preserves_source(
