@@ -10,6 +10,7 @@ from comfyreview.domain.card_battler.cards import (
 )
 from comfyreview.domain.card_battler.mechanics import (
     MaterializedBranch,
+    MaterializedBranchConditionGroup,
     MaterializedCondition,
     MaterializedConditionGroup,
     MaterializedCost,
@@ -28,6 +29,7 @@ __all__ = [
     "CardRulesProvenance",
     "CardStats",
     "MaterializedBranch",
+    "MaterializedBranchConditionGroup",
     "MaterializedCondition",
     "MaterializedConditionGroup",
     "MaterializedCost",

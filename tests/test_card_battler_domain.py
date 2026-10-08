@@ -16,6 +16,7 @@ from comfyreview.domain.card_battler import (
     CardRulesProvenance,
     CardStats,
     MaterializedBranch,
+    MaterializedBranchConditionGroup,
     MaterializedCondition,
     MaterializedConditionGroup,
     MaterializedCost,
@@ -85,7 +86,13 @@ def test_structured_card_spec_keeps_rules_and_provenance_immutable() -> None:
         key="main",
         order=1,
         branch_type="main",
-        condition_group_orders=(1,),
+        condition_groups=(
+            MaterializedBranchConditionGroup(
+                order=1,
+                condition_group_order=1,
+                join_with_previous=None,
+            ),
+        ),
         steps=(step,),
     )
     mechanic = MaterializedMechanic(

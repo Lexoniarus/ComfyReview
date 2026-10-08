@@ -52,13 +52,22 @@ class MaterializedStep:
 
 
 @dataclass(frozen=True, slots=True)
+class MaterializedBranchConditionGroup:
+    """Attach one condition group to a branch without losing join semantics."""
+
+    order: int
+    condition_group_order: int
+    join_with_previous: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class MaterializedBranch:
     """Freeze one resolved mechanic branch."""
 
     key: str
     order: int
     branch_type: str
-    condition_group_orders: tuple[int, ...]
+    condition_groups: tuple[MaterializedBranchConditionGroup, ...]
     steps: tuple[MaterializedStep, ...]
 
 
