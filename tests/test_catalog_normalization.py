@@ -23,6 +23,7 @@ from comfyreview.importers import (
     CatalogNormalizationRebuilder,
     CatalogNormalizationValidationError,
 )
+from comfyreview.importers.catalog_normalization import payload_sha256
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteReviewRepository,
@@ -142,6 +143,40 @@ def _seed_rebuild_source(database: Path, tmp_path: Path) -> None:
             kind="scene",
             name="Old scene",
             atom="fog",
+        )
+        old_scene_component_id, old_scene_revision_id = connection.execute(
+            "SELECT component.id, revision.id "
+            "FROM prompt_components AS component "
+            "JOIN prompt_revisions AS revision "
+            "ON revision.component_id = component.id "
+            "WHERE component.component_uid = 'old-scene'"
+        ).fetchone()
+        old_scene_group_id = connection.execute(
+            """
+            INSERT INTO generation_prompt_groups(
+                group_uid, generation_id, component_id,
+                source_revision_id, kind, position, content_hash
+            ) VALUES (
+                'old-scene-generation-group', ?, ?, ?,
+                'scene', 0, 'old-scene-hash'
+            ) RETURNING id
+            """,
+            (
+                generation_id,
+                old_scene_component_id,
+                old_scene_revision_id,
+            ),
+        ).fetchone()[0]
+        old_scene_atom_id = connection.execute(
+            "SELECT atom_id FROM prompt_revision_atom_usages "
+            "WHERE revision_id = ?",
+            (old_scene_revision_id,),
+        ).fetchone()[0]
+        connection.execute(
+            "INSERT INTO generation_prompt_group_atom_usages("
+            "group_id, atom_id, scope, position, weight_milli"
+            ") VALUES (?, ?, 'pos', 0, 1000)",
+            (old_scene_group_id, old_scene_atom_id),
         )
         composition_id = connection.execute(
             "INSERT INTO image_catalog_compositions("
@@ -268,48 +303,86 @@ def _complete_rebuild_mapping(mapping_path: Path) -> str:
         decision["reviewed"] = True
         if decision["source_component_uid"] == "old-scene":
             decision["action"] = "replace"
-            decision["target_component_uids"] = ["mist-atmosphere"]
-    revision_uid, _content_hash = prompt_revision_identity(
-        "mist-atmosphere", "mist", ""
-    )
-    mapping["target_components"] = [
-        {
-            "component_uid": "mist-atmosphere",
-            "revision_uid": revision_uid,
-            "kind": "atmosphere",
-            "component_key": "mist",
-            "name": "Mist",
-            "tags": [],
-            "notes": "normalized",
-            "atoms": [
-                {
-                    "scope": "pos",
-                    "position": 0,
-                    "text": "mist",
-                    "weight_milli": 1000,
-                    "evidence_sources": [
-                        {
-                            "component_uid": "old-scene",
-                            "scope": "pos",
-                            "text": "fog",
-                            "relation": "synonym",
-                        }
-                    ],
-                }
-            ],
+            decision["target_component_uids"] = [
+                f"normalized-{kind}"
+                for kind in (
+                    "scene",
+                    "atmosphere",
+                    "lighting",
+                    "outfit",
+                    "accessory",
+                    "pose",
+                    "expression",
+                    "framing",
+                    "camera_angle",
+                    "optical_effect",
+                )
+            ]
+    mapping["target_components"] = []
+    revision_uids = []
+    for kind in (
+        "scene",
+        "atmosphere",
+        "lighting",
+        "outfit",
+        "accessory",
+        "pose",
+        "expression",
+        "framing",
+        "camera_angle",
+        "optical_effect",
+    ):
+        component_uid = f"normalized-{kind}"
+        text = "mist" if kind == "atmosphere" else f"normalized {kind}"
+        revision_uid, _content_hash = prompt_revision_identity(
+            component_uid, text, ""
+        )
+        revision_uids.append(revision_uid)
+        atom = {
+            "scope": "pos",
+            "position": 0,
+            "text": text,
+            "weight_milli": 1000,
+            "evidence_sources": [],
         }
-    ]
+        if kind == "atmosphere":
+            atom["evidence_sources"] = [
+                {
+                    "component_uid": "old-scene",
+                    "scope": "pos",
+                    "text": "fog",
+                    "relation": "synonym",
+                }
+            ]
+        mapping["target_components"].append(
+            {
+                "component_uid": component_uid,
+                "revision_uid": revision_uid,
+                "revision_number": 1,
+                "kind": kind,
+                "component_key": f"normalized-{kind}",
+                "name": f"Normalized {kind}",
+                "tags": [],
+                "notes": "normalized test fixture",
+                "atoms": [atom],
+            }
+        )
     for image in mapping["image_compositions"]:
         image["reviewed"] = True
         image["revision_uids"] = [
             "hero-character-revision",
-            revision_uid,
+            *revision_uids,
         ]
+    _write_mapping(mapping_path, mapping)
+    return revision_uids[1]
+
+
+def _write_mapping(mapping_path: Path, mapping: dict[str, Any]) -> None:
+    mapping["mapping_sha256"] = payload_sha256(mapping, "mapping_sha256")
     mapping_path.write_text(
         json.dumps(mapping, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
-    return revision_uid
 
 
 def _unused_local_port() -> int:
@@ -392,7 +465,8 @@ def test_catalog_normalization_audit_writes_hash_bound_mapping_draft(
         item["source_component_uid"]: item
         for item in mapping["source_components"]
     }
-    assert decisions["rooftop"]["action"] == "keep"
+    assert decisions["rooftop"]["action"] == "review"
+    assert decisions["rooftop"]["target_component_uids"] == []
     assert decisions["mixed"]["action"] == "review"
     assert mapping["complete"] is False
     assert mapping["target_components"] == []
@@ -486,6 +560,13 @@ def test_catalog_rebuild_preserves_safe_priors_and_resets_image_reviews(
     database = tmp_path / "source.sqlite3"
     _seed_rebuild_source(database, tmp_path)
     source_before = database.read_bytes()
+    with sqlite3.connect(database) as connection:
+        character_promotions_before = connection.execute(
+            "SELECT promotion.* FROM prompt_component_promotions AS promotion "
+            "JOIN prompt_components AS component "
+            "ON component.id = promotion.component_id "
+            "WHERE component.kind = 'character' ORDER BY promotion.id"
+        ).fetchall()
     audit_path = tmp_path / "audit.json"
     mapping_path = tmp_path / "mapping.json"
     CatalogNormalizationAuditor(database).audit(audit_path, mapping_path)
@@ -539,7 +620,7 @@ def test_catalog_rebuild_preserves_safe_priors_and_resets_image_reviews(
             WHERE atom.canonical_text = 'mist'
             """
         ).fetchone() == ("mist", 1, 8.0)
-        assert connection.execute(
+        rebuilt_revision_uids = connection.execute(
             "SELECT revision.revision_uid "
             "FROM current_image_catalog_compositions AS current_catalog "
             "JOIN image_catalog_composition_revisions AS membership "
@@ -547,10 +628,10 @@ def test_catalog_rebuild_preserves_safe_priors_and_resets_image_reviews(
             "JOIN prompt_revisions AS revision "
             "ON revision.id = membership.revision_id "
             "ORDER BY membership.position"
-        ).fetchall() == [
-            ("hero-character-revision",),
-            (target_revision_uid,),
-        ]
+        ).fetchall()
+        assert rebuilt_revision_uids[0] == ("hero-character-revision",)
+        assert len(rebuilt_revision_uids) == 11
+        assert (target_revision_uid,) in rebuilt_revision_uids
         assert (
             connection.execute(
                 "SELECT catalog_role, archived_at FROM prompt_components "
@@ -558,11 +639,28 @@ def test_catalog_rebuild_preserves_safe_priors_and_resets_image_reviews(
             ).fetchone()[0]
             == "generation_provenance"
         )
+        assert (
+            connection.execute(
+                "SELECT promotion.* FROM prompt_component_promotions AS promotion "
+                "JOIN prompt_components AS component "
+                "ON component.id = promotion.component_id "
+                "WHERE component.kind = 'character' ORDER BY promotion.id"
+            ).fetchall()
+            == character_promotions_before
+        )
         assert connection.execute(
-            "SELECT reason, provisional FROM prompt_component_promotions "
-            "WHERE component_id = (SELECT id FROM prompt_components "
-            "WHERE component_uid = 'hero-character')"
-        ).fetchone() == ("catalog_cleanup_baseline", 0)
+            "SELECT COUNT(*) FROM prompt_component_promotions AS promotion "
+            "JOIN prompt_components AS component "
+            "ON component.id = promotion.component_id "
+            "WHERE component.kind != 'character' "
+            "AND component.catalog_role = 'catalog' "
+            "AND promotion.reason = 'catalog_cleanup_baseline'"
+        ).fetchone() == (10,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM generation_global_prompt_policies "
+            "WHERE generation_id = (SELECT id FROM generations "
+            "WHERE generation_uid = 'generation-live')"
+        ).fetchone() == (2,)
 
     SqliteReviewRepository(output).append(
         ReviewRecord(
@@ -669,7 +767,19 @@ def test_rebuilt_database_runs_through_main_entrypoint(
         )
         assert {
             component["kind"] for component in components["components"]
-        } == {"character", "atmosphere"}
+        } == {
+            "character",
+            "scene",
+            "atmosphere",
+            "lighting",
+            "outfit",
+            "accessory",
+            "pose",
+            "expression",
+            "framing",
+            "camera_angle",
+            "optical_effect",
+        }
         rankings = _read_runtime_json(f"{base_url}/api/v2/rankings")
         assert rankings["items"] == []
         assert rankings["total"] == 0
@@ -712,7 +822,7 @@ def test_catalog_rebuild_rejects_source_changes_after_audit(
             "weight_milli": 1000,
         }
     ]
-    mapping_path.write_text(json.dumps(mapping), encoding="utf-8")
+    _write_mapping(mapping_path, mapping)
     with sqlite3.connect(database) as connection:
         connection.execute(
             "INSERT INTO prompt_atoms(canonical_text) VALUES ('changed')"
@@ -736,25 +846,11 @@ def test_catalog_rebuild_can_atomically_replace_source_without_backup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database = tmp_path / "source.sqlite3"
-    CanonicalSchemaManager(database).prepare_startup()
+    _seed_rebuild_source(database, tmp_path)
     audit_path = tmp_path / "audit.json"
     mapping_path = tmp_path / "mapping.json"
     CatalogNormalizationAuditor(database).audit(audit_path, mapping_path)
-    mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
-    mapping["complete"] = True
-    next(
-        item
-        for item in mapping["global_policies"]
-        if item["policy_type"] == "quality"
-    )["atoms"] = [
-        {
-            "scope": "neg",
-            "position": 0,
-            "text": "bad anatomy",
-            "weight_milli": 1000,
-        }
-    ]
-    mapping_path.write_text(json.dumps(mapping), encoding="utf-8")
+    _complete_rebuild_mapping(mapping_path)
     output = tmp_path / "candidate.sqlite3"
     monkeypatch.setattr(
         CanonicalSchemaManager,
@@ -794,7 +890,7 @@ def test_catalog_rebuild_rejects_or_alternatives_in_target_atoms(
     target["revision_uid"] = prompt_revision_identity(
         target["component_uid"], "mist or fog", ""
     )[0]
-    mapping_path.write_text(json.dumps(mapping), encoding="utf-8")
+    _write_mapping(mapping_path, mapping)
 
     with pytest.raises(
         CatalogNormalizationValidationError,
@@ -807,7 +903,7 @@ def test_catalog_rebuild_rejects_or_alternatives_in_target_atoms(
         )
 
 
-def test_catalog_rebuild_rejects_or_alternatives_in_retained_components(
+def test_catalog_rebuild_rejects_retained_non_character_components(
     tmp_path: Path,
 ) -> None:
     database = tmp_path / "source.sqlite3"
@@ -825,7 +921,13 @@ def test_catalog_rebuild_rejects_or_alternatives_in_retained_components(
     CatalogNormalizationAuditor(database).audit(audit_path, mapping_path)
     mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
     mapping["complete"] = True
-    mapping["source_components"][0]["reviewed"] = True
+    mapping["source_components"][0].update(
+        {
+            "action": "keep",
+            "target_component_uids": ["ambiguous-outfit"],
+            "reviewed": True,
+        }
+    )
     next(
         item
         for item in mapping["global_policies"]
@@ -838,11 +940,11 @@ def test_catalog_rebuild_rejects_or_alternatives_in_retained_components(
             "weight_milli": 1000,
         }
     ]
-    mapping_path.write_text(json.dumps(mapping), encoding="utf-8")
+    _write_mapping(mapping_path, mapping)
 
     with pytest.raises(
         CatalogNormalizationValidationError,
-        match="unresolved or-alternative",
+        match="Unresolved source component decision",
     ):
         CatalogNormalizationRebuilder(database).rebuild(
             audit_path,

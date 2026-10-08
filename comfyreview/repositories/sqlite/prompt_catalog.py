@@ -573,7 +573,19 @@ class SqlitePromptCatalogRepository:
                     ON membership.composition_id = composition.id
                 JOIN prompt_revisions AS revision
                     ON revision.id = membership.revision_id
+                JOIN prompt_components AS component
+                    ON component.id = revision.component_id
                 WHERE composition.composition_uid = ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM prompt_composition_revisions AS hidden_membership
+                      JOIN prompt_revisions AS hidden_revision
+                        ON hidden_revision.id = hidden_membership.revision_id
+                      JOIN prompt_components AS hidden_component
+                        ON hidden_component.id = hidden_revision.component_id
+                      WHERE hidden_membership.composition_id = composition.id
+                        AND hidden_component.catalog_role != 'catalog'
+                  )
                 ORDER BY membership.position, membership.slot
                 """,
                     (str(composition_uid or "").strip(),),

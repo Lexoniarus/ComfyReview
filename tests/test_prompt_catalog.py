@@ -905,3 +905,12 @@ def test_sqlite_prompt_catalog_reads_exact_revision_and_composition(
     assert repository.list_components_for_revisions(("missing",)) == ()
     assert repository.list_components_for_revisions(()) == ()
     assert repository.list_composition_components("missing") == ()
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE prompt_components SET catalog_role = "
+            "'generation_provenance' WHERE component_uid = ?",
+            (created.component_uid,),
+        )
+
+    assert repository.list_composition_components("composition-exact") == ()

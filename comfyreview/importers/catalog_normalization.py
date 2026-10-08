@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import os
@@ -112,8 +113,11 @@ class CatalogNormalizationRebuilder:
             self._validate_result(temporary, audit)
             os.replace(temporary, destination)
             if replace_source:
+                source.execute("PRAGMA locking_mode = NORMAL")
                 source.close()
                 source_closed = True
+                del source
+                gc.collect()
                 os.replace(destination, self._database_path)
                 final_path = self._database_path
             else:
@@ -168,6 +172,12 @@ class CatalogNormalizationRebuilder:
             raise CatalogNormalizationValidationError(
                 "Catalog normalization mapping source mismatch"
             )
+        if mapping.get("mapping_sha256") != payload_sha256(
+            mapping, "mapping_sha256"
+        ):
+            raise CatalogNormalizationValidationError(
+                "Catalog normalization mapping checksum mismatch"
+            )
         self._validate_mapping(audit, mapping)
         return audit, mapping
 
@@ -196,7 +206,7 @@ class CatalogNormalizationRebuilder:
             )
         for uid, decision in decisions.items():
             action = decision.get("action")
-            if action not in {"keep", "replace", "drop"}:
+            if action not in {"replace", "drop"}:
                 raise CatalogNormalizationValidationError(
                     f"Unresolved source component decision: {uid}"
                 )
@@ -209,24 +219,6 @@ class CatalogNormalizationRebuilder:
                 raise CatalogNormalizationValidationError(
                     f"Invalid target component list: {uid}"
                 )
-            if action == "keep" and targets != [uid]:
-                raise CatalogNormalizationValidationError(
-                    f"Unchanged component must retain its UID: {uid}"
-                )
-            if (
-                action == "keep"
-                and source_non_character[uid]["kind"] not in _TARGET_KINDS
-            ):
-                raise CatalogNormalizationValidationError(
-                    f"Unsupported source kind cannot be retained: {uid}"
-                )
-            if action == "keep":
-                for revision in source_non_character[uid]["revisions"]:
-                    _validate_atoms(
-                        revision["atoms"],
-                        owner=uid,
-                        allow_evidence=False,
-                    )
             if action == "drop" and targets:
                 raise CatalogNormalizationValidationError(
                     f"Dropped component cannot have targets: {uid}"
@@ -254,6 +246,10 @@ class CatalogNormalizationRebuilder:
                 raise CatalogNormalizationValidationError(
                     f"Invalid target component kind: {uid}"
                 )
+            if item.get("revision_number") != 1:
+                raise CatalogNormalizationValidationError(
+                    f"Target component must start at revision 1: {uid}"
+                )
             atoms = item.get("atoms")
             if not isinstance(atoms, list) or not atoms:
                 raise CatalogNormalizationValidationError(
@@ -270,16 +266,28 @@ class CatalogNormalizationRebuilder:
             raise CatalogNormalizationValidationError(
                 "Replacement targets and target components differ"
             )
+        required_non_character_kinds = set(_TARGET_KINDS) - {"character"}
+        target_kinds = {
+            str(item["kind"]) for item in target_components.values()
+        }
+        if (source_non_character or audit["summary"]["live_images"]) and (
+            target_kinds != required_non_character_kinds
+        ):
+            missing = sorted(required_non_character_kinds - target_kinds)
+            unexpected = sorted(target_kinds - required_non_character_kinds)
+            details = []
+            if missing:
+                details.append("missing " + ", ".join(missing))
+            if unexpected:
+                details.append("unexpected " + ", ".join(unexpected))
+            raise CatalogNormalizationValidationError(
+                "Target catalog must populate all non-Character groups: "
+                + "; ".join(details)
+            )
 
         known_revisions: dict[str, str] = {}
         for component in audit["components"]:
-            if (
-                component["kind"] == "character"
-                or decisions.get(str(component["component_uid"]), {}).get(
-                    "action"
-                )
-                == "keep"
-            ):
+            if component["kind"] == "character":
                 for revision in component["revisions"]:
                     known_revisions[str(revision["revision_uid"])] = str(
                         component["kind"]
@@ -382,11 +390,7 @@ class CatalogNormalizationRebuilder:
         try:
             connection.execute("BEGIN IMMEDIATE")
             selected = self._selected_revisions(connection)
-            decisions = {
-                str(item["source_component_uid"]): item
-                for item in mapping["source_components"]
-            }
-            self._classify_source_components(connection, decisions)
+            self._classify_source_components(connection)
             target_atoms = self._create_target_components(
                 connection, mapping["target_components"]
             )
@@ -399,6 +403,7 @@ class CatalogNormalizationRebuilder:
             self._replace_global_policies(
                 connection, mapping["global_policies"]
             )
+            self._bind_generation_policies(connection)
             self._replace_image_compositions(
                 connection,
                 mapping["image_compositions"],
@@ -407,6 +412,7 @@ class CatalogNormalizationRebuilder:
             removed_images = self._remove_deleted_images(connection)
             self._reset_reviews_and_promotions(connection, selected)
             self._reset_generator_state(connection)
+            self._prune_unreferenced_provenance(connection)
             connection.commit()
         except Exception:
             connection.rollback()
@@ -444,20 +450,12 @@ class CatalogNormalizationRebuilder:
     @staticmethod
     def _classify_source_components(
         connection: sqlite3.Connection,
-        decisions: dict[str, dict[str, Any]],
     ) -> None:
         connection.execute(
             "UPDATE prompt_components SET catalog_role = 'generation_provenance', "
             "archived_at = COALESCE(archived_at, datetime('now')) "
             "WHERE kind != 'character'"
         )
-        for uid, decision in decisions.items():
-            if decision["action"] == "keep":
-                connection.execute(
-                    "UPDATE prompt_components SET catalog_role = 'catalog', "
-                    "archived_at = NULL WHERE component_uid = ?",
-                    (uid,),
-                )
 
     @staticmethod
     def _create_target_components(
@@ -537,10 +535,6 @@ class CatalogNormalizationRebuilder:
         mapping: dict[str, Any],
         target_atoms: dict[tuple[str, str], int],
     ) -> tuple[int, int]:
-        decisions = {
-            str(item["source_component_uid"]): item
-            for item in mapping["source_components"]
-        }
         source_to_targets: dict[
             tuple[str, int, str], set[tuple[int, str, int]]
         ] = {}
@@ -554,16 +548,10 @@ class CatalogNormalizationRebuilder:
             JOIN prompt_revision_atom_usages AS usage
               ON usage.revision_id = revision.id
             WHERE component.kind = 'character'
-               OR component.catalog_role = 'catalog'
             """
         ).fetchall()
         for row in direct_rows:
             uid = str(row["component_uid"])
-            if (
-                str(row["kind"]) != "character"
-                and decisions.get(uid, {}).get("action") != "keep"
-            ):
-                continue
             key = (uid, int(row["atom_id"]), str(row["scope"]))
             source_to_targets.setdefault(key, set()).add(
                 (
@@ -763,6 +751,7 @@ class CatalogNormalizationRebuilder:
                     str(policy["name"]),
                     policy.get("content_level"),
                 )
+
                 actual = tuple(existing)[1:]
                 if actual != expected:
                     raise CatalogNormalizationValidationError(
@@ -839,6 +828,41 @@ class CatalogNormalizationRebuilder:
                         int(atom["weight_milli"]),
                     ),
                 )
+
+    @staticmethod
+    def _bind_generation_policies(connection: sqlite3.Connection) -> None:
+        """Bind every retained generation to quality and its content profile."""
+        connection.execute("DELETE FROM generation_global_prompt_policies")
+        connection.execute(
+            """
+            INSERT INTO generation_global_prompt_policies(
+                generation_id, policy_id, position
+            )
+            SELECT generation.id, policy.id, 0
+            FROM generations AS generation
+            JOIN global_prompt_policies AS policy
+              ON policy.policy_type = 'quality' AND policy.active = 1
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO generation_global_prompt_policies(
+                generation_id, policy_id, position
+            )
+            SELECT generation.id, policy.id, 1
+            FROM generations AS generation
+            JOIN images AS image ON image.generation_id = generation.id
+            LEFT JOIN image_content_level_state AS content_state
+              ON content_state.image_id = image.id
+            JOIN global_prompt_policies AS policy
+              ON policy.policy_type = 'content_profile'
+             AND policy.content_level = COALESCE(
+                 content_state.override_content_level,
+                 generation.inferred_content_level
+             )
+             AND policy.active = 1
+            """
+        )
 
     @staticmethod
     def _replace_image_compositions(
@@ -920,6 +944,16 @@ class CatalogNormalizationRebuilder:
                 """,
                 (int(image["id"]), int(composition_id)),
             )
+        connection.execute(
+            """
+            DELETE FROM image_catalog_compositions
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM current_image_catalog_compositions AS current_catalog
+                WHERE current_catalog.composition_id = image_catalog_compositions.id
+            )
+            """
+        )
 
     @staticmethod
     def _remove_deleted_images(connection: sqlite3.Connection) -> int:
@@ -948,6 +982,33 @@ class CatalogNormalizationRebuilder:
         return removed
 
     @staticmethod
+    def _prune_unreferenced_provenance(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Remove old catalog facts not required by retained generations."""
+        connection.execute(
+            """
+            DELETE FROM prompt_components
+            WHERE kind != 'character'
+              AND catalog_role = 'generation_provenance'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM generation_prompt_groups AS prompt_group
+                  WHERE prompt_group.component_id = prompt_components.id
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM prompt_revisions AS revision
+                  JOIN prompt_composition_revisions AS membership
+                    ON membership.revision_id = revision.id
+                  JOIN generations AS generation
+                    ON generation.prompt_composition_id = membership.composition_id
+                  WHERE revision.component_id = prompt_components.id
+              )
+            """
+        )
+
+    @staticmethod
     def _reset_reviews_and_promotions(
         connection: sqlite3.Connection,
         selected: dict[int, int],
@@ -961,14 +1022,6 @@ class CatalogNormalizationRebuilder:
                 JOIN prompt_components AS component
                   ON component.id = candidate.component_id
                 WHERE component.kind != 'character'
-                   OR (
-                       candidate.candidate_type IN ('calculated', 'next_test')
-                       AND NOT EXISTS (
-                           SELECT 1
-                           FROM prompt_component_manual_variants AS manual
-                           WHERE manual.candidate_id = candidate.id
-                       )
-                   )
                 """
             )
         ]
@@ -999,9 +1052,16 @@ class CatalogNormalizationRebuilder:
         connection.execute(
             "UPDATE review_clock SET value = 0 WHERE singleton_id = 1"
         )
-        connection.execute("DELETE FROM prompt_component_promotions")
+        connection.execute(
+            "DELETE FROM prompt_component_promotions "
+            "WHERE component_id IN ("
+            "SELECT id FROM prompt_components WHERE kind != 'character'"
+            ")"
+        )
         for component in connection.execute(
-            "SELECT id, component_uid FROM prompt_components ORDER BY id"
+            "SELECT id, component_uid FROM prompt_components "
+            "WHERE kind != 'character' AND catalog_role = 'catalog' "
+            "ORDER BY id"
         ):
             component_id = int(component["id"])
             revision_id = selected.get(component_id)
@@ -1145,6 +1205,24 @@ class CatalogNormalizationRebuilder:
                     "WHERE catalog_role = 'catalog' AND kind != 'character' "
                     "AND archived_at IS NOT NULL"
                 ),
+                "orphan generation provenance": (
+                    "SELECT COUNT(*) FROM prompt_components AS component "
+                    "WHERE component.kind != 'character' "
+                    "AND component.catalog_role = 'generation_provenance' "
+                    "AND NOT EXISTS (SELECT 1 FROM generation_prompt_groups AS g "
+                    "WHERE g.component_id = component.id) "
+                    "AND NOT EXISTS (SELECT 1 FROM prompt_revisions AS r "
+                    "JOIN prompt_composition_revisions AS m "
+                    "ON m.revision_id = r.id JOIN generations AS generation "
+                    "ON generation.prompt_composition_id = m.composition_id "
+                    "WHERE r.component_id = component.id)"
+                ),
+                "generation policy bindings": (
+                    "SELECT COUNT(*) FROM generations AS generation "
+                    "WHERE (SELECT COUNT(*) FROM "
+                    "generation_global_prompt_policies AS binding "
+                    "WHERE binding.generation_id = generation.id) != 2"
+                ),
             }
             for name, statement in checks.items():
                 if int(connection.execute(statement).fetchone()[0]) != 0:
@@ -1161,6 +1239,93 @@ class CatalogNormalizationRebuilder:
                 failures.append("live image count")
             if current_count != live_count:
                 failures.append("current image composition count")
+            generation_count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM generations"
+                ).fetchone()[0]
+            )
+            if generation_count != live_count:
+                failures.append("live generation count")
+            catalog_kinds = {
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT DISTINCT kind FROM prompt_components "
+                    "WHERE catalog_role = 'catalog'"
+                )
+            }
+            if catalog_kinds != set(_TARGET_KINDS):
+                failures.append("catalog prompt kinds")
+            invalid_revision_count = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM prompt_components AS component
+                    WHERE component.catalog_role = 'catalog'
+                      AND component.kind != 'character'
+                      AND (
+                          SELECT COUNT(*) FROM prompt_revisions AS revision
+                          WHERE revision.component_id = component.id
+                      ) != 1
+                    """
+                ).fetchone()[0]
+            )
+            invalid_revision_number = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM prompt_revisions AS revision
+                    JOIN prompt_components AS component
+                      ON component.id = revision.component_id
+                    WHERE component.catalog_role = 'catalog'
+                      AND component.kind != 'character'
+                      AND revision.revision_number != 1
+                    """
+                ).fetchone()[0]
+            )
+            if invalid_revision_count or invalid_revision_number:
+                failures.append("non-Character revision 1")
+            invalid_image_compositions = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM current_image_catalog_compositions AS current_catalog
+                    WHERE (
+                        SELECT COUNT(*)
+                        FROM image_catalog_composition_revisions AS membership
+                        JOIN prompt_revisions AS revision
+                          ON revision.id = membership.revision_id
+                        JOIN prompt_components AS component
+                          ON component.id = revision.component_id
+                        WHERE membership.composition_id = current_catalog.composition_id
+                          AND component.kind = 'character'
+                          AND component.catalog_role = 'catalog'
+                    ) != 1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM image_catalog_composition_revisions AS membership
+                        JOIN prompt_revisions AS revision
+                          ON revision.id = membership.revision_id
+                        JOIN prompt_components AS component
+                          ON component.id = revision.component_id
+                        WHERE membership.composition_id = current_catalog.composition_id
+                          AND component.catalog_role != 'catalog'
+                    )
+                    OR EXISTS (
+                        SELECT component.kind
+                        FROM image_catalog_composition_revisions AS membership
+                        JOIN prompt_revisions AS revision
+                          ON revision.id = membership.revision_id
+                        JOIN prompt_components AS component
+                          ON component.id = revision.component_id
+                        WHERE membership.composition_id = current_catalog.composition_id
+                        GROUP BY component.kind
+                        HAVING COUNT(*) > 1
+                    )
+                    """
+                ).fetchone()[0]
+            )
+            if invalid_image_compositions:
+                failures.append("current image catalog composition")
             fingerprint = CatalogNormalizationAuditor._character_fingerprint(
                 connection
             )
@@ -1529,12 +1694,53 @@ class CatalogNormalizationAuditor:
                 """
             )
         ]
+        promotions = [
+            {
+                "database_id": int(row["id"]),
+                "promotion_uid": str(row["promotion_uid"]),
+                "component_uid": str(row["component_uid"]),
+                "revision_uid": str(row["revision_uid"]),
+                "previous_revision_uid": (
+                    str(row["previous_revision_uid"])
+                    if row["previous_revision_uid"] is not None
+                    else None
+                ),
+                "policy_version": str(row["policy_version"]),
+                "review_frontier": int(row["review_frontier"]),
+                "independent_image_count": int(row["independent_image_count"]),
+                "review_count": int(row["review_count"]),
+                "deleted_count": int(row["deleted_count"]),
+                "lower_bound_score": row["lower_bound_score"],
+                "expected_score": row["expected_score"],
+                "average_rating": row["average_rating"],
+                "reason": str(row["reason"]),
+                "provisional": int(row["provisional"]),
+                "created_at": str(row["created_at"]),
+            }
+            for row in connection.execute(
+                """
+                SELECT promotion.*, component.component_uid,
+                       revision.revision_uid,
+                       previous.revision_uid AS previous_revision_uid
+                FROM prompt_component_promotions AS promotion
+                JOIN prompt_components AS component
+                  ON component.id = promotion.component_id
+                JOIN prompt_revisions AS revision
+                  ON revision.id = promotion.revision_id
+                LEFT JOIN prompt_revisions AS previous
+                  ON previous.id = promotion.previous_revision_id
+                WHERE component.kind = 'character'
+                ORDER BY promotion.id
+                """
+            )
+        ]
         normalized = json.dumps(
             {
                 "components": characters,
                 "selected_revisions": selected,
                 "candidates": candidates,
                 "manual_variants": manual_variants,
+                "promotions": promotions,
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -1549,6 +1755,7 @@ class CatalogNormalizationAuditor:
             "selected_revisions": selected,
             "candidate_count": len(candidates),
             "manual_variant_count": len(manual_variants),
+            "promotion_count": len(promotions),
             "aiko_revision_counts": aiko_revision_counts,
         }
 
@@ -1562,14 +1769,11 @@ class CatalogNormalizationAuditor:
                 revision_kinds[str(revision["revision_uid"])] = kind
             if kind == "character":
                 continue
-            ready = kind in _TARGET_KINDS
             source_components.append(
                 {
                     "source_component_uid": component["component_uid"],
-                    "action": "keep" if ready else "review",
-                    "target_component_uids": (
-                        [component["component_uid"]] if ready else []
-                    ),
+                    "action": "review",
+                    "target_component_uids": [],
                     "reviewed": False,
                 }
             )

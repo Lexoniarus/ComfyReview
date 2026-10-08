@@ -4198,12 +4198,18 @@ class CanonicalSchemaManager:
                 "Prompt variant facts contain cross-component references"
             )
 
+        catalog_predicate = (
+            "component.catalog_role = 'catalog' AND "
+            if "catalog_role"
+            in cls._table_column_rows(connection, "prompt_components")
+            else ""
+        )
         missing_promotions = int(
             connection.execute(
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM prompt_components AS component
-                WHERE EXISTS (
+                WHERE {catalog_predicate}EXISTS (
                     SELECT 1 FROM prompt_revisions AS revision
                     WHERE revision.component_id = component.id
                 )
@@ -4216,7 +4222,8 @@ class CanonicalSchemaManager:
         )
         if missing_promotions:
             raise CanonicalSchemaValidationError(
-                "Every revisioned prompt component requires a promotion"
+                "Every selectable revisioned prompt component requires a "
+                "promotion"
             )
 
     @classmethod
