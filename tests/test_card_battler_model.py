@@ -136,6 +136,22 @@ def _create_model_database(
                 next_tier_id INTEGER REFERENCES development_tiers(id),
                 development_locked INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE trigger_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE usage_limit_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
             CREATE TABLE mechanic_templates (
                 id INTEGER PRIMARY KEY,
                 ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
@@ -143,6 +159,10 @@ def _create_model_database(
                 internal_name TEXT NOT NULL,
                 description TEXT NOT NULL,
                 base_weight_milli INTEGER NOT NULL,
+                default_trigger_type_id INTEGER NOT NULL
+                    REFERENCES trigger_types(id),
+                default_usage_limit_type_id INTEGER
+                    REFERENCES usage_limit_types(id),
                 active INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE visual_prompt_atoms (
@@ -294,6 +314,63 @@ def _create_model_database(
                 weight_milli INTEGER NOT NULL,
                 PRIMARY KEY (lineage_id, stat_profile_id)
             );
+            CREATE TABLE lineage_mechanics (
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                min_tier_id INTEGER NOT NULL REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                selection_weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (lineage_id, mechanic_template_id)
+            );
+            CREATE TABLE world_style_mechanic_affinity (
+                world_style_id INTEGER NOT NULL REFERENCES world_styles(id),
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (world_style_id, mechanic_template_id)
+            );
+            CREATE TABLE class_mechanic_affinity (
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (class_id, mechanic_template_id)
+            );
+            CREATE TABLE role_mechanic_affinity (
+                role_id INTEGER NOT NULL REFERENCES combat_roles(id),
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (role_id, mechanic_template_id)
+            );
+            CREATE TABLE lineage_mechanic_affinity (
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (lineage_id, mechanic_template_id)
+            );
+            CREATE TABLE mechanic_usage_limits (
+                id INTEGER PRIMARY KEY,
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                usage_limit_type_id INTEGER NOT NULL
+                    REFERENCES usage_limit_types(id),
+                max_uses INTEGER,
+                scope TEXT NOT NULL,
+                reset_trigger_type_id INTEGER REFERENCES trigger_types(id)
+            );
+            CREATE TABLE rules_text_templates (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                locale TEXT NOT NULL,
+                template_text TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
             """
         )
         connection.executemany(
@@ -416,14 +493,37 @@ def _create_model_database(
         )
         connection.executemany(
             """
-            INSERT INTO mechanic_templates(
-                id, ruleset_id, key, internal_name, description,
-                base_weight_milli, active
-            ) VALUES (?, 1, ?, ?, ?, ?, 1)
+            INSERT INTO trigger_types(
+                id, ruleset_id, key, name, description, active
+            ) VALUES (?, 1, ?, ?, ?, 1)
             """,
             (
-                (2, "zeta", "ZETA", "Zeta mechanic", 900),
-                (1, "alpha", "ALPHA", "Alpha mechanic", 1100),
+                (1, "on_play", "On Play", "When played"),
+                (2, "turn_start", "Turn Start", "At turn start"),
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO usage_limit_types(
+                id, ruleset_id, key, name, description, active
+            ) VALUES (?, 1, ?, ?, ?, 1)
+            """,
+            (
+                (1, "once_per_turn", "Once per turn", "One use per turn"),
+                (2, "twice_per_match", "Twice", "Two uses per match"),
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO mechanic_templates(
+                id, ruleset_id, key, internal_name, description,
+                base_weight_milli, default_trigger_type_id,
+                default_usage_limit_type_id, active
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                (2, "zeta", "ZETA", "Zeta mechanic", 900, 2, None),
+                (1, "alpha", "ALPHA", "Alpha mechanic", 1100, 1, 1),
             ),
         )
         connection.executemany(
@@ -508,6 +608,51 @@ def _create_model_database(
                 f"INSERT INTO {table}({source_column}, stat_profile_id, weight_milli) VALUES (?, ?, ?)",
                 ((1, 1, 700), (1, 2, 900), (2, 1, 800), (2, 2, 600)),
             )
+        connection.executemany(
+            """
+            INSERT INTO lineage_mechanics(
+                lineage_id, mechanic_template_id, min_tier_id,
+                max_tier_id, selection_weight_milli
+            ) VALUES (?, ?, 1, ?, ?)
+            """,
+            ((2, 2, None, 700), (1, 1, 2, 900)),
+        )
+        for table, source_column in (
+            ("world_style_mechanic_affinity", "world_style_id"),
+            ("class_mechanic_affinity", "class_id"),
+            ("role_mechanic_affinity", "role_id"),
+            ("lineage_mechanic_affinity", "lineage_id"),
+        ):
+            connection.executemany(
+                f"INSERT INTO {table}({source_column}, mechanic_template_id, weight_milli) VALUES (?, ?, ?)",
+                ((1, 1, 900), (1, 2, 500), (2, 1, 400), (2, 2, 800)),
+            )
+        connection.executemany(
+            """
+            INSERT INTO mechanic_usage_limits(
+                id, mechanic_template_id, usage_limit_type_id,
+                max_uses, scope, reset_trigger_type_id
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (2, 2, 2, 2, "match", None),
+                (1, 1, 1, 1, "turn", 2),
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO rules_text_templates(
+                id, ruleset_id, mechanic_template_id, locale,
+                template_text, version, active
+            ) VALUES (?, 1, ?, ?, ?, 1, 1)
+            """,
+            (
+                (4, 2, "en-US", "Zeta rule"),
+                (3, 2, "de-DE", "Zeta-Regel"),
+                (2, 1, "en-US", "Alpha rule"),
+                (1, 1, "de-DE", "Alpha-Regel"),
+            ),
+        )
         for table, target_column in (
             ("semantic_world_style_affinity", "world_style_id"),
             ("semantic_class_affinity", "class_id"),

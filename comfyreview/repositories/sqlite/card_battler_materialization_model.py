@@ -7,6 +7,9 @@ import sqlite3
 
 from comfyreview.application.card_battler_materialization import (
     CardBalancePolicy,
+    LineageMechanicEligibility,
+    MechanicAffinity,
+    MechanicTemplateDefinition,
     StatProfileAffinity,
     StatProfileAffinitySource,
     StatProfileDefinition,
@@ -15,6 +18,9 @@ from comfyreview.application.card_battler_materialization import (
 from comfyreview.application.card_battler_model import (
     CardBattlerModelInvalid,
     CardBattlerRulesetRef,
+)
+from comfyreview.repositories.sqlite.card_battler_mechanic_model import (
+    _SqliteCardMechanicModelReader,
 )
 from comfyreview.repositories.sqlite.card_battler_model_resource import (
     SqliteCardBattlerModelResource,
@@ -26,6 +32,7 @@ class SqliteCardMaterializationModelRepository:
 
     def __init__(self, resource: SqliteCardBattlerModelResource) -> None:
         self._resource = resource
+        self._mechanics = _SqliteCardMechanicModelReader(resource)
 
     def balance_policy(
         self,
@@ -217,6 +224,27 @@ class SqliteCardMaterializationModelRepository:
                 ),
             )
         )
+
+    def mechanic_definitions(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicTemplateDefinition, ...]:
+        """Return active mechanic templates with usage and rule facts."""
+        return self._mechanics.definitions(ruleset)
+
+    def lineage_mechanic_eligibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[LineageMechanicEligibility, ...]:
+        """Return lineage legality in stable lineage/mechanic order."""
+        return self._mechanics.lineage_eligibility(ruleset)
+
+    def mechanic_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicAffinity, ...]:
+        """Return imprint-axis mechanic affinities in stable order."""
+        return self._mechanics.affinities(ruleset)
 
     def _ruleset_id(
         self,

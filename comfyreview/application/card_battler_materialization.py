@@ -8,6 +8,7 @@ from typing import Literal, Protocol
 from comfyreview.application.card_battler_model import CardBattlerRulesetRef
 
 StatProfileAffinitySource = Literal["class", "role", "lineage"]
+MechanicAffinitySource = Literal["world_style", "class", "role", "lineage"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +62,60 @@ class StatProfileAffinity:
     weight_milli: int
 
 
+@dataclass(frozen=True, slots=True)
+class MechanicUsageLimitDefinition:
+    """Describe one usage limit attached to a mechanic template."""
+
+    usage_limit_key: str
+    max_uses: int | None
+    scope: str
+    reset_trigger_key: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RuleTextTemplateDefinition:
+    """Provide one versioned localized authoritative rule template."""
+
+    locale: str
+    version: int
+    template_text: str
+
+
+@dataclass(frozen=True, slots=True)
+class MechanicTemplateDefinition:
+    """Expose an active mechanic template without SQLite identities."""
+
+    key: str
+    internal_name: str
+    description: str
+    base_weight_milli: int
+    default_trigger_key: str
+    default_usage_limit_key: str | None
+    usage_limits: tuple[MechanicUsageLimitDefinition, ...]
+    rule_text_templates: tuple[RuleTextTemplateDefinition, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class LineageMechanicEligibility:
+    """Declare a mechanic legal for one lineage across a tier interval."""
+
+    lineage_key: str
+    mechanic_key: str
+    min_tier_ordinal: int
+    max_tier_ordinal: int | None
+    selection_weight_milli: int
+
+
+@dataclass(frozen=True, slots=True)
+class MechanicAffinity:
+    """Relate one imprint-axis value to a mechanic template."""
+
+    source: MechanicAffinitySource
+    source_key: str
+    mechanic_key: str
+    weight_milli: int
+
+
 class CardMaterializationModelRepository(Protocol):
     """Supply immutable balance and materialization facts."""
 
@@ -97,4 +152,25 @@ class CardMaterializationModelRepository(Protocol):
         ruleset: CardBattlerRulesetRef | None = None,
     ) -> tuple[StatProfileAffinity, ...]:
         """Return class, role and lineage affinities in stable order."""
+        ...
+
+    def mechanic_definitions(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicTemplateDefinition, ...]:
+        """Return active mechanic templates with usage and rule facts."""
+        ...
+
+    def lineage_mechanic_eligibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[LineageMechanicEligibility, ...]:
+        """Return lineage legality in stable lineage/mechanic order."""
+        ...
+
+    def mechanic_affinities(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicAffinity, ...]:
+        """Return imprint-axis mechanic affinities in stable order."""
         ...

@@ -9,6 +9,9 @@ import pytest
 
 from comfyreview.application.card_battler_materialization import (
     CardBalancePolicy,
+    MechanicTemplateDefinition,
+    MechanicUsageLimitDefinition,
+    RuleTextTemplateDefinition,
 )
 from comfyreview.application.card_battler_model import (
     CardBattlerModelInvalid,
@@ -103,6 +106,140 @@ def test_materialization_model_supports_an_explicit_ruleset_reference(
     assert repository.balance_policy(active).key == "prototype_balance"
     assert len(repository.stat_profiles(active)) == 2
     assert len(repository.stat_profile_affinities(active)) == 12
+    assert len(repository.mechanic_definitions(active)) == 2
+    assert len(repository.lineage_mechanic_eligibility(active)) == 2
+    assert len(repository.mechanic_affinities(active)) == 16
+
+
+def test_materialization_model_reads_stable_id_free_mechanic_facts(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    repository = _repository(path)
+
+    definitions = repository.mechanic_definitions()
+    eligibility = repository.lineage_mechanic_eligibility()
+    affinities = repository.mechanic_affinities()
+
+    assert [definition.key for definition in definitions] == ["alpha", "zeta"]
+    assert definitions[0] == MechanicTemplateDefinition(
+        key="alpha",
+        internal_name="ALPHA",
+        description="Alpha mechanic",
+        base_weight_milli=1100,
+        default_trigger_key="on_play",
+        default_usage_limit_key="once_per_turn",
+        usage_limits=(
+            MechanicUsageLimitDefinition(
+                usage_limit_key="once_per_turn",
+                max_uses=1,
+                scope="turn",
+                reset_trigger_key="turn_start",
+            ),
+        ),
+        rule_text_templates=(
+            RuleTextTemplateDefinition(
+                locale="de-DE",
+                version=1,
+                template_text="Alpha-Regel",
+            ),
+            RuleTextTemplateDefinition(
+                locale="en-US",
+                version=1,
+                template_text="Alpha rule",
+            ),
+        ),
+    )
+    assert (
+        definitions[0].usage_limits[0].usage_limit_key,
+        definitions[0].usage_limits[0].max_uses,
+        definitions[0].usage_limits[0].scope,
+        definitions[0].usage_limits[0].reset_trigger_key,
+    ) == ("once_per_turn", 1, "turn", "turn_start")
+    assert [
+        (template.locale, template.version, template.template_text)
+        for template in definitions[0].rule_text_templates
+    ] == [
+        ("de-DE", 1, "Alpha-Regel"),
+        ("en-US", 1, "Alpha rule"),
+    ]
+    assert [
+        (
+            item.lineage_key,
+            item.mechanic_key,
+            item.min_tier_ordinal,
+            item.max_tier_ordinal,
+            item.selection_weight_milli,
+        )
+        for item in eligibility
+    ] == [
+        ("alpha", "alpha", 1, 2, 900),
+        ("zeta", "zeta", 1, None, 700),
+    ]
+    assert [
+        (fact.source, fact.source_key, fact.mechanic_key)
+        for fact in affinities
+    ] == sorted(
+        (fact.source, fact.source_key, fact.mechanic_key)
+        for fact in affinities
+    )
+    assert len(affinities) == 16
+
+
+@pytest.mark.parametrize(
+    "statement, missing",
+    (
+        ("DROP TABLE rules_text_templates", "rules_text_templates"),
+        (
+            "ALTER TABLE mechanic_usage_limits RENAME COLUMN scope TO absent",
+            "scope",
+        ),
+    ),
+)
+def test_materialization_model_rejects_incomplete_mechanic_schema(
+    tmp_path: Path,
+    statement: str,
+    missing: str,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute(statement)
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(CardBattlerModelInvalid, match=missing):
+        _repository(path).mechanic_definitions()
+
+
+def test_materialization_model_rejects_cross_ruleset_mechanic_lookup(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO trigger_types(
+                id, ruleset_id, key, name, description, active
+            ) VALUES (9, 2, 'foreign', 'Foreign', 'Foreign trigger', 1)
+            """
+        )
+        connection.execute(
+            "UPDATE mechanic_templates SET default_trigger_type_id = 9 "
+            "WHERE key = 'alpha'"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(CardBattlerModelInvalid, match="crosses a ruleset"):
+        _repository(path).mechanic_definitions()
 
 
 def test_materialization_model_rejects_unknown_or_invalid_requests(

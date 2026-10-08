@@ -317,9 +317,105 @@ CARD_MATERIALIZATION_SCHEMA = CardBattlerModelSchemaRequirement(
     ),
 )
 
+CARD_MECHANIC_CATALOG_SCHEMA = CardBattlerModelSchemaRequirement(
+    group="mechanic-catalog",
+    tables=(
+        CardBattlerModelTableRequirement(
+            "mechanic_templates",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "key",
+                    "internal_name",
+                    "description",
+                    "base_weight_milli",
+                    "default_trigger_type_id",
+                    "default_usage_limit_type_id",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "lineage_mechanics",
+            frozenset(
+                {
+                    "lineage_id",
+                    "mechanic_template_id",
+                    "min_tier_id",
+                    "max_tier_id",
+                    "selection_weight_milli",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "world_style_mechanic_affinity",
+            frozenset(
+                {"world_style_id", "mechanic_template_id", "weight_milli"}
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "class_mechanic_affinity",
+            frozenset({"class_id", "mechanic_template_id", "weight_milli"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "role_mechanic_affinity",
+            frozenset({"role_id", "mechanic_template_id", "weight_milli"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "lineage_mechanic_affinity",
+            frozenset({"lineage_id", "mechanic_template_id", "weight_milli"}),
+        ),
+        *(
+            CardBattlerModelTableRequirement(
+                table,
+                frozenset(
+                    {
+                        "id",
+                        "ruleset_id",
+                        "key",
+                        "name",
+                        "description",
+                        "active",
+                    }
+                ),
+            )
+            for table in ("trigger_types", "usage_limit_types")
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_usage_limits",
+            frozenset(
+                {
+                    "id",
+                    "mechanic_template_id",
+                    "usage_limit_type_id",
+                    "max_uses",
+                    "scope",
+                    "reset_trigger_type_id",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "rules_text_templates",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "mechanic_template_id",
+                    "locale",
+                    "template_text",
+                    "version",
+                    "active",
+                }
+            ),
+        ),
+    ),
+)
+
 CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     MODEL_IDENTITY_SCHEMA,
     FOUNDATIONAL_CARD_BATTLER_SCHEMA,
     CARD_BATTLER_MAPPING_SCHEMA,
     CARD_MATERIALIZATION_SCHEMA,
+    CARD_MECHANIC_CATALOG_SCHEMA,
 )
