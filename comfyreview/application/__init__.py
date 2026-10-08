@@ -56,6 +56,9 @@ from comfyreview.application.card_battler_development_addition import (
 from comfyreview.application.card_battler_development_improvement import (
     ExistingTraitImprovementPolicy,
 )
+from comfyreview.application.card_battler_development_service import (
+    CardDevelopmentService,
+)
 from comfyreview.application.card_battler_mapping import (
     CandidateScore,
     CardImprint,
@@ -610,6 +613,7 @@ __all__ = [
     "TierDevelopmentActionWeight",
     "CompatibleTraitAdditionPolicy",
     "ExistingTraitImprovementPolicy",
+    "CardDevelopmentService",
     "WorldStyleDefinition",
     "CanonicalOutputImageRecord",
     "CanonicalOutputImageSource",
