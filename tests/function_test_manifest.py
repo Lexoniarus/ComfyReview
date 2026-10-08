@@ -1,6 +1,10 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_common:CommonCardMaterializer.materialize": (
+        "tests/test_card_battler_common_materialization.py::"
+        "test_common_card_materializer_has_a_stable_golden_vector"
+    ),
     "comfyreview.application.card_battler_rules:CanonicalRuleRenderer.render": (
         "tests/test_card_battler_rule_rendering.py::"
         "test_canonical_rule_renderer_resolves_localized_parameters"

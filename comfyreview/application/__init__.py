@@ -37,6 +37,7 @@ from comfyreview.application.arena import (
     FairArenaPairingPolicy,
     RecordArenaDecisionCommand,
 )
+from comfyreview.application.card_battler_common import CommonCardMaterializer
 from comfyreview.application.card_battler_mapping import (
     CandidateScore,
     CardImprint,
@@ -531,6 +532,7 @@ __all__ = [
     "CardBattlerMappingPolicy",
     "CardBattlerRngPolicy",
     "CardBalancePolicy",
+    "CommonCardMaterializer",
     "CardStatMaterializer",
     "InitialTraitCandidateScore",
     "InitialTraitSelection",
