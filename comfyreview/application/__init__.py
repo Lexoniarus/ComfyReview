@@ -140,6 +140,14 @@ from comfyreview.application.card_battler_visual_model import (
     VisualPromptAtomDefinition,
     VisualPromptBinding,
 )
+from comfyreview.application.card_battler_visuals import (
+    VISUAL_PROMPT_PROJECTION_REVISION,
+    VisualPromptAtom,
+    VisualPromptAtomSource,
+    VisualPromptDiagnostic,
+    VisualPromptProvenance,
+    VisualPromptRecipe,
+)
 from comfyreview.application.catalog_evidence import (
     CatalogEvidenceImage,
     CatalogEvidenceRepository,
@@ -632,6 +640,12 @@ __all__ = [
     "VisualProgressionProfile",
     "VisualPromptAtomDefinition",
     "VisualPromptBinding",
+    "VISUAL_PROMPT_PROJECTION_REVISION",
+    "VisualPromptAtom",
+    "VisualPromptAtomSource",
+    "VisualPromptDiagnostic",
+    "VisualPromptProvenance",
+    "VisualPromptRecipe",
     "VisualProjectionPolicy",
     "CanonicalOutputImageRecord",
     "CanonicalOutputImageSource",
