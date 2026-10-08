@@ -8,6 +8,15 @@ from comfyreview.domain.card_battler.cards import (
     CardStats,
     StructuredCardSpec,
 )
+from comfyreview.domain.card_battler.development import (
+    CARD_DEVELOPMENT_ALGORITHM_REVISION,
+    CardDevelopmentPlan,
+    CardDevelopmentProvenance,
+    CardDevelopmentResult,
+    DevelopmentTier,
+    PrimaryTraitAction,
+    TraitDevelopmentAction,
+)
 from comfyreview.domain.card_battler.mechanics import (
     MaterializedBranch,
     MaterializedBranchConditionGroup,
@@ -24,10 +33,15 @@ from comfyreview.domain.card_battler.mechanics import (
 
 __all__ = [
     "CANONICAL_RULE_RENDERER_REVISION",
+    "CARD_DEVELOPMENT_ALGORITHM_REVISION",
     "COMMON_CARD_MATERIALIZATION_REVISION",
+    "CardDevelopmentPlan",
+    "CardDevelopmentProvenance",
+    "CardDevelopmentResult",
     "CardImprint",
     "CardRulesProvenance",
     "CardStats",
+    "DevelopmentTier",
     "MaterializedBranch",
     "MaterializedBranchConditionGroup",
     "MaterializedCondition",
@@ -39,5 +53,7 @@ __all__ = [
     "MaterializedStep",
     "MaterializedTrait",
     "MaterializedUsageLimit",
+    "PrimaryTraitAction",
     "StructuredCardSpec",
+    "TraitDevelopmentAction",
 ]
