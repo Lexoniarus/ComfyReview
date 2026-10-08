@@ -64,9 +64,11 @@ and `generation_uid` values are identity; PNG and optional sidecar paths are
 mutable attributes.
 
 Schema v11 adds only `image_geometry_projection`. It records actual PNG
-dimensions, classified format/orientation, nearest 720/1080/2160 short-edge
-class, the matched target dimensions, exact/approximate state and classifier
-version. It is derived, rebuildable and never replaces image UID identity.
+dimensions, classified format/orientation, the nearest nominal 720/1080/2160
+compatibility class, the matched target dimensions, exact/approximate state
+and classifier version. The highest class preserves the format's complete 4x
+AnimeSharp dimensions. The projection is derived, rebuildable and never
+replaces image UID identity.
 
 Schema v12 extends the existing stable LoRA identity into one canonical
 catalog. `lora_revisions` is immutable and owns default Model/CLIP strengths
@@ -363,10 +365,11 @@ matching do not exist.
 
 Blueprint v4 maps `output_width` and `output_height` roles into a fixed
 AnimeSharp path: `VAEDecode -> 4x-AnimeSharp -> ImageSharpen -> Lanczos
-ImageScale -> SaveImage`. `GenerationGeometryPolicy` derives those target
-dimensions from a 720p, 1080p or 2160p short edge without cropping. Required
-nodes and `example-upscaler.pth` are discovered at the provider boundary and are
-validated before persistence or submission.
+ImageScale -> SaveImage`. `GenerationGeometryPolicy` derives 720p and 1080p
+targets or retains the complete 4x AnimeSharp dimensions for the highest
+quality class without cropping. Required nodes and `example-upscaler.pth` are
+discovered at the provider boundary and are validated before persistence or
+submission.
 
 ## 9. Schema lifecycle
 

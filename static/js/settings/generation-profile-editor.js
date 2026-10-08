@@ -72,7 +72,7 @@ export class GenerationProfileEditor {
         [
           { value: "hd_720", label: "720p" },
           { value: "full_hd_1080", label: "1080p" },
-          { value: "uhd_4k", label: "4K / 2160p" },
+          { value: "uhd_4k", label: "4× Upscale / maximale Qualität" },
         ],
         value.output_tier || "full_hd_1080",
       ),

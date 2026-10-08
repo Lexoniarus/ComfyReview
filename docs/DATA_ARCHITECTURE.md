@@ -476,10 +476,12 @@ explicit operational steps.
 
 Schema v11 geometry is deliberately derived. `PngHeaderDimensionReader` reads
 the source dimensions behind a filesystem provider boundary. Aspect format is
-the smallest logarithmic ratio deviation; output class is the nearest short
-edge among 720, 1080 and 2160, with a higher-class tie break. Approximate
-matches are recorded without rewriting files. The explicit rebuild scans first
-and performs one short atomic projection replacement afterward.
+the smallest logarithmic ratio deviation; output class uses the nearest nominal
+short edge among the stable 720, 1080 and 2160 compatibility values, with a
+higher-class tie break. The highest class targets the complete 4x AnimeSharp
+dimensions for the classified format. Approximate matches are recorded without
+rewriting files. The explicit rebuild scans first and performs one short atomic
+projection replacement afterward.
 
 ## 6. Audited historical output import
 

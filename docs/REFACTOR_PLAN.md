@@ -337,6 +337,9 @@ constants.
 - Blueprint v4 owns the fixed AnimeSharp/sharpen/Lanczos output path and maps
   only semantic target geometry roles; capability validation blocks missing
   nodes or `example-upscaler.pth` before persistence/submission;
+- the maximum-quality geometry class retains the complete 4x AnimeSharp output
+  for all five aspect formats, while HD and Full-HD remain proportional smaller
+  targets;
 - Settings creates classified LoRA trigger revisions and offers explicit,
   revision-checked preview/apply commands for historical reclassification;
 - unclassified LoRAs cannot be added to a Playground request;

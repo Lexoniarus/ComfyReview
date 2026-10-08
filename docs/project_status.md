@@ -67,10 +67,12 @@ audit/import tools. Paths are attributes, not identity, and no cut-over feature
 dual-writes legacy state.
 
 New generation uses Blueprint v4 with the fixed 4x-AnimeSharp, sharpen and
-Lanczos scale path. The model canvas and final target geometry remain separate. The
-compiler owns prompt, sampler, output-role and LoRA graph semantics; the
-provider owns only transport, job state, capabilities and raw output
-descriptors.
+Lanczos scale path. The model canvas and final target geometry remain separate.
+HD and Full-HD are explicit smaller outputs; the maximum-quality class retains
+the complete 4x AnimeSharp dimensions for all five formats, from 4096 x 4096
+square through 5120 x 2880 widescreen. The compiler owns prompt, sampler,
+output-role and LoRA graph semantics; the provider owns only transport, job
+state, capabilities and raw output descriptors.
 
 Generation is rejected before persistence or submission when required nodes or
 `example-upscaler.pth` are unavailable. A selected LoRA requires an exact

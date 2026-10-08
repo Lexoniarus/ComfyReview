@@ -93,9 +93,11 @@ ComfyReview exists to make that part easier:
 
 New Playground generations use Blueprint v4 and the fixed
 `VAEDecode -> 4x-AnimeSharp -> ImageSharpen -> Lanczos -> SaveImage` path.
-The browser selects one of five format/orientation values and one of the
-720/1080/2160 output classes; the server resolves both latent and exact target
-dimensions. No repository-specific ComfyUI custom node is required at runtime.
+The browser selects one of five format/orientation values and an HD, Full-HD
+or maximum-quality output class. The highest class preserves the complete 4x
+AnimeSharp dimensions for every format (from 4096 x 4096 square up to 5120 x
+2880 widescreen); the server resolves both latent and exact target dimensions.
+No repository-specific ComfyUI custom node is required at runtime.
 
 Matching JSON sidecars remain supported as historical import evidence. They
 are not required for newly generated canonical images or for already-canonical

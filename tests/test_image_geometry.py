@@ -34,19 +34,19 @@ from comfyreview.repositories.sqlite import (
     [
         ("2:3", "720", (720, 1080)),
         ("2:3", "1080", (1080, 1620)),
-        ("2:3", "2160", (2160, 3240)),
+        ("2:3", "2160", (3072, 4608)),
         ("3:2", "720", (1080, 720)),
         ("3:2", "1080", (1620, 1080)),
-        ("3:2", "2160", (3240, 2160)),
+        ("3:2", "2160", (4608, 3072)),
         ("16:9", "720", (1280, 720)),
         ("16:9", "1080", (1920, 1080)),
-        ("16:9", "2160", (3840, 2160)),
+        ("16:9", "2160", (5120, 2880)),
         ("9:16", "720", (720, 1280)),
         ("9:16", "1080", (1080, 1920)),
-        ("9:16", "2160", (2160, 3840)),
+        ("9:16", "2160", (2880, 5120)),
         ("1:1", "720", (720, 720)),
         ("1:1", "1080", (1080, 1080)),
-        ("1:1", "2160", (2160, 2160)),
+        ("1:1", "2160", (4096, 4096)),
     ],
 )
 def test_generation_geometry_resolves_all_matrix_cells(
@@ -84,9 +84,10 @@ def test_geometry_classifier_handles_known_sizes_and_higher_tie() -> None:
 
     values = {
         (1024, 1024): ("1:1", "1080", False),
-        (4096, 4096): ("1:1", "2160", False),
-        (2160, 3240): ("2:3", "2160", True),
-        (3840, 2160): ("16:9", "2160", True),
+        (4096, 4096): ("1:1", "2160", True),
+        (2160, 3240): ("2:3", "2160", False),
+        (3072, 4608): ("2:3", "2160", True),
+        (5120, 2880): ("16:9", "2160", True),
         (900, 900): ("1:1", "1080", False),
     }
     for dimensions, expected in values.items():
@@ -105,7 +106,7 @@ def test_geometry_rebuild_scans_files_then_atomically_replaces_projection(
     CanonicalSchemaManager(database).upgrade()
     valid = tmp_path / "valid.png"
     invalid = tmp_path / "invalid.png"
-    valid.write_bytes(_png_header(2160, 3240))
+    valid.write_bytes(_png_header(3072, 4608))
     invalid.write_bytes(b"broken")
     _insert_images(database, valid, invalid)
     service = ImageGeometryProjectionService(
@@ -121,7 +122,7 @@ def test_geometry_rebuild_scans_files_then_atomically_replaces_projection(
             "SELECT actual_width, actual_height, aspect_format, "
             "resolution_class, is_exact FROM image_geometry_projection"
         ).fetchone()
-    assert row == (2160, 3240, "2:3", "2160", 1)
+    assert row == (3072, 4608, "2:3", "2160", 1)
 
 
 def test_geometry_projection_projects_single_image(tmp_path: Path) -> None:

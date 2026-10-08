@@ -255,7 +255,7 @@ def test_generation_geometry_policy_resolves_matrix_and_classifies() -> None:
     approximate = policy.classify("image-1", 1024, 1024)
 
     assert (landscape.output_width, landscape.output_height) == (1920, 1080)
-    assert (portrait.output_width, portrait.output_height) == (2160, 3240)
+    assert (portrait.output_width, portrait.output_height) == (3072, 4608)
     assert (square.output_width, square.output_height) == (720, 720)
     assert approximate.aspect_format is AspectFormat.SQUARE_1_1
     assert approximate.resolution_class is ResolutionClass.FULL_HD_1080
