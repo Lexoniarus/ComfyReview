@@ -98,6 +98,11 @@ from comfyreview.application.card_battler_model import (
 from comfyreview.application.card_battler_random import (
     DomainSeparatedCardRandom,
 )
+from comfyreview.application.card_battler_trait_selection import (
+    InitialTraitCandidateScore,
+    InitialTraitSelection,
+    InitialTraitSelector,
+)
 from comfyreview.application.catalog_evidence import (
     CatalogEvidenceImage,
     CatalogEvidenceRepository,
@@ -522,6 +527,9 @@ __all__ = [
     "CardBattlerRngPolicy",
     "CardBalancePolicy",
     "CardStatMaterializer",
+    "InitialTraitCandidateScore",
+    "InitialTraitSelection",
+    "InitialTraitSelector",
     "CardMaterializationModelRepository",
     "LineageMechanicEligibility",
     "MechanicAffinity",

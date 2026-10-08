@@ -1,6 +1,10 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_trait_selection:InitialTraitSelector.select": (
+        "tests/test_card_battler_initial_trait.py::"
+        "test_initial_trait_selector_uses_world_only_after_primary_tie"
+    ),
     "comfyreview.application.card_battler_materialization:CardStatMaterializer.materialize": (
         "tests/test_card_battler_stats.py::"
         "test_card_stats_follow_profile_grid_bounds_and_exact_budget"
