@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from comfyreview.application.card_battler_model import CardBattlerRulesetRef
+from comfyreview.application.card_battler_model import (
+    CardBattlerModelInvalid,
+    CardBattlerRulesetRef,
+)
+from comfyreview.domain.card_battler import CardImprint
 
 StatProfileAffinitySource = Literal["class", "role", "lineage"]
 MechanicAffinitySource = Literal["world_style", "class", "role", "lineage"]
@@ -60,6 +64,102 @@ class StatProfileAffinity:
     source_key: str
     stat_profile_key: str
     weight_milli: int
+
+
+@dataclass(frozen=True, slots=True)
+class StatProfileCandidateScore:
+    """Expose the three-axis integer score for one stat profile."""
+
+    stat_profile_key: str
+    class_affinity_milli: int
+    role_affinity_milli: int
+    lineage_affinity_milli: int
+    average_affinity_milli: int
+
+
+@dataclass(frozen=True, slots=True)
+class StatProfileSelection:
+    """Return the selected profile with stable inspectable diagnostics."""
+
+    profile: StatProfileDefinition
+    selected_score_milli: int
+    candidates: tuple[StatProfileCandidateScore, ...]
+
+
+class StatProfileSelector:
+    """Select a profile from equal class, role, and lineage evidence."""
+
+    def select(
+        self,
+        imprint: CardImprint,
+        profiles: tuple[StatProfileDefinition, ...],
+        affinities: tuple[StatProfileAffinity, ...],
+    ) -> StatProfileSelection:
+        """Choose the highest integer mean, then the stable profile key."""
+        profiles_by_key = {profile.key: profile for profile in profiles}
+        if not profiles or len(profiles_by_key) != len(profiles):
+            raise CardBattlerModelInvalid(
+                "stat profiles require unique stable keys"
+            )
+        affinity_by_key: dict[tuple[str, str, str], int] = {}
+        for affinity in affinities:
+            key = (
+                affinity.source,
+                affinity.source_key,
+                affinity.stat_profile_key,
+            )
+            if affinity.stat_profile_key not in profiles_by_key:
+                raise CardBattlerModelInvalid(
+                    "stat profile affinity references an unknown profile"
+                )
+            if key in affinity_by_key:
+                raise CardBattlerModelInvalid(
+                    "stat profile affinities require unique axis facts"
+                )
+            affinity_by_key[key] = affinity.weight_milli
+
+        candidates = tuple(
+            self._score(profile.key, imprint, affinity_by_key)
+            for profile in sorted(profiles, key=lambda item: item.key)
+        )
+        selected = min(
+            candidates,
+            key=lambda candidate: (
+                -candidate.average_affinity_milli,
+                candidate.stat_profile_key,
+            ),
+        )
+        return StatProfileSelection(
+            profile=profiles_by_key[selected.stat_profile_key],
+            selected_score_milli=selected.average_affinity_milli,
+            candidates=candidates,
+        )
+
+    @staticmethod
+    def _score(
+        stat_profile_key: str,
+        imprint: CardImprint,
+        affinities: dict[tuple[str, str, str], int],
+    ) -> StatProfileCandidateScore:
+        class_weight = affinities.get(
+            ("class", imprint.card_class, stat_profile_key), 0
+        )
+        role_weight = affinities.get(
+            ("role", imprint.combat_role, stat_profile_key), 0
+        )
+        lineage_weight = affinities.get(
+            ("lineage", imprint.trait_lineage, stat_profile_key), 0
+        )
+        return StatProfileCandidateScore(
+            stat_profile_key=stat_profile_key,
+            class_affinity_milli=class_weight,
+            role_affinity_milli=role_weight,
+            lineage_affinity_milli=lineage_weight,
+            average_affinity_milli=(
+                class_weight + role_weight + lineage_weight
+            )
+            // 3,
+        )
 
 
 @dataclass(frozen=True, slots=True)

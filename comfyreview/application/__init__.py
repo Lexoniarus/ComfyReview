@@ -66,7 +66,10 @@ from comfyreview.application.card_battler_materialization import (
     MechanicUsageLimitDefinition,
     RuleTextTemplateDefinition,
     StatProfileAffinity,
+    StatProfileCandidateScore,
     StatProfileDefinition,
+    StatProfileSelection,
+    StatProfileSelector,
     TierBalanceProfile,
 )
 from comfyreview.application.card_battler_model import (
@@ -533,7 +536,10 @@ __all__ = [
     "MechanicUsageLimitDefinition",
     "RuleTextTemplateDefinition",
     "StatProfileAffinity",
+    "StatProfileCandidateScore",
     "StatProfileDefinition",
+    "StatProfileSelection",
+    "StatProfileSelector",
     "TierBalanceProfile",
     "CompatibilityFact",
     "FallbackCandidate",
