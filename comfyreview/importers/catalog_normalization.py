@@ -115,8 +115,9 @@ class CatalogNormalizationRebuilder:
             if replace_source:
                 source.execute("PRAGMA locking_mode = NORMAL")
                 source.close()
+                source = sqlite3.connect(":memory:")
+                source.close()
                 source_closed = True
-                del source
                 gc.collect()
                 os.replace(destination, self._database_path)
                 final_path = self._database_path
