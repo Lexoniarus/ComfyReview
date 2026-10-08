@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import re
+import string
+
 from comfyreview.application.card_battler_materialization import (
     MechanicBranchDefinition,
     MechanicConditionDefinition,
     MechanicParameterDefinition,
     MechanicTemplateDefinition,
+    RuleTextTemplateDefinition,
     TierBalanceProfile,
 )
 from comfyreview.application.card_battler_model import CardBattlerModelInvalid
@@ -14,6 +18,7 @@ from comfyreview.application.card_battler_random import (
     DomainSeparatedCardRandom,
 )
 from comfyreview.domain.card_battler import (
+    CANONICAL_RULE_RENDERER_REVISION,
     MaterializedBranch,
     MaterializedBranchConditionGroup,
     MaterializedCondition,
@@ -25,6 +30,12 @@ from comfyreview.domain.card_battler import (
     MaterializedStep,
     MaterializedUsageLimit,
 )
+
+_RULE_FIELD_PATTERN = re.compile(r"[a-z][a-z0-9_]*")
+
+
+class CanonicalRuleRenderingError(CardBattlerModelInvalid):
+    """Signal an invalid or unresolved authoritative rule template."""
 
 
 class MechanicMaterializer:
@@ -429,3 +440,103 @@ class MechanicMaterializer:
     def _require_unique_orders(orders: tuple[int, ...], label: str) -> None:
         if len(orders) != len(set(orders)):
             raise CardBattlerModelInvalid(f"{label} require unique ordering")
+
+
+class CanonicalRuleRenderer:
+    """Serialize a materialized mechanic through one model-owned template."""
+
+    revision = CANONICAL_RULE_RENDERER_REVISION
+
+    def render(
+        self,
+        definition: MechanicTemplateDefinition,
+        mechanic: MaterializedMechanic,
+        *,
+        locale: str = "de-DE",
+    ) -> str:
+        """Render a strict localized rule without changing mechanic facts."""
+        if definition.key != mechanic.key:
+            raise CanonicalRuleRenderingError(
+                "rule definition and materialized mechanic do not match"
+            )
+        template = self._template(definition.rule_text_templates, locale)
+        values = self._parameter_values(mechanic)
+        try:
+            parsed = tuple(string.Formatter().parse(template.template_text))
+        except ValueError as error:
+            raise CanonicalRuleRenderingError(
+                "canonical rule template has invalid braces"
+            ) from error
+        fields: list[str] = []
+        for _literal, field, format_spec, conversion in parsed:
+            if field is None:
+                continue
+            if (
+                _RULE_FIELD_PATTERN.fullmatch(field) is None
+                or format_spec
+                or conversion
+            ):
+                raise CanonicalRuleRenderingError(
+                    "canonical rule template has an invalid placeholder"
+                )
+            fields.append(field)
+        unknown = tuple(sorted(set(fields) - values.keys()))
+        if unknown:
+            raise CanonicalRuleRenderingError(
+                "canonical rule template has unknown placeholders: "
+                + ", ".join(unknown)
+            )
+        rendered = template.template_text.format_map(values)
+        if not rendered or "{" in rendered or "}" in rendered:
+            raise CanonicalRuleRenderingError(
+                "canonical rule template remains unresolved"
+            )
+        return rendered
+
+    @staticmethod
+    def _template(
+        templates: tuple[RuleTextTemplateDefinition, ...],
+        locale: str,
+    ) -> RuleTextTemplateDefinition:
+        if not locale:
+            raise CanonicalRuleRenderingError("rule locale must not be empty")
+        matches = tuple(
+            template for template in templates if template.locale == locale
+        )
+        if len(matches) != 1:
+            raise CanonicalRuleRenderingError(
+                f"expected exactly one canonical rule template for {locale}"
+            )
+        template = matches[0]
+        if template.version < 1 or not template.template_text:
+            raise CanonicalRuleRenderingError(
+                "canonical rule template version or text is invalid"
+            )
+        return template
+
+    @staticmethod
+    def _parameter_values(
+        mechanic: MaterializedMechanic,
+    ) -> dict[str, str]:
+        parameters = list(mechanic.parameters)
+        parameters.extend(
+            parameter
+            for branch in mechanic.branches
+            for step in branch.steps
+            for parameter in step.parameters
+        )
+        keys = tuple(parameter.key for parameter in parameters)
+        if len(keys) != len(set(keys)):
+            raise CanonicalRuleRenderingError(
+                "materialized rule parameters require unique keys"
+            )
+        return {
+            parameter.key: (
+                "true"
+                if parameter.value is True
+                else "false"
+                if parameter.value is False
+                else str(parameter.value)
+            )
+            for parameter in parameters
+        }
