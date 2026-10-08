@@ -152,6 +152,54 @@ def _create_model_database(
                 description TEXT NOT NULL,
                 active INTEGER NOT NULL DEFAULT 1
             );
+            CREATE TABLE condition_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE cost_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE effect_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE target_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE duration_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE status_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
             CREATE TABLE mechanic_templates (
                 id INTEGER PRIMARY KEY,
                 ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
@@ -371,6 +419,89 @@ def _create_model_database(
                 version INTEGER NOT NULL,
                 active INTEGER NOT NULL DEFAULT 1
             );
+            CREATE TABLE mechanic_condition_groups (
+                id INTEGER PRIMARY KEY,
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                group_order INTEGER NOT NULL,
+                operator TEXT NOT NULL,
+                join_with_previous TEXT,
+                scope TEXT NOT NULL
+            );
+            CREATE TABLE mechanic_branches (
+                id INTEGER PRIMARY KEY,
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                branch_key TEXT NOT NULL,
+                branch_order INTEGER NOT NULL,
+                branch_type TEXT NOT NULL,
+                condition_group_id INTEGER
+                    REFERENCES mechanic_condition_groups(id),
+                description TEXT
+            );
+            CREATE TABLE mechanic_branch_condition_groups (
+                branch_id INTEGER NOT NULL REFERENCES mechanic_branches(id),
+                condition_group_id INTEGER NOT NULL
+                    REFERENCES mechanic_condition_groups(id),
+                group_order INTEGER NOT NULL,
+                join_with_previous TEXT,
+                PRIMARY KEY (branch_id, condition_group_id)
+            );
+            CREATE TABLE mechanic_conditions (
+                id INTEGER PRIMARY KEY,
+                condition_group_id INTEGER NOT NULL
+                    REFERENCES mechanic_condition_groups(id),
+                condition_order INTEGER NOT NULL,
+                condition_type_id INTEGER NOT NULL REFERENCES condition_types(id),
+                target_type_id INTEGER REFERENCES target_types(id),
+                comparator TEXT,
+                value_int INTEGER,
+                value_text TEXT,
+                negated INTEGER NOT NULL DEFAULT 0,
+                status_type_id INTEGER REFERENCES status_types(id)
+            );
+            CREATE TABLE mechanic_steps (
+                id INTEGER PRIMARY KEY,
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                branch_id INTEGER NOT NULL REFERENCES mechanic_branches(id),
+                step_order INTEGER NOT NULL,
+                effect_type_id INTEGER NOT NULL REFERENCES effect_types(id),
+                target_type_id INTEGER NOT NULL REFERENCES target_types(id),
+                duration_type_id INTEGER NOT NULL REFERENCES duration_types(id),
+                status_type_id INTEGER REFERENCES status_types(id),
+                notes TEXT
+            );
+            CREATE TABLE mechanic_costs (
+                id INTEGER PRIMARY KEY,
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                cost_order INTEGER NOT NULL,
+                cost_type_id INTEGER NOT NULL REFERENCES cost_types(id),
+                target_type_id INTEGER REFERENCES target_types(id),
+                amount INTEGER,
+                notes TEXT
+            );
+            CREATE TABLE mechanic_parameters (
+                id INTEGER PRIMARY KEY,
+                mechanic_template_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                step_id INTEGER REFERENCES mechanic_steps(id),
+                param_key TEXT NOT NULL,
+                value_type TEXT NOT NULL,
+                min_int INTEGER,
+                max_int INTEGER,
+                step_int INTEGER,
+                default_int INTEGER,
+                allowed_values_json TEXT
+            );
+            CREATE TABLE mechanic_parameter_enum_values (
+                parameter_id INTEGER NOT NULL REFERENCES mechanic_parameters(id),
+                value_key TEXT NOT NULL,
+                sort_order INTEGER NOT NULL,
+                description TEXT,
+                PRIMARY KEY (parameter_id, value_key)
+            );
             """
         )
         connection.executemany(
@@ -513,6 +644,34 @@ def _create_model_database(
                 (2, "twice_per_match", "Twice", "Two uses per match"),
             ),
         )
+        lookup_rows = {
+            "condition_types": (
+                (1, "has_status", "Has status", "Target has status"),
+            ),
+            "cost_types": ((1, "discard", "Discard", "Discard a card"),),
+            "effect_types": (
+                (1, "gain_attack", "Gain attack", "Increase attack"),
+                (2, "apply_status", "Apply status", "Apply a status"),
+            ),
+            "target_types": (
+                (1, "self", "Self", "This card"),
+                (2, "enemy", "Enemy", "An enemy"),
+            ),
+            "duration_types": (
+                (1, "instant", "Instant", "Immediate"),
+                (2, "turn", "Turn", "For this turn"),
+            ),
+            "status_types": ((1, "marked", "Marked", "Marked target"),),
+        }
+        for table, rows in lookup_rows.items():
+            connection.executemany(
+                f"""
+                INSERT INTO {table}(
+                    id, ruleset_id, key, name, description, active
+                ) VALUES (?, 1, ?, ?, ?, 1)
+                """,
+                rows,
+            )
         connection.executemany(
             """
             INSERT INTO mechanic_templates(
@@ -651,6 +810,100 @@ def _create_model_database(
                 (3, 2, "de-DE", "Zeta-Regel"),
                 (2, 1, "en-US", "Alpha rule"),
                 (1, 1, "de-DE", "Alpha-Regel"),
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO mechanic_condition_groups(
+                id, mechanic_template_id, group_order,
+                operator, join_with_previous, scope
+            ) VALUES (1, 1, 1, 'AND', NULL, 'global')
+            """
+        )
+        connection.executemany(
+            """
+            INSERT INTO mechanic_branches(
+                id, mechanic_template_id, branch_key, branch_order,
+                branch_type, condition_group_id, description
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (2, 1, "optional", 2, "optional", None, None),
+                (1, 1, "main", 1, "main", 1, "Primary branch"),
+                (3, 2, "main", 1, "main", None, "Zeta branch"),
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO mechanic_branch_condition_groups(
+                branch_id, condition_group_id, group_order, join_with_previous
+            ) VALUES (2, 1, 1, NULL)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO mechanic_conditions(
+                id, condition_group_id, condition_order, condition_type_id,
+                target_type_id, comparator, value_int, value_text,
+                negated, status_type_id
+            ) VALUES (1, 1, 1, 1, 2, 'eq', NULL, 'marked', 0, 1)
+            """
+        )
+        connection.executemany(
+            """
+            INSERT INTO mechanic_steps(
+                id, mechanic_template_id, branch_id, step_order,
+                effect_type_id, target_type_id, duration_type_id,
+                status_type_id, notes
+            ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)
+            """,
+            (
+                (2, 1, 2, 2, 2, 2, 1, "Mark the enemy"),
+                (1, 1, 1, 1, 1, 2, None, "Gain attack"),
+                (3, 2, 3, 1, 1, 1, None, None),
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO mechanic_costs(
+                id, mechanic_template_id, cost_order, cost_type_id,
+                target_type_id, amount, notes
+            ) VALUES (1, 1, 1, 1, 1, 1, 'Discard one')
+            """
+        )
+        connection.executemany(
+            """
+            INSERT INTO mechanic_parameters(
+                id, mechanic_template_id, step_id, param_key, value_type,
+                min_int, max_int, step_int, default_int, allowed_values_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    2,
+                    1,
+                    2,
+                    "mode",
+                    "enum",
+                    None,
+                    None,
+                    None,
+                    None,
+                    '["soft","hard"]',
+                ),
+                (1, 1, 1, "bonus", "int", 100, 500, 100, 300, None),
+                (3, 2, None, "enabled", "bool", None, None, None, None, None),
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO mechanic_parameter_enum_values(
+                parameter_id, value_key, sort_order, description
+            ) VALUES (2, ?, ?, ?)
+            """,
+            (
+                ("hard", 2, "Hard mode"),
+                ("soft", 1, "Soft mode"),
             ),
         )
         for table, target_column in (

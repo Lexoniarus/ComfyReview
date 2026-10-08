@@ -17,6 +17,9 @@ from comfyreview.application.card_battler_model import (
     CardBattlerModelInvalid,
     CardBattlerRulesetRef,
 )
+from comfyreview.repositories.sqlite.card_battler_mechanic_structure import (
+    _SqliteCardMechanicStructureReader,
+)
 from comfyreview.repositories.sqlite.card_battler_model_resource import (
     SqliteCardBattlerModelResource,
 )
@@ -27,6 +30,7 @@ class _SqliteCardMechanicModelReader:
 
     def __init__(self, resource: SqliteCardBattlerModelResource) -> None:
         self._resource = resource
+        self._structures = _SqliteCardMechanicStructureReader(resource)
 
     def definitions(
         self,
@@ -57,6 +61,7 @@ class _SqliteCardMechanicModelReader:
             self._validate_template_lookups(templates, ruleset_id)
             usage_by_mechanic = self._usage_limits(connection, ruleset_id)
             rules_by_mechanic = self._rule_templates(connection, ruleset_id)
+            structures = self._structures.read(connection, ruleset_id)
             return tuple(
                 MechanicTemplateDefinition(
                     key=str(row["key"]),
@@ -73,6 +78,7 @@ class _SqliteCardMechanicModelReader:
                     rule_text_templates=tuple(
                         rules_by_mechanic[int(row["id"])]
                     ),
+                    structure=structures[int(row["id"])],
                 )
                 for row in templates
             )

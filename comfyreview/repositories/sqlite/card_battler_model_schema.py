@@ -412,10 +412,148 @@ CARD_MECHANIC_CATALOG_SCHEMA = CardBattlerModelSchemaRequirement(
     ),
 )
 
+CARD_MECHANIC_STRUCTURE_SCHEMA = CardBattlerModelSchemaRequirement(
+    group="mechanic-structure",
+    tables=(
+        *(
+            CardBattlerModelTableRequirement(
+                table,
+                frozenset(
+                    {
+                        "id",
+                        "ruleset_id",
+                        "key",
+                        "name",
+                        "description",
+                        "active",
+                    }
+                ),
+            )
+            for table in (
+                "condition_types",
+                "cost_types",
+                "effect_types",
+                "target_types",
+                "duration_types",
+                "status_types",
+            )
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_branches",
+            frozenset(
+                {
+                    "id",
+                    "mechanic_template_id",
+                    "branch_key",
+                    "branch_order",
+                    "branch_type",
+                    "condition_group_id",
+                    "description",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_condition_groups",
+            frozenset(
+                {
+                    "id",
+                    "mechanic_template_id",
+                    "group_order",
+                    "operator",
+                    "join_with_previous",
+                    "scope",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_branch_condition_groups",
+            frozenset(
+                {
+                    "branch_id",
+                    "condition_group_id",
+                    "group_order",
+                    "join_with_previous",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_conditions",
+            frozenset(
+                {
+                    "id",
+                    "condition_group_id",
+                    "condition_order",
+                    "condition_type_id",
+                    "target_type_id",
+                    "comparator",
+                    "value_int",
+                    "value_text",
+                    "negated",
+                    "status_type_id",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_steps",
+            frozenset(
+                {
+                    "id",
+                    "mechanic_template_id",
+                    "branch_id",
+                    "step_order",
+                    "effect_type_id",
+                    "target_type_id",
+                    "duration_type_id",
+                    "status_type_id",
+                    "notes",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_costs",
+            frozenset(
+                {
+                    "id",
+                    "mechanic_template_id",
+                    "cost_order",
+                    "cost_type_id",
+                    "target_type_id",
+                    "amount",
+                    "notes",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_parameters",
+            frozenset(
+                {
+                    "id",
+                    "mechanic_template_id",
+                    "step_id",
+                    "param_key",
+                    "value_type",
+                    "min_int",
+                    "max_int",
+                    "step_int",
+                    "default_int",
+                    "allowed_values_json",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_parameter_enum_values",
+            frozenset(
+                {"parameter_id", "value_key", "sort_order", "description"}
+            ),
+        ),
+    ),
+)
+
 CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     MODEL_IDENTITY_SCHEMA,
     FOUNDATIONAL_CARD_BATTLER_SCHEMA,
     CARD_BATTLER_MAPPING_SCHEMA,
     CARD_MATERIALIZATION_SCHEMA,
     CARD_MECHANIC_CATALOG_SCHEMA,
+    CARD_MECHANIC_STRUCTURE_SCHEMA,
 )

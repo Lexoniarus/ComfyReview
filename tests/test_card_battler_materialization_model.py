@@ -9,7 +9,6 @@ import pytest
 
 from comfyreview.application.card_battler_materialization import (
     CardBalancePolicy,
-    MechanicTemplateDefinition,
     MechanicUsageLimitDefinition,
     RuleTextTemplateDefinition,
 )
@@ -123,32 +122,40 @@ def test_materialization_model_reads_stable_id_free_mechanic_facts(
     affinities = repository.mechanic_affinities()
 
     assert [definition.key for definition in definitions] == ["alpha", "zeta"]
-    assert definitions[0] == MechanicTemplateDefinition(
-        key="alpha",
-        internal_name="ALPHA",
-        description="Alpha mechanic",
-        base_weight_milli=1100,
-        default_trigger_key="on_play",
-        default_usage_limit_key="once_per_turn",
-        usage_limits=(
-            MechanicUsageLimitDefinition(
-                usage_limit_key="once_per_turn",
-                max_uses=1,
-                scope="turn",
-                reset_trigger_key="turn_start",
-            ),
+    alpha = definitions[0]
+    assert (
+        alpha.key,
+        alpha.internal_name,
+        alpha.description,
+        alpha.base_weight_milli,
+        alpha.default_trigger_key,
+        alpha.default_usage_limit_key,
+    ) == (
+        "alpha",
+        "ALPHA",
+        "Alpha mechanic",
+        1100,
+        "on_play",
+        "once_per_turn",
+    )
+    assert alpha.usage_limits == (
+        MechanicUsageLimitDefinition(
+            usage_limit_key="once_per_turn",
+            max_uses=1,
+            scope="turn",
+            reset_trigger_key="turn_start",
         ),
-        rule_text_templates=(
-            RuleTextTemplateDefinition(
-                locale="de-DE",
-                version=1,
-                template_text="Alpha-Regel",
-            ),
-            RuleTextTemplateDefinition(
-                locale="en-US",
-                version=1,
-                template_text="Alpha rule",
-            ),
+    )
+    assert alpha.rule_text_templates == (
+        RuleTextTemplateDefinition(
+            locale="de-DE",
+            version=1,
+            template_text="Alpha-Regel",
+        ),
+        RuleTextTemplateDefinition(
+            locale="en-US",
+            version=1,
+            template_text="Alpha rule",
         ),
     )
     assert (
@@ -187,13 +194,74 @@ def test_materialization_model_reads_stable_id_free_mechanic_facts(
     assert len(affinities) == 16
 
 
+def test_materialization_model_assembles_complete_mechanic_structures(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+
+    alpha, zeta = _repository(path).mechanic_definitions()
+
+    assert [branch.key for branch in alpha.structure.branches] == [
+        "main",
+        "optional",
+    ]
+    assert [
+        step.effect_type_key for step in alpha.structure.branches[0].steps
+    ] == ["gain_attack"]
+    assert [
+        (
+            link.order,
+            link.condition_group_order,
+            link.join_with_previous,
+        )
+        for link in alpha.structure.branches[1].condition_groups
+    ] == [(1, 1, None)]
+    group = alpha.structure.condition_groups[0]
+    assert (group.order, group.operator, group.scope) == (1, "AND", "global")
+    assert (
+        group.conditions[0].condition_type_key,
+        group.conditions[0].target_type_key,
+        group.conditions[0].status_type_key,
+        group.conditions[0].value_text,
+    ) == ("has_status", "enemy", "marked", "marked")
+    assert (
+        alpha.structure.costs[0].cost_type_key,
+        alpha.structure.costs[0].target_type_key,
+        alpha.structure.costs[0].amount,
+    ) == ("discard", "self", 1)
+    assert [parameter.key for parameter in alpha.structure.parameters] == [
+        "bonus",
+        "mode",
+    ]
+    assert (
+        alpha.structure.parameters[0].branch_key,
+        alpha.structure.parameters[0].step_order,
+        alpha.structure.parameters[0].default_int,
+    ) == ("main", 1, 300)
+    assert alpha.structure.parameters[1].allowed_values == ("soft", "hard")
+    assert [
+        value.key for value in alpha.structure.parameters[1].enum_values
+    ] == ["soft", "hard"]
+    assert [branch.key for branch in zeta.structure.branches] == ["main"]
+    assert zeta.structure.condition_groups == ()
+    assert zeta.structure.costs == ()
+    assert zeta.structure.parameters[0].branch_key is None
+
+
 @pytest.mark.parametrize(
     "statement, missing",
     (
         ("DROP TABLE rules_text_templates", "rules_text_templates"),
+        ("DROP TABLE mechanic_steps", "mechanic_steps"),
         (
             "ALTER TABLE mechanic_usage_limits RENAME COLUMN scope TO absent",
             "scope",
+        ),
+        (
+            "ALTER TABLE mechanic_parameters "
+            "RENAME COLUMN allowed_values_json TO absent_values",
+            "allowed_values_json",
         ),
     ),
 )
@@ -239,6 +307,50 @@ def test_materialization_model_rejects_cross_ruleset_mechanic_lookup(
         connection.close()
 
     with pytest.raises(CardBattlerModelInvalid, match="crosses a ruleset"):
+        _repository(path).mechanic_definitions()
+
+
+def test_materialization_model_rejects_invalid_parameter_enum_json(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "UPDATE mechanic_parameters SET allowed_values_json = '{}' "
+            "WHERE param_key = 'mode'"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(CardBattlerModelInvalid, match="must contain text"):
+        _repository(path).mechanic_definitions()
+
+
+def test_materialization_model_rejects_cross_ruleset_structure_lookup(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO condition_types(
+                id, ruleset_id, key, name, description, active
+            ) VALUES (9, 2, 'foreign', 'Foreign', 'Foreign condition', 1)
+            """
+        )
+        connection.execute(
+            "UPDATE mechanic_conditions SET condition_type_id = 9 WHERE id = 1"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(CardBattlerModelInvalid, match="condition lookup"):
         _repository(path).mechanic_definitions()
 
 
