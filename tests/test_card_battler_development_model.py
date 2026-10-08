@@ -71,6 +71,8 @@ def test_development_model_reads_policy_ladder_budgets_caps_and_weights(
     weights = repository.development_action_weights()
     upgrade_edges = repository.mechanic_upgrade_edges()
     parameter_progression = repository.mechanic_parameter_progression()
+    lineage_compatibility = repository.lineage_compatibility()
+    mechanic_compatibility = repository.mechanic_compatibility()
 
     assert (
         policy
@@ -145,6 +147,26 @@ def test_development_model_reads_policy_ladder_budgets_caps_and_weights(
         )
         for progression in parameter_progression
     ] == [("alpha", "bonus", 1, 2, 50, 4, 125)]
+    assert [
+        (
+            fact.lineage_a_key,
+            fact.lineage_b_key,
+            fact.relation,
+            fact.weight_milli,
+            fact.notes,
+        )
+        for fact in lineage_compatibility
+    ] == [("alpha", "zeta", "compatible", 700, "Fixture lineages")]
+    assert [
+        (
+            fact.mechanic_a_key,
+            fact.mechanic_b_key,
+            fact.relation,
+            fact.weight_milli,
+            fact.notes,
+        )
+        for fact in mechanic_compatibility
+    ] == [("alpha", "zeta", "preferred", 850, "Fixture mechanics")]
 
 
 def test_development_model_supports_an_explicit_ruleset_reference(
@@ -169,6 +191,8 @@ def test_development_model_supports_an_explicit_ruleset_reference(
     assert len(repository.development_action_weights(ruleset)) == 6
     assert len(repository.mechanic_upgrade_edges(ruleset)) == 1
     assert len(repository.mechanic_parameter_progression(ruleset)) == 1
+    assert len(repository.lineage_compatibility(ruleset)) == 1
+    assert len(repository.mechanic_compatibility(ruleset)) == 1
 
 
 @pytest.mark.parametrize(
@@ -224,6 +248,12 @@ def test_development_model_rejects_invalid_policy_or_ladder_facts(
             "ALTER TABLE mechanic_parameter_progression "
             "RENAME COLUMN budget_cost_milli TO absent",
             "budget_cost_milli",
+        ),
+        ("DROP TABLE lineage_compatibility", "lineage_compatibility"),
+        (
+            "ALTER TABLE mechanic_compatibility "
+            "RENAME COLUMN relation TO absent",
+            "relation",
         ),
     ),
 )
@@ -379,6 +409,14 @@ def test_development_model_rejects_unresolvable_references_and_policies(
         CardBattlerModelInvalid, match="cannot resolve ruleset"
     ):
         repository.mechanic_parameter_progression(missing_ruleset)
+    with pytest.raises(
+        CardBattlerModelInvalid, match="cannot resolve ruleset"
+    ):
+        repository.lineage_compatibility(missing_ruleset)
+    with pytest.raises(
+        CardBattlerModelInvalid, match="cannot resolve ruleset"
+    ):
+        repository.mechanic_compatibility(missing_ruleset)
 
 
 @pytest.mark.parametrize(
@@ -508,3 +546,104 @@ def test_development_progression_preserves_open_ranges_and_optional_steps(
         progression.upgrade_step_int,
         progression.max_upgrade_steps,
     ) == (None, None, None)
+
+
+@pytest.mark.parametrize(
+    ("statement", "read", "message"),
+    (
+        (
+            "UPDATE trait_lineages SET active = 0 WHERE id = 2",
+            "lineage",
+            "unavailable value",
+        ),
+        (
+            "UPDATE mechanic_templates SET ruleset_id = 2 WHERE id = 1",
+            "mechanic",
+            "unavailable value",
+        ),
+        (
+            "UPDATE lineage_compatibility SET lineage_b_id = lineage_a_id",
+            "lineage",
+            "cannot be reflexive",
+        ),
+        (
+            "UPDATE mechanic_compatibility SET relation = 'unknown'",
+            "mechanic",
+            "relation is invalid",
+        ),
+        (
+            "UPDATE lineage_compatibility SET weight_milli = 1001",
+            "lineage",
+            "weight is invalid",
+        ),
+    ),
+)
+def test_development_compatibility_rejects_invalid_facts(
+    tmp_path: Path,
+    statement: str,
+    read: str,
+    message: str,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    _execute(path, statement)
+    repository = _repository(path)
+
+    with pytest.raises(CardBattlerModelInvalid, match=message):
+        if read == "lineage":
+            repository.lineage_compatibility()
+        else:
+            repository.mechanic_compatibility()
+
+
+@pytest.mark.parametrize(
+    ("statement", "read", "message"),
+    (
+        (
+            "INSERT INTO lineage_compatibility(lineage_a_id, lineage_b_id, "
+            "relation, weight_milli, notes) "
+            "VALUES (1, 2, 'neutral', 500, NULL)",
+            "lineage",
+            "lineage compatibility is ambiguous",
+        ),
+        (
+            "INSERT INTO mechanic_compatibility(mechanic_a_id, mechanic_b_id, "
+            "relation, weight_milli, notes) "
+            "VALUES (1, 2, 'neutral', 500, NULL)",
+            "mechanic",
+            "mechanic compatibility is ambiguous",
+        ),
+    ),
+)
+def test_development_compatibility_rejects_symmetric_duplicates(
+    tmp_path: Path,
+    statement: str,
+    read: str,
+    message: str,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    _execute(path, statement)
+    repository = _repository(path)
+
+    with pytest.raises(CardBattlerModelInvalid, match=message):
+        if read == "lineage":
+            repository.lineage_compatibility()
+        else:
+            repository.mechanic_compatibility()
+
+
+def test_development_compatibility_preserves_optional_notes(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    _execute(
+        path,
+        "UPDATE lineage_compatibility SET notes = NULL",
+        "UPDATE mechanic_compatibility SET notes = NULL",
+    )
+    repository = _repository(path)
+
+    assert repository.lineage_compatibility()[0].notes is None
+    assert repository.mechanic_compatibility()[0].notes is None

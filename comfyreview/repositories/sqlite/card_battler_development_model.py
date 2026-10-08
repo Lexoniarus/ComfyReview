@@ -8,6 +8,8 @@ import sqlite3
 from comfyreview.application.card_battler_development import (
     CardDevelopmentPolicy,
     DevelopmentTierModel,
+    LineageCompatibility,
+    MechanicCompatibility,
     MechanicParameterProgression,
     MechanicUpgradeEdge,
     TierDevelopmentActionWeight,
@@ -15,6 +17,9 @@ from comfyreview.application.card_battler_development import (
 from comfyreview.application.card_battler_model import (
     CardBattlerModelInvalid,
     CardBattlerRulesetRef,
+)
+from comfyreview.repositories.sqlite.card_battler_development_compatibility import (
+    _SqliteCardDevelopmentCompatibilityReader,
 )
 from comfyreview.repositories.sqlite.card_battler_development_progression import (
     _SqliteCardDevelopmentProgressionReader,
@@ -29,6 +34,9 @@ class SqliteCardDevelopmentModelRepository:
 
     def __init__(self, resource: SqliteCardBattlerModelResource) -> None:
         self._resource = resource
+        self._compatibility = _SqliteCardDevelopmentCompatibilityReader(
+            resource
+        )
         self._progression = _SqliteCardDevelopmentProgressionReader(resource)
 
     def development_policy(
@@ -177,6 +185,20 @@ class SqliteCardDevelopmentModelRepository:
     ) -> tuple[MechanicParameterProgression, ...]:
         """Return registered parameter progressions in stable order."""
         return self._progression.mechanic_parameter_progression(ruleset)
+
+    def lineage_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[LineageCompatibility, ...]:
+        """Return symmetric lineage compatibility in stable order."""
+        return self._compatibility.lineage_compatibility(ruleset)
+
+    def mechanic_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicCompatibility, ...]:
+        """Return symmetric mechanic compatibility in stable order."""
+        return self._compatibility.mechanic_compatibility(ruleset)
 
     def _ladder_rows(
         self,

@@ -53,6 +53,9 @@ class TierDevelopmentActionWeight:
 
 
 MechanicUpgradeKind = Literal["replace", "branch", "augment"]
+CompatibilityRelation = Literal[
+    "preferred", "compatible", "neutral", "incompatible"
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +82,28 @@ class MechanicParameterProgression:
     upgrade_step_int: int | None
     max_upgrade_steps: int | None
     budget_cost_milli: int
+
+
+@dataclass(frozen=True, slots=True)
+class LineageCompatibility:
+    """Describe one symmetric compatibility relation between lineages."""
+
+    lineage_a_key: str
+    lineage_b_key: str
+    relation: CompatibilityRelation
+    weight_milli: int
+    notes: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class MechanicCompatibility:
+    """Describe one symmetric compatibility relation between mechanics."""
+
+    mechanic_a_key: str
+    mechanic_b_key: str
+    relation: CompatibilityRelation
+    weight_milli: int
+    notes: str | None
 
 
 class CardDevelopmentModelRepository(Protocol):
@@ -123,4 +148,18 @@ class CardDevelopmentModelRepository(Protocol):
         ruleset: CardBattlerRulesetRef | None = None,
     ) -> tuple[MechanicParameterProgression, ...]:
         """Return registered parameter progressions in stable order."""
+        ...
+
+    def lineage_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[LineageCompatibility, ...]:
+        """Return symmetric lineage compatibility facts in stable order."""
+        ...
+
+    def mechanic_compatibility(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicCompatibility, ...]:
+        """Return symmetric mechanic compatibility facts in stable order."""
         ...

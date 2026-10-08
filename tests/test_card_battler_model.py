@@ -547,6 +547,22 @@ def _create_model_database(
                 max_upgrade_steps INTEGER,
                 budget_cost_milli INTEGER NOT NULL
             );
+            CREATE TABLE lineage_compatibility (
+                lineage_a_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                lineage_b_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                relation TEXT NOT NULL,
+                weight_milli INTEGER NOT NULL,
+                notes TEXT,
+                PRIMARY KEY (lineage_a_id, lineage_b_id)
+            );
+            CREATE TABLE mechanic_compatibility (
+                mechanic_a_id INTEGER NOT NULL REFERENCES mechanic_templates(id),
+                mechanic_b_id INTEGER NOT NULL REFERENCES mechanic_templates(id),
+                relation TEXT NOT NULL,
+                weight_milli INTEGER NOT NULL,
+                notes TEXT,
+                PRIMARY KEY (mechanic_a_id, mechanic_b_id)
+            );
             """
         )
         connection.executemany(
@@ -1029,6 +1045,20 @@ def _create_model_database(
                 id, parameter_id, min_tier_id, max_tier_id,
                 upgrade_step_int, max_upgrade_steps, budget_cost_milli
             ) VALUES (1, 1, 1, 2, 50, 4, 125)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO lineage_compatibility(
+                lineage_a_id, lineage_b_id, relation, weight_milli, notes
+            ) VALUES (2, 1, 'compatible', 700, 'Fixture lineages')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO mechanic_compatibility(
+                mechanic_a_id, mechanic_b_id, relation, weight_milli, notes
+            ) VALUES (2, 1, 'preferred', 850, 'Fixture mechanics')
             """
         )
         for table, target_column in (

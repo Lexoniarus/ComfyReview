@@ -687,6 +687,44 @@ CARD_DEVELOPMENT_PROGRESSION_SCHEMA = CardBattlerModelSchemaRequirement(
     ),
 )
 
+CARD_DEVELOPMENT_COMPATIBILITY_SCHEMA = CardBattlerModelSchemaRequirement(
+    group="card-development-compatibility",
+    tables=(
+        CardBattlerModelTableRequirement(
+            "lineage_compatibility",
+            frozenset(
+                {
+                    "lineage_a_id",
+                    "lineage_b_id",
+                    "relation",
+                    "weight_milli",
+                    "notes",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_compatibility",
+            frozenset(
+                {
+                    "mechanic_a_id",
+                    "mechanic_b_id",
+                    "relation",
+                    "weight_milli",
+                    "notes",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "trait_lineages",
+            frozenset({"id", "ruleset_id", "key", "active"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_templates",
+            frozenset({"id", "ruleset_id", "key", "active"}),
+        ),
+    ),
+)
+
 CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     MODEL_IDENTITY_SCHEMA,
     FOUNDATIONAL_CARD_BATTLER_SCHEMA,
@@ -696,4 +734,5 @@ CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     CARD_MECHANIC_STRUCTURE_SCHEMA,
     CARD_DEVELOPMENT_POLICY_SCHEMA,
     CARD_DEVELOPMENT_PROGRESSION_SCHEMA,
+    CARD_DEVELOPMENT_COMPATIBILITY_SCHEMA,
 )
