@@ -69,40 +69,46 @@ def test_prompt_labels_use_longest_active_revision_matches() -> None:
         _component("pose", "pose", "standing", name="Standing"),
         _component("expression", "expression", "smile", name="Smile"),
         _component("lighting", "lighting", "soft light", name="Soft"),
-        _component("modifier-a", "modifier", "wind", name="Wind"),
-        _component("modifier-b", "modifier", "rain", name="Rain"),
+        _component("atmosphere", "atmosphere", "wind", name="Wind"),
+        _component("accessory", "accessory", "scarf", name="Scarf"),
+        _component("framing", "framing", "close-up", name="Close-up"),
+        _component(
+            "camera-angle", "camera_angle", "low angle", name="Low angle"
+        ),
+        _component(
+            "optical-effect",
+            "optical_effect",
+            "film grain",
+            name="Film grain",
+        ),
         _component("empty", "scene", ""),
         _component("archived", "scene", "secret", archived=True),
     )
 
     labels = service.resolve(
-        "moon city, red dress, standing, smile, soft light, wind, rain"
+        "moon city, wind, soft light, red dress, scarf, standing, smile, "
+        "close-up, low angle, film grain"
     )
 
     assert labels == PromptLabels(
         scene_name="Moon City",
+        atmosphere_name="Wind",
+        light_name="Soft",
         outfit_name="Red Dress",
+        accessory_name="Scarf",
         pose_name="Standing",
         expression_name="Smile",
-        modifiers=("Wind", "Rain"),
-        light_name="Soft",
+        framing_name="Close-up",
+        camera_angle_name="Low angle",
+        optical_effect_name="Film grain",
     )
 
 
-def test_prompt_labels_can_omit_lighting_and_limit_modifiers() -> None:
-    modifiers = tuple(
-        _component(f"modifier-{index}", "modifier", f"m{index}")
-        for index in range(15)
-    )
+def test_prompt_labels_can_omit_lighting() -> None:
     service = _service(
         _component("lighting", "lighting", "bright", name="Bright"),
-        *modifiers,
     )
 
-    labels = service.resolve(
-        "bright, " + ", ".join(f"m{index}" for index in range(15)),
-        include_lighting=False,
-    )
+    labels = service.resolve("bright", include_lighting=False)
 
     assert labels.light_name == ""
-    assert len(labels.modifiers) == 12
