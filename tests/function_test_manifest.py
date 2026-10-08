@@ -1,6 +1,10 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_development:DevelopmentPlanner.plan": (
+        "tests/test_card_battler_development_planning.py::"
+        "test_development_planner_builds_the_exact_next_tier_golden_plan"
+    ),
     "comfyreview.application.card_battler_common:CommonCardMaterializer.materialize": (
         "tests/test_card_battler_common_materialization.py::"
         "test_common_card_materializer_has_a_stable_golden_vector"

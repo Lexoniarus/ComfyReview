@@ -41,8 +41,10 @@ class CardDevelopmentPlan:
 
     current_tier: DevelopmentTier
     next_tier: DevelopmentTier
+    stat_budget: int
     mechanic_budget_milli: int
     trait_cap: int
+    parameter_scale_milli: int
     primary_trait_action: PrimaryTraitAction
     provenance: CardDevelopmentProvenance
 

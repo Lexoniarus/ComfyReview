@@ -39,8 +39,10 @@ def test_development_contracts_freeze_one_next_tier_and_trait_action() -> None:
     plan = CardDevelopmentPlan(
         current_tier=DevelopmentTier("common", 1, 1),
         next_tier=DevelopmentTier("common", 2, 2),
+        stat_budget=3200,
         mechanic_budget_milli=1250,
         trait_cap=1,
+        parameter_scale_milli=1100,
         primary_trait_action="improve_existing_trait",
         provenance=provenance,
     )
