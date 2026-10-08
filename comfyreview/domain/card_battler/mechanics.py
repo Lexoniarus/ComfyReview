@@ -105,9 +105,18 @@ class MaterializedMechanic:
 
 
 @dataclass(frozen=True, slots=True)
+class MaterializedParameterUpgrade:
+    """Count applied model-authorized upgrades for one stable parameter."""
+
+    parameter_key: str
+    applied_steps: int
+
+
+@dataclass(frozen=True, slots=True)
 class MaterializedTrait:
     """Attach one authoritative mechanic to its stable trait lineage."""
 
     lineage_key: str
     mechanic: MaterializedMechanic
     canonical_rule_text: str
+    parameter_upgrades: tuple[MaterializedParameterUpgrade, ...] = ()

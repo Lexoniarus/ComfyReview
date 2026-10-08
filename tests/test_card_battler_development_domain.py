@@ -17,6 +17,7 @@ from comfyreview.domain.card_battler import (
     DevelopmentTier,
     MaterializedMechanic,
     MaterializedParameter,
+    MaterializedParameterUpgrade,
     MaterializedTrait,
     StructuredCardSpec,
     TraitDevelopmentAction,
@@ -30,6 +31,7 @@ def test_development_contracts_freeze_one_next_tier_and_trait_action() -> None:
         lineage_key=previous_trait.lineage_key,
         mechanic=previous_trait.mechanic,
         canonical_rule_text="Erhält 400 ATK.",
+        parameter_upgrades=(MaterializedParameterUpgrade("bonus", 1),),
     )
     provenance = CardDevelopmentProvenance(
         development_policy_key="prototype_development",
@@ -60,6 +62,9 @@ def test_development_contracts_freeze_one_next_tier_and_trait_action() -> None:
 
     assert plan.next_tier.ordinal == plan.current_tier.ordinal + 1
     assert result.action.previous_trait is previous_trait
+    assert (
+        result.action.developed_trait.parameter_upgrades[0].applied_steps == 1
+    )
     assert result.provenance.development_algorithm_revision.endswith("-v1")
 
     with pytest.raises(FrozenInstanceError):
