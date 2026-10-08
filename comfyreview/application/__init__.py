@@ -51,6 +51,7 @@ from comfyreview.application.card_battler_mapping import (
 from comfyreview.application.card_battler_materialization import (
     CardBalancePolicy,
     CardMaterializationModelRepository,
+    CardStatMaterializer,
     LineageMechanicEligibility,
     MechanicAffinity,
     MechanicBranchConditionGroupLink,
@@ -520,6 +521,7 @@ __all__ = [
     "CardBattlerMappingPolicy",
     "CardBattlerRngPolicy",
     "CardBalancePolicy",
+    "CardStatMaterializer",
     "CardMaterializationModelRepository",
     "LineageMechanicEligibility",
     "MechanicAffinity",

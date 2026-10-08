@@ -9,7 +9,10 @@ from comfyreview.application.card_battler_model import (
     CardBattlerModelInvalid,
     CardBattlerRulesetRef,
 )
-from comfyreview.domain.card_battler import CardImprint
+from comfyreview.application.card_battler_random import (
+    DomainSeparatedCardRandom,
+)
+from comfyreview.domain.card_battler import CardImprint, CardStats
 
 StatProfileAffinitySource = Literal["class", "role", "lineage"]
 MechanicAffinitySource = Literal["world_style", "class", "role", "lineage"]
@@ -160,6 +163,76 @@ class StatProfileSelector:
             )
             // 3,
         )
+
+
+class CardStatMaterializer:
+    """Convert one balance tier and stat profile into exact combat stats."""
+
+    def materialize(
+        self,
+        balance_policy: CardBalancePolicy,
+        tier: TierBalanceProfile,
+        stat_profile: StatProfileDefinition,
+        random: DomainSeparatedCardRandom,
+    ) -> CardStats:
+        """Choose the closest legal ATK grid point and derive exact DEF."""
+        if balance_policy.stat_rounding_step <= 0:
+            raise CardBattlerModelInvalid(
+                "stat rounding step must be positive"
+            )
+        share_total = (
+            stat_profile.atk_share_milli + stat_profile.def_share_milli
+        )
+        if not stat_profile.key or share_total <= 0:
+            raise CardBattlerModelInvalid(
+                "stat profile requires a key and positive total share"
+            )
+
+        legal_attacks = self._legal_attacks(balance_policy, tier)
+        if not legal_attacks:
+            raise CardBattlerModelInvalid(
+                "tier balance has no legal ATK grid point"
+            )
+        target_numerator = tier.stat_budget * stat_profile.atk_share_milli
+        nearest_distance = min(
+            abs(attack * share_total - target_numerator)
+            for attack in legal_attacks
+        )
+        nearest = tuple(
+            attack
+            for attack in legal_attacks
+            if abs(attack * share_total - target_numerator) == nearest_distance
+        )
+        attack = nearest[random.integer("stats", modulo=len(nearest))]
+        return CardStats(
+            attack=attack,
+            defense=tier.stat_budget - attack,
+            budget=tier.stat_budget,
+            stat_profile_key=stat_profile.key,
+        )
+
+    @staticmethod
+    def _legal_attacks(
+        balance_policy: CardBalancePolicy,
+        tier: TierBalanceProfile,
+    ) -> tuple[int, ...]:
+        minimum = balance_policy.atk_def_minimum
+        if balance_policy.no_negative_stats:
+            minimum = max(minimum, 0)
+        lower = max(
+            tier.min_atk,
+            minimum,
+            tier.stat_budget - tier.max_def,
+        )
+        upper = min(
+            tier.max_atk,
+            tier.stat_budget - max(tier.min_def, minimum),
+        )
+        step = balance_policy.stat_rounding_step
+        first = ((lower + step - 1) // step) * step
+        if first > upper:
+            return ()
+        return tuple(range(first, upper + 1, step))
 
 
 @dataclass(frozen=True, slots=True)
