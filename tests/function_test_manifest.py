@@ -277,6 +277,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_handles_empty_and_observed_queries"
     ),
+    "comfyreview.application.analytics:PlaygroundCombinationSelectionPolicy.select": (
+        "tests/test_playground_combination_selection.py::"
+        "test_policy_prefers_unique_covers_across_groups"
+    ),
     "comfyreview.application.analytics:AnalyticsService.prompt_token_statistics": (
         "tests/test_canonical_analytics.py::"
         "test_analytics_service_normalizes_canonical_queries"

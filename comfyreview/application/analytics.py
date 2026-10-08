@@ -62,7 +62,7 @@ class ObservedPromptCombination:
     """Describe one generated canonical prompt-component combination."""
 
     combo_key: str
-    combo_size: int
+    additional_factor_count: int
     component_uids: tuple[str, ...]
     component_names: tuple[str, ...]
     label: str
@@ -80,6 +80,108 @@ class CharacterCombinationGroup:
     character_uid: str
     character_name: str
     combinations: tuple[ObservedPromptCombination, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PlaygroundCharacterCombinationSelection:
+    """Carry diverse Playground combinations for one canonical character."""
+
+    character_uid: str
+    character_name: str
+    two_additional_factors: tuple[ObservedPromptCombination, ...]
+    three_additional_factors: tuple[ObservedPromptCombination, ...]
+
+
+class PlaygroundCombinationSelectionPolicy:
+    """Prefer distinct cover images across both Playground factor groups."""
+
+    def select(
+        self,
+        *,
+        two_additional_factors: tuple[CharacterCombinationGroup, ...],
+        three_additional_factors: tuple[CharacterCombinationGroup, ...],
+        limit_per_group: int,
+    ) -> tuple[PlaygroundCharacterCombinationSelection, ...]:
+        """Select diverse ranked rows and fall back only after exhaustion."""
+        limit = max(int(limit_per_group), 0)
+        two_by_uid = {
+            group.character_uid: group for group in two_additional_factors
+        }
+        three_by_uid = {
+            group.character_uid: group for group in three_additional_factors
+        }
+        character_uids = dict.fromkeys((*two_by_uid, *three_by_uid))
+        return tuple(
+            self._select_character(
+                two_by_uid.get(character_uid),
+                three_by_uid.get(character_uid),
+                limit=limit,
+            )
+            for character_uid in character_uids
+        )
+
+    def _select_character(
+        self,
+        two_group: CharacterCombinationGroup | None,
+        three_group: CharacterCombinationGroup | None,
+        *,
+        limit: int,
+    ) -> PlaygroundCharacterCombinationSelection:
+        group = two_group or three_group
+        assert group is not None
+        candidates = {
+            2: two_group.combinations if two_group is not None else (),
+            3: three_group.combinations if three_group is not None else (),
+        }
+        selected: dict[int, list[ObservedPromptCombination]] = {2: [], 3: []}
+        selected_keys: dict[int, set[str]] = {2: set(), 3: set()}
+        used_image_uids: set[str] = set()
+
+        while True:
+            progress = False
+            for factor_count in (2, 3):
+                if len(selected[factor_count]) >= limit:
+                    continue
+                candidate = next(
+                    (
+                        item
+                        for item in candidates[factor_count]
+                        if item.combo_key not in selected_keys[factor_count]
+                        and (image_uid := self._cover_image_uid(item))
+                        and image_uid not in used_image_uids
+                    ),
+                    None,
+                )
+                if candidate is None:
+                    continue
+                selected[factor_count].append(candidate)
+                selected_keys[factor_count].add(candidate.combo_key)
+                used_image_uids.add(self._cover_image_uid(candidate))
+                progress = True
+            if not progress:
+                break
+
+        for factor_count in (2, 3):
+            for candidate in candidates[factor_count]:
+                if len(selected[factor_count]) >= limit:
+                    break
+                if candidate.combo_key in selected_keys[factor_count]:
+                    continue
+                selected[factor_count].append(candidate)
+                selected_keys[factor_count].add(candidate.combo_key)
+
+        return PlaygroundCharacterCombinationSelection(
+            character_uid=group.character_uid,
+            character_name=group.character_name,
+            two_additional_factors=tuple(selected[2]),
+            three_additional_factors=tuple(selected[3]),
+        )
+
+    @staticmethod
+    def _cover_image_uid(combination: ObservedPromptCombination) -> str:
+        if not combination.best_images:
+            return ""
+        return combination.best_images[0].image_uid.strip()
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,7 +271,7 @@ class AnalyticsRepository(Protocol):
     def list_observed_combinations(
         self,
         *,
-        combo_size: int,
+        additional_factor_count: int,
         limit: int,
     ) -> tuple[ObservedPromptCombination, ...]:
         """Return only combinations represented by canonical generations."""
@@ -178,8 +280,7 @@ class AnalyticsRepository(Protocol):
     def list_observed_combinations_by_character(
         self,
         *,
-        combo_size: int,
-        limit_per_character: int,
+        additional_factor_count: int,
     ) -> tuple[CharacterCombinationGroup, ...]:
         """Return ranked observed combinations grouped by character."""
         ...
@@ -391,29 +492,27 @@ class AnalyticsService:
     def observed_combinations(
         self,
         *,
-        combo_size: int,
+        additional_factor_count: int,
         limit: int = 8,
     ) -> tuple[ObservedPromptCombination, ...]:
-        """Return generated two- or three-component combinations only."""
-        if combo_size not in {2, 3}:
-            raise ValueError("combo_size must be 2 or 3")
+        """Return combinations with two or three additional factors."""
+        if additional_factor_count not in {2, 3}:
+            raise ValueError("additional_factor_count must be 2 or 3")
         return self._repository.list_observed_combinations(
-            combo_size=combo_size,
+            additional_factor_count=additional_factor_count,
             limit=max(int(limit), 0),
         )
 
     def observed_combinations_by_character(
         self,
         *,
-        combo_size: int,
-        limit_per_character: int = 8,
+        additional_factor_count: int,
     ) -> tuple[CharacterCombinationGroup, ...]:
-        """Return one independently ranked combination row per character."""
-        if combo_size not in {2, 3}:
-            raise ValueError("combo_size must be 2 or 3")
+        """Return every ranked combination candidate per character."""
+        if additional_factor_count not in {2, 3}:
+            raise ValueError("additional_factor_count must be 2 or 3")
         return self._repository.list_observed_combinations_by_character(
-            combo_size=combo_size,
-            limit_per_character=max(int(limit_per_character), 0),
+            additional_factor_count=additional_factor_count,
         )
 
     def latest_review_sequence(self) -> int:

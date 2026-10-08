@@ -367,10 +367,13 @@ preserving the original workflow JSON. Promotion and backup of the canonical
 runtime database are explicit operational steps. Top/Worst,
 Analytics and Playground card collections use three equal columns on iPad-sized
 viewports, while every card keeps the full natural image ratio without crop.
-Playground ranks Top-2 and Top-3 combinations independently for every canonical
-character. Analytics Overview, Scopes and Render Analysis share the same cyclic
-three-card tablet language; horizontal touch gestures and arrows wrap in both
-directions.
+Playground ranks combinations with two or three additional observed factors for
+every canonical character. A shared diversity policy prefers a different
+highest-rated cover image for every visible card across both groups and repeats
+one only after the available unique evidence is exhausted. Each card still
+retains its three strongest matching images. Analytics Overview, Scopes and
+Render Analysis share the same cyclic three-card tablet language; horizontal
+touch gestures and arrows wrap in both directions.
 
 Audit reports bind source files and databases by hash. Import commands
 revalidate that evidence, create a backup before writing, and commit all writes
@@ -501,7 +504,8 @@ views expose old query shapes but cannot be written.
 
 The Playground Generator is designed to carry values back into ComfyUI in a reproducible way instead of relying on memory and manual copy-paste.
 
-`/playground` is the evidence overview for Top-2/Top-3 combinations;
+`/playground` is the evidence overview for combinations with two or three
+additional factors beside the always-present character;
 `/playground/generator` is an experiment workspace with the explicit flow
 `Setup konfigurieren -> Varianten vorbereiten -> vergleichen/bearbeiten ->
 Auswahl generieren`. Fixed catalog groups show their positive and negative

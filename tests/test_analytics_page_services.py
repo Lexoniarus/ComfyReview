@@ -16,6 +16,7 @@ from comfyreview.application import (
     CompositionStatistic,
     ObservedPromptCombination,
     ParameterValueStatistic,
+    PlaygroundCombinationSelectionPolicy,
     PromptTokenStatistic,
     RenderAnalyticsService,
     RenderAnalyticsSummary,
@@ -45,23 +46,25 @@ class _Analytics:
         self.calls.append(("parameter-images", (parameter, values, options)))
         return {value: (self.image,) for value in values}
 
-    def observed_combinations(self, *, combo_size, limit):
-        self.calls.append(("observed", (combo_size, limit)))
-        outfit_id = 3 if combo_size == 3 else None
-        suffix = "|outfit:3" if outfit_id is not None else ""
+    def observed_combinations(self, *, additional_factor_count, limit):
+        self.calls.append(("observed", (additional_factor_count, limit)))
+        pose_id = 4 if additional_factor_count == 3 else None
+        suffix = "|pose:4" if pose_id is not None else ""
         return (
             ObservedPromptCombination(
-                combo_key=f"character:1|scene:2{suffix}",
-                combo_size=combo_size,
+                combo_key=f"character:1|scene:2|outfit:3{suffix}",
+                additional_factor_count=additional_factor_count,
                 component_uids=(
                     "character-a",
                     "scene-a",
-                    *(("outfit-a",) if outfit_id is not None else ()),
+                    "outfit-a",
+                    *(("pose-a",) if pose_id is not None else ()),
                 ),
                 component_names=(
                     "Hero",
                     "Rooftop",
-                    *(("Red Coat",) if outfit_id is not None else ()),
+                    "Red Coat",
+                    *(("Standing",) if pose_id is not None else ()),
                 ),
                 label="Hero + Rooftop",
                 average_rating=8.5,
@@ -71,12 +74,10 @@ class _Analytics:
             ),
         )
 
-    def observed_combinations_by_character(
-        self, *, combo_size, limit_per_character
-    ):
+    def observed_combinations_by_character(self, *, additional_factor_count):
         combinations = self.observed_combinations(
-            combo_size=combo_size,
-            limit=limit_per_character,
+            additional_factor_count=additional_factor_count,
+            limit=100,
         )
         return (
             CharacterCombinationGroup(
@@ -262,6 +263,7 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
             CompositionAnalyticsService,
             _CompositionAnalytics(image, render.setup),
         ),
+        playground_combinations=PlaygroundCombinationSelectionPolicy(),
         image_url=lambda path: f"url:{Path(path).name}",
     )
 
@@ -288,10 +290,10 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
     ]
     assert stats["view"] == "prompt"
     assert stats["model_list"] == ["sdxl"]
-    assert playground["characters"][0]["two_component"][0] == {
-        "combo_key": "character:1|scene:2",
-        "component_uids": ["character-a", "scene-a"],
-        "component_names": ["Hero", "Rooftop"],
+    assert playground["characters"][0]["two_additional_factors"][0] == {
+        "combo_key": "character:1|scene:2|outfit:3",
+        "component_uids": ["character-a", "scene-a", "outfit-a"],
+        "component_names": ["Hero", "Rooftop", "Red Coat"],
         "label": "Hero + Rooftop",
         "average_rating": 8.5,
         "image_count": 1,
@@ -306,12 +308,13 @@ def test_analytics_pages_build_combo_and_recommendation_contexts(
             }
         ],
     }
-    assert playground["characters"][0]["three_component"][0][
+    assert playground["characters"][0]["three_additional_factors"][0][
         "component_uids"
     ] == [
         "character-a",
         "scene-a",
         "outfit-a",
+        "pose-a",
     ]
     assert recommendations["stable"] == ["yes"]
     assert recommendations["approx"] == {
@@ -334,6 +337,7 @@ def test_analytics_pages_build_parameter_and_scope_contexts(
             CompositionAnalyticsService,
             _CompositionAnalytics(image, render.setup),
         ),
+        playground_combinations=PlaygroundCombinationSelectionPolicy(),
         image_url=lambda path: "" if "missing" in path else "url:image.png",
     )
 

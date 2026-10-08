@@ -259,28 +259,29 @@ class SqliteAnalyticsRepository:
     def list_observed_combinations(
         self,
         *,
-        combo_size: int,
+        additional_factor_count: int,
         limit: int,
     ) -> tuple[ObservedPromptCombination, ...]:
         """Aggregate observed character-scoped prompt factors."""
-        combinations = self._observed_combinations(combo_size)
+        combinations = self._observed_combinations(additional_factor_count)
         return tuple(combinations[:limit])
 
     def list_observed_combinations_by_character(
         self,
         *,
-        combo_size: int,
-        limit_per_character: int,
+        additional_factor_count: int,
     ) -> tuple[CharacterCombinationGroup, ...]:
         """Rank combinations independently for every canonical character."""
         grouped: dict[str, list[ObservedPromptCombination]] = defaultdict(list)
-        for combination in self._observed_combinations(combo_size):
+        for combination in self._observed_combinations(
+            additional_factor_count
+        ):
             grouped[combination.component_uids[0]].append(combination)
         groups = [
             CharacterCombinationGroup(
                 character_uid=character_uid,
                 character_name=combinations[0].component_names[0],
-                combinations=tuple(combinations[:limit_per_character]),
+                combinations=tuple(combinations),
             )
             for character_uid, combinations in grouped.items()
             if combinations
@@ -295,7 +296,7 @@ class SqliteAnalyticsRepository:
 
     def _observed_combinations(
         self,
-        combo_size: int,
+        additional_factor_count: int,
     ) -> list[ObservedPromptCombination]:
         """Aggregate observed character-scoped factors of one size."""
         connection = connect_read_only(self._database_path, rows=True)
@@ -420,7 +421,9 @@ class SqliteAnalyticsRepository:
             if len(characters) != 1:
                 continue
             character = characters[0]
-            for selected in factor_combinations(candidates, combo_size):
+            for selected in factor_combinations(
+                candidates, additional_factor_count
+            ):
                 ordered = (character, *selected)
                 key = tuple(
                     f"{factor.source}:{factor.uid}" for factor in ordered
@@ -453,7 +456,7 @@ class SqliteAnalyticsRepository:
             combinations.append(
                 ObservedPromptCombination(
                     combo_key="|".join(factor_key),
-                    combo_size=combo_size,
+                    additional_factor_count=additional_factor_count,
                     component_uids=component_uids,
                     component_names=component_names,
                     factors=prompt_factors,

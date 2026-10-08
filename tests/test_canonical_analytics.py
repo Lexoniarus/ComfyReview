@@ -267,21 +267,32 @@ def test_analytics_service_handles_empty_and_observed_queries() -> None:
 
     assert service.best_images_for_combos(()) == {}
     assert service.best_images_for_parameter("steps", ()) == {}
-    assert service.observed_combinations(combo_size=2, limit=-1) == ()
+    assert (
+        service.observed_combinations(
+            additional_factor_count=2,
+            limit=-1,
+        )
+        == ()
+    )
     assert (
         service.observed_combinations_by_character(
-            combo_size=3,
-            limit_per_character=-1,
+            additional_factor_count=3,
         )
         == ()
     )
     assert service.latest_review_sequence() == 9
     assert service.token_statistics_for(()) == {}
     assert service.best_prompt_match(()) is None
-    with pytest.raises(ValueError, match="combo_size must be 2 or 3"):
-        service.observed_combinations(combo_size=4)
-    with pytest.raises(ValueError, match="combo_size must be 2 or 3"):
-        service.observed_combinations_by_character(combo_size=4)
+    with pytest.raises(
+        ValueError,
+        match="additional_factor_count must be 2 or 3",
+    ):
+        service.observed_combinations(additional_factor_count=4)
+    with pytest.raises(
+        ValueError,
+        match="additional_factor_count must be 2 or 3",
+    ):
+        service.observed_combinations_by_character(additional_factor_count=4)
 
 
 def test_analytics_service_normalizes_selected_tokens_and_matches() -> None:
@@ -780,10 +791,12 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         model_branch="",
         limit_per_value=3,
     )
-    observed = repository.list_observed_combinations(combo_size=2, limit=8)
+    observed = repository.list_observed_combinations(
+        additional_factor_count=2,
+        limit=8,
+    )
     observed_by_character = repository.list_observed_combinations_by_character(
-        combo_size=2,
-        limit_per_character=8,
+        additional_factor_count=2,
     )
     selected = repository.list_selected_prompt_token_statistics(
         ("hero", "missing"),
@@ -816,7 +829,7 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
                 "component:component-1|component:component-2|"
                 "component:component-3"
             ),
-            combo_size=2,
+            additional_factor_count=2,
             component_uids=("component-1", "component-2", "component-3"),
             component_names=("Alice", "Rooftop", "Red Coat"),
             label="Alice + Rooftop + Red Coat",
@@ -924,7 +937,7 @@ def test_observed_character_combinations_include_evidenced_lora_factors(
 
     combinations = SqliteAnalyticsRepository(
         database_path
-    ).list_observed_combinations(combo_size=2, limit=10)
+    ).list_observed_combinations(additional_factor_count=2, limit=10)
 
     lora_combinations = [
         item
@@ -958,7 +971,13 @@ def test_sqlite_analytics_apply_workspace_content_visibility(
     analytics = SqliteAnalyticsRepository(database_path)
     reports = SqliteAnalyticsReportRepository(database_path)
 
-    assert analytics.list_observed_combinations(combo_size=3, limit=8) == ()
+    assert (
+        analytics.list_observed_combinations(
+            additional_factor_count=3,
+            limit=8,
+        )
+        == ()
+    )
     assert (
         analytics.list_best_images_for_parameter(
             "steps",

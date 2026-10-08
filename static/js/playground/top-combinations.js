@@ -23,20 +23,20 @@ export class TopCombinationsView {
     this.#disposeCarousels();
     const groups = characterGroups(payload);
     const twoComponent = combinationCollection(
-      "Top 2er-Kombinationen",
-      "Zwei tatsächlich gemeinsam verwendete Faktoren · getrennt nach Charakter",
+      "Top-Kombinationen mit 2 Zusatzfaktoren",
+      "Der Charakter ist immer enthalten · zwei weitere tatsächlich gemeinsam verwendete Faktoren",
       groups,
-      "two_component",
+      "two_additional_factors",
       this.evidenceCarousels,
       this.createGeneratorActions,
       this.navigator,
       this.abortController.signal,
     );
     const threeComponent = combinationCollection(
-      "Top 3er-Kombinationen",
-      "Drei tatsächlich gemeinsam verwendete Faktoren · getrennt nach Charakter",
+      "Top-Kombinationen mit 3 Zusatzfaktoren",
+      "Der Charakter ist immer enthalten · drei weitere tatsächlich gemeinsam verwendete Faktoren",
       groups,
-      "three_component",
+      "three_additional_factors",
       this.evidenceCarousels,
       this.createGeneratorActions,
       this.navigator,
@@ -67,7 +67,7 @@ export class TopCombinationsView {
   }
 }
 
-/** @param {string} title @param {string} subtitle @param {Record<string, any>[]} groups @param {"two_component" | "three_component"} field @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
+/** @param {string} title @param {string} subtitle @param {Record<string, any>[]} groups @param {"two_additional_factors" | "three_additional_factors"} field @param {EvidenceCarousel[]} evidenceCarousels @param {((imageUid: string) => HTMLElement) | undefined} createGeneratorActions @param {PlaygroundIntentNavigatorBoundary} navigator @param {AbortSignal} signal */
 function combinationCollection(
   title,
   subtitle,
@@ -272,8 +272,8 @@ function characterGroups(payload) {
     {
       character_uid: "all",
       character_name: "Alle Charaktere",
-      two_component: arrayValue(payload.two_component),
-      three_component: arrayValue(payload.three_component),
+      two_additional_factors: arrayValue(payload.two_additional_factors),
+      three_additional_factors: arrayValue(payload.three_additional_factors),
     },
   ];
 }
