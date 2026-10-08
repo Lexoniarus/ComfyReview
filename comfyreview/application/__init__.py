@@ -132,9 +132,13 @@ from comfyreview.application.card_battler_trait_selection import (
 )
 from comfyreview.application.card_battler_visual_model import (
     CardVisualModelRepository,
+    CompositeProfileDefinition,
+    PromptAtomExclusion,
     PromptGroupDefinition,
     VisualProgressionProfile,
     VisualProjectionPolicy,
+    VisualPromptAtomDefinition,
+    VisualPromptBinding,
 )
 from comfyreview.application.catalog_evidence import (
     CatalogEvidenceImage,
@@ -622,8 +626,12 @@ __all__ = [
     "CardDevelopmentService",
     "WorldStyleDefinition",
     "CardVisualModelRepository",
+    "CompositeProfileDefinition",
+    "PromptAtomExclusion",
     "PromptGroupDefinition",
     "VisualProgressionProfile",
+    "VisualPromptAtomDefinition",
+    "VisualPromptBinding",
     "VisualProjectionPolicy",
     "CanonicalOutputImageRecord",
     "CanonicalOutputImageSource",

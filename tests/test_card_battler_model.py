@@ -271,6 +271,101 @@ def _create_model_database(
                 max_selected INTEGER NOT NULL,
                 description TEXT NOT NULL
             );
+            CREATE TABLE semantic_prompt_atoms (
+                id INTEGER PRIMARY KEY,
+                concept_id INTEGER NOT NULL REFERENCES semantic_concepts(id),
+                prompt_atom_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                scope TEXT NOT NULL, mode TEXT NOT NULL, weight_milli INTEGER NOT NULL,
+                min_tier_id INTEGER REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                selection_weight_milli INTEGER NOT NULL,
+                prompt_group_id INTEGER REFERENCES prompt_groups(id),
+                priority INTEGER NOT NULL, intensity_channel TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE world_style_prompt_atoms (
+                id INTEGER PRIMARY KEY,
+                world_style_id INTEGER NOT NULL REFERENCES world_styles(id),
+                prompt_atom_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                scope TEXT NOT NULL, mode TEXT NOT NULL, weight_milli INTEGER NOT NULL,
+                min_tier_id INTEGER REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                selection_weight_milli INTEGER NOT NULL,
+                prompt_group_id INTEGER REFERENCES prompt_groups(id),
+                priority INTEGER NOT NULL, intensity_channel TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE class_prompt_atoms (
+                id INTEGER PRIMARY KEY,
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                prompt_atom_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                scope TEXT NOT NULL, mode TEXT NOT NULL, weight_milli INTEGER NOT NULL,
+                min_tier_id INTEGER REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                selection_weight_milli INTEGER NOT NULL,
+                prompt_group_id INTEGER REFERENCES prompt_groups(id),
+                priority INTEGER NOT NULL, intensity_channel TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE role_prompt_atoms (
+                id INTEGER PRIMARY KEY,
+                role_id INTEGER NOT NULL REFERENCES combat_roles(id),
+                prompt_atom_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                scope TEXT NOT NULL, mode TEXT NOT NULL, weight_milli INTEGER NOT NULL,
+                min_tier_id INTEGER REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                selection_weight_milli INTEGER NOT NULL,
+                prompt_group_id INTEGER REFERENCES prompt_groups(id),
+                priority INTEGER NOT NULL, intensity_channel TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE lineage_prompt_atoms (
+                id INTEGER PRIMARY KEY,
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                prompt_atom_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                scope TEXT NOT NULL, mode TEXT NOT NULL, weight_milli INTEGER NOT NULL,
+                min_tier_id INTEGER REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                selection_weight_milli INTEGER NOT NULL,
+                prompt_group_id INTEGER REFERENCES prompt_groups(id),
+                priority INTEGER NOT NULL, intensity_channel TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE mechanic_prompt_atoms (
+                id INTEGER PRIMARY KEY,
+                mechanic_template_id INTEGER NOT NULL REFERENCES mechanic_templates(id),
+                prompt_atom_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                scope TEXT NOT NULL, mode TEXT NOT NULL, weight_milli INTEGER NOT NULL,
+                min_tier_id INTEGER REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                selection_weight_milli INTEGER NOT NULL,
+                prompt_group_id INTEGER REFERENCES prompt_groups(id),
+                priority INTEGER NOT NULL, intensity_channel TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE composite_profiles (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL, name TEXT NOT NULL,
+                world_style_id INTEGER NOT NULL REFERENCES world_styles(id),
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                role_id INTEGER NOT NULL REFERENCES combat_roles(id),
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                weight_milli INTEGER NOT NULL, description TEXT NOT NULL,
+                naming_hint TEXT NOT NULL, presentation_hint TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE composite_profile_prompt_atoms (
+                id INTEGER PRIMARY KEY,
+                composite_profile_id INTEGER NOT NULL REFERENCES composite_profiles(id),
+                prompt_atom_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                scope TEXT NOT NULL, mode TEXT NOT NULL, weight_milli INTEGER NOT NULL,
+                min_tier_id INTEGER REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                selection_weight_milli INTEGER NOT NULL,
+                prompt_group_id INTEGER REFERENCES prompt_groups(id),
+                priority INTEGER NOT NULL, intensity_channel TEXT NOT NULL, notes TEXT
+            );
+            CREATE TABLE prompt_atom_exclusions (
+                atom_a_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                atom_b_id INTEGER NOT NULL REFERENCES visual_prompt_atoms(id),
+                reason TEXT NOT NULL,
+                PRIMARY KEY(atom_a_id, atom_b_id)
+            );
             CREATE TABLE mapping_policies (
                 id INTEGER PRIMARY KEY,
                 ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
@@ -881,6 +976,69 @@ def _create_model_database(
                 (2, "armor", "Armor", 0, 1, "Armor profile"),
                 (1, "weapon", "Weapon", 0, 1, "Primary weapon"),
             ),
+        )
+        binding_rows = (
+            ("semantic_prompt_atoms", "concept_id", 1, 1, "SEMANTIC", 20),
+            ("world_style_prompt_atoms", "world_style_id", 1, 1, "WORLD", 30),
+            ("class_prompt_atoms", "class_id", 1, 2, "CLASS", 40),
+            ("role_prompt_atoms", "role_id", 1, 1, "ROLE", 50),
+            ("lineage_prompt_atoms", "lineage_id", 1, 2, "LINEAGE", 60),
+            (
+                "mechanic_prompt_atoms",
+                "mechanic_template_id",
+                1,
+                1,
+                "MECHANIC",
+                70,
+            ),
+        )
+        for (
+            table,
+            source_column,
+            source_id,
+            atom_id,
+            channel,
+            priority,
+        ) in binding_rows:
+            connection.execute(
+                f"""
+                INSERT INTO {table}(
+                    id, {source_column}, prompt_atom_id, scope, mode,
+                    weight_milli, min_tier_id, max_tier_id,
+                    selection_weight_milli, prompt_group_id, priority,
+                    intensity_channel, notes
+                ) VALUES (1, ?, ?, 'positive', 'optional', 1000,
+                          NULL, NULL, 1000, NULL, ?, ?, NULL)
+                """,
+                (source_id, atom_id, priority, channel),
+            )
+        connection.execute(
+            """
+            INSERT INTO composite_profiles(
+                id, ruleset_id, key, name, world_style_id, class_id,
+                role_id, lineage_id, weight_milli, description,
+                naming_hint, presentation_hint, active
+            ) VALUES (1, 1, 'alpha_alpha', 'Alpha Composite', 1, 1, 1, 1,
+                      950, 'Alpha combination', 'Alpha names',
+                      'Alpha presentation', 1)
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO composite_profile_prompt_atoms(
+                id, composite_profile_id, prompt_atom_id, scope, mode,
+                weight_milli, min_tier_id, max_tier_id,
+                selection_weight_milli, prompt_group_id, priority,
+                intensity_channel, notes
+            ) VALUES (1, 1, 2, 'negative', 'required', 1100,
+                      2, NULL, 1000, 1, 35, 'COMPOSITE', 'fixture')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_atom_exclusions(atom_a_id, atom_b_id, reason)
+            VALUES (1, 2, 'Fixture conflict')
+            """
         )
         connection.execute(
             """

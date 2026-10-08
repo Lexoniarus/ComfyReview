@@ -10,12 +10,19 @@ from comfyreview.application.card_battler_model import (
     CardBattlerRulesetRef,
 )
 from comfyreview.application.card_battler_visual_model import (
+    CompositeProfileDefinition,
+    PromptAtomExclusion,
     PromptGroupDefinition,
     VisualProgressionProfile,
     VisualProjectionPolicy,
+    VisualPromptAtomDefinition,
+    VisualPromptBinding,
 )
 from comfyreview.repositories.sqlite.card_battler_model_resource import (
     SqliteCardBattlerModelResource,
+)
+from comfyreview.repositories.sqlite.card_battler_visual_bindings import (
+    _SqliteCardVisualBindingReader,
 )
 
 _STABLE_ORDER_FIELDS = frozenset(
@@ -28,6 +35,7 @@ class SqliteCardVisualModelRepository:
 
     def __init__(self, resource: SqliteCardBattlerModelResource) -> None:
         self._resource = resource
+        self._bindings = _SqliteCardVisualBindingReader(resource)
 
     def projection_policy(
         self,
@@ -174,6 +182,38 @@ class SqliteCardVisualModelRepository:
             ):
                 raise self._invalid("visual prompt groups are invalid")
             return results
+
+    def prompt_atoms(
+        self, ruleset: CardBattlerRulesetRef | None = None
+    ) -> tuple[VisualPromptAtomDefinition, ...]:
+        with self._resource.connect() as connection:
+            return self._bindings.prompt_atoms(
+                connection, self._ruleset_id(connection, ruleset)
+            )
+
+    def prompt_bindings(
+        self, ruleset: CardBattlerRulesetRef | None = None
+    ) -> tuple[VisualPromptBinding, ...]:
+        with self._resource.connect() as connection:
+            return self._bindings.prompt_bindings(
+                connection, self._ruleset_id(connection, ruleset)
+            )
+
+    def composite_profiles(
+        self, ruleset: CardBattlerRulesetRef | None = None
+    ) -> tuple[CompositeProfileDefinition, ...]:
+        with self._resource.connect() as connection:
+            return self._bindings.composite_profiles(
+                connection, self._ruleset_id(connection, ruleset)
+            )
+
+    def prompt_atom_exclusions(
+        self, ruleset: CardBattlerRulesetRef | None = None
+    ) -> tuple[PromptAtomExclusion, ...]:
+        with self._resource.connect() as connection:
+            return self._bindings.prompt_atom_exclusions(
+                connection, self._ruleset_id(connection, ruleset)
+            )
 
     def _ruleset_id(
         self,

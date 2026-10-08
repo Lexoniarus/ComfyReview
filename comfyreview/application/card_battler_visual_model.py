@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from comfyreview.application.card_battler_model import CardBattlerRulesetRef
 
@@ -48,6 +48,72 @@ class PromptGroupDefinition:
     description: str
 
 
+VisualPromptScope = Literal["positive", "negative"]
+VisualPromptMode = Literal["optional", "required", "forbidden"]
+VisualPromptSource = Literal[
+    "semantic",
+    "world_style",
+    "class",
+    "role",
+    "lineage",
+    "mechanic",
+    "composite",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class VisualPromptAtomDefinition:
+    """Expose one active canonical visual prompt atom."""
+
+    key: str
+    canonical_text: str
+    category: str
+
+
+@dataclass(frozen=True, slots=True)
+class VisualPromptBinding:
+    """Bind one source fact to one atom without leaking technical IDs."""
+
+    source_type: VisualPromptSource
+    source_key: str
+    atom_key: str
+    scope: VisualPromptScope
+    mode: VisualPromptMode
+    weight_milli: int
+    min_tier_ordinal: int | None
+    max_tier_ordinal: int | None
+    selection_weight_milli: int
+    prompt_group_key: str | None
+    priority: int
+    intensity_channel: str
+    notes: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class CompositeProfileDefinition:
+    """Describe one exact four-axis visual composite profile."""
+
+    key: str
+    name: str
+    world_style_key: str
+    class_key: str
+    role_key: str
+    lineage_key: str
+    weight_milli: int
+    description: str
+    naming_hint: str
+    presentation_hint: str
+
+
+@dataclass(frozen=True, slots=True)
+class PromptAtomExclusion:
+    """Declare one symmetric pair of mutually exclusive prompt atoms."""
+
+    atom_a_key: str
+    atom_b_key: str
+    reason: str
+
+
 class CardVisualModelRepository(Protocol):
     """Read immutable visual projection facts from the model resource."""
 
@@ -71,4 +137,28 @@ class CardVisualModelRepository(Protocol):
         self, ruleset: CardBattlerRulesetRef | None = None
     ) -> tuple[PromptGroupDefinition, ...]:
         """Return stable prompt-selection groups."""
+        ...
+
+    def prompt_atoms(
+        self, ruleset: CardBattlerRulesetRef | None = None
+    ) -> tuple[VisualPromptAtomDefinition, ...]:
+        """Return active canonical prompt atoms."""
+        ...
+
+    def prompt_bindings(
+        self, ruleset: CardBattlerRulesetRef | None = None
+    ) -> tuple[VisualPromptBinding, ...]:
+        """Return every typed visual binding in stable order."""
+        ...
+
+    def composite_profiles(
+        self, ruleset: CardBattlerRulesetRef | None = None
+    ) -> tuple[CompositeProfileDefinition, ...]:
+        """Return active exact-axis composite profiles."""
+        ...
+
+    def prompt_atom_exclusions(
+        self, ruleset: CardBattlerRulesetRef | None = None
+    ) -> tuple[PromptAtomExclusion, ...]:
+        """Return stable symmetric atom exclusions."""
         ...

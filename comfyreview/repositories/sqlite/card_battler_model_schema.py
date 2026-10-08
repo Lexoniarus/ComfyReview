@@ -776,6 +776,119 @@ CARD_VISUAL_PROGRESSION_SCHEMA = CardBattlerModelSchemaRequirement(
     ),
 )
 
+_VISUAL_BINDING_COLUMNS = frozenset(
+    {
+        "id",
+        "prompt_atom_id",
+        "scope",
+        "mode",
+        "weight_milli",
+        "min_tier_id",
+        "max_tier_id",
+        "selection_weight_milli",
+        "prompt_group_id",
+        "priority",
+        "intensity_channel",
+        "notes",
+    }
+)
+
+CARD_VISUAL_BINDING_SCHEMA = CardBattlerModelSchemaRequirement(
+    group="card-visual-bindings",
+    tables=(
+        CardBattlerModelTableRequirement(
+            "visual_prompt_atoms",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "key",
+                    "canonical_text",
+                    "category",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "semantic_prompt_atoms", _VISUAL_BINDING_COLUMNS | {"concept_id"}
+        ),
+        CardBattlerModelTableRequirement(
+            "world_style_prompt_atoms",
+            _VISUAL_BINDING_COLUMNS | {"world_style_id"},
+        ),
+        CardBattlerModelTableRequirement(
+            "class_prompt_atoms", _VISUAL_BINDING_COLUMNS | {"class_id"}
+        ),
+        CardBattlerModelTableRequirement(
+            "role_prompt_atoms", _VISUAL_BINDING_COLUMNS | {"role_id"}
+        ),
+        CardBattlerModelTableRequirement(
+            "lineage_prompt_atoms", _VISUAL_BINDING_COLUMNS | {"lineage_id"}
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_prompt_atoms",
+            _VISUAL_BINDING_COLUMNS | {"mechanic_template_id"},
+        ),
+        CardBattlerModelTableRequirement(
+            "composite_profiles",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "key",
+                    "name",
+                    "world_style_id",
+                    "class_id",
+                    "role_id",
+                    "lineage_id",
+                    "weight_milli",
+                    "description",
+                    "naming_hint",
+                    "presentation_hint",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "composite_profile_prompt_atoms",
+            _VISUAL_BINDING_COLUMNS | {"composite_profile_id"},
+        ),
+        CardBattlerModelTableRequirement(
+            "prompt_atom_exclusions",
+            frozenset({"atom_a_id", "atom_b_id", "reason"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "semantic_concepts",
+            frozenset({"id", "vocabulary_id", "key", "active"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "rulesets", frozenset({"id", "semantic_vocabulary_id"})
+        ),
+        CardBattlerModelTableRequirement(
+            "world_styles", frozenset({"id", "ruleset_id", "key", "active"})
+        ),
+        CardBattlerModelTableRequirement(
+            "card_classes", frozenset({"id", "ruleset_id", "key", "active"})
+        ),
+        CardBattlerModelTableRequirement(
+            "combat_roles", frozenset({"id", "ruleset_id", "key", "active"})
+        ),
+        CardBattlerModelTableRequirement(
+            "trait_lineages", frozenset({"id", "ruleset_id", "key", "active"})
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_templates",
+            frozenset({"id", "ruleset_id", "key", "active"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "development_tiers", frozenset({"id", "ruleset_id", "ordinal"})
+        ),
+        CardBattlerModelTableRequirement(
+            "prompt_groups", frozenset({"id", "ruleset_id", "key"})
+        ),
+    ),
+)
+
 CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     MODEL_IDENTITY_SCHEMA,
     FOUNDATIONAL_CARD_BATTLER_SCHEMA,
@@ -787,4 +900,5 @@ CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     CARD_DEVELOPMENT_PROGRESSION_SCHEMA,
     CARD_DEVELOPMENT_COMPATIBILITY_SCHEMA,
     CARD_VISUAL_PROGRESSION_SCHEMA,
+    CARD_VISUAL_BINDING_SCHEMA,
 )
