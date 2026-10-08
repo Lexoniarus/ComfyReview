@@ -430,6 +430,14 @@ temporary copy, and writes a distinct output database. `--replace` installs
 that database atomically after schema and cutover validation. Per the explicit
 operator decision for this one workflow, it creates no additional backup.
 
+The first real output is an acceptance rehearsal, not a promotion candidate.
+It is selected with `COMFYREVIEW_DATABASE` and served on a separate port by
+`python main.py`, so manual checks traverse the ordinary schema lifecycle and
+runtime repositories. Ratings or other acceptance writes intentionally taint
+that file. After explicit acceptance, the operator stops the canonical app and
+runs the same hash-bound rebuild again with a new output name and `--replace`;
+only that untouched fresh result may replace the source.
+
 Before reset, current effective ratings of live images become canonical atom
 and render baselines. Identical retained atoms map directly; explicit 1:1 or
 synonym mappings deduplicate support per image; split, rewritten and new atoms

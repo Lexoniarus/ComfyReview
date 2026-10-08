@@ -249,6 +249,42 @@ reviews, Arena and Curation. Add `--replace` only while the application is
 stopped to atomically install the validated output. This explicit workflow
 does not create an additional backup.
 
+Before replacement, run the rebuilt rehearsal database through the normal
+application entry point on a separate local port:
+
+```powershell
+$rehearsal = (Resolve-Path `
+  "data\rehearsals\comfyreview-normalized.sqlite3").Path
+$env:COMFYREVIEW_DATABASE=$rehearsal
+$env:COMFYREVIEW_PORT="8016"
+python main.py
+```
+
+Open `http://127.0.0.1:8016`. Settings must show the exact rehearsal database
+path and schema v18. Review, Top/Worst, Arena, Playground Catalog, Generator,
+Handoff, Scopes and Analytics are the ordinary runtime surfaces; there is no
+separate test catalog or test mode. Confirm the eleven prompt groups, the
+absence of `modifier`, an unrated Review queue, empty Top/Worst and Arena, and
+an editable handoff for retained images.
+
+Manual ratings or other writes make this rehearsal file disposable. Stop
+`main.py`, clear the temporary environment variables, and never install the
+tested file. After explicit acceptance, rebuild once more from the unchanged
+source and reviewed mapping while the canonical application is stopped:
+
+```powershell
+Remove-Item Env:COMFYREVIEW_DATABASE
+Remove-Item Env:COMFYREVIEW_PORT
+python -m comfyreview catalog-normalization rebuild `
+  --output data/rehearsals/comfyreview-normalized-cutover.sqlite3 `
+  --replace
+python main.py
+```
+
+If the source hash changed after audit, rebuild stops and requires a new audit
+and editorial review. The final `--replace` command is intentionally withheld
+until the rehearsal has been accepted explicitly.
+
 The v11 geometry rebuild reads PNG headers outside a write transaction and
 then atomically replaces the rebuildable projection. Missing or malformed
 files are reported as diagnostics; source images and stored paths are never

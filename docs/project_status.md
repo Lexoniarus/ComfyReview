@@ -211,7 +211,11 @@ The catalog-normalization implementation slices are committed on
 green: 770 Python tests, 181 frontend tests and 14 Playwright acceptance tests
 pass, with 100% Python-Core and frontend statement, function and line coverage.
 The private editorial mapping and the explicit real-database `--replace`
-cutover remain separate operator work.
+cutover remain separate operator work. A dedicated behavior test now rebuilds
+a fixture database and serves it through the real `python main.py` subprocess;
+the real rehearsal uses the same entry point on a separate port. Manual
+acceptance may write to that rehearsal, so it is never promoted: explicit
+approval is followed by a fresh rebuild before `--replace`.
 On 2026-10-05 the live v10 database was backed up, upgraded to v11 and
 rebuilt without diagnostics: all 377 active images received geometry
 projections. Real Blueprint-v4 ComfyUI smoke generations also completed for

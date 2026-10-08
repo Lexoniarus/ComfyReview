@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
+import socket
 import sqlite3
+import subprocess
+import sys
+import time
+import urllib.request
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -305,6 +312,40 @@ def _complete_rebuild_mapping(mapping_path: Path) -> str:
     return revision_uid
 
 
+def _unused_local_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return int(listener.getsockname()[1])
+
+
+def _read_runtime_json(url: str) -> dict[str, Any]:
+    with urllib.request.urlopen(url, timeout=2.0) as response:
+        payload: Any = json.loads(response.read().decode("utf-8"))
+    assert isinstance(payload, dict)
+    return payload
+
+
+def _wait_for_main_runtime(
+    process: subprocess.Popen[str],
+    url: str,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + 20.0
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            pytest.fail(
+                "main.py exited before serving the rebuilt database:\n"
+                f"stdout:\n{stdout}\nstderr:\n{stderr}"
+            )
+        try:
+            return _read_runtime_json(url)
+        except (OSError, json.JSONDecodeError):
+            time.sleep(0.1)
+    pytest.fail(
+        "main.py did not expose the rebuilt database within 20 seconds"
+    )
+
+
 def test_catalog_normalization_audit_writes_hash_bound_mapping_draft(
     tmp_path: Path,
 ) -> None:
@@ -553,6 +594,90 @@ def test_catalog_rebuild_preserves_safe_priors_and_resets_image_reviews(
             WHERE atom.canonical_text = 'mist'
             """
         ).fetchone() == (1, 8.0, 2, 17.0)
+
+
+def test_rebuilt_database_runs_through_main_entrypoint(
+    tmp_path: Path,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    source = tmp_path / "source.sqlite3"
+    _seed_rebuild_source(source, tmp_path)
+    audit_path = tmp_path / "audit.json"
+    mapping_path = tmp_path / "mapping.json"
+    CatalogNormalizationAuditor(source).audit(audit_path, mapping_path)
+    _complete_rebuild_mapping(mapping_path)
+    rebuilt = tmp_path / "rebuilt.sqlite3"
+    CatalogNormalizationRebuilder(source).rebuild(
+        audit_path,
+        mapping_path,
+        rebuilt,
+    )
+    port = _unused_local_port()
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "COMFYREVIEW_DATABASE": str(rebuilt),
+            "COMFYREVIEW_DATA_DIR": str(tmp_path / "runtime-data"),
+            "COMFYREVIEW_OUTPUT_ROOT": str(tmp_path / "output"),
+            "COMFYREVIEW_CARD_BATTLER_MODEL_DATABASE": str(
+                tmp_path / "card-battler.sqlite3"
+            ),
+            "COMFYREVIEW_WORKFLOWS_DIR": str(
+                repository_root / "data" / "workflows"
+            ),
+            "COMFYREVIEW_CHECKPOINTS_DIR": str(tmp_path / "checkpoints"),
+            "COMFYREVIEW_COMFYUI_BASE_URL": "http://127.0.0.1:1",
+            "COMFYREVIEW_HOST": "127.0.0.1",
+            "COMFYREVIEW_PORT": str(port),
+            "COMFYREVIEW_SSL_ENABLED": "false",
+            "PYTHONUNBUFFERED": "1",
+        }
+    )
+    process = subprocess.Popen(
+        [sys.executable, str(repository_root / "main.py")],
+        cwd=repository_root,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
+    base_url = f"http://127.0.0.1:{port}"
+    try:
+        settings = _wait_for_main_runtime(
+            process,
+            f"{base_url}/api/v2/settings",
+        )
+        configuration = settings["runtime"]["configuration"]
+        assert configuration["canonical_database_path"] == str(
+            rebuilt.resolve()
+        )
+        assert configuration["schema_version"] == 18
+
+        components = _read_runtime_json(
+            f"{base_url}/api/v2/playground/components"
+        )
+        assert {
+            component["kind"] for component in components["components"]
+        } == {"character", "atmosphere"}
+        rankings = _read_runtime_json(f"{base_url}/api/v2/rankings")
+        assert rankings["items"] == []
+        assert rankings["total"] == 0
+        with urllib.request.urlopen(f"{base_url}/", timeout=2.0) as response:
+            assert response.status == 200
+        with urllib.request.urlopen(
+            f"{base_url}/playground/generator",
+            timeout=2.0,
+        ) as response:
+            assert response.status == 200
+    finally:
+        if process.poll() is None:
+            process.terminate()
+        try:
+            process.communicate(timeout=10.0)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate(timeout=10.0)
 
 
 def test_catalog_rebuild_rejects_source_changes_after_audit(

@@ -585,7 +585,17 @@ deleted images and orphan-only facts, resets Review/Arena/Curation last, and
 can atomically install the validated result without an additional backup via
 explicit `--replace`. Automated behavior tests cover stale-source rejection,
 rollback, Character fingerprinting, synonym evidence, projection initialization
-and baseline immutability under new reviews.
+and baseline immutability under new reviews. Entrypoint acceptance additionally
+builds a normalized fixture database, starts the real `python main.py` process
+with that database and verifies runtime configuration, catalog components,
+empty post-reset rankings and the normal Review/Generator pages.
+
+The real operator sequence has a mandatory hold point: a distinct rehearsal
+database is run through `python main.py` on a separate port and accepted
+manually. That tested file is never promoted because acceptance may mutate it.
+Only after explicit approval is a fresh result rebuilt from the unchanged,
+hash-matching source and installed with `--replace` while the application is
+stopped.
 
 The private mapping and real audit artifacts are ignored runtime data. The
 2026-10-08 audit observes 805 source components (7 Character, 66 legacy

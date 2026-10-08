@@ -49,6 +49,14 @@ canonical schema. Root `app.py` and `main.py` remain compatible entry points.
 Legacy database paths live in a separate `LegacyMigrationSettings` object used
 only by explicit audit, import and maintenance commands.
 
+Catalog-normalization rehearsal uses that same production composition root.
+An operator points `COMFYREVIEW_DATABASE` at the distinct rebuilt database,
+selects a separate local port and starts `python main.py`. The resulting Review,
+Ranking, Arena, Playground, Handoff, Scope and Analytics behavior therefore
+uses the real repositories, lifespan and worker rather than a migration-only
+inspection path. A rehearsal database that receives test writes is disposable
+and cannot be installed; accepted data is rebuilt fresh before replacement.
+
 ## 3. Canonical identity and runtime data
 
 The canonical database has an explicit schema version. Schema v18 is the active
