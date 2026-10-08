@@ -6,6 +6,9 @@ from dataclasses import dataclass
 
 from comfyreview.domain.card_battler.mechanics import MaterializedTrait
 
+COMMON_CARD_MATERIALIZATION_REVISION = "common-card-materialization-v1"
+CANONICAL_RULE_RENDERER_REVISION = "canonical-rule-renderer-v1"
+
 
 @dataclass(frozen=True, slots=True)
 class CardImprint:

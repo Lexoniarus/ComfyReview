@@ -10,6 +10,8 @@ from comfyreview.application.card_battler_mapping import (
     CardImprint as ApplicationCardImprint,
 )
 from comfyreview.domain.card_battler import (
+    CANONICAL_RULE_RENDERER_REVISION,
+    COMMON_CARD_MATERIALIZATION_REVISION,
     CardImprint,
     CardRulesProvenance,
     CardStats,
@@ -120,8 +122,8 @@ def test_structured_card_spec_keeps_rules_and_provenance_immutable() -> None:
         balance_policy_key="prototype_balance",
         balance_policy_version=2,
         explicit_seed=42,
-        materialization_algorithm_revision="common-card-materialization-v1",
-        rule_renderer_revision="canonical-rule-renderer-v1",
+        materialization_algorithm_revision=COMMON_CARD_MATERIALIZATION_REVISION,
+        rule_renderer_revision=CANONICAL_RULE_RENDERER_REVISION,
     )
     spec = StructuredCardSpec(
         imprint=_imprint(),

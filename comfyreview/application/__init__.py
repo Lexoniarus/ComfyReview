@@ -91,6 +91,9 @@ from comfyreview.application.card_battler_model import (
     TraitLineageDefinition,
     WorldStyleDefinition,
 )
+from comfyreview.application.card_battler_random import (
+    DomainSeparatedCardRandom,
+)
 from comfyreview.application.catalog_evidence import (
     CatalogEvidenceImage,
     CatalogEvidenceRepository,
@@ -547,6 +550,7 @@ __all__ = [
     "CardClassDefinition",
     "CombatRoleDefinition",
     "DevelopmentTierDefinition",
+    "DomainSeparatedCardRandom",
     "MechanicTemplateReference",
     "SemanticConceptDefinition",
     "TraitLineageDefinition",

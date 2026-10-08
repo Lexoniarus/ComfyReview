@@ -1,6 +1,14 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_random:DomainSeparatedCardRandom.integer": (
+        "tests/test_card_battler_random.py::"
+        "test_domain_random_has_stable_independent_golden_vectors"
+    ),
+    "comfyreview.application.card_battler_random:DomainSeparatedCardRandom.weighted_choice": (
+        "tests/test_card_battler_random.py::"
+        "test_weighted_choice_is_input_order_independent"
+    ),
     "comfyreview.application.generator_state:GeneratorStateSnapshot.from_mapping": (
         "tests/test_generator_state.py::"
         "test_generator_state_snapshot_validates_complete_fixed_references"
