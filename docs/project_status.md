@@ -9,7 +9,7 @@ native ES-module Frontend V2.
 
 ## Implemented state
 
-- canonical schema v16 with stable image/generation identity, rebuildable PNG
+- canonical schema v18 with stable image/generation identity, rebuildable PNG
   geometry classification, immutable content-bearing LoRA trigger revisions,
   normalized Generator state and evidence-backed prompt variants;
 - append-only Review events and rebuildable current-state/ranking views;
@@ -18,14 +18,19 @@ native ES-module Frontend V2.
   imports;
 - audited legacy prompt-provenance recovery into a separately validated output
   database, with embedded, exact and reviewed evidence kept distinct;
-- reviewed legacy prompt curation promoted on 2026-10-06: historical catalog
-  revisions now cover every normal prompt block, including ten combined
-  modifier/framing variants and two combined lighting variants; six active and
+- reviewed legacy prompt curation promoted on 2026-10-06: historical source
+  revisions cover every old prompt block, including combined modifier/framing
+  and lighting variants; these remain provenance inputs for the pending
+  normalized-catalog editorial cutover; six active and
   two deleted malformed Hina snapshots were corrected through hash-bound
   offline recovery, so only attributable LoRA triggers remain outside normal
   prompt-component memberships;
 - immutable prompt revisions, structured weighted atoms and reproducible
   compositions;
+- eleven normalized Generator groups, versioned global prompt policies and one
+  selected catalog composition per image; the hash-bound cleanup rebuild keeps
+  Character exact, preserves safe atom/render priors, and resets image reviews,
+  Arena and Curation only after complete validation;
 - versioned workflow blueprints, dedicated compiler and technical ComfyUI
   provider;
 - an application-owned generation lifecycle worker, explicit reconciliation,
@@ -182,7 +187,8 @@ ambiguous LoRA bindings. It retained 19 graph-effective, trigger-evidenced LoRA
 usages with exact revision links and removed 832 unsupported normalized rows;
 their raw graphs remain unchanged. All 393 active images produce a complete
 editable Prompt handoff when their content levels are visible. The validated
-runtime contains 803 catalog components and is served on LAN port 8002.
+runtime source audit contains 805 catalog components. The running source remains
+schema v16 until the reviewed normalization output is explicitly installed.
 
 Schema v16 was promoted on 2026-10-07 through a separately created and
 validated output database. The v15 source remained unchanged until the
@@ -200,10 +206,12 @@ both outputs canonically.
 
 ## Acceptance and integration state
 
-The implementation slices are integrated on `refactor/review-boundary`. The
-latest full shared quality gate is green: 681 Python tests, 162 frontend tests
-and 14 Playwright acceptance tests pass, with 100% Python-Core and frontend
-statement, function and line coverage.
+The catalog-normalization implementation slices are committed on
+`fix/playground-combination-diversity`. The latest full shared quality gate is
+green: 770 Python tests, 181 frontend tests and 14 Playwright acceptance tests
+pass, with 100% Python-Core and frontend statement, function and line coverage.
+The private editorial mapping and the explicit real-database `--replace`
+cutover remain separate operator work.
 On 2026-10-05 the live v10 database was backed up, upgraded to v11 and
 rebuilt without diagnostics: all 377 active images received geometry
 projections. Real Blueprint-v4 ComfyUI smoke generations also completed for

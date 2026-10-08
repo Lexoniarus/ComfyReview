@@ -1,8 +1,8 @@
 # ComfyReview Refactor Plan
 
-Status: the canonical backend cutover, structured prompt catalog, schema-v16
-data migration and Frontend V2 overhaul are implemented and integrated on
-`refactor/review-boundary`, 2026-10-07. Analytics collections are bounded,
+Status: the canonical backend cutover, normalized structured prompt catalog,
+schema-v18 support and Frontend V2 overhaul are implemented on
+`fix/playground-combination-diversity`, 2026-10-08. Analytics collections are bounded,
 Playground handoffs are explicit, generation profiles are dormant migration
 compatibility, Settings is a complete product surface, the Inspector is
 composed from focused views and Playwright covers the browser acceptance
@@ -563,6 +563,42 @@ Python tests, 162 frontend tests and 14 Playwright scenarios passed. Python Core
 and frontend statements, functions and lines retained 100% coverage; formatting,
 linting, strict typing, architecture checks and the function-to-test manifest
 also passed.
+
+### Catalog normalization and review restart (implemented; editorial cutover pending)
+
+Schema v17 establishes the eleven normalized prompt kinds, versioned current
+image compositions, versioned global prompt policies and atom/render evidence
+baselines. Schema v18 separates the selectable catalog from immutable
+generation-only component provenance. Character remains outside semantic
+normalization and is protected by an exact rebuild fingerprint; the real audit
+currently confirms Aiko has 24 revisions.
+
+The runtime now uses current image compositions for Handoff, scopes, analytics,
+atom attribution and promotion. Global policy revisions are recorded per
+generation and scope-local canonical duplicates defer to selected component
+weights. Arena and Top/Worst both require one post-reset review; the obsolete
+Arena minimum-runs setting is gone.
+
+`catalog-normalization audit` and `rebuild` implement the source-hash-bound,
+new-output-first workflow. Rebuild creates safe evidence baselines, removes
+deleted images and orphan-only facts, resets Review/Arena/Curation last, and
+can atomically install the validated result without an additional backup via
+explicit `--replace`. Automated behavior tests cover stale-source rejection,
+rollback, Character fingerprinting, synonym evidence, projection initialization
+and baseline immutability under new reviews.
+
+The private mapping and real audit artifacts are ignored runtime data. The
+2026-10-08 audit observes 805 source components (7 Character, 66 legacy
+Modifier), 425 live images, 87 deleted images and 222 live compositions still
+requiring editorial Modifier replacement. The implementation is complete;
+the semantic review of those private rows and the real `--replace` cutover are
+deliberately not represented as completed until that mapping is signed off.
+
+The closing implementation gate on 2026-10-08 ended with
+`quality gate passed`: 770 Python tests, 181 frontend tests and all 14
+Playwright scenarios passed. Python Core and frontend statements, functions
+and lines retained 100% coverage; formatting, linting, strict typing,
+architecture checks and the function-to-test manifest also passed.
 
 ## Integration and acceptance state
 

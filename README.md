@@ -225,11 +225,29 @@ Validate or explicitly upgrade the canonical database:
 ```bash
 python -m comfyreview canonical-db validate
 python -m comfyreview canonical-db upgrade \
-  --output data/comfyreview-v16.sqlite3 \
+  --output data/comfyreview-v18.sqlite3 \
   --backup-dir data/backups/canonical \
   --generator-state data/ui_state/playground_generator_last.json
 python -m comfyreview canonical-db rebuild-image-geometry
 ```
+
+Normalize an existing Playground catalog through a source-hash-bound audit and
+a private editorial mapping:
+
+```bash
+python -m comfyreview catalog-normalization audit
+python -m comfyreview catalog-normalization rebuild \
+  --output data/rehearsals/comfyreview-normalized.sqlite3
+```
+
+The audit writes its report below `data/reports/` and its editable mapping
+below ignored `data/rehearsals/`. Rebuild refuses an incomplete mapping or a
+source database changed since audit. It creates and fully validates a new
+database, removes historically deleted images, preserves Character identities
+and revisions, migrates safe atom/render evidence, and only then resets image
+reviews, Arena and Curation. Add `--replace` only while the application is
+stopped to atomically install the validated output. This explicit workflow
+does not create an additional backup.
 
 The v11 geometry rebuild reads PNG headers outside a write transaction and
 then atomically replaces the rebuildable projection. Missing or malformed
@@ -286,7 +304,7 @@ revisions unchanged as the latest revisions. Recognizable historical variants
 become prior revisions of their real component; no generic remainder component
 is created.
 
-The active application schema is v16. Prompt Catalog revisions and Playground
+The active application schema is v18. Prompt Catalog revisions and Playground
 drafts expose ordered positive/negative atom rows with separate numeric
 weights. Rendered whole prompts remain exact provenance snapshots produced by
 the server; they
@@ -323,7 +341,9 @@ groups and append-only catalog promotions. Schema v16 adds the separate
 append-only manual-variant selection history. The current catalog standard is
 the newest promotion, while `latest_revision` remains historical numbering and
 `latest_manual_variant` remains available independently of generation, review
-or promotion.
+or promotion. Schema v17 adds current image catalog compositions, global prompt
+policies and evidence baselines. Schema v18 marks superseded components as
+generation-only provenance so they cannot re-enter the selectable catalog.
 
 Generation profiles are no longer an active runtime or HTTP concept; their
 tables remain dormant only for migration compatibility. The Generator owns

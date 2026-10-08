@@ -174,6 +174,10 @@ Routes call services. They do not execute SQL or external provider calls.
 - Unsupported schemas fail explicitly; runtime startup does not silently repair
   arbitrary historical layouts.
 - Destructive migration requires backup + explicit offline migration command.
+- The one approved catalog-normalization cutover is an explicit operator
+  exception: it is source-hash-bound, writes and validates a distinct output
+  database first, requires `--replace` for installation, and deliberately
+  creates no additional backup. No other migration inherits this exception.
 - Schema DDL exists only in the explicit canonical and legacy schema managers;
   architecture tests reject DDL in ordinary repositories, services and routes.
 - Normal repositories open existing files in `rw` mode and never create or

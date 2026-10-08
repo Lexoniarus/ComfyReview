@@ -1,10 +1,10 @@
 # ComfyReview Architecture
 
 Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, schema-v16 application support and Frontend V2
+analytics, native Generation, schema-v18 application support and Frontend V2
 including Settings are implemented and integrated on
-`refactor/review-boundary`, 2026-10-07. Final user acceptance and eventual
-integration into `master` remain open.
+`fix/playground-combination-diversity`, 2026-10-08. The private editorial
+mapping and production catalog cutover remain open.
 
 ## 1. Product boundary
 
@@ -51,7 +51,7 @@ only by explicit audit, import and maintenance commands.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v16 is the active
+The canonical database has an explicit schema version. Schema v18 is the active
 shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
 catalog, records v6 native output roles/content hashes, normalizes ordered
 prompt-revision atom usages in v7 and adds workspace preferences, generation
@@ -94,6 +94,15 @@ append-only promotion facts. Schema v16 adds append-only manual-variant
 selection facts without changing candidate recipe identity. Sections 10.2 and
 10.3 describe the active guidance and analytics boundaries.
 
+Schema v17 adds versioned current image catalog compositions, versioned global
+quality/content policies and canonical atom/render evidence baselines. The
+original generation composition and full prompt snapshots remain immutable;
+Handoff, scopes, analytics, rating attribution and promotion consume the
+current image composition. Schema v18 adds `prompt_components.catalog_role` so
+superseded non-Character rows can remain as immutable generation provenance
+without appearing in the selectable catalog. Character rows may never be
+provenance-only.
+
 Canonical v4 facts include:
 
 - images and generation provenance;
@@ -116,7 +125,7 @@ remain derived immutable snapshots, not writable API inputs.
 
 Schema v8 introduced workspace preferences and generation profiles. The
 profile tables and generation profile columns remain dormant migration
-compatibility in v16, but no active container service, V2 endpoint, Settings
+compatibility in v18, but no active container service, V2 endpoint, Settings
 surface or Playground flow reads them. Generations still record the exact
 LoRAs they actually used. A loader is normalized only when a non-zero model or
 CLIP branch reaches a consumed sampler input. Historical `loras_json` and raw
@@ -130,7 +139,7 @@ read model. Services and browser surfaces do not duplicate OR/AND or content
 visibility semantics, and no path, prompt substring or image inspection is
 used to infer a missing level at runtime.
 
-Schema v10 separates automatic and manual classification. In the current v16
+Schema v10 separates automatic and manual classification. In the current v18
 runtime, automatic generation classification is the strictest level from
 authored prompt-component tags and the content-level snapshots of
 graph-effective, trigger-evidenced LoRA revisions. A current image override,
