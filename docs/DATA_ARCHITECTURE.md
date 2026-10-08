@@ -407,6 +407,11 @@ that mean “current catalog meaning” use the image composition instead:
 Playground handoff, scopes, analytics, rating atom attribution and automatic
 promotion. Exact generated candidate atoms remain usable only while the
 current component/revision still matches that original generation group.
+Composition selection lookup accepts both authored composition identities and
+current image-catalog composition identities. Aggregate Analytics cards use
+the first ranked best image identity for prompt and LoRA handoff, preserving
+the exact image-level composition and ordered LoRA revisions independently of
+any render-parameter action.
 
 Quality/anatomy negatives and content profiles are immutable global policy
 revisions, not selectable catalog components. A generation records the exact

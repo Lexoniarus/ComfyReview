@@ -1385,33 +1385,40 @@ def test_v2_playground_projects_exact_composition_prompt_selections() -> None:
         for selected in container.playground_service.composition_selection.components
     ) == ("character-historical", "scene-historical")
 
+    current_response = client.get(
+        "/api/v2/playground/compositions/"
+        "image-catalog-generation-image-a/prompt-selections"
+    )
+
+    assert current_response.status_code == 200
+    assert current_response.json() == response.json()
+    assert container.playground_service.composition_uid == (
+        "image-catalog-generation-image-a"
+    )
+
 
 def test_v2_playground_composition_handoff_surfaces_selection_rejection() -> (
     None
 ):
     client, container = _client()
 
-    for message in (
-        "composition contains an inactive prompt component",
-        "prompt selection contains a disabled content level",
-    ):
-
-        def reject_composition(
-            composition_uid: str,
-            expected_message: str = message,
-        ) -> PromptSelection:
-            assert composition_uid == "composition-rejected"
-            raise PromptSelectionError(expected_message)
-
-        container.playground_service.resolve_composition_selection = (
-            reject_composition
-        )
-        response = client.get(
-            "/api/v2/playground/compositions/composition-rejected/prompt-selections"
+    def reject_composition(composition_uid: str) -> PromptSelection:
+        assert composition_uid == "composition-rejected"
+        raise PromptSelectionError(
+            "prompt selection contains a disabled content level"
         )
 
-        assert response.status_code == 400
-        assert response.json()["error"]["message"] == message
+    container.playground_service.resolve_composition_selection = (
+        reject_composition
+    )
+    response = client.get(
+        "/api/v2/playground/compositions/composition-rejected/prompt-selections"
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["message"] == (
+        "prompt selection contains a disabled content level"
+    )
 
 
 def test_v2_playground_generator_state_round_trips_strict_payload() -> None:

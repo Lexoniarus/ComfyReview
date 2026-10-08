@@ -805,7 +805,7 @@ def test_sqlite_prompt_catalog_reads_exact_revision_and_composition(
     created = service.create_component(
         replace(_create_command(), kind="character")
     )
-    service.add_revision(
+    revised = service.add_revision(
         RevisePromptComponentCommand(
             created.component_uid,
             prompt_atom_usages_from_text("new prompt"),
@@ -821,6 +821,10 @@ def test_sqlite_prompt_catalog_reads_exact_revision_and_composition(
             "SELECT id FROM prompt_revisions WHERE revision_uid = ?",
             (created.latest_revision.revision_uid,),
         ).fetchone()[0]
+        revised_id = connection.execute(
+            "SELECT id FROM prompt_revisions WHERE revision_uid = ?",
+            (revised.revision_uid,),
+        ).fetchone()[0]
         connection.execute(
             """
             INSERT INTO prompt_composition_revisions(
@@ -829,14 +833,75 @@ def test_sqlite_prompt_catalog_reads_exact_revision_and_composition(
             """,
             (composition_id, revision_id),
         )
+        positive_prompt_id = connection.execute(
+            "INSERT INTO prompts(scope, prompt_hash, text) "
+            "VALUES ('pos', 'positive-hash', 'Aiko') RETURNING id"
+        ).fetchone()[0]
+        negative_prompt_id = connection.execute(
+            "INSERT INTO prompts(scope, prompt_hash, text) "
+            "VALUES ('neg', 'negative-hash', '') RETURNING id"
+        ).fetchone()[0]
+        generation_id = connection.execute(
+            """
+            INSERT INTO generations(
+                generation_uid, model_branch, checkpoint, combo_key,
+                positive_prompt_id, negative_prompt_id
+            ) VALUES (
+                'generation-current-composition', 'anime', 'model.safetensors',
+                'combo', ?, ?
+            ) RETURNING id
+            """,
+            (positive_prompt_id, negative_prompt_id),
+        ).fetchone()[0]
+        image_id = connection.execute(
+            """
+            INSERT INTO images(
+                image_uid, generation_id, output_node_id, output_index,
+                png_path, output_role, content_hash
+            ) VALUES (
+                'image-current-composition', ?, 'save', 0,
+                'output/image.png', 'primary', 'image-hash'
+            ) RETURNING id
+            """,
+            (generation_id,),
+        ).fetchone()[0]
+        current_composition_id = connection.execute(
+            """
+            INSERT INTO image_catalog_compositions(
+                composition_uid, image_id, version, source
+            ) VALUES ('image-catalog-current', ?, 1, 'editorial')
+            RETURNING id
+            """,
+            (image_id,),
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            ) VALUES (?, ?, 0), (?, ?, 1)
+            """,
+            (
+                current_composition_id,
+                revised_id,
+                current_composition_id,
+                revision_id,
+            ),
+        )
 
     [exact] = repository.list_components_for_revisions(
         (created.latest_revision.revision_uid,)
     )
     [composition] = repository.list_composition_components("composition-exact")
+    current_composition = repository.list_composition_components(
+        "image-catalog-current"
+    )
 
     assert exact.latest_revision == created.latest_revision
     assert composition == exact
+    assert tuple(
+        component.latest_revision.revision_uid
+        for component in current_composition
+    ) == (revised.revision_uid, created.latest_revision.revision_uid)
     assert repository.list_components_for_revisions(("missing",)) == ()
     assert repository.list_components_for_revisions(()) == ()
     assert repository.list_composition_components("missing") == ()

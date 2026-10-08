@@ -256,6 +256,11 @@ constants.
 
 ### Frontend V2 analytics correction (completed)
 
+- aggregate Prompt Combination and Render Analytics cards hand off the exact
+  current catalog composition and ordered LoRAs of their first ranked best
+  image, while setup and single-parameter render actions remain independent;
+- composition selection lookup supports both current image-catalog and
+  existing authored composition identities without a schema change;
 - the live canonical output import was rerun idempotently and all 379
   generations now expose their normalized checkpoint without an `unknown`
   fallback;

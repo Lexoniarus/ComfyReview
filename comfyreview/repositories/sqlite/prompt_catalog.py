@@ -548,11 +548,25 @@ class SqlitePromptCatalogRepository:
         self,
         composition_uid: str,
     ) -> tuple[PromptComponent, ...]:
-        """Read exact ordered revisions for one canonical composition."""
+        """Read exact ordered revisions for one current or authored composition."""
         connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
                 """
+                SELECT revision.revision_uid
+                FROM image_catalog_compositions AS composition
+                JOIN image_catalog_composition_revisions AS membership
+                    ON membership.composition_id = composition.id
+                JOIN prompt_revisions AS revision
+                    ON revision.id = membership.revision_id
+                WHERE composition.composition_uid = ?
+                ORDER BY membership.position
+                """,
+                (str(composition_uid or "").strip(),),
+            ).fetchall()
+            if not rows:
+                rows = connection.execute(
+                    """
                 SELECT revision.revision_uid
                 FROM prompt_compositions AS composition
                 JOIN prompt_composition_revisions AS membership
@@ -562,8 +576,8 @@ class SqlitePromptCatalogRepository:
                 WHERE composition.composition_uid = ?
                 ORDER BY membership.position, membership.slot
                 """,
-                (str(composition_uid or "").strip(),),
-            ).fetchall()
+                    (str(composition_uid or "").strip(),),
+                ).fetchall()
             return self._components_for_revisions(
                 connection,
                 tuple(str(row["revision_uid"]) for row in rows),

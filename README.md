@@ -628,9 +628,12 @@ Prompt/LoRA handoffs replace the visible “01 Auswahl” state with fully
 catalog-bound, normally editable component and ordered LoRA controls, while
 render-only handoffs leave it untouched. There is no tray, toast event or
 hidden prompt editor, and no draft exists until “Varianten vorbereiten” is
-pressed. Exact image handoffs may restore archived historical component
-revisions; those entries are labelled `Archiv`, remain manually editable and
-are never candidates for random selection. Image cards and inspectors expose
+pressed. Aggregate Prompt Combination and Render Analytics cards explicitly
+offer the prompt and LoRAs of their first ranked best image; technical render
+settings remain a separate action. Exact image handoffs may restore archived
+historical component revisions; those entries are labelled `Archiv`, remain
+manually editable and are never candidates for random selection. Image cards
+and inspectors expose
 normalized trigger-evidenced LoRAs alongside component scopes. Successful
 handoffs clean their URL parameters; rejected handoffs
 keep the prior state and display the error in the Generator. LoRA revision

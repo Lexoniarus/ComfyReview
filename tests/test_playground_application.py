@@ -1921,7 +1921,7 @@ def test_playground_service_rejects_duplicate_composition_kinds() -> None:
             prepare(_service(_DuplicateCompositionCatalog(components)))
 
 
-def test_playground_service_rejects_archived_composition_components() -> None:
+def test_playground_service_restores_archived_composition_components() -> None:
     class _ArchivedCompositionCatalog(_CatalogService):
         def list_composition_components(
             self,
@@ -1929,18 +1929,16 @@ def test_playground_service_rejects_archived_composition_components() -> None:
         ) -> tuple[PromptComponent, ...]:
             return self.components[0], self.components[8]
 
-    for prepare in (
-        lambda service: service.resolve_composition_selection(
-            "composition-archived"
-        ),
-        lambda service: service.prepare_composition_draft(
-            "composition-archived"
-        ),
-    ):
-        with pytest.raises(
-            PromptSelectionError, match="inactive prompt component"
-        ):
-            prepare(_service(_ArchivedCompositionCatalog(_catalog())))
+    service = _service(_ArchivedCompositionCatalog(_catalog()))
+
+    selection = service.resolve_composition_selection("composition-archived")
+    draft = service.prepare_composition_draft("composition-archived")
+
+    assert tuple(
+        selected.component.component_uid for selected in selection.components
+    ) == ("character-a", "scene-archived")
+    assert selection.components[1].component.archived is True
+    assert draft.selection == selection
 
 
 def test_playground_service_rejects_policy_disallowed_compositions() -> None:

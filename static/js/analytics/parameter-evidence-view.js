@@ -7,6 +7,10 @@ import {
 } from "./analytics-formatters.js";
 import { AnalyticsCardRail } from "./analytics-card-rail.js";
 import { createGeneratorHandoffAction } from "../playground/generator-handoff-action.js";
+import {
+  analyticsActionGroup,
+  createBestImagePromptAction,
+} from "./best-image-prompt-action.js";
 
 /** Render the same four evidence modes exposed by the Generator. */
 export class ParameterEvidenceView {
@@ -126,7 +130,12 @@ function setupCard(item, basis, images) {
         : { renderSetup: JSON.stringify(settings) },
     disabled: row.applicable === false,
   });
-  const body = cardBody(heading, values, support, action);
+  const body = cardBody(
+    heading,
+    values,
+    support,
+    analyticsActionGroup(createBestImagePromptAction(row.best_images), action),
+  );
   card.append(images.render(row.best_images, "Render-Setup"), body);
   return card;
 }
@@ -147,7 +156,11 @@ function parameterCard(item, basis, images) {
     },
     disabled: row.applicable === false,
   });
-  const body = cardBody(heading, support, action);
+  const body = cardBody(
+    heading,
+    support,
+    analyticsActionGroup(createBestImagePromptAction(row.best_images), action),
+  );
   card.append(images.render(row.best_images, heading.textContent), body);
   return card;
 }

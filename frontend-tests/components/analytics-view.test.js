@@ -110,6 +110,9 @@ describe("AnalyticsView", () => {
             confidence: "medium",
             relative_rank: 1,
           },
+          best_images: [
+            { image_uid: "image-parameter-best", url: "/parameter.png" },
+          ],
         },
       ],
     });
@@ -117,6 +120,10 @@ describe("AnalyticsView", () => {
     expect(root.textContent).toContain("82.0 % prognostizierter Erfolg");
     expect(root.textContent).toContain("14 unabhängige Bilder");
     expect(root.textContent).toContain("Parameter übernehmen");
+    expect(
+      root.querySelector("[data-playground-intent='best_image_prompt']")
+        ?.dataset.imageUid,
+    ).toBe("image-parameter-best");
     expect(root.querySelectorAll("[data-guidance-basis]")).toHaveLength(2);
     expect(
       root.querySelectorAll("[data-guidance-scope]").length,
@@ -135,10 +142,20 @@ describe("AnalyticsView", () => {
           image_count: 2,
           rating_count: 3,
           average_rating: 8.5,
+          best_images: [
+            { image_uid: "image-best", url: "/best.png", avg_rating: 9 },
+            { image_uid: "image-second", url: "/second.png", avg_rating: 8 },
+          ],
         },
       ],
     });
-    expect(root.textContent).toContain("Prompt & LoRAs übernehmen");
+    const bestImageAction = root.querySelector(
+      "[data-playground-intent='best_image_prompt']",
+    );
+    expect(bestImageAction?.textContent).toBe(
+      "Prompt & LoRAs des Bestbilds übernehmen",
+    );
+    expect(bestImageAction?.dataset.imageUid).toBe("image-best");
     expect(root.querySelector("[data-analytics-view]")).toBeNull();
     view.renderCompositionSetups("composition-a", {
       rows: [
@@ -156,10 +173,16 @@ describe("AnalyticsView", () => {
           ],
           image_count: 2,
           rating_count: 3,
+          best_images: [{ image_uid: "image-setup-best", url: "/setup.png" }],
         },
       ],
     });
     expect(root.textContent).toContain("model.safetensors");
+    expect(
+      root.querySelector(
+        ".analytics-render-setup [data-playground-intent='best_image_prompt']",
+      )?.dataset.imageUid,
+    ).toBe("image-setup-best");
   });
 
   it("covers empty, archived, setup and incremental analytics states", () => {
@@ -212,11 +235,15 @@ describe("AnalyticsView", () => {
             confidence: "insufficient",
             relative_rank: 0,
           },
-          best_images: [],
+          best_images: [{ image_uid: "image-render-best", url: "/render.png" }],
         },
       ],
     });
     expect(root.textContent).toContain("Generierungseinstellungen übernehmen");
+    expect(
+      root.querySelector("[data-playground-intent='best_image_prompt']")
+        ?.dataset.imageUid,
+    ).toBe("image-render-best");
     view.render("parameters", {
       basis: "predicted",
       scope: "setup",
@@ -241,9 +268,14 @@ describe("AnalyticsView", () => {
           composition_uid: "composition-empty",
           component_names: [],
           component_uids: [],
+          best_images: [],
         },
       ],
     });
+    expect(
+      root.querySelector("[data-playground-intent='best_image_prompt']")
+        ?.disabled,
+    ).toBe(true);
     view.renderCompositionSetups("missing", { rows: [] });
     view.renderCompositionSetups("composition-empty", { rows: [] });
     expect(root.textContent).toContain("Keine technischen Setups");

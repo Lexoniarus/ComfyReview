@@ -1034,10 +1034,6 @@ class PlaygroundService:
         components = self._with_current_component_metadata(
             revision_projections
         )
-        if any(selected.component.archived for selected in components):
-            raise PromptSelectionError(
-                "composition contains an inactive prompt component"
-            )
         return self._exact_selection(components, revision_uids)
 
     def prepare_image_snapshot(

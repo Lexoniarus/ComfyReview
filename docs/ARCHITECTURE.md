@@ -511,12 +511,16 @@ The canonical cutover is intentionally not the end of the wider refactor.
   shared cards and inspectors show the same LoRA factors that the handoff
   applies; raw or triggerless loader provenance is not presented as usage.
   Analytics Scope actions carry only a typed component/revision source and
-  patch that prompt kind; Analytics Composition actions carry only the
-  composition UID, resolve its exact ordered revisions through one
-  Application `PromptSelection` operation, and replace the complete prompt
-  selection. The Composition draft renderer and API handoff project this same
-  validated selection, including active-component, content-level, historical
-  revision, Character and unique-kind rules. Multiple typed prompt sources in
+  patch that prompt kind. Aggregate Prompt Combination and Render Analytics
+  cards carry the stable image UID of their first server-ranked best image;
+  the normal image handoff then replaces the complete prompt selection and
+  ordered LoRA stack from that exact image. Render settings and individual
+  render parameters remain separate typed actions. Authored composition UIDs
+  and current image-catalog composition UIDs can both resolve their exact
+  ordered revisions through the Application `PromptSelection` operation. The
+  Composition draft renderer and API handoff project this same validated
+  selection, including active-component, content-level, historical revision,
+  Character and unique-kind rules. Multiple typed prompt sources in
   one intent are rejected visibly at the beginning of controller startup,
   before editor rendering, saved-state restore, handoff, persistence or
   cleanup. Both single-source Scope and Composition actions apply through the

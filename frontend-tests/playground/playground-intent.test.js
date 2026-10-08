@@ -134,6 +134,11 @@ describe("Playground intent codec", () => {
       kind: "composition",
       compositionUid: "composition-a",
     });
+    expect(action("best_image_prompt", { imageUid: "image-best" })).toEqual({
+      kind: "image-prompt",
+      imageUid: "image-best",
+    });
+    expect(action("best_image_prompt", { imageUid: " " })).toBeNull();
     expect(action("image", { imageUid: "image-a" })).toBeNull();
     expect(action("parameter", { parameter: "steps", value: "24" })).toEqual({
       kind: "parameter",
