@@ -604,10 +604,12 @@ stopped.
 
 The private mapping and real audit artifacts are ignored runtime data. The
 2026-10-08 audit observes 805 source components (7 Character, 66 legacy
-Modifier), 425 live images, 87 deleted images and 222 live compositions still
-requiring editorial Modifier replacement. The implementation is complete;
-the semantic review of those private rows and the real `--replace` cutover are
-deliberately not represented as completed until that mapping is signed off.
+Modifier), 425 live images and 87 deleted images. The reviewed normalization
+mapping replaces or drops all 798 Non-Character sources, creates only new
+revision-1 target components across all ten Non-Character groups and assigns
+one current composition to every live image. A separate schema-v18 rehearsal
+database has been built and started successfully through `python main.py`;
+the real `--replace` cutover remains pending explicit manual acceptance.
 
 The closing implementation gate on 2026-10-08 ended with
 `quality gate passed`: 770 Python tests, 181 frontend tests and all 14

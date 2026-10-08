@@ -56,6 +56,11 @@ Ranking, Arena, Playground, Handoff, Scope and Analytics behavior therefore
 uses the real repositories, lifespan and worker rather than a migration-only
 inspection path. A rehearsal database that receives test writes is disposable
 and cannot be installed; accepted data is rebuilt fresh before replacement.
+The rebuild boundary never promotes an old Non-Character component back into
+the selectable catalog: it creates new revision-1 components, keeps only
+generation-referenced old rows as hidden provenance and prevents authored
+composition fallback from resolving any composition containing that
+provenance. Character rows, promotions and manual variants remain exact.
 
 ### 2.1 Card Battler model resource
 

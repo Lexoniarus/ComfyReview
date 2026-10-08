@@ -242,12 +242,16 @@ python -m comfyreview catalog-normalization rebuild \
 
 The audit writes its report below `data/reports/` and its editable mapping
 below ignored `data/rehearsals/`. Rebuild refuses an incomplete mapping or a
-source database changed since audit. It creates and fully validates a new
-database, removes historically deleted images, preserves Character identities
-and revisions, migrates safe atom/render evidence, and only then resets image
-reviews, Arena and Curation. Add `--replace` only while the application is
-stopped to atomically install the validated output. This explicit workflow
-does not create an additional backup.
+mapping whose own checksum or source binding changed since audit. Every
+Non-Character source must be explicitly replaced or dropped: `keep` is not a
+valid cleanup decision. Replacement components always receive a new UID and
+start at revision 1, while Character—including promotions and manual
+variants—is preserved exactly. Rebuild creates and fully validates a new
+database, removes historically deleted images, migrates safe atom/render
+evidence, binds every retained generation to quality and content policies, and
+only then resets image reviews, Arena and Curation. Add `--replace` only while
+the application is stopped to atomically install the validated output. This
+explicit workflow does not create an additional backup.
 
 Before replacement, run the rebuilt rehearsal database through the normal
 application entry point on a separate local port:
@@ -265,7 +269,9 @@ path and schema v18. Review, Top/Worst, Arena, Playground Catalog, Generator,
 Handoff, Scopes and Analytics are the ordinary runtime surfaces; there is no
 separate test catalog or test mode. Confirm the eleven prompt groups, the
 absence of `modifier`, an unrated Review queue, empty Top/Worst and Arena, and
-an editable handoff for retained images.
+an editable handoff for retained images. Old Non-Character revisions required
+by immutable generation provenance remain technical-only; authored
+compositions containing them deliberately resolve to no selectable handoff.
 
 Manual ratings or other writes make this rehearsal file disposable. Stop
 `main.py`, clear the temporary environment variables, and never install the

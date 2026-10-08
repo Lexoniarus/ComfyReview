@@ -433,12 +433,25 @@ chooses catalog alternatives, creates target components or marks source/image
 rows as reviewed. Those decisions belong exclusively to the subsequent manual
 editorial pass. Rebuild requires every source
 component and live image to be marked reviewed, rejects unsupported kinds or
-duplicate image groups, and applies the same atom validation to retained
-revisions as to newly authored targets, including rejection of unresolved
-`or` alternatives. It locks and re-hashes the source, upgrades only a temporary
-copy, and writes a distinct output database. `--replace` installs that database
-atomically after schema and cutover validation. Per the explicit operator
-decision for this one workflow, it creates no additional backup.
+duplicate image groups, rejects every Non-Character `keep` decision, and
+requires every replacement to use a new component UID with exactly revision
+1. All ten Non-Character groups must be populated with source-derived entries;
+unresolved `or` alternatives, archived selectable entries and `modifier` are
+validation failures. The mapping checksum is validated in addition to its
+audit and source hashes. It locks and re-hashes the source, upgrades only a
+temporary copy, and writes a distinct output database. `--replace` installs
+that database atomically after schema and cutover validation. Per the explicit
+operator decision for this one workflow, it creates no additional backup.
+
+Old Non-Character components survive only with
+`catalog_role = 'generation_provenance'` when a retained generation still
+references them through its immutable authored composition or structured
+generation groups. They need no selectable promotion, are excluded from all
+catalog lists and cannot be resolved through the authored-composition handoff
+fallback. Unreferenced old components, revisions, candidates, promotions and
+compositions are removed. Every retained generation is bound to the active
+quality policy and the content profile selected by its effective content
+level.
 
 The first real output is an acceptance rehearsal, not a promotion candidate.
 It is selected with `COMFYREVIEW_DATABASE` and served on a separate port by
@@ -460,8 +473,8 @@ add to the projections without mutating the baseline facts.
 
 Character components are excluded from semantic cleanup. Rebuild validation
 compares their internal IDs, UIDs, archive states, revisions, atom identities,
-weights, selected standards, manual candidates and manual-variant bindings.
-When Aiko exists, exactly 24 revisions are required.
+weights, complete promotion history, selected standards, manual candidates and
+manual-variant bindings. When Aiko exists, exactly 24 revisions are required.
 
 ## 5.3 Workspace preferences, content, profiles and LoRA usage
 
