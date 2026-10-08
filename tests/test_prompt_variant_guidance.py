@@ -353,6 +353,22 @@ def test_sqlite_prompt_variant_repository_reads_repeated_and_delete_events(
                 "VALUES (?, ?, 'pos', 0, 1000)",
                 (group_id, atom_id),
             )
+            image_composition_id = connection.execute(
+                "INSERT INTO image_catalog_compositions("
+                "composition_uid, image_id, version, source) "
+                "VALUES (?, ?, 1, 'generation') RETURNING id",
+                (f"image-composition-{index}", image_id),
+            ).fetchone()[0]
+            connection.execute(
+                "INSERT INTO image_catalog_composition_revisions("
+                "composition_id, revision_id, position) VALUES (?, ?, 0)",
+                (image_composition_id, revision_id),
+            )
+            connection.execute(
+                "INSERT INTO current_image_catalog_compositions("
+                "image_id, composition_id) VALUES (?, ?)",
+                (image_id, image_composition_id),
+            )
             ratings = (8, 9) if index == 1 else (10,)
             for run, rating in enumerate(ratings, 1):
                 sequence = index * 10 + run
@@ -388,3 +404,42 @@ def test_sqlite_prompt_variant_repository_reads_repeated_and_delete_events(
     assert observations[0].review_count == 2
     assert observations[0].success_weight == 5
     assert observations[1].failure_weight == 4
+
+    with sqlite3.connect(database_path) as connection:
+        replacement_component_id = connection.execute(
+            "INSERT INTO prompt_components("
+            "component_uid, kind, component_key, name) "
+            "VALUES ('component-b', 'expression', 'b', 'B') RETURNING id"
+        ).fetchone()[0]
+        replacement_revision_id = connection.execute(
+            "INSERT INTO prompt_revisions("
+            "revision_uid, component_id, revision_number, positive_text, "
+            "negative_text, content_hash) "
+            "VALUES ('revision-b', ?, 1, 'smile', '', 'hash-b') RETURNING id",
+            (replacement_component_id,),
+        ).fetchone()[0]
+        replacement_atom_id = connection.execute(
+            "INSERT INTO prompt_atoms(canonical_text) "
+            "VALUES ('smile') RETURNING id"
+        ).fetchone()[0]
+        connection.execute(
+            "INSERT INTO prompt_revision_atom_usages("
+            "revision_id, atom_id, scope, position, weight_milli) "
+            "VALUES (?, ?, 'pos', 0, 1000)",
+            (replacement_revision_id, replacement_atom_id),
+        )
+        connection.execute(
+            "UPDATE image_catalog_composition_revisions SET revision_id = ? "
+            "WHERE composition_id = ("
+            "SELECT current_catalog.composition_id "
+            "FROM current_image_catalog_compositions AS current_catalog "
+            "JOIN images AS image ON image.id = current_catalog.image_id "
+            "WHERE image.image_uid = 'image-2')",
+            (replacement_revision_id,),
+        )
+
+    assert len(repository.list_observations("component-a")) == 1
+    replacement = repository.list_observations("component-b")
+    assert len(replacement) == 1
+    assert replacement[0].recipe == _recipe(1000, texts=("smile",))
+    assert replacement[0].failure_weight == 4

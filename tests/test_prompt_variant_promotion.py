@@ -334,6 +334,13 @@ def test_promotion_repository_creates_reuses_and_returns_to_revisions(
         assert connection.execute(
             "SELECT COUNT(*) FROM prompt_component_promotions"
         ).fetchone() == (4,)
+        connection.execute(
+            "UPDATE prompt_components "
+            "SET catalog_role = 'generation_provenance' "
+            "WHERE component_uid = ?",
+            (created.component_uid,),
+        )
+    assert repository.list_component_uids() == ()
 
 
 def test_prompt_promotion_cli_audits_and_reconciles_explicit_database(
