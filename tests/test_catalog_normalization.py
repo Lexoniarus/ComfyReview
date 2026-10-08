@@ -395,6 +395,16 @@ def test_catalog_normalization_audit_writes_hash_bound_mapping_draft(
     assert decisions["rooftop"]["action"] == "keep"
     assert decisions["mixed"]["action"] == "review"
     assert mapping["complete"] is False
+    assert mapping["target_components"] == []
+    assert all(
+        decision["reviewed"] is False
+        for decision in mapping["source_components"]
+    )
+    assert all(
+        composition["reviewed"] is False
+        for composition in mapping["image_compositions"]
+    )
+    assert "defaulted_image_choices" not in mapping
     assert len(mapping["global_policies"]) == 6
     assert mapping["audit_sha256"] == report["audit_sha256"]
 

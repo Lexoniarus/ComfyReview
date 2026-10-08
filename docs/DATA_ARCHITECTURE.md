@@ -423,7 +423,10 @@ python -m comfyreview catalog-normalization rebuild --output PATH [--replace]
 
 Audit reads the source transactionally, inventories all components, revisions,
 atoms, live/deleted images and original prompts, and writes a hash-bound report
-plus an ignored editorial mapping draft. Rebuild requires every source
+plus an ignored editorial mapping draft. Audit never splits prompt text,
+chooses catalog alternatives, creates target components or marks source/image
+rows as reviewed. Those decisions belong exclusively to the subsequent manual
+editorial pass. Rebuild requires every source
 component and live image to be marked reviewed, rejects unsupported kinds or
 duplicate image groups, and applies the same atom validation to retained
 revisions as to newly authored targets, including rejection of unresolved
