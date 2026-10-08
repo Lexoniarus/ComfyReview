@@ -526,6 +526,27 @@ def _create_model_database(
                 description TEXT,
                 PRIMARY KEY (parameter_id, value_key)
             );
+            CREATE TABLE mechanic_upgrade_edges (
+                id INTEGER PRIMARY KEY,
+                from_mechanic_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                to_mechanic_id INTEGER NOT NULL
+                    REFERENCES mechanic_templates(id),
+                min_tier_id INTEGER NOT NULL REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                weight_milli INTEGER NOT NULL,
+                upgrade_kind TEXT NOT NULL,
+                notes TEXT
+            );
+            CREATE TABLE mechanic_parameter_progression (
+                id INTEGER PRIMARY KEY,
+                parameter_id INTEGER NOT NULL REFERENCES mechanic_parameters(id),
+                min_tier_id INTEGER NOT NULL REFERENCES development_tiers(id),
+                max_tier_id INTEGER REFERENCES development_tiers(id),
+                upgrade_step_int INTEGER,
+                max_upgrade_steps INTEGER,
+                budget_cost_milli INTEGER NOT NULL
+            );
             """
         )
         connection.executemany(
@@ -992,6 +1013,23 @@ def _create_model_database(
                 ("hard", 2, "Hard mode"),
                 ("soft", 1, "Soft mode"),
             ),
+        )
+        connection.execute(
+            """
+            INSERT INTO mechanic_upgrade_edges(
+                id, from_mechanic_id, to_mechanic_id,
+                min_tier_id, max_tier_id, weight_milli,
+                upgrade_kind, notes
+            ) VALUES (1, 1, 2, 1, 2, 900, 'branch', 'Fixture edge')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO mechanic_parameter_progression(
+                id, parameter_id, min_tier_id, max_tier_id,
+                upgrade_step_int, max_upgrade_steps, budget_cost_milli
+            ) VALUES (1, 1, 1, 2, 50, 4, 125)
+            """
         )
         for table, target_column in (
             ("semantic_world_style_affinity", "world_style_id"),

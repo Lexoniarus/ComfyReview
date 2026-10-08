@@ -640,6 +640,53 @@ CARD_DEVELOPMENT_POLICY_SCHEMA = CardBattlerModelSchemaRequirement(
     ),
 )
 
+CARD_DEVELOPMENT_PROGRESSION_SCHEMA = CardBattlerModelSchemaRequirement(
+    group="card-development-progression",
+    tables=(
+        CardBattlerModelTableRequirement(
+            "mechanic_upgrade_edges",
+            frozenset(
+                {
+                    "id",
+                    "from_mechanic_id",
+                    "to_mechanic_id",
+                    "min_tier_id",
+                    "max_tier_id",
+                    "weight_milli",
+                    "upgrade_kind",
+                    "notes",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_parameter_progression",
+            frozenset(
+                {
+                    "id",
+                    "parameter_id",
+                    "min_tier_id",
+                    "max_tier_id",
+                    "upgrade_step_int",
+                    "max_upgrade_steps",
+                    "budget_cost_milli",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_templates",
+            frozenset({"id", "ruleset_id", "key", "active"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "mechanic_parameters",
+            frozenset({"id", "mechanic_template_id", "param_key"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "development_tiers",
+            frozenset({"id", "ruleset_id", "ordinal"}),
+        ),
+    ),
+)
+
 CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     MODEL_IDENTITY_SCHEMA,
     FOUNDATIONAL_CARD_BATTLER_SCHEMA,
@@ -648,4 +695,5 @@ CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     CARD_MECHANIC_CATALOG_SCHEMA,
     CARD_MECHANIC_STRUCTURE_SCHEMA,
     CARD_DEVELOPMENT_POLICY_SCHEMA,
+    CARD_DEVELOPMENT_PROGRESSION_SCHEMA,
 )

@@ -69,6 +69,8 @@ def test_development_model_reads_policy_ladder_budgets_caps_and_weights(
         balance_policy_key="prototype_balance", balance_policy_version=2
     )
     weights = repository.development_action_weights()
+    upgrade_edges = repository.mechanic_upgrade_edges()
+    parameter_progression = repository.mechanic_parameter_progression()
 
     assert (
         policy
@@ -119,6 +121,30 @@ def test_development_model_reads_policy_ladder_budgets_caps_and_weights(
         ("add_first_trait", 1000, True),
         ("improve_existing_trait", 800, True),
     ]
+    assert [
+        (
+            edge.from_mechanic_key,
+            edge.to_mechanic_key,
+            edge.min_tier_ordinal,
+            edge.max_tier_ordinal,
+            edge.weight_milli,
+            edge.upgrade_kind,
+            edge.notes,
+        )
+        for edge in upgrade_edges
+    ] == [("alpha", "zeta", 1, 2, 900, "branch", "Fixture edge")]
+    assert [
+        (
+            progression.mechanic_key,
+            progression.parameter_key,
+            progression.min_tier_ordinal,
+            progression.max_tier_ordinal,
+            progression.upgrade_step_int,
+            progression.max_upgrade_steps,
+            progression.budget_cost_milli,
+        )
+        for progression in parameter_progression
+    ] == [("alpha", "bonus", 1, 2, 50, 4, 125)]
 
 
 def test_development_model_supports_an_explicit_ruleset_reference(
@@ -141,6 +167,8 @@ def test_development_model_supports_an_explicit_ruleset_reference(
     assert repository.development_policy(ruleset).version == 2
     assert len(repository.development_ladder(ruleset)) == 2
     assert len(repository.development_action_weights(ruleset)) == 6
+    assert len(repository.mechanic_upgrade_edges(ruleset)) == 1
+    assert len(repository.mechanic_parameter_progression(ruleset)) == 1
 
 
 @pytest.mark.parametrize(
@@ -190,6 +218,12 @@ def test_development_model_rejects_invalid_policy_or_ladder_facts(
             "ALTER TABLE tier_development_action_weights "
             "RENAME COLUMN weight_milli TO absent",
             "weight_milli",
+        ),
+        ("DROP TABLE mechanic_upgrade_edges", "mechanic_upgrade_edges"),
+        (
+            "ALTER TABLE mechanic_parameter_progression "
+            "RENAME COLUMN budget_cost_milli TO absent",
+            "budget_cost_milli",
         ),
     ),
 )
@@ -337,3 +371,140 @@ def test_development_model_rejects_unresolvable_references_and_policies(
         repository.development_ladder(balance_policy_version=2)
     with pytest.raises(CardBattlerModelInvalid, match="cannot resolve"):
         repository.development_policy(key="absent")
+    with pytest.raises(
+        CardBattlerModelInvalid, match="cannot resolve ruleset"
+    ):
+        repository.mechanic_upgrade_edges(missing_ruleset)
+    with pytest.raises(
+        CardBattlerModelInvalid, match="cannot resolve ruleset"
+    ):
+        repository.mechanic_parameter_progression(missing_ruleset)
+
+
+@pytest.mark.parametrize(
+    ("statement", "read", "message"),
+    (
+        (
+            "UPDATE mechanic_templates SET active = 0 WHERE id = 2",
+            "edge",
+            "unavailable mechanic",
+        ),
+        (
+            "UPDATE mechanic_templates SET ruleset_id = 2 WHERE id = 2",
+            "edge",
+            "unavailable mechanic",
+        ),
+        (
+            "UPDATE mechanic_upgrade_edges SET weight_milli = 1001",
+            "edge",
+            "weight is invalid",
+        ),
+        (
+            "UPDATE mechanic_upgrade_edges SET upgrade_kind = 'unknown'",
+            "edge",
+            "kind is invalid",
+        ),
+        (
+            "UPDATE mechanic_upgrade_edges SET min_tier_id = 2, max_tier_id = 1",
+            "edge",
+            "tier range is invalid",
+        ),
+        (
+            "UPDATE mechanic_parameter_progression SET max_upgrade_steps = -1",
+            "parameter",
+            "maximum parameter upgrade steps",
+        ),
+        (
+            "UPDATE mechanic_parameter_progression SET budget_cost_milli = -1",
+            "parameter",
+            "progression budget is invalid",
+        ),
+    ),
+)
+def test_development_progression_rejects_invalid_facts(
+    tmp_path: Path,
+    statement: str,
+    read: str,
+    message: str,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    _execute(path, statement)
+    repository = _repository(path)
+
+    with pytest.raises(CardBattlerModelInvalid, match=message):
+        if read == "edge":
+            repository.mechanic_upgrade_edges()
+        else:
+            repository.mechanic_parameter_progression()
+
+
+@pytest.mark.parametrize(
+    ("statements", "read", "message"),
+    (
+        (
+            (
+                "INSERT INTO mechanic_upgrade_edges(id, from_mechanic_id, "
+                "to_mechanic_id, min_tier_id, max_tier_id, weight_milli, "
+                "upgrade_kind, notes) VALUES "
+                "(2, 1, 2, 1, 2, 500, 'augment', NULL)",
+            ),
+            "edge",
+            "edges are ambiguous",
+        ),
+        (
+            (
+                "INSERT INTO mechanic_parameter_progression(id, parameter_id, "
+                "min_tier_id, max_tier_id, upgrade_step_int, "
+                "max_upgrade_steps, budget_cost_milli) "
+                "VALUES (2, 1, 1, NULL, NULL, NULL, 0)",
+            ),
+            "parameter",
+            "progression is ambiguous",
+        ),
+        (
+            ("UPDATE development_tiers SET ruleset_id = 2 WHERE id = 2",),
+            "parameter",
+            "crosses rulesets",
+        ),
+    ),
+)
+def test_development_progression_rejects_ambiguous_or_cross_ruleset_facts(
+    tmp_path: Path,
+    statements: tuple[str, ...],
+    read: str,
+    message: str,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    _execute(path, *statements)
+    repository = _repository(path)
+
+    with pytest.raises(CardBattlerModelInvalid, match=message):
+        if read == "edge":
+            repository.mechanic_upgrade_edges()
+        else:
+            repository.mechanic_parameter_progression()
+
+
+def test_development_progression_preserves_open_ranges_and_optional_steps(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    _execute(
+        path,
+        "UPDATE mechanic_upgrade_edges SET max_tier_id = NULL, notes = NULL",
+        "UPDATE mechanic_parameter_progression SET max_tier_id = NULL, "
+        "upgrade_step_int = NULL, max_upgrade_steps = NULL",
+    )
+
+    edge = _repository(path).mechanic_upgrade_edges()[0]
+    progression = _repository(path).mechanic_parameter_progression()[0]
+
+    assert (edge.max_tier_ordinal, edge.notes) == (None, None)
+    assert (
+        progression.max_tier_ordinal,
+        progression.upgrade_step_int,
+        progression.max_upgrade_steps,
+    ) == (None, None, None)

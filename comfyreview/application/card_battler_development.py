@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from comfyreview.application.card_battler_model import CardBattlerRulesetRef
 
@@ -52,6 +52,35 @@ class TierDevelopmentActionWeight:
     enabled: bool
 
 
+MechanicUpgradeKind = Literal["replace", "branch", "augment"]
+
+
+@dataclass(frozen=True, slots=True)
+class MechanicUpgradeEdge:
+    """Declare one registered mechanic-to-mechanic development edge."""
+
+    from_mechanic_key: str
+    to_mechanic_key: str
+    min_tier_ordinal: int
+    max_tier_ordinal: int | None
+    weight_milli: int
+    upgrade_kind: MechanicUpgradeKind
+    notes: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class MechanicParameterProgression:
+    """Declare the legal upgrade budget for one mechanic parameter."""
+
+    mechanic_key: str
+    parameter_key: str
+    min_tier_ordinal: int
+    max_tier_ordinal: int | None
+    upgrade_step_int: int | None
+    max_upgrade_steps: int | None
+    budget_cost_milli: int
+
+
 class CardDevelopmentModelRepository(Protocol):
     """Read versioned development facts from the immutable model resource."""
 
@@ -80,4 +109,18 @@ class CardDevelopmentModelRepository(Protocol):
         ruleset: CardBattlerRulesetRef | None = None,
     ) -> tuple[TierDevelopmentActionWeight, ...]:
         """Return stable per-tier primary-action weights."""
+        ...
+
+    def mechanic_upgrade_edges(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicUpgradeEdge, ...]:
+        """Return registered mechanic upgrade edges in stable order."""
+        ...
+
+    def mechanic_parameter_progression(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicParameterProgression, ...]:
+        """Return registered parameter progressions in stable order."""
         ...

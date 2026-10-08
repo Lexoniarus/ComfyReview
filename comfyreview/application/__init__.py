@@ -42,6 +42,9 @@ from comfyreview.application.card_battler_development import (
     CardDevelopmentModelRepository,
     CardDevelopmentPolicy,
     DevelopmentTierModel,
+    MechanicParameterProgression,
+    MechanicUpgradeEdge,
+    MechanicUpgradeKind,
     TierDevelopmentActionWeight,
 )
 from comfyreview.application.card_battler_mapping import (
@@ -587,6 +590,9 @@ __all__ = [
     "CanonicalRuleRenderingError",
     "MechanicMaterializer",
     "MechanicTemplateReference",
+    "MechanicParameterProgression",
+    "MechanicUpgradeEdge",
+    "MechanicUpgradeKind",
     "SemanticConceptDefinition",
     "TraitLineageDefinition",
     "TierDevelopmentActionWeight",

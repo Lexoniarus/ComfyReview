@@ -8,11 +8,16 @@ import sqlite3
 from comfyreview.application.card_battler_development import (
     CardDevelopmentPolicy,
     DevelopmentTierModel,
+    MechanicParameterProgression,
+    MechanicUpgradeEdge,
     TierDevelopmentActionWeight,
 )
 from comfyreview.application.card_battler_model import (
     CardBattlerModelInvalid,
     CardBattlerRulesetRef,
+)
+from comfyreview.repositories.sqlite.card_battler_development_progression import (
+    _SqliteCardDevelopmentProgressionReader,
 )
 from comfyreview.repositories.sqlite.card_battler_model_resource import (
     SqliteCardBattlerModelResource,
@@ -24,6 +29,7 @@ class SqliteCardDevelopmentModelRepository:
 
     def __init__(self, resource: SqliteCardBattlerModelResource) -> None:
         self._resource = resource
+        self._progression = _SqliteCardDevelopmentProgressionReader(resource)
 
     def development_policy(
         self,
@@ -157,6 +163,20 @@ class SqliteCardDevelopmentModelRepository:
             if len(keys) != len(set(keys)):
                 raise self._invalid("development action weights are ambiguous")
             return results
+
+    def mechanic_upgrade_edges(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicUpgradeEdge, ...]:
+        """Return registered mechanic upgrade edges in stable order."""
+        return self._progression.mechanic_upgrade_edges(ruleset)
+
+    def mechanic_parameter_progression(
+        self,
+        ruleset: CardBattlerRulesetRef | None = None,
+    ) -> tuple[MechanicParameterProgression, ...]:
+        """Return registered parameter progressions in stable order."""
+        return self._progression.mechanic_parameter_progression(ruleset)
 
     def _ladder_rows(
         self,
