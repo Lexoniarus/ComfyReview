@@ -18,7 +18,7 @@ const components = [
   component("pose-a", "pose", "Standing"),
   component("expression-a", "expression", "Smile"),
   component("lighting-a", "lighting", "Sunset"),
-  component("modifier-a", "modifier", "Wind"),
+  component("optical-effect-a", "optical_effect", "Film grain"),
 ];
 
 describe("Playground browser components", () => {
@@ -42,7 +42,7 @@ describe("Playground browser components", () => {
     ];
     editor.render(components, loraDefinitions);
     const rows = root.querySelectorAll(".prompt-mode-row");
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(11);
     expect(rows[0].querySelector("select")?.value).toBe("fixed");
     expect(
       await editor.applyState({

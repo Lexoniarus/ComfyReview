@@ -2,11 +2,15 @@ const catalogKinds = [
   ["", "Alle"],
   ["character", "Charakter"],
   ["scene", "Szenen"],
+  ["atmosphere", "Atmosphäre"],
+  ["lighting", "Licht"],
   ["outfit", "Outfits"],
+  ["accessory", "Accessoires"],
   ["pose", "Posen"],
   ["expression", "Ausdrücke"],
-  ["lighting", "Licht"],
-  ["modifier", "Modifier"],
+  ["framing", "Bildausschnitte"],
+  ["camera_angle", "Kamerawinkel"],
+  ["optical_effect", "Optische Effekte"],
   ["lora", "LoRAs"],
 ];
 

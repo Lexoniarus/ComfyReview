@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -13,6 +14,7 @@ from comfyreview.application import (
     GeneratorStateSnapshot,
     GeneratorStateValidationError,
 )
+from comfyreview.application.prompt_kinds import PROMPT_KINDS
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteGeneratorStateRepository,
@@ -29,13 +31,17 @@ def _payload() -> dict[str, object]:
                 "revision_uid": "revision-a",
                 "candidate_uid": "candidate-a",
             },
-            {
-                "kind": "scene",
-                "mode": "random",
-                "component_uid": None,
-                "revision_uid": None,
-                "candidate_uid": None,
-            },
+            *[
+                {
+                    "kind": kind,
+                    "mode": "random",
+                    "component_uid": None,
+                    "revision_uid": None,
+                    "candidate_uid": None,
+                }
+                for kind in PROMPT_KINDS
+                if kind != "character"
+            ],
         ],
         "loras": [
             {
@@ -152,14 +158,13 @@ def test_generator_state_snapshot_validates_complete_fixed_references() -> (
     None
 ):
     payload = _payload()
-    payload["selections"] = [
-        {
-            "kind": "character",
-            "mode": "fixed",
-            "component_uid": "character-a",
-            "revision_uid": None,
-        }
-    ]
+    selections = cast(list[dict[str, object]], payload["selections"])
+    selections[0] = {
+        "kind": "character",
+        "mode": "fixed",
+        "component_uid": "character-a",
+        "revision_uid": None,
+    }
 
     with pytest.raises(GeneratorStateValidationError, match="stable"):
         GeneratorStateSnapshot.from_mapping(payload)

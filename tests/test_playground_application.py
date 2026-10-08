@@ -92,8 +92,10 @@ def _catalog() -> tuple[PromptComponent, ...]:
             positive="dramatic light",
             tags=("dramatic",),
         ),
-        _component("modifier-a", "modifier", positive="wind", tags=("wind",)),
-        _component("modifier-empty", "modifier", name="Empty"),
+        _component(
+            "atmosphere-a", "atmosphere", positive="wind", tags=("wind",)
+        ),
+        _component("atmosphere-empty", "atmosphere", name="Empty"),
         _component("scene-archived", "scene", archived=True),
     )
 
@@ -120,13 +122,13 @@ def test_prompt_selection_policy_selects_reproducible_compatible_revisions() -> 
     assert tuple(selected.component.kind for selected in first.components) == (
         "character",
         "scene",
+        "atmosphere",
+        "lighting",
         "outfit",
         "pose",
         "expression",
-        "lighting",
-        "modifier",
     )
-    assert first.components[-1].component.component_uid == "modifier-a"
+    assert first.components[2].component.component_uid == "atmosphere-a"
 
 
 def test_playground_fixed_revision_uses_exact_revision_projection() -> None:
@@ -162,7 +164,7 @@ def test_playground_fixed_revision_uses_exact_revision_projection() -> None:
                 "pose",
                 "expression",
                 "lighting",
-                "modifier",
+                "optical_effect",
             ),
             character_revision_uid="revision-character-a-old",
         )
@@ -212,7 +214,6 @@ def test_historical_revision_content_drives_selection_compatibility() -> None:
                 ),
                 disabled_kinds=("scene", "pose", "expression"),
                 include_lighting=False,
-                include_modifier=False,
                 max_attempts=1,
             )
         )
@@ -250,7 +251,7 @@ def test_playground_fixed_manual_selection_uses_exact_revision() -> None:
                 "pose",
                 "expression",
                 "lighting",
-                "modifier",
+                "optical_effect",
             ),
         )
     )
@@ -299,7 +300,7 @@ def test_playground_fixed_revision_rejects_revision_kind_mismatch() -> None:
                     "pose",
                     "expression",
                     "lighting",
-                    "modifier",
+                    "optical_effect",
                 ),
                 character_revision_uid="revision-scene",
             )
@@ -376,7 +377,7 @@ def test_playground_fixed_revision_rejects_invalid_revision_binding(
                     "pose",
                     "expression",
                     "lighting",
-                    "modifier",
+                    "optical_effect",
                 ),
                 character_revision_uid=revision_uid,
             )
@@ -413,7 +414,7 @@ def test_playground_fixed_revision_accepts_archived_historical_component() -> (
                 "pose",
                 "expression",
                 "lighting",
-                "modifier",
+                "optical_effect",
             ),
             character_revision_uid="revision-character-archived",
         )
@@ -439,7 +440,7 @@ def test_playground_fixed_revision_requires_current_component_identity() -> (
                     "pose",
                     "expression",
                     "lighting",
-                    "modifier",
+                    "optical_effect",
                 ),
                 character_revision_uid=(orphaned.latest_revision.revision_uid),
             )
@@ -487,7 +488,7 @@ def test_playground_random_character_keeps_latest_catalog_revision() -> None:
                 "pose",
                 "expression",
                 "lighting",
-                "modifier",
+                "optical_effect",
             ),
             seed=17,
         )
@@ -522,7 +523,7 @@ def test_playground_exact_revision_does_not_bypass_content_policy() -> None:
                     "pose",
                     "expression",
                     "lighting",
-                    "modifier",
+                    "optical_effect",
                 ),
                 character_revision_uid="revision-character-a",
             )
@@ -596,7 +597,7 @@ def test_playground_sqlite_defaults_to_promoted_revision_not_latest_history(
         "pose",
         "expression",
         "lighting",
-        "modifier",
+        "optical_effect",
     )
 
     fixed_old = playground.prepare_draft(
@@ -719,7 +720,7 @@ def test_playground_applies_one_exact_candidate_without_changing_other_groups(
                 "pose",
                 "expression",
                 "lighting",
-                "modifier",
+                "optical_effect",
             ),
         )
     )
@@ -749,7 +750,7 @@ def test_playground_applies_one_exact_candidate_without_changing_other_groups(
                     "pose",
                     "expression",
                     "lighting",
-                    "modifier",
+                    "optical_effect",
                 ),
             )
         )
@@ -760,7 +761,7 @@ def test_prompt_selection_policy_supports_random_character_and_disabled_kinds() 
 ):
     command = PromptSelectionCommand(
         character_component_uid="",
-        disabled_kinds=("outfit", "lighting", "modifier"),
+        disabled_kinds=("outfit", "lighting", "optical_effect"),
         seed=9,
     )
 
@@ -771,6 +772,7 @@ def test_prompt_selection_policy_supports_random_character_and_disabled_kinds() 
     ) == (
         "character",
         "scene",
+        "atmosphere",
         "pose",
         "expression",
     )
@@ -852,10 +854,10 @@ def test_prompt_selection_policy_rejects_invalid_exact_confirmation(
         ),
         (
             (
-                _component("character-a", "character", tags=("adult",)),
-                _component("modifier-wind", "modifier", tags=("wind",)),
+                _component("character-a", "character"),
+                _component("outfit-adult", "outfit", tags=("adult_only",)),
             ),
-            ("character-a", "modifier-wind"),
+            ("character-a", "outfit-adult"),
             "incompatible prompt component",
         ),
         (
@@ -999,7 +1001,6 @@ def test_prompt_selection_policy_applies_gates_to_random_candidates() -> None:
             PromptSelectionCommand(
                 "character-a",
                 include_lighting=False,
-                include_modifier=False,
                 max_attempts=1,
             ),
         )
@@ -1025,24 +1026,19 @@ def test_prompt_selection_policy_validates_manual_excludes_and_requirements() ->
             ManualPromptSelection("expression", "expression-a"),
         ),
         include_lighting=False,
-        include_modifier=False,
         max_attempts=1,
     )
-    no_skirt_catalog = tuple(
-        replace(
-            component,
-            latest_revision=replace(
-                component.latest_revision,
-                positive_text="red coat",
-            ),
-        )
-        if component.component_uid == "outfit-red"
+    restricted_catalog = tuple(
+        replace(component, tags=())
+        if component.component_uid == "character-a"
+        else replace(component, tags=("adult_only",))
+        if component.component_uid == "pose-a"
         else component
         for component in _catalog()
     )
     requirement = PromptSelectionCommand(
         "character-a",
-        manual_selections=(ManualPromptSelection("modifier", "modifier-a"),),
+        manual_selections=(ManualPromptSelection("pose", "pose-a"),),
         include_lighting=False,
         max_attempts=1,
     )
@@ -1050,7 +1046,7 @@ def test_prompt_selection_policy_validates_manual_excludes_and_requirements() ->
     with pytest.raises(PromptSelectionError, match="no compatible"):
         PromptSelectionPolicy().select(school_catalog, excludes)
     with pytest.raises(PromptSelectionError, match="no compatible"):
-        PromptSelectionPolicy().select(no_skirt_catalog, requirement)
+        PromptSelectionPolicy().select(restricted_catalog, requirement)
 
 
 def test_prompt_selection_policy_derives_catalog_compatibility_tags() -> None:
@@ -1080,12 +1076,18 @@ def test_prompt_selection_policy_derives_catalog_compatibility_tags() -> None:
         PromptSelectionCommand(
             "character-a",
             include_lighting=False,
-            include_modifier=False,
             max_attempts=1,
         ),
     )
 
-    assert selection.components[2].component.component_uid == "outfit-red"
+    assert (
+        next(
+            selected.component.component_uid
+            for selected in selection.components
+            if selected.component.kind == "outfit"
+        )
+        == "outfit-red"
+    )
 
 
 def test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate() -> (
@@ -1107,7 +1109,7 @@ def test_prompt_renderer_keeps_revision_snapshot_and_draft_override_separate() -
     )
 
     assert rendered.positive_text == (
-        "person, city, red skirt, standing, smile, dramatic light, wind"
+        "person, city, wind, dramatic light, red skirt, standing, smile"
     )
     assert rendered.negative_text == "bad anatomy"
     assert rendered.notes == "character note"
@@ -1345,8 +1347,8 @@ def test_playground_content_policy_filters_explicit_levels() -> None:
             content_level=ContentLevel.LEWD,
         ),
         _component(
-            "modifier-nude",
-            "modifier",
+            "atmosphere-nude",
+            "atmosphere",
             tags=("nsfw_level_nude",),
             content_level=ContentLevel.NUDE,
         ),
@@ -1364,7 +1366,7 @@ def test_playground_content_policy_filters_explicit_levels() -> None:
     )
     assert tuple(component.component_uid for component in nude) == (
         "character-a",
-        "modifier-nude",
+        "atmosphere-nude",
     )
     lewd = policy.filter(
         components,
@@ -1380,8 +1382,8 @@ def test_playground_content_policy_uses_typed_level_not_descriptive_tags() -> (
     None
 ):
     component = _component(
-        "modifier-conflict",
-        "modifier",
+        "atmosphere-conflict",
+        "atmosphere",
         tags=("nsfw_level_suggestive", "nsfw_level_nude"),
         content_level=ContentLevel.SEXY,
     )
@@ -1401,20 +1403,20 @@ def test_playground_service_prepares_draft_without_generation_submission() -> (
         PromptSelectionCommand(
             "character-a",
             include_lighting=False,
-            include_modifier=False,
             seed=3,
         )
     )
 
     assert catalog.calls == [False]
     assert draft.prompt.positive_text == (
-        "person, city, red skirt, standing, smile"
+        "person, city, wind, red skirt, standing, smile"
     )
     assert tuple(
         selected.component.kind for selected in draft.selection.components
     ) == (
         "character",
         "scene",
+        "atmosphere",
         "outfit",
         "pose",
         "expression",
@@ -1726,7 +1728,7 @@ def test_playground_service_resolves_ordered_exact_composition_selections() -> (
             components[6],
             latest_revision=replace(
                 components[6].latest_revision,
-                revision_uid="modifier-historical",
+                revision_uid="atmosphere-historical",
             ),
         ),
     )
@@ -1747,7 +1749,7 @@ def test_playground_service_resolves_ordered_exact_composition_selections() -> (
         "character",
         "scene",
         "outfit",
-        "modifier",
+        "atmosphere",
     )
     assert tuple(
         item.component.component_uid for item in selected.components
@@ -1755,13 +1757,13 @@ def test_playground_service_resolves_ordered_exact_composition_selections() -> (
         "character-a",
         "scene-night",
         "outfit-red",
-        "modifier-a",
+        "atmosphere-a",
     )
     expected_revisions = (
         "character-historical",
         "scene-historical",
         "outfit-historical",
-        "modifier-historical",
+        "atmosphere-historical",
     )
     assert (
         tuple(item.revision.revision_uid for item in selected.components)
@@ -1947,8 +1949,8 @@ def test_playground_service_rejects_disabled_exact_revision_handoff() -> None:
         (
             _component("character-a", "character"),
             _component(
-                "modifier-nude",
-                "modifier",
+                "atmosphere-nude",
+                "atmosphere",
                 tags=("nsfw_level_nude",),
                 content_level=ContentLevel.NUDE,
             ),
@@ -1957,7 +1959,7 @@ def test_playground_service_rejects_disabled_exact_revision_handoff() -> None:
 
     with pytest.raises(PromptSelectionError, match="disabled content level"):
         _service(catalog).prepare_revision_draft(
-            ("revision-character-a", "revision-modifier-nude")
+            ("revision-character-a", "revision-atmosphere-nude")
         )
 
 

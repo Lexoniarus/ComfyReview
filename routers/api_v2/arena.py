@@ -47,7 +47,7 @@ def arena_pair(
             model,
             checkpoint,
             set_key,
-            minimum_rating_count=container.settings.minimum_runs,
+            minimum_rating_count=1,
         )
         pair = container.arena_service.next_pair(
             ArenaQuery(

@@ -280,10 +280,10 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
                 2,
             ),
             ImageScope(
-                ScopeKind.MODIFIER,
-                "modifier-a",
-                "modifier-revision-1",
-                "Modifier",
+                ScopeKind.OPTICAL_EFFECT,
+                "optical-effect-a",
+                "optical-effect-revision-1",
+                "Optical effect",
                 3,
             ),
         ),
@@ -312,20 +312,23 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
             ScopeKind.OUTFIT, "outfit-a", "outfit-revision-3", 2
         ),
         GeneratorPromptSelection(
-            ScopeKind.MODIFIER, "modifier-a", "modifier-revision-1", 3
+            ScopeKind.OPTICAL_EFFECT,
+            "optical-effect-a",
+            "optical-effect-revision-1",
+            3,
         ),
     )
     assert handoff.prompt_setup.component_uids == (
         "character-a",
         "scene-a",
         "outfit-a",
-        "modifier-a",
+        "optical-effect-a",
     )
     assert handoff.prompt_setup.revision_uids == (
         "character-revision-4",
         "scene-revision-2",
         "outfit-revision-3",
-        "modifier-revision-1",
+        "optical-effect-revision-1",
     )
     with pytest.raises(FrozenInstanceError):
         handoff.prompt_setup.selections[0].__setattr__("position", 99)

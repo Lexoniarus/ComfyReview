@@ -9,17 +9,10 @@ from comfyreview.application import (
     PromptComponent,
     UpdatePromptComponentCommand,
 )
+from comfyreview.application.prompt_kinds import PROMPT_KINDS
 from comfyreview.domain import prompt_atom_usages_from_text
 
-_DROPDOWN_KINDS = (
-    "character",
-    "scene",
-    "outfit",
-    "pose",
-    "expression",
-    "lighting",
-    "modifier",
-)
+_DROPDOWN_KINDS = PROMPT_KINDS
 
 
 class PromptCatalogViewService:

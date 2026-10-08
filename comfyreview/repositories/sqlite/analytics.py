@@ -333,8 +333,9 @@ class SqliteAnalyticsRepository:
                 JOIN prompt_components AS component
                   ON component.id = revision.component_id
                 WHERE component.kind IN (
-                      'character', 'scene', 'outfit', 'pose', 'expression',
-                      'lighting', 'modifier'
+                      'character', 'scene', 'atmosphere', 'lighting',
+                      'outfit', 'accessory', 'pose', 'expression',
+                      'framing', 'camera_angle', 'optical_effect'
                   )
                 ORDER BY generation.id, membership.position
                 """

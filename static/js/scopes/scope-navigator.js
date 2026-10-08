@@ -1,14 +1,18 @@
-/** @typedef {"character" | "scene" | "outfit" | "pose" | "expression" | "lighting" | "modifier"} ScopeKind */
+/** @typedef {"character" | "scene" | "atmosphere" | "lighting" | "outfit" | "accessory" | "pose" | "expression" | "framing" | "camera_angle" | "optical_effect"} ScopeKind */
 
 /** @type {Record<ScopeKind, string>} */
 const KIND_LABELS = {
   character: "Charakter",
   scene: "Szene",
+  atmosphere: "Atmosphäre",
+  lighting: "Licht",
   outfit: "Outfit",
+  accessory: "Accessoire",
   pose: "Pose",
   expression: "Ausdruck",
-  lighting: "Licht",
-  modifier: "Modifier",
+  framing: "Bildausschnitt",
+  camera_angle: "Kamerawinkel",
+  optical_effect: "Optischer Effekt",
 };
 
 /** Own scope controls and their DOM listeners. */

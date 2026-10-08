@@ -34,6 +34,7 @@ from comfyreview.application import (
     ResolutionClass,
     SelectedPromptComponent,
 )
+from comfyreview.application.prompt_kinds import PROMPT_KINDS, PromptKind
 from comfyreview.domain import PromptAtomUsage
 from routers.api_v2.catalog import (
     PromptAtomRequest,
@@ -42,7 +43,7 @@ from routers.api_v2.catalog import (
     component_response,
     lora_response,
 )
-from routers.api_v2.common import PromptKind, error_response
+from routers.api_v2.common import error_response
 from routers.api_v2.render_guidance import guidance_response
 
 router = APIRouter()
@@ -1197,15 +1198,7 @@ def selection_command(
     concrete_seed: int,
 ) -> PromptSelectionCommand:
     """Translate complete V2 mode intent into a selection command."""
-    expected: tuple[PromptKind, ...] = (
-        "character",
-        "scene",
-        "outfit",
-        "pose",
-        "expression",
-        "lighting",
-        "modifier",
-    )
+    expected: tuple[PromptKind, ...] = PROMPT_KINDS
     by_kind = {selection.kind: selection for selection in payload.selections}
     if len(by_kind) != len(payload.selections) or set(by_kind) != set(
         expected

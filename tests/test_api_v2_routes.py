@@ -68,6 +68,7 @@ from comfyreview.application import (
     SelectedPromptComponent,
     WorkflowProvenance,
 )
+from comfyreview.application.prompt_kinds import PROMPT_KINDS
 from comfyreview.domain import (
     PromptAtomUsage,
     prompt_atom_usages_from_text,
@@ -201,14 +202,17 @@ class _ImageGeneratorHandoffs:
                         ScopeKind.OUTFIT, "outfit-a", "revision-c", 2
                     ),
                     GeneratorPromptSelection(
-                        ScopeKind.MODIFIER, "modifier-a", "revision-d", 3
+                        ScopeKind.OPTICAL_EFFECT,
+                        "optical-effect-a",
+                        "revision-d",
+                        3,
                     ),
                 ),
                 component_uids=(
                     "character-a",
                     "scene-a",
                     "outfit-a",
-                    "modifier-a",
+                    "optical-effect-a",
                 ),
                 revision_uids=(
                     "revision-a",
@@ -1087,7 +1091,7 @@ def test_v2_image_generator_handoff_exposes_visible_prompt_components() -> (
         "character-a",
         "scene-a",
         "outfit-a",
-        "modifier-a",
+        "optical-effect-a",
     ]
     assert response.json()["prompt_setup"]["revision_uids"] == [
         "revision-a",
@@ -1115,8 +1119,8 @@ def test_v2_image_generator_handoff_exposes_visible_prompt_components() -> (
             "position": 2,
         },
         {
-            "kind": "modifier",
-            "component_uid": "modifier-a",
+            "kind": "optical_effect",
+            "component_uid": "optical-effect-a",
             "revision_uid": "revision-d",
             "position": 3,
         },
@@ -1233,6 +1237,9 @@ def test_v2_arena_pair_uses_the_canonical_filtered_pool() -> None:
     assert (
         container.arena_service.query.images.filters.scopes.component_uids
         == ("character-a",)
+    )
+    assert (
+        container.arena_service.query.images.filters.minimum_rating_count == 1
     )
 
 
@@ -1599,11 +1606,18 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
             "component_uid": "scene-a",
             "revision_uid": "revision-scene-old",
         },
-        {"kind": "outfit", "mode": "random"},
-        {"kind": "pose", "mode": "off"},
-        {"kind": "expression", "mode": "random"},
-        {"kind": "lighting", "mode": "off"},
-        {"kind": "modifier", "mode": "random"},
+        *[
+            {
+                "kind": kind,
+                "mode": (
+                    "random"
+                    if kind in {"outfit", "expression", "optical_effect"}
+                    else "off"
+                ),
+            }
+            for kind in PROMPT_KINDS
+            if kind not in {"character", "scene"}
+        ],
     ]
 
     response = client.post(
@@ -1671,8 +1685,12 @@ def test_v2_playground_draft_preserves_modes_and_overrides() -> None:
         ManualPromptSelection("scene", "scene-a", "revision-scene-old")
     )
     assert container.playground_service.command.disabled_kinds == (
-        "pose",
+        "atmosphere",
         "lighting",
+        "accessory",
+        "pose",
+        "framing",
+        "camera_angle",
     )
     for selection_index in (2, 3):
         invalid_revision_mode = [dict(selection) for selection in selections]
@@ -1750,11 +1768,16 @@ def test_v2_playground_prepares_variant_batch_with_local_component_override() ->
             "component_uid": "scene-a",
             "revision_uid": "revision-scene-old",
         },
-        {"kind": "outfit", "mode": "random"},
-        {"kind": "pose", "mode": "off"},
-        {"kind": "expression", "mode": "random"},
-        {"kind": "lighting", "mode": "off"},
-        {"kind": "modifier", "mode": "random"},
+        *[
+            {
+                "kind": kind,
+                "mode": "random"
+                if kind in {"outfit", "expression"}
+                else "off",
+            }
+            for kind in PROMPT_KINDS
+            if kind not in {"character", "scene"}
+        ],
     ]
     generation = {
         **_draft_generation(seed=42),
@@ -1835,15 +1858,7 @@ def test_v2_playground_draft_appends_selected_lora_triggers() -> None:
                         else {}
                     ),
                 }
-                for kind in (
-                    "character",
-                    "scene",
-                    "outfit",
-                    "pose",
-                    "expression",
-                    "lighting",
-                    "modifier",
-                )
+                for kind in PROMPT_KINDS
             ],
             "generation": _draft_generation(),
             "loras": [
@@ -1902,18 +1917,7 @@ def test_v2_playground_rejects_incomplete_or_disabled_character_intent() -> (
             "generation": _draft_generation(),
         },
     )
-    selections = [
-        {"kind": kind, "mode": "off"}
-        for kind in (
-            "character",
-            "scene",
-            "outfit",
-            "pose",
-            "expression",
-            "lighting",
-            "modifier",
-        )
-    ]
+    selections = [{"kind": kind, "mode": "off"} for kind in PROMPT_KINDS]
     disabled = client.post(
         "/api/v2/playground/drafts",
         json={"selections": selections, "generation": _draft_generation()},

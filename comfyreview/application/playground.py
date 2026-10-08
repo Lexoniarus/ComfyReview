@@ -13,6 +13,7 @@ from comfyreview.application.prompt_catalog import (
     PromptComponentCandidate,
     PromptRevision,
 )
+from comfyreview.application.prompt_kinds import PROMPT_KINDS
 from comfyreview.application.workspace_settings import (
     ContentLevel,
     PreferencesRepository,
@@ -23,15 +24,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-_SELECTION_ORDER = (
-    "character",
-    "scene",
-    "outfit",
-    "pose",
-    "expression",
-    "lighting",
-    "modifier",
-)
+_SELECTION_ORDER = PROMPT_KINDS
 _EXCLUDES = (
     ("school", "lewd"),
     ("studio", "lewd"),
@@ -40,7 +33,6 @@ _EXCLUDES = (
     ("slice of life", "lewd"),
 )
 _REQUIRES = {
-    "wind": frozenset({"skirt"}),
     "rain": frozenset({"rain"}),
     "adult_only": frozenset({"adult"}),
     "club": frozenset({"school"}),
@@ -59,8 +51,7 @@ _REQUIRES_ANY = {
     "isekai": (frozenset({"fantasy"}),),
 }
 _GATES = {
-    "modifier": {
-        "wind": frozenset({"skirt"}),
+    "atmosphere": {
         "rain": frozenset({"rain"}),
         "club": frozenset({"school"}),
         "kendo": frozenset({"school", "sport"}),
@@ -154,7 +145,6 @@ class PromptSelectionCommand:
     manual_selections: tuple[ManualPromptSelection, ...] = ()
     disabled_kinds: tuple[str, ...] = ()
     include_lighting: bool = True
-    include_modifier: bool = True
     seed: int | None = None
     max_attempts: int = 200
     character_revision_uid: str | None = None
@@ -303,9 +293,12 @@ class PromptSelectionPolicy:
                     continue
                 component = manual.get(kind)
                 if component is None:
+                    kind_candidates = candidates.get(kind, ())
+                    if not kind_candidates:
+                        continue
                     allowed = tuple(
                         self._latest_selection(candidate)
-                        for candidate in candidates.get(kind, ())
+                        for candidate in kind_candidates
                         if self._candidate_allowed(
                             self._latest_selection(candidate),
                             active_tags,
@@ -395,8 +388,6 @@ class PromptSelectionPolicy:
             )
         if not command.include_lighting:
             disabled.add("lighting")
-        if not command.include_modifier:
-            disabled.add("modifier")
         return disabled
 
     def _character_component(
