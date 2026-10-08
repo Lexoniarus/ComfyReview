@@ -42,7 +42,11 @@ test("unsecured LAN-style origin prepares, reviews and submits variant batches",
     "Pose: Modus",
     "Ausdruck: Modus",
     "Licht: Modus",
-    "Modifier: Modus",
+    "Atmosphäre: Modus",
+    "Accessoire: Modus",
+    "Bildausschnitt: Modus",
+    "Kamerawinkel: Modus",
+    "Optischer Effekt: Modus",
   ]) {
     await page.getByLabel(label).selectOption("off");
   }

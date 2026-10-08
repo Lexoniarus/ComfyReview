@@ -340,27 +340,27 @@ def test_default_blueprint_v4_wires_ordered_loras_through_model_and_clip() -> (
             AspectFormat.PORTRAIT_2_3: {
                 ResolutionClass.HD_720: (720, 1080),
                 ResolutionClass.FULL_HD_1080: (1080, 1620),
-                ResolutionClass.UHD_2160: (2160, 3240),
+                ResolutionClass.UHD_2160: (3072, 4608),
             },
             AspectFormat.LANDSCAPE_3_2: {
                 ResolutionClass.HD_720: (1080, 720),
                 ResolutionClass.FULL_HD_1080: (1620, 1080),
-                ResolutionClass.UHD_2160: (3240, 2160),
+                ResolutionClass.UHD_2160: (4608, 3072),
             },
             AspectFormat.LANDSCAPE_16_9: {
                 ResolutionClass.HD_720: (1280, 720),
                 ResolutionClass.FULL_HD_1080: (1920, 1080),
-                ResolutionClass.UHD_2160: (3840, 2160),
+                ResolutionClass.UHD_2160: (5120, 2880),
             },
             AspectFormat.PORTRAIT_9_16: {
                 ResolutionClass.HD_720: (720, 1280),
                 ResolutionClass.FULL_HD_1080: (1080, 1920),
-                ResolutionClass.UHD_2160: (2160, 3840),
+                ResolutionClass.UHD_2160: (2880, 5120),
             },
             AspectFormat.SQUARE_1_1: {
                 ResolutionClass.HD_720: (720, 720),
                 ResolutionClass.FULL_HD_1080: (1080, 1080),
-                ResolutionClass.UHD_2160: (2160, 2160),
+                ResolutionClass.UHD_2160: (4096, 4096),
             },
         }.items()
         for resolution, dimensions in row.items()

@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from comfyreview.application import PromptCatalogService, PromptComponent
+from comfyreview.application.prompt_kinds import OPTIONAL_PROMPT_KINDS
 
-_SINGLE_KINDS = ("scene", "outfit", "pose", "expression")
+_DISPLAY_KINDS = OPTIONAL_PROMPT_KINDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,11 +25,15 @@ class PromptLabels:
     """Contain the catalog labels displayed for one image prompt."""
 
     scene_name: str
+    atmosphere_name: str
+    light_name: str
     outfit_name: str
+    accessory_name: str
     pose_name: str
     expression_name: str
-    modifiers: tuple[str, ...]
-    light_name: str
+    framing_name: str
+    camera_angle_name: str
+    optical_effect_name: str
 
 
 class PromptLabelService:
@@ -48,23 +53,23 @@ class PromptLabelService:
         candidates = self._candidates(
             self._catalog.list_components(include_archived=False)
         )
-        singles = {
+        matches = {
             kind: self._first_match(candidates.get(kind, ()), prompt)
-            for kind in _SINGLE_KINDS
+            for kind in _DISPLAY_KINDS
         }
-        lighting = (
-            self._first_match(candidates.get("lighting", ()), prompt)
-            if include_lighting
-            else None
-        )
-        modifiers = self._matches(candidates.get("modifier", ()), prompt, 12)
+        if not include_lighting:
+            matches["lighting"] = None
         return PromptLabels(
-            scene_name=self._name(singles["scene"]),
-            outfit_name=self._name(singles["outfit"]),
-            pose_name=self._name(singles["pose"]),
-            expression_name=self._name(singles["expression"]),
-            modifiers=tuple(label.name for label in modifiers if label.name),
-            light_name=self._name(lighting),
+            scene_name=self._name(matches["scene"]),
+            atmosphere_name=self._name(matches["atmosphere"]),
+            light_name=self._name(matches["lighting"]),
+            outfit_name=self._name(matches["outfit"]),
+            accessory_name=self._name(matches["accessory"]),
+            pose_name=self._name(matches["pose"]),
+            expression_name=self._name(matches["expression"]),
+            framing_name=self._name(matches["framing"]),
+            camera_angle_name=self._name(matches["camera_angle"]),
+            optical_effect_name=self._name(matches["optical_effect"]),
         )
 
     @classmethod
@@ -110,19 +115,6 @@ class PromptLabelService:
             ),
             None,
         )
-
-    @classmethod
-    def _matches(
-        cls,
-        candidates: tuple[PromptLabel, ...],
-        prompt: str,
-        limit: int,
-    ) -> tuple[PromptLabel, ...]:
-        return tuple(
-            label
-            for label in candidates
-            if cls._normalize(label.positive_text) in prompt
-        )[:limit]
 
     @staticmethod
     def _normalize(value: str) -> str:

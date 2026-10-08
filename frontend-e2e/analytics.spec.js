@@ -25,6 +25,29 @@ test("analytics renders a bounded page and loads the next page lazily", async ({
   expect(errors).toEqual([]);
 });
 
+test("prompt combinations hand off the ranked best image prompt and LoRAs", async ({
+  page,
+}) => {
+  const errors = collectConsoleErrors(page);
+  await page.goto("/stats?min_n=1");
+  await page.locator("[data-analytics-sentinel]").scrollIntoViewIfNeeded();
+  await expect(page.locator(".analytics-composition-card")).toHaveCount(30);
+  const action = page.locator(
+    "[data-playground-intent='best_image_prompt'][data-image-uid='image-e2e-01']",
+  );
+  await expect(action).toHaveText("Prompt & LoRAs des Bestbilds übernehmen");
+  await action.click();
+
+  await expect(page).toHaveURL(/\/playground\/generator$/);
+  await expect(
+    page.locator('.prompt-mode-row[data-kind="scene"] select').first(),
+  ).toHaveValue("fixed");
+  await expect(page.locator(".prompt-lora-layer")).toContainText(
+    "Character Detail",
+  );
+  expect(errors).toEqual([]);
+});
+
 test("analytics cards remain contained and hand off without drafting", async ({
   page,
 }) => {
@@ -57,6 +80,11 @@ test("analytics cards remain contained and hand off without drafting", async ({
     .locator(".analytics-guidance-card")
     .filter({ hasText: "NetaYume-e2e-1.safetensors" })
     .first();
+  await expect(
+    applicableSetup.getByRole("button", {
+      name: "Prompt & LoRAs des Bestbilds übernehmen",
+    }),
+  ).toBeVisible();
   await applicableSetup
     .getByRole("button", { name: "Generierungseinstellungen übernehmen" })
     .click();

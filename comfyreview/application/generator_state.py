@@ -7,27 +7,12 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Any, Literal, Protocol, cast
 
-PromptKind = Literal[
-    "character",
-    "scene",
-    "outfit",
-    "pose",
-    "expression",
-    "lighting",
-    "modifier",
-]
+from comfyreview.application.prompt_kinds import PROMPT_KINDS, PromptKind
+
 PromptMode = Literal["fixed", "random", "off"]
 SeedMode = Literal["fixed", "random"]
 
-_PROMPT_KINDS = {
-    "character",
-    "scene",
-    "outfit",
-    "pose",
-    "expression",
-    "lighting",
-    "modifier",
-}
+_PROMPT_KINDS = frozenset(PROMPT_KINDS)
 _PROMPT_MODES = {"fixed", "random", "off"}
 _SELECTION_KEYS = {
     "kind",
@@ -277,12 +262,24 @@ def _prompt_selections(
         kinds.add(kind)
         selections.append(
             GeneratorPromptSelection(
-                kind=cast(PromptKind, kind),
+                kind=kind,
                 mode=cast(PromptMode, mode),
                 component_uid=component_uid,
                 revision_uid=revision_uid,
                 candidate_uid=candidate_uid,
             )
+        )
+    missing_kinds = set(PROMPT_KINDS) - kinds
+    if missing_kinds:
+        raise GeneratorStateValidationError(
+            "selections missing: " + ", ".join(sorted(missing_kinds))
+        )
+    character = next(
+        selection for selection in selections if selection.kind == "character"
+    )
+    if character.mode == "off":
+        raise GeneratorStateValidationError(
+            "character selection cannot be disabled"
         )
     return tuple(selections)
 

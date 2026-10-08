@@ -578,8 +578,20 @@
   --scope-color: var(--scope-scene);
 }
 
+.prompt-mode-row[data-kind="atmosphere"] {
+  --scope-color: var(--scope-atmosphere);
+}
+
+.prompt-mode-row[data-kind="lighting"] {
+  --scope-color: var(--scope-lighting);
+}
+
 .prompt-mode-row[data-kind="outfit"] {
   --scope-color: var(--scope-outfit);
+}
+
+.prompt-mode-row[data-kind="accessory"] {
+  --scope-color: var(--scope-accessory);
 }
 
 .prompt-mode-row[data-kind="pose"] {
@@ -590,12 +602,16 @@
   --scope-color: var(--scope-expression);
 }
 
-.prompt-mode-row[data-kind="lighting"] {
-  --scope-color: var(--scope-lighting);
+.prompt-mode-row[data-kind="framing"] {
+  --scope-color: var(--scope-framing);
 }
 
-.prompt-mode-row[data-kind="modifier"] {
-  --scope-color: var(--scope-modifier);
+.prompt-mode-row[data-kind="camera_angle"] {
+  --scope-color: var(--scope-camera-angle);
+}
+
+.prompt-mode-row[data-kind="optical_effect"] {
+  --scope-color: var(--scope-optical-effect);
 }
 
 .prompt-kind-label {

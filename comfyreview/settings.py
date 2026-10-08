@@ -31,7 +31,6 @@ class Settings:
     card_battler_model_database_path: Path
     templates_directory: Path
     pool_limit: int
-    minimum_runs: int
     lora_export_root: Path
     curation_set_keys: tuple[str, ...]
     default_max_tries: int
@@ -165,7 +164,6 @@ def load_settings(
         card_battler_model_database_path=card_battler_model_database_path,
         templates_directory=base / "templates",
         pool_limit=_integer(values, "COMFYREVIEW_POOL_LIMIT", 128),
-        minimum_runs=_integer(values, "COMFYREVIEW_MIN_RUNS", 3),
         lora_export_root=_path(
             values,
             "COMFYREVIEW_LORA_EXPORT_ROOT",

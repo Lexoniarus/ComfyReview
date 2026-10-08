@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -13,6 +14,7 @@ from comfyreview.application import (
     GeneratorStateSnapshot,
     GeneratorStateValidationError,
 )
+from comfyreview.application.prompt_kinds import PROMPT_KINDS
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     SqliteGeneratorStateRepository,
@@ -29,13 +31,17 @@ def _payload() -> dict[str, object]:
                 "revision_uid": "revision-a",
                 "candidate_uid": "candidate-a",
             },
-            {
-                "kind": "scene",
-                "mode": "random",
-                "component_uid": None,
-                "revision_uid": None,
-                "candidate_uid": None,
-            },
+            *[
+                {
+                    "kind": kind,
+                    "mode": "random",
+                    "component_uid": None,
+                    "revision_uid": None,
+                    "candidate_uid": None,
+                }
+                for kind in PROMPT_KINDS
+                if kind != "character"
+            ],
         ],
         "loras": [
             {
@@ -115,6 +121,24 @@ def _repository(tmp_path: Path) -> SqliteGeneratorStateRepository:
     return SqliteGeneratorStateRepository(database_path)
 
 
+def _drop_last_selection(payload: dict[str, object]) -> None:
+    cast(list[object], payload["selections"]).pop()
+
+
+def _disable_character(payload: dict[str, object]) -> None:
+    character = cast(
+        dict[str, object], cast(list[object], payload["selections"])[0]
+    )
+    character.update(
+        {
+            "mode": "off",
+            "component_uid": None,
+            "revision_uid": None,
+            "candidate_uid": None,
+        }
+    )
+
+
 def test_generator_state_round_trips_normalized_catalog_references(
     tmp_path: Path,
 ) -> None:
@@ -152,14 +176,13 @@ def test_generator_state_snapshot_validates_complete_fixed_references() -> (
     None
 ):
     payload = _payload()
-    payload["selections"] = [
-        {
-            "kind": "character",
-            "mode": "fixed",
-            "component_uid": "character-a",
-            "revision_uid": None,
-        }
-    ]
+    selections = cast(list[dict[str, object]], payload["selections"])
+    selections[0] = {
+        "kind": "character",
+        "mode": "fixed",
+        "component_uid": "character-a",
+        "revision_uid": None,
+    }
 
     with pytest.raises(GeneratorStateValidationError, match="stable"):
         GeneratorStateSnapshot.from_mapping(payload)
@@ -192,6 +215,8 @@ def test_generator_state_reports_missing_and_unknown_lora_keys_together() -> (
         (lambda value: value.pop("checkpoint"), "missing"),
         (lambda value: value.update({"selections": "bad"}), "selections"),
         (lambda value: value.update({"loras": "bad"}), "loras"),
+        (_drop_last_selection, "selections missing"),
+        (_disable_character, "character selection cannot be disabled"),
         (lambda value: value.update({"selections": [1]}), "selection must"),
         (
             lambda value: value.update(

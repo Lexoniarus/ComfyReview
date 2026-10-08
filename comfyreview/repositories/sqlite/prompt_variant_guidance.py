@@ -66,6 +66,7 @@ class SqlitePromptVariantEvidenceRepository:
                 JOIN prompt_revisions AS revision
                   ON revision.id = promotion.revision_id
                 WHERE component.component_uid = ?
+                  AND component.catalog_role = 'catalog'
                 """,
                 (str(component_uid or "").strip(),),
             ).fetchone()
@@ -105,12 +106,16 @@ class SqlitePromptVariantEvidenceRepository:
                 SELECT
                     image.id AS image_id,
                     image.image_uid,
-                    prompt_group.id AS group_id,
+                    membership.position AS group_id,
                     revision.revision_uid,
                     candidate.candidate_uid,
-                    usage.scope,
-                    usage.position,
-                    usage.weight_milli,
+                    COALESCE(group_usage.scope, revision_usage.scope) AS scope,
+                    COALESCE(group_usage.position, revision_usage.position)
+                        AS position,
+                    COALESCE(
+                        group_usage.weight_milli,
+                        revision_usage.weight_milli
+                    ) AS weight_milli,
                     atom.canonical_text,
                     event.id AS event_id,
                     event.run,
@@ -118,25 +123,37 @@ class SqlitePromptVariantEvidenceRepository:
                     CASE WHEN event.event_type = 'delete' THEN 1 ELSE 0 END
                         AS deleted
                 FROM prompt_components AS component
-                JOIN generation_prompt_groups AS prompt_group
-                  ON prompt_group.component_id = component.id
-                JOIN generations AS generation
-                  ON generation.id = prompt_group.generation_id
+                JOIN prompt_revisions AS revision
+                  ON revision.component_id = component.id
+                JOIN image_catalog_composition_revisions AS membership
+                  ON membership.revision_id = revision.id
+                JOIN current_image_catalog_compositions AS current_catalog
+                  ON current_catalog.composition_id = membership.composition_id
                 JOIN images AS image
-                  ON image.generation_id = generation.id
+                  ON image.id = current_catalog.image_id
+                JOIN generations AS generation
+                  ON generation.id = image.generation_id
                 JOIN evidence_events AS event
                   ON event.image_id = image.id
-                JOIN prompt_revisions AS revision
-                  ON revision.id = prompt_group.source_revision_id
+                LEFT JOIN generation_prompt_groups AS prompt_group
+                  ON prompt_group.generation_id = generation.id
+                 AND prompt_group.component_id = component.id
+                 AND prompt_group.source_revision_id = revision.id
                 LEFT JOIN prompt_component_candidates AS candidate
                   ON candidate.id = prompt_group.candidate_id
-                LEFT JOIN generation_prompt_group_atom_usages AS usage
-                  ON usage.group_id = prompt_group.id
-                LEFT JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
+                LEFT JOIN generation_prompt_group_atom_usages AS group_usage
+                  ON group_usage.group_id = prompt_group.id
+                LEFT JOIN prompt_revision_atom_usages AS revision_usage
+                  ON revision_usage.revision_id = revision.id
+                 AND prompt_group.id IS NULL
+                LEFT JOIN prompt_atoms AS atom ON atom.id = COALESCE(
+                    group_usage.atom_id, revision_usage.atom_id
+                )
                 WHERE component.component_uid = ?
+                  AND component.catalog_role = 'catalog'
                   AND {content_visibility_predicate()}
-                ORDER BY image.id, prompt_group.id, usage.scope,
-                         usage.position, event.id
+                ORDER BY image.id, membership.position, scope,
+                         position, event.id
                 """,
                 (str(component_uid or "").strip(),),
             ).fetchall()

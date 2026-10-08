@@ -1,7 +1,8 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v16 is implemented and integrated on
-`refactor/review-boundary`, 2026-10-07. Images, reviews, Arena, Curation,
+Status: canonical schema v18 and the catalog-normalization workflow are
+implemented on `fix/playground-combination-diversity`, 2026-10-08. Images,
+reviews, Arena, Curation,
 revisioned prompts, prompt-variant evidence and native generation outputs use
 the canonical database. Catalog authoring and Playground drafts use structured
 prompt atoms; workspace preferences, content levels and LoRA usage are
@@ -23,13 +24,13 @@ png_path = "E:/ComfyUI/output/.../image.png"
 Changing a path does not change the image UID or any review, match or curation
 relationship.
 
-## 2. Canonical schema v16
+## 2. Canonical schema v18
 
 The canonical database uses explicit schema metadata and foreign keys. Schema
-v16 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
+v18 contains the v4 identity/review cutover, the v5 prompt catalog, v6 native
 output provenance, v7 normalized prompt-revision atom usages, v8 workspace
 settings/generation profiles, v9 content/canvas settings and v10 output/content
-classification facts together with the v11-to-v16 additions listed below:
+classification facts together with the v11-to-v18 additions listed below:
 
 - `generations` and normalized generation provenance;
 - `images` with stable UID, output role, content hash, current paths and
@@ -71,11 +72,19 @@ classification facts together with the v11-to-v16 additions listed below:
   current standard revision;
 - append-only `prompt_component_manual_variants`, which preserves the latest
   authored catalog-test selection independently of promotion;
+- versioned current image catalog compositions, independent of immutable
+  generation compositions and complete prompt snapshots;
+- versioned global quality/content policies and exact generation policy links;
+- canonical atom/render evidence baseline runs plus rebuildable learning
+  projections;
+- `prompt_components.catalog_role`, separating selectable catalog entries from
+  generation-only provenance;
 - rebuildable current-state and aggregate views.
 
 Unknown or unsupported versions fail at startup. Runtime startup never performs
 a v3-to-v4, v4-to-v5, v5-to-v6, v6-to-v7, v7-to-v8, v8-to-v9, v9-to-v10,
-v10-to-v11, v11-to-v12, v12-to-v13, v13-to-v14, v14-to-v15 or v15-to-v16
+v10-to-v11, v11-to-v12, v12-to-v13, v13-to-v14, v14-to-v15, v15-to-v16,
+v16-to-v17 or v17-to-v18
 migration. The explicit, backed-up command is:
 
 ```text
@@ -196,7 +205,7 @@ comparison:
   separate Generator choice.
 
 The Generator offers `Stable`, `Catalog test`, `Calculated` and `Next test`
-independently for Character, Outfit, Scene, Modifier and every other prompt
+independently for the eleven normalized prompt groups
 group. Each selection replaces only that group's atoms in the ordinary editable
 Generator state. A calculated candidate remains derived guidance until
 explicitly materialized and then generated. Promotion is initiated
@@ -373,9 +382,9 @@ was then served again on the LAN runtime.
 No ordinary scene, outfit, pose, expression, lighting or framing block remains
 unidentified. Seventeen images retain prompt-side LoRA trigger atoms that are
 owned by their normalized LoRA provenance rather than prompt-component
-memberships. The ten active dual-modifier prompts are represented by reviewed
-historical combined modifier revisions, and the two active dual-lighting
-prompts by historical combined lighting revisions. Six active and two deleted
+memberships. The earlier combined modifier and lighting revisions remain
+historical source/provenance facts until the catalog-normalization cutover;
+they are not valid normalized target components. Six active and two deleted
 Hina generations had their missing expression/lighting separator restored and
 were linked to separate historical expression and lighting revisions. All 18
 formerly structural active-image residuals are therefore resolved; the only
@@ -383,7 +392,78 @@ remaining positive atoms outside normal component memberships are attributable
 LoRA triggers. These are curated data facts, not runtime heuristics or importer
 constants.
 
-## 5.2 Workspace preferences, content, profiles and LoRA usage
+## 5.2 Current catalog composition and normalization
+
+The selectable prompt-kind order is `character`, `scene`, `atmosphere`,
+`lighting`, `outfit`, `accessory`, `pose`, `expression`, `framing`,
+`camera_angle`, `optical_effect`. Character is mandatory; every other group
+may be off. `modifier` is accepted only as old migration/provenance input and
+can never have `catalog_role = 'catalog'` in a normalized result.
+
+Every retained image owns exactly one selected versioned catalog composition.
+The immutable generation keeps its original complete positive/negative prompt,
+generation composition, exact group snapshots and renderer provenance. Reads
+that mean “current catalog meaning” use the image composition instead:
+Playground handoff, scopes, analytics, rating atom attribution and automatic
+promotion. Exact generated candidate atoms remain usable only while the
+current component/revision still matches that original generation group.
+Composition selection lookup accepts both authored composition identities and
+current image-catalog composition identities. Aggregate Analytics cards use
+the first ranked best image identity for prompt and LoRA handoff, preserving
+the exact image-level composition and ordered LoRA revisions independently of
+any render-parameter action.
+
+Quality/anatomy negatives and content profiles are immutable global policy
+revisions, not selectable catalog components. A generation records the exact
+policy revisions used. Rendering deduplicates canonical text within each scope;
+an explicitly selected component atom and its weight win over a global
+duplicate. Global policy atoms are not optimizable catalog evidence.
+
+Catalog cleanup is an explicit offline workflow:
+
+```text
+python -m comfyreview catalog-normalization audit
+python -m comfyreview catalog-normalization rebuild --output PATH [--replace]
+```
+
+Audit reads the source transactionally, inventories all components, revisions,
+atoms, live/deleted images and original prompts, and writes a hash-bound report
+plus an ignored editorial mapping draft. Audit never splits prompt text,
+chooses catalog alternatives, creates target components or marks source/image
+rows as reviewed. Those decisions belong exclusively to the subsequent manual
+editorial pass. Rebuild requires every source
+component and live image to be marked reviewed, rejects unsupported kinds or
+duplicate image groups, and applies the same atom validation to retained
+revisions as to newly authored targets, including rejection of unresolved
+`or` alternatives. It locks and re-hashes the source, upgrades only a temporary
+copy, and writes a distinct output database. `--replace` installs that database
+atomically after schema and cutover validation. Per the explicit operator
+decision for this one workflow, it creates no additional backup.
+
+The first real output is an acceptance rehearsal, not a promotion candidate.
+It is selected with `COMFYREVIEW_DATABASE` and served on a separate port by
+`python main.py`, so manual checks traverse the ordinary schema lifecycle and
+runtime repositories. Ratings or other acceptance writes intentionally taint
+that file. After explicit acceptance, the operator stops the canonical app and
+runs the same hash-bound rebuild again with a new output name and `--replace`;
+only that untouched fresh result may replace the source.
+
+Before reset, current effective ratings of live images become canonical atom
+and render baselines. Identical retained atoms map directly; explicit 1:1 or
+synonym mappings deduplicate support per image; split, rewritten and new atoms
+receive no inferred prior. Then deleted images and orphan-only facts are
+removed, Review/Arena/Curation and the clock are reset, rating-derived
+candidates/promotions are removed, and projections are initialized from the
+baselines. Baseline support never counts as a new independent image for
+promotion because promotion reads only post-reset `review_events`. New reviews
+add to the projections without mutating the baseline facts.
+
+Character components are excluded from semantic cleanup. Rebuild validation
+compares their internal IDs, UIDs, archive states, revisions, atom identities,
+weights, selected standards, manual candidates and manual-variant bindings.
+When Aiko exists, exactly 24 revisions are required.
+
+## 5.3 Workspace preferences, content, profiles and LoRA usage
 
 Schema v8 stores one typed workspace-preference row plus an ordered list of
 visible Curation sets. Preferences affect presentation/session defaults; they
@@ -476,10 +556,12 @@ explicit operational steps.
 
 Schema v11 geometry is deliberately derived. `PngHeaderDimensionReader` reads
 the source dimensions behind a filesystem provider boundary. Aspect format is
-the smallest logarithmic ratio deviation; output class is the nearest short
-edge among 720, 1080 and 2160, with a higher-class tie break. Approximate
-matches are recorded without rewriting files. The explicit rebuild scans first
-and performs one short atomic projection replacement afterward.
+the smallest logarithmic ratio deviation; output class uses the nearest nominal
+short edge among the stable 720, 1080 and 2160 compatibility values, with a
+higher-class tie break. The highest class targets the complete 4x AnimeSharp
+dimensions for the classified format. Approximate matches are recorded without
+rewriting files. The explicit rebuild scans first and performs one short atomic
+projection replacement afterward.
 
 ## 6. Audited historical output import
 
@@ -582,7 +664,7 @@ added content/canvas settings. That verified live database's `user_version` is 9
 `integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
 pre-v7 backup remains schema v6 with all 729 revisions.
 
-The application requires schema v16. No older database is silently changed at
+The application requires schema v18. No older database is silently changed at
 startup. `canonical-db upgrade` first migrates and validates a new database
 file and preserves the source; installation of the validated output is a
 separate controlled step.

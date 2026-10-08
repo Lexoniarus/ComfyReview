@@ -57,20 +57,9 @@ class SqliteImageGeneratorHandoffRepository:
                 """,
                 (generation_id,),
             ).fetchall()
-            attributed = connection.execute(
+            lora_atoms = connection.execute(
                 """
-                SELECT usage.scope, membership.position AS group_position,
-                       usage.position AS atom_position, atom.canonical_text,
-                       usage.weight_milli
-                FROM generations AS generation
-                JOIN prompt_composition_revisions AS membership
-                  ON membership.composition_id = generation.prompt_composition_id
-                JOIN prompt_revision_atom_usages AS usage
-                  ON usage.revision_id = membership.revision_id
-                JOIN prompt_atoms AS atom ON atom.id = usage.atom_id
-                WHERE generation.id = ?
-                UNION ALL
-                SELECT usage.scope, 1000 + selection.position AS group_position,
+                SELECT usage.scope, selection.position AS group_position,
                        usage.position AS atom_position, atom.canonical_text,
                        usage.weight_milli
                 FROM generation_loras AS selection
@@ -80,7 +69,7 @@ class SqliteImageGeneratorHandoffRepository:
                 WHERE selection.generation_id = ?
                 ORDER BY group_position, atom_position
                 """,
-                (generation_id, generation_id),
+                (generation_id,),
             ).fetchall()
         return ImageGenerationFacts(
             sampler_stages=tuple(
@@ -111,8 +100,8 @@ class SqliteImageGeneratorHandoffRepository:
                 )
                 for row in loras
             ),
-            attributed_positive_atoms=self._atoms(attributed, "pos"),
-            attributed_negative_atoms=self._atoms(attributed, "neg"),
+            lora_positive_atoms=self._atoms(lora_atoms, "pos"),
+            lora_negative_atoms=self._atoms(lora_atoms, "neg"),
         )
 
     @staticmethod

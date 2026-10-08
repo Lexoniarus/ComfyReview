@@ -57,6 +57,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_random.py::"
         "test_weighted_choice_is_input_order_independent"
     ),
+    "comfyreview.application.global_prompt_policy:GlobalPromptPolicyApplicator.apply": (
+        "tests/test_global_prompt_policy.py::"
+        "test_global_policy_preserves_component_weight_and_deduplicates_per_scope"
+    ),
     "comfyreview.application.generator_state:GeneratorStateSnapshot.from_mapping": (
         "tests/test_generator_state.py::"
         "test_generator_state_snapshot_validates_complete_fixed_references"

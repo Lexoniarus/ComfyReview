@@ -627,20 +627,55 @@ def _insert_image(
             ),
         ).fetchone()[0]
     )
-    connection.execute(
-        """
-        INSERT INTO images(
-            image_uid, generation_id, output_node_id, output_index,
-            png_path, json_path, output_role, content_hash
-        ) VALUES (?, ?, 'save', 0, ?, NULL, 'primary', ?)
-        """,
-        (
-            image_uid,
-            generation_id,
-            f"output/{image_uid}.png",
-            f"hash-{image_uid}",
-        ),
+    image_id = int(
+        connection.execute(
+            """
+            INSERT INTO images(
+                image_uid, generation_id, output_node_id, output_index,
+                png_path, json_path, output_role, content_hash
+            ) VALUES (?, ?, 'save', 0, ?, NULL, 'primary', ?)
+            RETURNING id
+            """,
+            (
+                image_uid,
+                generation_id,
+                f"output/{image_uid}.png",
+                f"hash-{image_uid}",
+            ),
+        ).fetchone()[0]
     )
+    if composition_id is not None:
+        current_composition_id = int(
+            connection.execute(
+                """
+                INSERT INTO image_catalog_compositions(
+                    composition_uid, image_id, version, source
+                ) VALUES (?, ?, 1, 'generation')
+                RETURNING id
+                """,
+                (f"image-catalog-generation-{image_uid}", image_id),
+            ).fetchone()[0]
+        )
+        connection.execute(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            )
+            SELECT ?, revision_id, position
+            FROM prompt_composition_revisions
+            WHERE composition_id = ?
+            ORDER BY position, slot
+            """,
+            (current_composition_id, composition_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO current_image_catalog_compositions(
+                image_id, composition_id
+            ) VALUES (?, ?)
+            """,
+            (image_id, current_composition_id),
+        )
 
 
 def _insert_prompt(

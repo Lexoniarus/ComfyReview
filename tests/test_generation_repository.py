@@ -98,6 +98,7 @@ def _request(revision_uid: str) -> GenerationRequest:
                     negative_atoms=prompt_atom_usages_from_text("blur"),
                 ),
             ),
+            global_policy_revision_uids=("quality-1",),
         ),
         blueprint_uid="portrait",
         blueprint_version=1,
@@ -135,6 +136,14 @@ def _catalog_revision(database_path: Path) -> str:
             ) VALUES (?, ?, 1, 'hero', 'blur', 'hash')
             """,
             (revision_uid, cursor.lastrowid),
+        )
+        connection.execute(
+            """
+            INSERT INTO global_prompt_policies(
+                policy_uid, policy_key, policy_type, revision_number,
+                name, active
+            ) VALUES ('quality-1', 'quality', 'quality', 1, 'Quality', 1)
+            """
         )
     return revision_uid
 
@@ -290,6 +299,18 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
                      usage.position
             """
         ).fetchall()
+        global_policies = connection.execute(
+            """
+            SELECT policy.policy_uid, usage.position
+            FROM generation_global_prompt_policies AS usage
+            JOIN global_prompt_policies AS policy ON policy.id = usage.policy_id
+            WHERE usage.generation_id = (
+                SELECT id FROM generations
+                WHERE generation_uid = 'generation-native'
+            )
+            ORDER BY usage.position
+            """
+        ).fetchall()
     assert generation[:4] == (
         "native_comfyui",
         "completed",
@@ -297,6 +318,9 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
         1,
     )
     assert json.loads(generation[4])["revision_uids"] == [revision_uid]
+    assert json.loads(generation[4])["global_policy_revision_uids"] == [
+        "quality-1"
+    ]
     assert generation[5:] == (768, 1152)
     assert stages == [
         ("base_sampler", "sampler", 0),
@@ -306,6 +330,7 @@ def test_generation_repository_persists_reproducible_request_and_lifecycle(
     assert composition_memberships == [("character", 0, revision_uid)]
     assert loras == [(0, "style.safetensors", 800, 650)]
     assert len(prompt_groups) == 1
+    assert global_policies == [("quality-1", 0)]
     assert prompt_groups[0][:4] == (
         "character",
         "component-1",

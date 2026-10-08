@@ -34,7 +34,7 @@ describe("Catalog browser components", () => {
     search.value = "nicht vorhanden";
     search.dispatchEvent(new Event("input"));
     expect(list.textContent).toContain("Keine Einträge");
-    kinds.querySelectorAll("button").item(8).click();
+    kinds.querySelectorAll("button").item(12).click();
     expect(browser.selectedCatalogKind()).toBe("lora");
     browser.dispose();
   });

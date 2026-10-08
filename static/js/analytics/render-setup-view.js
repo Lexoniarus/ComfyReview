@@ -7,6 +7,10 @@ import {
   textValue,
 } from "./analytics-formatters.js";
 import { createGeneratorHandoffAction } from "../playground/generator-handoff-action.js";
+import {
+  analyticsActionGroup,
+  createBestImagePromptAction,
+} from "./best-image-prompt-action.js";
 
 /** Render one observed technical setup with bounded evidence. */
 export class RenderSetupView {
@@ -31,7 +35,13 @@ export class RenderSetupView {
         renderSetup: JSON.stringify(item),
       },
     });
-    header.append(title, action);
+    header.append(
+      title,
+      analyticsActionGroup(
+        createBestImagePromptAction(item.best_images),
+        action,
+      ),
+    );
     const stages = document.createElement("div");
     stages.className = "analytics-stage-list";
     for (const stage of arrayValue(item.stages)) {

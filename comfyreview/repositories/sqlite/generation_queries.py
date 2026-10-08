@@ -70,6 +70,9 @@ class SqliteGenerationQueryRepository:
                 positive_prompt=str(row["positive_prompt"]),
                 negative_prompt=str(row["negative_prompt"]),
                 revision_uids=_revision_uids(connection, generation_id),
+                global_policy_revision_uids=_global_policy_revision_uids(
+                    connection, generation_id
+                ),
                 sampler_stages=_sampler_stages(connection, generation_id),
                 outputs=_outputs(connection, generation_id),
             )
@@ -185,6 +188,23 @@ def _sampler_stages(
         )
         for row in rows
     )
+
+
+def _global_policy_revision_uids(
+    connection: sqlite3.Connection,
+    generation_id: int,
+) -> tuple[str, ...]:
+    rows = connection.execute(
+        """
+        SELECT policy.policy_uid
+        FROM generation_global_prompt_policies AS usage
+        JOIN global_prompt_policies AS policy ON policy.id = usage.policy_id
+        WHERE usage.generation_id = ?
+        ORDER BY usage.position
+        """,
+        (generation_id,),
+    ).fetchall()
+    return tuple(str(row["policy_uid"]) for row in rows)
 
 
 def _outputs(

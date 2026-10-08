@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from fastapi.responses import JSONResponse
 
 from comfyreview.application import (
@@ -13,16 +11,6 @@ from comfyreview.application import (
     ScopeSelection,
 )
 from comfyreview.observability import get_trace_id
-
-PromptKind = Literal[
-    "character",
-    "scene",
-    "outfit",
-    "pose",
-    "expression",
-    "lighting",
-    "modifier",
-]
 
 
 def build_image_filter(

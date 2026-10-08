@@ -29,7 +29,7 @@ class SqliteAnalyticsCoverageRepository:
                     COUNT(DISTINCT CASE WHEN review.image_id IS NOT NULL
                         THEN image.id END) AS rated_images,
                     COUNT(DISTINCT CASE
-                        WHEN generation.prompt_composition_id IS NOT NULL
+                        WHEN current_catalog.composition_id IS NOT NULL
                         THEN image.id END) AS prompt_linked_images,
                     COUNT(DISTINCT CASE
                         WHEN generation.source LIKE 'legacy%'
@@ -40,6 +40,8 @@ class SqliteAnalyticsCoverageRepository:
                   ON generation.id = image.generation_id
                 LEFT JOIN image_reviews AS review
                   ON review.image_id = image.id
+                LEFT JOIN current_image_catalog_compositions AS current_catalog
+                  ON current_catalog.image_id = image.id
                 LEFT JOIN image_geometry_projection AS geometry
                   ON geometry.image_id = image.id
                 WHERE image.deleted_at IS NULL

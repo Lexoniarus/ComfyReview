@@ -279,6 +279,12 @@ from comfyreview.application.generator_state import (
 from comfyreview.application.generator_state import (
     GeneratorPromptSelection as GeneratorStatePromptSelection,
 )
+from comfyreview.application.global_prompt_policy import (
+    AppliedGlobalPromptPolicies,
+    GlobalPromptPolicyApplicator,
+    GlobalPromptPolicyRepository,
+    GlobalPromptPolicyRevision,
+)
 from comfyreview.application.image_generator_handoff import (
     GeneratorPromptSelection,
     ImageGenerationFacts,
@@ -750,6 +756,10 @@ __all__ = [
     "GenerationSubmission",
     "GenerationSummary",
     "GenerationValidationError",
+    "AppliedGlobalPromptPolicies",
+    "GlobalPromptPolicyApplicator",
+    "GlobalPromptPolicyRepository",
+    "GlobalPromptPolicyRevision",
     "GeneratorLoraState",
     "GeneratorStatePromptSelection",
     "GeneratorStateRepository",

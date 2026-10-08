@@ -93,9 +93,11 @@ ComfyReview exists to make that part easier:
 
 New Playground generations use Blueprint v4 and the fixed
 `VAEDecode -> 4x-AnimeSharp -> ImageSharpen -> Lanczos -> SaveImage` path.
-The browser selects one of five format/orientation values and one of the
-720/1080/2160 output classes; the server resolves both latent and exact target
-dimensions. No repository-specific ComfyUI custom node is required at runtime.
+The browser selects one of five format/orientation values and an HD, Full-HD
+or maximum-quality output class. The highest class preserves the complete 4x
+AnimeSharp dimensions for every format (from 4096 x 4096 square up to 5120 x
+2880 widescreen); the server resolves both latent and exact target dimensions.
+No repository-specific ComfyUI custom node is required at runtime.
 
 Matching JSON sidecars remain supported as historical import evidence. They
 are not required for newly generated canonical images or for already-canonical
@@ -223,11 +225,65 @@ Validate or explicitly upgrade the canonical database:
 ```bash
 python -m comfyreview canonical-db validate
 python -m comfyreview canonical-db upgrade \
-  --output data/comfyreview-v16.sqlite3 \
+  --output data/comfyreview-v18.sqlite3 \
   --backup-dir data/backups/canonical \
   --generator-state data/ui_state/playground_generator_last.json
 python -m comfyreview canonical-db rebuild-image-geometry
 ```
+
+Normalize an existing Playground catalog through a source-hash-bound audit and
+a private editorial mapping:
+
+```bash
+python -m comfyreview catalog-normalization audit
+python -m comfyreview catalog-normalization rebuild \
+  --output data/rehearsals/comfyreview-normalized.sqlite3
+```
+
+The audit writes its report below `data/reports/` and its editable mapping
+below ignored `data/rehearsals/`. Rebuild refuses an incomplete mapping or a
+source database changed since audit. It creates and fully validates a new
+database, removes historically deleted images, preserves Character identities
+and revisions, migrates safe atom/render evidence, and only then resets image
+reviews, Arena and Curation. Add `--replace` only while the application is
+stopped to atomically install the validated output. This explicit workflow
+does not create an additional backup.
+
+Before replacement, run the rebuilt rehearsal database through the normal
+application entry point on a separate local port:
+
+```powershell
+$rehearsal = (Resolve-Path `
+  "data\rehearsals\comfyreview-normalized.sqlite3").Path
+$env:COMFYREVIEW_DATABASE=$rehearsal
+$env:COMFYREVIEW_PORT="8016"
+python main.py
+```
+
+Open `http://127.0.0.1:8016`. Settings must show the exact rehearsal database
+path and schema v18. Review, Top/Worst, Arena, Playground Catalog, Generator,
+Handoff, Scopes and Analytics are the ordinary runtime surfaces; there is no
+separate test catalog or test mode. Confirm the eleven prompt groups, the
+absence of `modifier`, an unrated Review queue, empty Top/Worst and Arena, and
+an editable handoff for retained images.
+
+Manual ratings or other writes make this rehearsal file disposable. Stop
+`main.py`, clear the temporary environment variables, and never install the
+tested file. After explicit acceptance, rebuild once more from the unchanged
+source and reviewed mapping while the canonical application is stopped:
+
+```powershell
+Remove-Item Env:COMFYREVIEW_DATABASE
+Remove-Item Env:COMFYREVIEW_PORT
+python -m comfyreview catalog-normalization rebuild `
+  --output data/rehearsals/comfyreview-normalized-cutover.sqlite3 `
+  --replace
+python main.py
+```
+
+If the source hash changed after audit, rebuild stops and requires a new audit
+and editorial review. The final `--replace` command is intentionally withheld
+until the rehearsal has been accepted explicitly.
 
 The v11 geometry rebuild reads PNG headers outside a write transaction and
 then atomically replaces the rebuildable projection. Missing or malformed
@@ -284,7 +340,7 @@ revisions unchanged as the latest revisions. Recognizable historical variants
 become prior revisions of their real component; no generic remainder component
 is created.
 
-The active application schema is v16. Prompt Catalog revisions and Playground
+The active application schema is v18. Prompt Catalog revisions and Playground
 drafts expose ordered positive/negative atom rows with separate numeric
 weights. Rendered whole prompts remain exact provenance snapshots produced by
 the server; they
@@ -321,7 +377,9 @@ groups and append-only catalog promotions. Schema v16 adds the separate
 append-only manual-variant selection history. The current catalog standard is
 the newest promotion, while `latest_revision` remains historical numbering and
 `latest_manual_variant` remains available independently of generation, review
-or promotion.
+or promotion. Schema v17 adds current image catalog compositions, global prompt
+policies and evidence baselines. Schema v18 marks superseded components as
+generation-only provenance so they cannot re-enter the selectable catalog.
 
 Generation profiles are no longer an active runtime or HTTP concept; their
 tables remain dormant only for migration compatibility. The Generator owns
@@ -570,9 +628,12 @@ Prompt/LoRA handoffs replace the visible “01 Auswahl” state with fully
 catalog-bound, normally editable component and ordered LoRA controls, while
 render-only handoffs leave it untouched. There is no tray, toast event or
 hidden prompt editor, and no draft exists until “Varianten vorbereiten” is
-pressed. Exact image handoffs may restore archived historical component
-revisions; those entries are labelled `Archiv`, remain manually editable and
-are never candidates for random selection. Image cards and inspectors expose
+pressed. Aggregate Prompt Combination and Render Analytics cards explicitly
+offer the prompt and LoRAs of their first ranked best image; technical render
+settings remain a separate action. Exact image handoffs may restore archived
+historical component revisions; those entries are labelled `Archiv`, remain
+manually editable and are never candidates for random selection. Image cards
+and inspectors expose
 normalized trigger-evidenced LoRAs alongside component scopes. Successful
 handoffs clean their URL parameters; rejected handoffs
 keep the prior state and display the error in the Generator. LoRA revision

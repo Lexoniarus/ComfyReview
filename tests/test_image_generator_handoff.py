@@ -35,6 +35,7 @@ from comfyreview.application.image_queries import (
     GenerationSettings,
     ImageContext,
 )
+from comfyreview.domain import PromptAtomUsage
 
 
 class _Images:
@@ -213,6 +214,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
             ),
         ),
         prompt_snapshot=replace(image.prompt_snapshot, draft_overridden=False),
+        prompt_evidence=None,
         geometry=None,
     )
     handoff = ImageGeneratorHandoffService(
@@ -224,7 +226,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
     assert handoff.prompt_setup.component_uids == ("character-a",)
     assert handoff.prompt_setup.issues == (
         "lora_unavailable:missing.safetensors",
-        "unattributed_prompt_atoms",
+        "catalog_composition_unavailable",
     )
     assert handoff.render_setup.applicable is False
     assert handoff.render_setup.seed is None
@@ -249,7 +251,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
     ).get("image-1")
     assert offline.prompt_setup.issues == (
         "capabilities_unavailable",
-        "unattributed_prompt_atoms",
+        "catalog_composition_unavailable",
     )
     assert offline.render_setup.applicable is False
 
@@ -280,10 +282,10 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
                 2,
             ),
             ImageScope(
-                ScopeKind.MODIFIER,
-                "modifier-a",
-                "modifier-revision-1",
-                "Modifier",
+                ScopeKind.OPTICAL_EFFECT,
+                "optical-effect-a",
+                "optical-effect-revision-1",
+                "Optical effect",
                 3,
             ),
         ),
@@ -294,7 +296,17 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
 
     handoff = ImageGeneratorHandoffService(
         images=cast(Any, _Images(image)),
-        repository=_Facts(ImageGenerationFacts((stage,), ())),
+        repository=_Facts(
+            ImageGenerationFacts(
+                (stage,),
+                (),
+                lora_positive_atoms=(
+                    PromptAtomUsage(" HERO ", 1250),
+                    PromptAtomUsage("detail trigger", 1000),
+                ),
+                lora_negative_atoms=(PromptAtomUsage("lora negative", 900),),
+            )
+        ),
         capabilities=_Capabilities(),
     ).get("image-1")
 
@@ -312,21 +324,31 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
             ScopeKind.OUTFIT, "outfit-a", "outfit-revision-3", 2
         ),
         GeneratorPromptSelection(
-            ScopeKind.MODIFIER, "modifier-a", "modifier-revision-1", 3
+            ScopeKind.OPTICAL_EFFECT,
+            "optical-effect-a",
+            "optical-effect-revision-1",
+            3,
         ),
     )
     assert handoff.prompt_setup.component_uids == (
         "character-a",
         "scene-a",
         "outfit-a",
-        "modifier-a",
+        "optical-effect-a",
     )
     assert handoff.prompt_setup.revision_uids == (
         "character-revision-4",
         "scene-revision-2",
         "outfit-revision-3",
-        "modifier-revision-1",
+        "optical-effect-revision-1",
     )
+    assert tuple(
+        atom.text for atom in handoff.prompt_setup.positive_atoms
+    ) == ("hero", "detail trigger")
+    assert handoff.prompt_setup.positive_atoms[0].weight_milli == 1000
+    assert tuple(
+        atom.text for atom in handoff.prompt_setup.negative_atoms
+    ) == ("blur", "lora negative")
     with pytest.raises(FrozenInstanceError):
         handoff.prompt_setup.selections[0].__setattr__("position", 99)
 

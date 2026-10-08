@@ -36,13 +36,14 @@ class SqliteCatalogEvidenceRepository:
                     FROM prompt_components AS component
                     JOIN prompt_revisions AS revision
                       ON revision.component_id = component.id
-                    JOIN prompt_composition_revisions AS membership
+                    JOIN image_catalog_composition_revisions AS membership
                       ON membership.revision_id = revision.id
-                    JOIN generations AS generation
-                      ON generation.prompt_composition_id =
+                    JOIN current_image_catalog_compositions AS current_catalog
+                      ON current_catalog.composition_id =
                          membership.composition_id
-                    JOIN images AS image
-                      ON image.generation_id = generation.id
+                    JOIN images AS image ON image.id = current_catalog.image_id
+                    JOIN generations AS generation
+                      ON generation.id = image.generation_id
                     LEFT JOIN image_review_summary AS summary
                       ON summary.image_id = image.id
                     WHERE component.component_uid = ?

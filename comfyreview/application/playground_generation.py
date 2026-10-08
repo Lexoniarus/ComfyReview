@@ -242,6 +242,9 @@ class PlaygroundGenerationPolicy:
                 positive_atoms=draft.prompt.positive_atoms,
                 negative_atoms=draft.prompt.negative_atoms,
                 prompt_groups=draft.prompt_groups,
+                global_policy_revision_uids=(
+                    draft.prompt.global_policy_revision_uids
+                ),
             ),
             blueprint_uid=draft.blueprint_uid or self._blueprint_uid,
             blueprint_version=(

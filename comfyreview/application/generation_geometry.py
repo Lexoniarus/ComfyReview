@@ -18,7 +18,7 @@ class AspectFormat(StrEnum):
 
 
 class ResolutionClass(StrEnum):
-    """Name one output class by its intended short edge."""
+    """Name one output class by its stable browser-facing value."""
 
     HD_720 = "720"
     FULL_HD_1080 = "1080"
@@ -96,28 +96,28 @@ class GenerationGeometryPolicy:
             1080,
             1620,
         ),
-        (AspectFormat.PORTRAIT_2_3, ResolutionClass.UHD_2160): (2160, 3240),
+        (AspectFormat.PORTRAIT_2_3, ResolutionClass.UHD_2160): (3072, 4608),
         (AspectFormat.LANDSCAPE_3_2, ResolutionClass.HD_720): (1080, 720),
         (AspectFormat.LANDSCAPE_3_2, ResolutionClass.FULL_HD_1080): (
             1620,
             1080,
         ),
-        (AspectFormat.LANDSCAPE_3_2, ResolutionClass.UHD_2160): (3240, 2160),
+        (AspectFormat.LANDSCAPE_3_2, ResolutionClass.UHD_2160): (4608, 3072),
         (AspectFormat.LANDSCAPE_16_9, ResolutionClass.HD_720): (1280, 720),
         (AspectFormat.LANDSCAPE_16_9, ResolutionClass.FULL_HD_1080): (
             1920,
             1080,
         ),
-        (AspectFormat.LANDSCAPE_16_9, ResolutionClass.UHD_2160): (3840, 2160),
+        (AspectFormat.LANDSCAPE_16_9, ResolutionClass.UHD_2160): (5120, 2880),
         (AspectFormat.PORTRAIT_9_16, ResolutionClass.HD_720): (720, 1280),
         (AspectFormat.PORTRAIT_9_16, ResolutionClass.FULL_HD_1080): (
             1080,
             1920,
         ),
-        (AspectFormat.PORTRAIT_9_16, ResolutionClass.UHD_2160): (2160, 3840),
+        (AspectFormat.PORTRAIT_9_16, ResolutionClass.UHD_2160): (2880, 5120),
         (AspectFormat.SQUARE_1_1, ResolutionClass.HD_720): (720, 720),
         (AspectFormat.SQUARE_1_1, ResolutionClass.FULL_HD_1080): (1080, 1080),
-        (AspectFormat.SQUARE_1_1, ResolutionClass.UHD_2160): (2160, 2160),
+        (AspectFormat.SQUARE_1_1, ResolutionClass.UHD_2160): (4096, 4096),
     }
     _ASPECT_RATIOS = {
         key: dimensions[0] / dimensions[1]

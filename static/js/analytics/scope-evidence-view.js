@@ -42,7 +42,7 @@ export class ScopeEvidenceView {
       const row = recordValue(value);
       const card = document.createElement("article");
       card.className = "analytics-scope-card media-card";
-      card.dataset.kind = String(row.kind || "modifier");
+      card.dataset.kind = String(row.kind || "optical_effect");
       card.dataset.itemKey = String(row.component_uid || "");
       const title = document.createElement("h3");
       title.textContent = textValue(row.name);

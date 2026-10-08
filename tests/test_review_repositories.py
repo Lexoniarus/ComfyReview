@@ -121,7 +121,7 @@ def _seed_review_target(
             (generation_uid, *prompt_ids),
         )
         assert cursor.lastrowid is not None
-        connection.execute(
+        image_cursor = connection.execute(
             """
             INSERT INTO images(
                 image_uid, generation_id, output_node_id, output_index,
@@ -137,6 +137,75 @@ def _seed_review_target(
                 str(json_path) if sidecar else None,
             ),
         )
+        assert image_cursor.lastrowid is not None
+        component_cursor = connection.execute(
+            """
+            INSERT INTO prompt_components(
+                kind, component_key, name, component_uid
+            ) VALUES ('character', 'review-target', 'Review target',
+                      'review-target-component')
+            """
+        )
+        assert component_cursor.lastrowid is not None
+        revision_cursor = connection.execute(
+            """
+            INSERT INTO prompt_revisions(
+                revision_uid, component_id, revision_number,
+                positive_text, negative_text, content_hash
+            ) VALUES ('review-target-revision', ?, 1,
+                      '(hero:1.25), blue sky', 'blur',
+                      'review-target-content')
+            """,
+            (int(component_cursor.lastrowid),),
+        )
+        assert revision_cursor.lastrowid is not None
+        revision_id = int(revision_cursor.lastrowid)
+        for scope, position, canonical_text, weight_milli in (
+            ("pos", 0, "hero", 1250),
+            ("pos", 1, "blue sky", 1000),
+            ("neg", 0, "blur", 1000),
+        ):
+            atom_id = connection.execute(
+                "SELECT id FROM prompt_atoms WHERE canonical_text = ?",
+                (canonical_text,),
+            ).fetchone()[0]
+            connection.execute(
+                """
+                INSERT INTO prompt_revision_atom_usages(
+                    revision_id, atom_id, scope, position, weight_milli
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (revision_id, atom_id, scope, position, weight_milli),
+            )
+        composition_cursor = connection.execute(
+            """
+            INSERT INTO image_catalog_compositions(
+                composition_uid, image_id, version, source
+            ) VALUES (?, ?, 1, 'generation')
+            """,
+            (
+                f"review-target-composition-{image_uid}",
+                int(image_cursor.lastrowid),
+            ),
+        )
+        assert composition_cursor.lastrowid is not None
+        composition_id = int(composition_cursor.lastrowid)
+        connection.execute(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            ) VALUES (?, ?, 0)
+            """,
+            (composition_id, revision_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO current_image_catalog_compositions(
+                image_id, composition_id
+            ) VALUES (?, ?)
+            """,
+            (int(image_cursor.lastrowid), composition_id),
+        )
 
 
 def test_canonical_schema_initializes_once_and_exposes_compatibility_views(
@@ -149,7 +218,7 @@ def test_canonical_schema_initializes_once_and_exposes_compatibility_views(
     second = manager.prepare_startup()
 
     assert first.initialized is True
-    assert first.schema_version == 16
+    assert first.schema_version == 18
     assert second.initialized is False
     with sqlite3.connect(database_path) as connection:
         objects = dict(
@@ -229,6 +298,51 @@ def test_review_repository_replaces_rating_without_token_journal_growth(
             """
         ).fetchone()
     assert tuple(hero) == ("hero", 1250, 1, 9.0)
+
+
+def test_review_repository_attributes_atoms_to_current_catalog_composition(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _seed_review_target(database_path, tmp_path / "image.json")
+    with sqlite3.connect(database_path) as connection:
+        cursor = connection.execute(
+            "INSERT INTO prompt_atoms(canonical_text) VALUES ('editorial hero')"
+        )
+        assert cursor.lastrowid is not None
+        revision_id = connection.execute(
+            "SELECT id FROM prompt_revisions "
+            "WHERE revision_uid = 'review-target-revision'"
+        ).fetchone()[0]
+        connection.execute(
+            "DELETE FROM prompt_revision_atom_usages WHERE revision_id = ?",
+            (revision_id,),
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_revision_atom_usages(
+                revision_id, atom_id, scope, position, weight_milli
+            ) VALUES (?, ?, 'pos', 0, 1100)
+            """,
+            (revision_id, int(cursor.lastrowid)),
+        )
+
+    SqliteReviewRepository(database_path).append(
+        _review_record(tmp_path / "image.json", 8)
+    )
+
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT atom.canonical_text, stats.weight_milli,
+                   stats.sample_count, stats.rating_sum
+            FROM atom_learning_stats AS stats
+            JOIN prompt_atoms AS atom ON atom.id = stats.atom_id
+            ORDER BY atom.canonical_text
+            """
+        ).fetchall()
+    assert rows == [("editorial hero", 1100, 1, 8.0)]
 
 
 def test_review_history_repository_reads_events_newest_first(

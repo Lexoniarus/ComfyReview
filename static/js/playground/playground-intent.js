@@ -17,6 +17,10 @@ const numericFields = [
 /** @param {HTMLElement} element @returns {GeneratorHandoff | null} */
 export function intentFromAnalyticsAction(element) {
   const kind = String(element.dataset.playgroundIntent || "");
+  if (kind === "best_image_prompt") {
+    const imageUid = text(element.dataset.imageUid);
+    return imageUid ? { kind: "image-prompt", imageUid } : null;
+  }
   if (kind === "scope") {
     if (!element.dataset.promptKind || !element.dataset.componentUid)
       return null;

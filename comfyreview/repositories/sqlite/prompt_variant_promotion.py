@@ -35,6 +35,7 @@ class SqlitePromptPromotionRepository:
                 str(row[0])
                 for row in connection.execute(
                     "SELECT component_uid FROM prompt_components "
+                    "WHERE catalog_role = 'catalog' "
                     "ORDER BY component_uid"
                 ).fetchall()
             )
@@ -51,13 +52,16 @@ class SqlitePromptPromotionRepository:
                     """
                     SELECT DISTINCT component.component_uid
                     FROM images AS image
-                    JOIN generations AS generation
-                      ON generation.id = image.generation_id
-                    JOIN generation_prompt_groups AS prompt_group
-                      ON prompt_group.generation_id = generation.id
+                    JOIN current_image_catalog_compositions AS current_catalog
+                      ON current_catalog.image_id = image.id
+                    JOIN image_catalog_composition_revisions AS membership
+                      ON membership.composition_id = current_catalog.composition_id
+                    JOIN prompt_revisions AS revision
+                      ON revision.id = membership.revision_id
                     JOIN prompt_components AS component
-                      ON component.id = prompt_group.component_id
+                      ON component.id = revision.component_id
                     WHERE image.image_uid = ?
+                      AND component.catalog_role = 'catalog'
                     ORDER BY component.component_uid
                     """,
                     (str(image_uid or "").strip(),),
@@ -103,6 +107,7 @@ class SqlitePromptPromotionRepository:
                 JOIN prompt_revisions AS revision
                   ON revision.id = promotion.revision_id
                 WHERE component.component_uid = ?
+                  AND component.catalog_role = 'catalog'
                 """,
                 (decision.component_uid,),
             ).fetchone()

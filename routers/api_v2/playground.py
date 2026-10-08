@@ -34,6 +34,7 @@ from comfyreview.application import (
     ResolutionClass,
     SelectedPromptComponent,
 )
+from comfyreview.application.prompt_kinds import PROMPT_KINDS, PromptKind
 from comfyreview.domain import PromptAtomUsage
 from routers.api_v2.catalog import (
     PromptAtomRequest,
@@ -42,7 +43,7 @@ from routers.api_v2.catalog import (
     component_response,
     lora_response,
 )
-from routers.api_v2.common import PromptKind, error_response
+from routers.api_v2.common import error_response
 from routers.api_v2.render_guidance import guidance_response
 
 router = APIRouter()
@@ -548,28 +549,38 @@ def prepare_playground_draft(
                 selection_command(payload, concrete_seed),
                 overrides=overrides,
             )
-        lora_groups = (
-            container.lora_drafts.resolve(
-                tuple(
-                    GenerationLoraSelection(
-                        name="",
-                        model_strength_milli=round(item.model_strength * 1000),
-                        clip_strength_milli=round(item.clip_strength * 1000),
-                        position=position,
-                        lora_uid=item.lora_uid,
-                        revision_uid=item.revision_uid,
-                    )
-                    for position, item in enumerate(payload.loras)
+        if source_mode == "image_snapshot" and source_handoff is not None:
+            lora_selections = tuple(
+                GenerationLoraSelection(
+                    name=item.provider_name,
+                    model_strength_milli=item.model_strength_milli,
+                    clip_strength_milli=item.clip_strength_milli,
+                    position=item.position,
+                    lora_uid=item.lora_uid,
+                    revision_uid=item.revision_uid,
                 )
+                for item in source_handoff.prompt_setup.loras
             )
-            if payload.loras and source_mode != "image_snapshot"
+        else:
+            lora_selections = tuple(
+                GenerationLoraSelection(
+                    name="",
+                    model_strength_milli=round(item.model_strength * 1000),
+                    clip_strength_milli=round(item.clip_strength * 1000),
+                    position=position,
+                    lora_uid=item.lora_uid,
+                    revision_uid=item.revision_uid,
+                )
+                for position, item in enumerate(payload.loras)
+            )
+        lora_groups = (
+            container.lora_drafts.resolve(lora_selections)
+            if lora_selections
             else ()
         )
         positive_atoms = draft.prompt.positive_atoms
         negative_atoms = draft.prompt.negative_atoms
-        if source_mode != "image_snapshot" and not whole_draft_overridden(
-            overrides
-        ):
+        if not whole_draft_overridden(overrides):
             positive_atoms += tuple(
                 atom
                 for group in lora_groups
@@ -619,6 +630,9 @@ def prepare_playground_draft(
             "positive_atoms": atom_response(positive_atoms),
             "negative_atoms": atom_response(negative_atoms),
             "revision_uids": draft.prompt.revision_uids,
+            "global_policy_revision_uids": (
+                draft.prompt.global_policy_revision_uids
+            ),
             "draft_overridden": draft.prompt.draft_overridden,
             "groups": (
                 [
@@ -810,21 +824,33 @@ def prepare_playground_variant_batch(
                 overrides=overrides,
             )
         )
-        lora_groups = (
-            container.lora_drafts.resolve(
-                tuple(
-                    GenerationLoraSelection(
-                        name="",
-                        model_strength_milli=round(item.model_strength * 1000),
-                        clip_strength_milli=round(item.clip_strength * 1000),
-                        position=position,
-                        lora_uid=item.lora_uid,
-                        revision_uid=item.revision_uid,
-                    )
-                    for position, item in enumerate(payload.loras)
+        if source_mode == "image_snapshot" and source_handoff is not None:
+            lora_selections = tuple(
+                GenerationLoraSelection(
+                    name=item.provider_name,
+                    model_strength_milli=item.model_strength_milli,
+                    clip_strength_milli=item.clip_strength_milli,
+                    position=item.position,
+                    lora_uid=item.lora_uid,
+                    revision_uid=item.revision_uid,
                 )
+                for item in source_handoff.prompt_setup.loras
             )
-            if payload.loras and source_mode != "image_snapshot"
+        else:
+            lora_selections = tuple(
+                GenerationLoraSelection(
+                    name="",
+                    model_strength_milli=round(item.model_strength * 1000),
+                    clip_strength_milli=round(item.clip_strength * 1000),
+                    position=position,
+                    lora_uid=item.lora_uid,
+                    revision_uid=item.revision_uid,
+                )
+                for position, item in enumerate(payload.loras)
+            )
+        lora_groups = (
+            container.lora_drafts.resolve(lora_selections)
+            if lora_selections
             else ()
         )
         loras: list[dict[str, object]] = (
@@ -877,9 +903,7 @@ def prepare_playground_variant_batch(
         for variant in batch.variants:
             positive_atoms = variant.draft.prompt.positive_atoms
             negative_atoms = variant.draft.prompt.negative_atoms
-            if source_mode != "image_snapshot" and not whole_draft_overridden(
-                overrides
-            ):
+            if not whole_draft_overridden(overrides):
                 positive_atoms += tuple(
                     atom
                     for group in lora_groups
@@ -1185,6 +1209,9 @@ def prepared_variant_response(
         "positive_atoms": atom_response(positive_atoms),
         "negative_atoms": atom_response(negative_atoms),
         "revision_uids": draft.prompt.revision_uids,
+        "global_policy_revision_uids": (
+            draft.prompt.global_policy_revision_uids
+        ),
         "draft_overridden": draft.prompt.draft_overridden,
         "groups": [*prompt_groups, *lora_prompt_groups],
         "prompt_groups": prompt_groups,
@@ -1197,15 +1224,7 @@ def selection_command(
     concrete_seed: int,
 ) -> PromptSelectionCommand:
     """Translate complete V2 mode intent into a selection command."""
-    expected: tuple[PromptKind, ...] = (
-        "character",
-        "scene",
-        "outfit",
-        "pose",
-        "expression",
-        "lighting",
-        "modifier",
-    )
+    expected: tuple[PromptKind, ...] = PROMPT_KINDS
     by_kind = {selection.kind: selection for selection in payload.selections}
     if len(by_kind) != len(payload.selections) or set(by_kind) != set(
         expected

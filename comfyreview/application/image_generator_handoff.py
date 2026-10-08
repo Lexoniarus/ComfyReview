@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -37,8 +36,8 @@ class ImageGenerationFacts:
 
     sampler_stages: tuple[GenerationStageSummary, ...]
     loras: tuple[ImageLoraSnapshot, ...]
-    attributed_positive_atoms: tuple[PromptAtomUsage, ...] = ()
-    attributed_negative_atoms: tuple[PromptAtomUsage, ...] = ()
+    lora_positive_atoms: tuple[PromptAtomUsage, ...] = ()
+    lora_negative_atoms: tuple[PromptAtomUsage, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,25 +142,28 @@ class ImageGeneratorHandoffService:
                 and lora.provider_name not in available_loras
             ):
                 prompt_issues.append(f"lora_unavailable:{lora.provider_name}")
-        positive_atoms = prompt_atom_usages_from_text(
-            image.prompt_snapshot.positive
+        evidence = image.prompt_evidence
+        positive_atoms = self._evidence_atoms(
+            evidence.positive_blocks if evidence is not None else ()
         )
-        negative_atoms = prompt_atom_usages_from_text(
-            image.prompt_snapshot.negative
+        negative_atoms = self._evidence_atoms(
+            evidence.negative_blocks if evidence is not None else ()
         )
-        complete = (
-            bool(selections)
-            and self._atoms_match(
-                positive_atoms,
-                facts.attributed_positive_atoms,
-            )
-            and self._atoms_match(
-                negative_atoms,
-                facts.attributed_negative_atoms,
-            )
+        positive_atoms = self._append_unique(
+            positive_atoms, facts.lora_positive_atoms
         )
+        negative_atoms = self._append_unique(
+            negative_atoms, facts.lora_negative_atoms
+        )
+        complete = bool(selections) and evidence is not None
         if not complete:
-            prompt_issues.append("unattributed_prompt_atoms")
+            positive_atoms = prompt_atom_usages_from_text(
+                image.prompt_snapshot.positive
+            )
+            negative_atoms = prompt_atom_usages_from_text(
+                image.prompt_snapshot.negative
+            )
+            prompt_issues.append("catalog_composition_unavailable")
         availability = "complete" if complete else "snapshot_only"
         prompt = PromptSetupHandoff(
             source_image_uid=image.image_uid,
@@ -278,16 +280,30 @@ class ImageGeneratorHandoffService:
         return tuple(result)
 
     @staticmethod
-    def _atoms_match(
-        prompt: tuple[PromptAtomUsage, ...],
-        attributed: tuple[PromptAtomUsage, ...],
-    ) -> bool:
-        def key(atom: PromptAtomUsage) -> str:
-            return " ".join(atom.text.casefold().split())
-
-        return Counter(key(atom) for atom in prompt) == Counter(
-            key(atom) for atom in attributed
+    def _evidence_atoms(
+        blocks: tuple[str, ...],
+    ) -> tuple[PromptAtomUsage, ...]:
+        return tuple(
+            atom
+            for block in blocks
+            for atom in prompt_atom_usages_from_text(block)
         )
+
+    @staticmethod
+    def _append_unique(
+        primary: tuple[PromptAtomUsage, ...],
+        additional: tuple[PromptAtomUsage, ...],
+    ) -> tuple[PromptAtomUsage, ...]:
+        """Append atoms without replacing an existing canonical weight."""
+        seen = {" ".join(atom.text.casefold().split()) for atom in primary}
+        result = list(primary)
+        for atom in additional:
+            canonical_text = " ".join(atom.text.casefold().split())
+            if canonical_text in seen:
+                continue
+            seen.add(canonical_text)
+            result.append(atom)
+        return tuple(result)
 
     def _availability(
         self,

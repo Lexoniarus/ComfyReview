@@ -69,6 +69,7 @@ class GenerationDetail:
     positive_prompt: str
     negative_prompt: str
     revision_uids: tuple[str, ...]
+    global_policy_revision_uids: tuple[str, ...]
     sampler_stages: tuple[GenerationStageSummary, ...]
     outputs: tuple[GenerationOutputSummary, ...]
 

@@ -54,6 +54,9 @@ from comfyreview.repositories.sqlite.generations import (
 from comfyreview.repositories.sqlite.generator_state import (
     SqliteGeneratorStateRepository,
 )
+from comfyreview.repositories.sqlite.global_prompt_policy import (
+    SqliteGlobalPromptPolicyRepository,
+)
 from comfyreview.repositories.sqlite.image_generator_handoff import (
     SqliteImageGeneratorHandoffRepository,
 )
@@ -125,6 +128,7 @@ __all__ = [
     "SqliteCurationRepository",
     "SqliteGenerationRepository",
     "SqliteGeneratorStateRepository",
+    "SqliteGlobalPromptPolicyRepository",
     "SqliteGenerationOutputRepository",
     "SqliteGenerationQueryRepository",
     "SqliteImageContextRepository",

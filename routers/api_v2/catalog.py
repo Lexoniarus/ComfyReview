@@ -18,8 +18,9 @@ from comfyreview.application import (
     UpdateLoraDefinitionCommand,
     UpdatePromptComponentCommand,
 )
+from comfyreview.application.prompt_kinds import PromptKind
 from comfyreview.domain import PromptAtomUsage, prompt_atom_usage
-from routers.api_v2.common import PromptKind, error_response
+from routers.api_v2.common import error_response
 
 router = APIRouter()
 

@@ -144,7 +144,7 @@ export class GenerationControls {
       [
         ["720", "720p / HD Ready"],
         ["1080", "1080p / Full HD"],
-        ["2160", "2160p / 4K"],
+        ["2160", "4× Upscale / maximale Qualität"],
       ],
       "1080",
     );

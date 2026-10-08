@@ -17,11 +17,15 @@
   --color-focus: #32c5ff;
   --scope-character: #ff7085;
   --scope-scene: #55d89a;
+  --scope-atmosphere: #59c3c3;
+  --scope-lighting: #ffd166;
   --scope-outfit: #f6b94b;
+  --scope-accessory: #f28f6b;
   --scope-pose: #72a7ff;
   --scope-expression: #b49cff;
-  --scope-lighting: #ffd166;
-  --scope-modifier: #a6b0be;
+  --scope-framing: #9cb5ff;
+  --scope-camera-angle: #cf8cff;
+  --scope-optical-effect: #a6b0be;
   --status-neutral: #a6b0be;
   --status-running: #72a7ff;
   --status-completed: #55d89a;

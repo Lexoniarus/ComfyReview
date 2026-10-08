@@ -7,12 +7,18 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
+from comfyreview.application.global_prompt_policy import (
+    GlobalPromptPolicyApplicator,
+    GlobalPromptPolicyRepository,
+    GlobalPromptPolicyRevision,
+)
 from comfyreview.application.image_queries import ImageContext
 from comfyreview.application.prompt_catalog import (
     PromptComponent,
     PromptComponentCandidate,
     PromptRevision,
 )
+from comfyreview.application.prompt_kinds import PROMPT_KINDS
 from comfyreview.application.workspace_settings import (
     ContentLevel,
     PreferencesRepository,
@@ -23,15 +29,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-_SELECTION_ORDER = (
-    "character",
-    "scene",
-    "outfit",
-    "pose",
-    "expression",
-    "lighting",
-    "modifier",
-)
+_SELECTION_ORDER = PROMPT_KINDS
 _EXCLUDES = (
     ("school", "lewd"),
     ("studio", "lewd"),
@@ -40,7 +38,6 @@ _EXCLUDES = (
     ("slice of life", "lewd"),
 )
 _REQUIRES = {
-    "wind": frozenset({"skirt"}),
     "rain": frozenset({"rain"}),
     "adult_only": frozenset({"adult"}),
     "club": frozenset({"school"}),
@@ -59,8 +56,7 @@ _REQUIRES_ANY = {
     "isekai": (frozenset({"fantasy"}),),
 }
 _GATES = {
-    "modifier": {
-        "wind": frozenset({"skirt"}),
+    "atmosphere": {
         "rain": frozenset({"rain"}),
         "club": frozenset({"school"}),
         "kendo": frozenset({"school", "sport"}),
@@ -154,7 +150,6 @@ class PromptSelectionCommand:
     manual_selections: tuple[ManualPromptSelection, ...] = ()
     disabled_kinds: tuple[str, ...] = ()
     include_lighting: bool = True
-    include_modifier: bool = True
     seed: int | None = None
     max_attempts: int = 200
     character_revision_uid: str | None = None
@@ -178,6 +173,7 @@ class ConfirmPlaygroundDraftCommand:
     prompt_selections: tuple[PromptRevisionSelection, ...]
     positive_atoms: tuple[PromptAtomUsage, ...]
     negative_atoms: tuple[PromptAtomUsage, ...]
+    global_policy_revision_uids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,6 +238,7 @@ class RenderedPrompt:
     positive_atoms: tuple[PromptAtomUsage, ...] = ()
     negative_atoms: tuple[PromptAtomUsage, ...] = ()
     component_groups: tuple[RenderedPromptGroup, ...] = ()
+    global_policy_revision_uids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,9 +300,12 @@ class PromptSelectionPolicy:
                     continue
                 component = manual.get(kind)
                 if component is None:
+                    kind_candidates = candidates.get(kind, ())
+                    if not kind_candidates:
+                        continue
                     allowed = tuple(
                         self._latest_selection(candidate)
-                        for candidate in candidates.get(kind, ())
+                        for candidate in kind_candidates
                         if self._candidate_allowed(
                             self._latest_selection(candidate),
                             active_tags,
@@ -395,8 +395,6 @@ class PromptSelectionPolicy:
             )
         if not command.include_lighting:
             disabled.add("lighting")
-        if not command.include_modifier:
-            disabled.add("modifier")
         return disabled
 
     def _character_component(
@@ -595,6 +593,7 @@ class PromptRenderer:
         self,
         selection: PromptSelection,
         overrides: PromptDraftOverrides | None = None,
+        policies: tuple[GlobalPromptPolicyRevision, ...] = (),
     ) -> RenderedPrompt:
         """Return exact positive/negative snapshots without catalog writes."""
         component_groups = self._component_groups(selection, overrides)
@@ -614,6 +613,13 @@ class PromptRenderer:
                 positive_atoms = tuple(overrides.positive_atoms)
             if overrides.negative_atoms is not None:
                 negative_atoms = tuple(overrides.negative_atoms)
+        applied = GlobalPromptPolicyApplicator().apply(
+            positive_atoms,
+            negative_atoms,
+            policies,
+        )
+        positive_atoms = applied.positive_atoms
+        negative_atoms = applied.negative_atoms
         positive, negative = self.render_atoms(positive_atoms, negative_atoms)
         return RenderedPrompt(
             positive_text=positive,
@@ -632,6 +638,7 @@ class PromptRenderer:
             positive_atoms=positive_atoms,
             negative_atoms=negative_atoms,
             component_groups=component_groups,
+            global_policy_revision_uids=applied.policy_uids,
         )
 
     @classmethod
@@ -783,12 +790,14 @@ class PlaygroundService:
         renderer: PromptRenderer,
         preferences: PreferencesRepository,
         content_policy: PromptContentPolicy,
+        global_policies: GlobalPromptPolicyRepository,
     ) -> None:
         self._catalog = catalog
         self._selection_policy = selection_policy
         self._renderer = renderer
         self._preferences = preferences
         self._content_policy = content_policy
+        self._global_policies = global_policies
 
     def list_available_components(self) -> tuple[PromptComponent, ...]:
         """Return active catalog components allowed by workspace policy."""
@@ -833,7 +842,7 @@ class PlaygroundService:
         )
         return PlaygroundDraft(
             selection=selection,
-            prompt=self._renderer.render(selection, overrides),
+            prompt=self._render(selection, overrides),
         )
 
     def _resolve_exact_fixed_revisions(
@@ -990,7 +999,7 @@ class PlaygroundService:
         selection = self._exact_selection(components, revision_uids)
         return PlaygroundDraft(
             selection=selection,
-            prompt=self._renderer.render(selection),
+            prompt=self._render(selection),
         )
 
     def prepare_composition_draft(
@@ -1001,7 +1010,7 @@ class PlaygroundService:
         selection = self.resolve_composition_selection(composition_uid)
         return PlaygroundDraft(
             selection=selection,
-            prompt=self._renderer.render(selection),
+            prompt=self._render(selection),
         )
 
     def resolve_composition_selection(
@@ -1025,10 +1034,6 @@ class PlaygroundService:
         components = self._with_current_component_metadata(
             revision_projections
         )
-        if any(selected.component.archived for selected in components):
-            raise PromptSelectionError(
-                "composition contains an inactive prompt component"
-            )
         return self._exact_selection(components, revision_uids)
 
     def prepare_image_snapshot(
@@ -1049,6 +1054,13 @@ class PlaygroundService:
         components = self._with_current_component_metadata(
             revision_projections
         )
+        evidence = image.prompt_evidence
+        selection = PromptSelection(components)
+        if evidence is not None:
+            return PlaygroundDraft(
+                selection=selection,
+                prompt=self._render(selection, overrides),
+            )
         positive = prompt_atom_usages_from_text(image.prompt_snapshot.positive)
         negative = prompt_atom_usages_from_text(image.prompt_snapshot.negative)
         if overrides is not None:
@@ -1058,11 +1070,11 @@ class PlaygroundService:
             positive, negative
         )
         return PlaygroundDraft(
-            selection=PromptSelection(components),
+            selection=selection,
             prompt=RenderedPrompt(
                 positive_text=positive_text,
                 negative_text=negative_text,
-                notes="historical image snapshot",
+                notes="current image catalog composition",
                 revision_uids=revision_uids,
                 draft_overridden=(
                     image.prompt_snapshot.draft_overridden
@@ -1087,7 +1099,12 @@ class PlaygroundService:
                 binding.revision_uid for binding in command.prompt_selections
             ),
         )
-        canonical = self._renderer.render(selection)
+        canonical = self._render(selection)
+        if (
+            command.global_policy_revision_uids
+            != canonical.global_policy_revision_uids
+        ):
+            raise PromptSelectionError("global prompt policy revision changed")
         positive_override = (
             command.positive_atoms
             if command.positive_atoms != canonical.positive_atoms
@@ -1105,7 +1122,21 @@ class PlaygroundService:
         )
         return PlaygroundDraft(
             selection=selection,
-            prompt=self._renderer.render(selection, overrides),
+            prompt=self._render(selection, overrides),
+        )
+
+    def _render(
+        self,
+        selection: PromptSelection,
+        overrides: PromptDraftOverrides | None = None,
+    ) -> RenderedPrompt:
+        preferences = self._preferences.get()
+        return self._renderer.render(
+            selection,
+            overrides,
+            self._global_policies.list_active(
+                preferences.enabled_content_levels
+            ),
         )
 
     def _require_allowed(

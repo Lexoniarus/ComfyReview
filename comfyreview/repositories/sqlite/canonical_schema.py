@@ -22,7 +22,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 18
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -600,6 +600,23 @@ _REQUIRED_OBJECTS_V16 = {
     **_REQUIRED_OBJECTS_V15,
     "prompt_component_manual_variants": "table",
 }
+_REQUIRED_OBJECTS_V17 = {
+    **_REQUIRED_OBJECTS_V16,
+    "active_evidence_baseline": "table",
+    "atom_evidence_baselines": "table",
+    "current_image_catalog_compositions": "table",
+    "evidence_baseline_runs": "table",
+    "generation_global_prompt_policies": "table",
+    "global_prompt_policies": "table",
+    "global_prompt_policy_atom_usages": "table",
+    "image_catalog_composition_revisions": "table",
+    "image_catalog_compositions": "table",
+    "render_evidence_baselines": "table",
+}
+_REQUIRED_OBJECTS_V18 = dict(_REQUIRED_OBJECTS_V17)
+_REQUIRED_PROMPT_COMPONENT_COLUMNS_V18 = (
+    _REQUIRED_PROMPT_COMPONENT_COLUMNS_V5 | {"catalog_role"}
+)
 _REQUIRED_PROMPT_MANUAL_VARIANT_COLUMNS_V16 = {
     "id",
     "manual_variant_uid",
@@ -733,6 +750,8 @@ class CanonicalSchemaManager:
         self,
         backup_directory: Path | None = None,
         legacy_generator_state_path: Path | None = None,
+        *,
+        create_backup: bool = True,
     ) -> CanonicalSchemaReport:
         """Back up and explicitly upgrade a supported older schema."""
         if not self._database_path.exists():
@@ -762,10 +781,12 @@ class CanonicalSchemaManager:
             13,
             14,
             15,
+            16,
+            17,
         }:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1 through 15, or "
+                f"{current_version}; expected 1 through 17, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -797,14 +818,20 @@ class CanonicalSchemaManager:
             self._validate_version_thirteen()
         elif current_version == 14:
             self._validate_version_fourteen()
-        else:
+        elif current_version == 15:
             self._validate_version_fifteen()
+        elif current_version == 16:
+            self._validate_version_sixteen()
+        else:
+            self._validate_version_seventeen()
 
         legacy_generator_state = self._read_legacy_generator_state(
             legacy_generator_state_path
         )
 
-        backup_path = self._create_backup(backup_directory)
+        backup_path = (
+            self._create_backup(backup_directory) if create_backup else None
+        )
         source_path = self._database_path
         migration_path = source_path.with_name(
             f".{source_path.name}.{uuid4().hex}.upgrade"
@@ -846,7 +873,11 @@ class CanonicalSchemaManager:
                     self._upgrade_v13_to_v14(connection)
                 if current_version <= 14:
                     self._upgrade_v14_to_v15(connection)
-                self._upgrade_v15_to_v16(connection)
+                if current_version <= 15:
+                    self._upgrade_v15_to_v16(connection)
+                if current_version <= 16:
+                    self._upgrade_v16_to_v17(connection)
+                self._upgrade_v17_to_v18(connection)
                 connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
@@ -983,6 +1014,12 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v15_to_v16(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v16_to_v17(connection)
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v17_to_v18(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -1011,6 +1048,8 @@ class CanonicalSchemaManager:
                 13,
                 14,
                 15,
+                16,
+                17,
             }:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
@@ -1269,6 +1308,43 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_sixteen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 16:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 16 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V16)
+            self._validate_metadata_version(connection, 16)
+            self._validate_prompt_catalog_v5(connection)
+            self._validate_prompt_catalog_v7(connection)
+            self._validate_generator_state_v13(connection)
+            self._validate_prompt_variants_v15(connection)
+            self._validate_manual_variants_v16(connection)
+        finally:
+            connection.close()
+
+    def _validate_version_seventeen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 17:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 17 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V17)
+            self._validate_metadata_version(connection, 17)
+            self._validate_prompt_catalog_v5(connection)
+            self._validate_prompt_catalog_v7(connection)
+            self._validate_generator_state_v13(connection)
+            self._validate_prompt_variants_v15(connection)
+            self._validate_manual_variants_v16(connection)
+            self._validate_catalog_normalization_v17(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -1277,7 +1353,7 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V16)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V18)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
@@ -1292,6 +1368,8 @@ class CanonicalSchemaManager:
         self._validate_lora_catalog_v14(connection)
         self._validate_prompt_variants_v15(connection)
         self._validate_manual_variants_v16(connection)
+        self._validate_catalog_normalization_v17(connection)
+        self._validate_catalog_roles_v18(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -2612,6 +2690,406 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 16")
 
     @staticmethod
+    def _upgrade_v16_to_v17(connection: sqlite3.Connection) -> None:
+        """Add normalized catalog mappings, prompt policies, and priors."""
+        connection.execute(
+            "DROP TRIGGER IF EXISTS prompt_revision_initial_promotion"
+        )
+        connection.execute(
+            "DROP INDEX IF EXISTS idx_prompt_component_promotions_current"
+        )
+        connection.execute(
+            "ALTER TABLE prompt_component_promotions "
+            "RENAME TO prompt_component_promotions_v16"
+        )
+        connection.execute(
+            """
+            CREATE TABLE prompt_component_promotions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                promotion_uid TEXT NOT NULL UNIQUE,
+                component_id INTEGER NOT NULL
+                    REFERENCES prompt_components(id) ON DELETE CASCADE,
+                revision_id INTEGER NOT NULL REFERENCES prompt_revisions(id),
+                previous_revision_id INTEGER REFERENCES prompt_revisions(id),
+                policy_version TEXT NOT NULL,
+                review_frontier INTEGER NOT NULL CHECK (review_frontier >= 0),
+                independent_image_count INTEGER NOT NULL
+                    CHECK (independent_image_count >= 0),
+                review_count INTEGER NOT NULL CHECK (review_count >= 0),
+                deleted_count INTEGER NOT NULL CHECK (deleted_count >= 0),
+                lower_bound_score REAL,
+                expected_score REAL,
+                average_rating REAL,
+                reason TEXT NOT NULL CHECK (reason IN (
+                    'initial', 'migration_baseline', 'evidence',
+                    'catalog_cleanup_baseline'
+                )),
+                provisional INTEGER NOT NULL CHECK (provisional IN (0, 1)),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_component_promotions(
+                id, promotion_uid, component_id, revision_id,
+                previous_revision_id, policy_version, review_frontier,
+                independent_image_count, review_count, deleted_count,
+                lower_bound_score, expected_score, average_rating, reason,
+                provisional, created_at
+            )
+            SELECT id, promotion_uid, component_id, revision_id,
+                   previous_revision_id, policy_version, review_frontier,
+                   independent_image_count, review_count, deleted_count,
+                   lower_bound_score, expected_score, average_rating, reason,
+                   provisional, created_at
+            FROM prompt_component_promotions_v16
+            ORDER BY id
+            """
+        )
+        connection.execute("DROP TABLE prompt_component_promotions_v16")
+        connection.execute(
+            "CREATE INDEX idx_prompt_component_promotions_current "
+            "ON prompt_component_promotions(component_id, id DESC)"
+        )
+        connection.execute(
+            """
+            CREATE TRIGGER prompt_revision_initial_promotion
+            AFTER INSERT ON prompt_revisions
+            WHEN NOT EXISTS (
+                SELECT 1
+                FROM prompt_component_promotions AS promotion
+                WHERE promotion.component_id = NEW.component_id
+            )
+            BEGIN
+                INSERT INTO prompt_component_promotions(
+                    promotion_uid, component_id, revision_id,
+                    previous_revision_id, policy_version, review_frontier,
+                    independent_image_count, review_count, deleted_count,
+                    lower_bound_score, expected_score, average_rating,
+                    reason, provisional
+                ) VALUES (
+                    'prompt-promotion-initial-' || NEW.revision_uid,
+                    NEW.component_id,
+                    NEW.id,
+                    NULL,
+                    'prompt-guidance-v1',
+                    COALESCE((
+                        SELECT value FROM review_clock WHERE singleton_id = 1
+                    ), 0),
+                    0, 0, 0, NULL, NULL, NULL, 'initial', 1
+                );
+            END
+            """
+        )
+
+        connection.execute(
+            "ALTER TABLE playground_generator_prompt_selections "
+            "RENAME TO playground_generator_prompt_selections_v16"
+        )
+        connection.execute(
+            """
+            CREATE TABLE playground_generator_prompt_selections (
+                singleton_id INTEGER NOT NULL
+                    REFERENCES playground_generator_state(singleton_id)
+                    ON DELETE CASCADE,
+                position INTEGER NOT NULL CHECK (position >= 0),
+                kind TEXT NOT NULL CHECK (kind IN (
+                    'character', 'scene', 'atmosphere', 'lighting',
+                    'outfit', 'accessory', 'pose', 'expression',
+                    'framing', 'camera_angle', 'optical_effect'
+                )),
+                mode TEXT NOT NULL CHECK (mode IN ('fixed', 'random', 'off')),
+                component_id INTEGER REFERENCES prompt_components(id),
+                revision_id INTEGER REFERENCES prompt_revisions(id),
+                candidate_id INTEGER
+                    REFERENCES prompt_component_candidates(id),
+                PRIMARY KEY (singleton_id, position),
+                UNIQUE (singleton_id, kind),
+                CHECK (
+                    (mode = 'fixed' AND component_id IS NOT NULL
+                        AND revision_id IS NOT NULL)
+                    OR (mode != 'fixed' AND component_id IS NULL
+                        AND revision_id IS NULL AND candidate_id IS NULL)
+                )
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO playground_generator_prompt_selections(
+                singleton_id, position, kind, mode,
+                component_id, revision_id, candidate_id
+            )
+            SELECT singleton_id, 0, kind, mode,
+                   component_id, revision_id, candidate_id
+            FROM playground_generator_prompt_selections_v16
+            WHERE kind = 'character'
+            """
+        )
+        optional_kinds = (
+            "scene",
+            "atmosphere",
+            "lighting",
+            "outfit",
+            "accessory",
+            "pose",
+            "expression",
+            "framing",
+            "camera_angle",
+            "optical_effect",
+        )
+        for position, kind in enumerate(optional_kinds, start=1):
+            connection.execute(
+                """
+                INSERT INTO playground_generator_prompt_selections(
+                    singleton_id, position, kind, mode,
+                    component_id, revision_id, candidate_id
+                )
+                SELECT singleton_id, ?, ?, 'random', NULL, NULL, NULL
+                FROM playground_generator_state
+                WHERE singleton_id = 1
+                  AND EXISTS (
+                      SELECT 1
+                      FROM playground_generator_prompt_selections
+                      WHERE singleton_id = 1 AND kind = 'character'
+                  )
+                """,
+                (position, kind),
+            )
+        connection.execute(
+            "DELETE FROM playground_generator_state "
+            "WHERE singleton_id = 1 AND NOT EXISTS ("
+            "SELECT 1 FROM playground_generator_prompt_selections "
+            "WHERE singleton_id = 1 AND kind = 'character')"
+        )
+        connection.execute(
+            "DROP TABLE playground_generator_prompt_selections_v16"
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE global_prompt_policies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                policy_uid TEXT NOT NULL UNIQUE,
+                policy_key TEXT NOT NULL,
+                policy_type TEXT NOT NULL CHECK (policy_type IN (
+                    'quality', 'content_profile'
+                )),
+                revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+                name TEXT NOT NULL,
+                content_level TEXT CHECK (content_level IN (
+                    'standard', 'sexy', 'lewd', 'nude', 'explicit'
+                )),
+                active INTEGER NOT NULL DEFAULT 0 CHECK (active IN (0, 1)),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (policy_key, revision_number),
+                CHECK (
+                    (policy_type = 'quality' AND content_level IS NULL)
+                    OR (policy_type = 'content_profile'
+                        AND content_level IS NOT NULL)
+                )
+            )
+            """
+        )
+        connection.execute(
+            "CREATE UNIQUE INDEX ux_global_prompt_policy_active "
+            "ON global_prompt_policies(policy_key) WHERE active = 1"
+        )
+        connection.execute(
+            """
+            CREATE TABLE global_prompt_policy_atom_usages (
+                policy_id INTEGER NOT NULL
+                    REFERENCES global_prompt_policies(id) ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                PRIMARY KEY (policy_id, scope, position)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE generation_global_prompt_policies (
+                generation_id INTEGER NOT NULL
+                    REFERENCES generations(id) ON DELETE CASCADE,
+                policy_id INTEGER NOT NULL
+                    REFERENCES global_prompt_policies(id),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                PRIMARY KEY (generation_id, position),
+                UNIQUE (generation_id, policy_id)
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE image_catalog_compositions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                composition_uid TEXT NOT NULL UNIQUE,
+                image_id INTEGER NOT NULL
+                    REFERENCES images(id) ON DELETE CASCADE,
+                version INTEGER NOT NULL CHECK (version > 0),
+                source TEXT NOT NULL CHECK (source IN (
+                    'generation', 'catalog_cleanup', 'editorial'
+                )),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (image_id, version)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE image_catalog_composition_revisions (
+                composition_id INTEGER NOT NULL
+                    REFERENCES image_catalog_compositions(id)
+                    ON DELETE CASCADE,
+                revision_id INTEGER NOT NULL REFERENCES prompt_revisions(id),
+                position INTEGER NOT NULL CHECK (position >= 0),
+                PRIMARY KEY (composition_id, position),
+                UNIQUE (composition_id, revision_id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE current_image_catalog_compositions (
+                image_id INTEGER PRIMARY KEY
+                    REFERENCES images(id) ON DELETE CASCADE,
+                composition_id INTEGER NOT NULL UNIQUE
+                    REFERENCES image_catalog_compositions(id)
+                    ON DELETE CASCADE,
+                selected_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO image_catalog_compositions(
+                composition_uid, image_id, version, source, created_at
+            )
+            SELECT 'image-catalog-generation-' || image.image_uid,
+                   image.id, 1, 'generation', image.last_seen_at
+            FROM images AS image
+            JOIN generations AS generation ON generation.id = image.generation_id
+            WHERE generation.prompt_composition_id IS NOT NULL
+            ORDER BY image.id
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            )
+            SELECT image_composition.id, membership.revision_id,
+                   membership.position
+            FROM image_catalog_compositions AS image_composition
+            JOIN images AS image ON image.id = image_composition.image_id
+            JOIN generations AS generation ON generation.id = image.generation_id
+            JOIN prompt_composition_revisions AS membership
+              ON membership.composition_id = generation.prompt_composition_id
+            ORDER BY image.id, membership.position, membership.slot
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO current_image_catalog_compositions(
+                image_id, composition_id, selected_at
+            )
+            SELECT image_id, id, created_at
+            FROM image_catalog_compositions
+            ORDER BY image_id
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE evidence_baseline_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                baseline_uid TEXT NOT NULL UNIQUE,
+                source_database_sha256 TEXT NOT NULL,
+                source_review_frontier INTEGER NOT NULL
+                    CHECK (source_review_frontier >= 0),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE active_evidence_baseline (
+                singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                baseline_run_id INTEGER NOT NULL UNIQUE
+                    REFERENCES evidence_baseline_runs(id)
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE atom_evidence_baselines (
+                baseline_run_id INTEGER NOT NULL
+                    REFERENCES evidence_baseline_runs(id) ON DELETE CASCADE,
+                atom_id INTEGER NOT NULL REFERENCES prompt_atoms(id),
+                scope TEXT NOT NULL CHECK (scope IN ('pos', 'neg')),
+                model_branch TEXT NOT NULL,
+                weight_milli INTEGER NOT NULL CHECK (weight_milli > 0),
+                sample_count INTEGER NOT NULL CHECK (sample_count >= 0),
+                rating_sum REAL NOT NULL,
+                rating_sq_sum REAL NOT NULL,
+                PRIMARY KEY (
+                    baseline_run_id, atom_id, scope,
+                    model_branch, weight_milli
+                )
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE render_evidence_baselines (
+                baseline_run_id INTEGER NOT NULL
+                    REFERENCES evidence_baseline_runs(id) ON DELETE CASCADE,
+                model_branch TEXT NOT NULL,
+                checkpoint TEXT NOT NULL,
+                sampler TEXT NOT NULL,
+                scheduler TEXT NOT NULL,
+                steps INTEGER NOT NULL,
+                cfg_milli INTEGER NOT NULL,
+                denoise_milli INTEGER NOT NULL,
+                sample_count INTEGER NOT NULL CHECK (sample_count >= 0),
+                rating_sum REAL NOT NULL,
+                rating_sq_sum REAL NOT NULL,
+                PRIMARY KEY (
+                    baseline_run_id, model_branch, checkpoint,
+                    sampler, scheduler, steps, cfg_milli, denoise_milli
+                )
+            )
+            """
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '17' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 17")
+
+    @staticmethod
+    def _upgrade_v17_to_v18(connection: sqlite3.Connection) -> None:
+        """Separate the selectable catalog from immutable provenance."""
+        connection.execute(
+            "ALTER TABLE prompt_components ADD COLUMN catalog_role TEXT "
+            "NOT NULL DEFAULT 'catalog' CHECK (catalog_role IN ("
+            "'catalog', 'generation_provenance'))"
+        )
+        connection.execute(
+            "CREATE INDEX idx_prompt_components_catalog_role "
+            "ON prompt_components(catalog_role, kind, archived_at)"
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '18' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 18")
+
+    @staticmethod
     def _backfill_exact_generation_prompt_groups(
         connection: sqlite3.Connection,
     ) -> None:
@@ -2784,6 +3262,8 @@ class CanonicalSchemaManager:
             ),
         )
         for position, selection in enumerate(state.selections):
+            if selection.kind != "character":
+                continue
             component_id = None
             revision_id = None
             if selection.mode == "fixed":
@@ -2872,7 +3352,41 @@ class CanonicalSchemaManager:
                 "Legacy Generator state is missing generator_v2"
             )
         try:
-            return GeneratorStateSnapshot.from_mapping(payload["generator_v2"])
+            state = dict(payload["generator_v2"])
+            selections = state.get("selections")
+            if isinstance(selections, list):
+                characters = [
+                    item
+                    for item in selections
+                    if isinstance(item, dict)
+                    and item.get("kind") == "character"
+                ]
+                if len(characters) == 1:
+                    state["selections"] = [
+                        characters[0],
+                        *(
+                            {
+                                "kind": kind,
+                                "mode": "random",
+                                "component_uid": None,
+                                "revision_uid": None,
+                                "candidate_uid": None,
+                            }
+                            for kind in (
+                                "scene",
+                                "atmosphere",
+                                "lighting",
+                                "outfit",
+                                "accessory",
+                                "pose",
+                                "expression",
+                                "framing",
+                                "camera_angle",
+                                "optical_effect",
+                            )
+                        ),
+                    ]
+            return GeneratorStateSnapshot.from_mapping(state)
         except GeneratorStateValidationError as error:
             raise CanonicalSchemaValidationError(
                 f"Legacy Generator state is invalid: {error}"
@@ -3740,6 +4254,135 @@ class CanonicalSchemaManager:
         if int(mismatched):
             raise CanonicalSchemaValidationError(
                 "Manual prompt variants contain cross-component references"
+            )
+
+    @classmethod
+    def _validate_catalog_normalization_v17(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        expected_kinds = (
+            "character",
+            "scene",
+            "atmosphere",
+            "lighting",
+            "outfit",
+            "accessory",
+            "pose",
+            "expression",
+            "framing",
+            "camera_angle",
+            "optical_effect",
+        )
+        state_exists = connection.execute(
+            "SELECT 1 FROM playground_generator_state WHERE singleton_id = 1"
+        ).fetchone()
+        if state_exists is not None:
+            rows = connection.execute(
+                "SELECT position, kind, mode "
+                "FROM playground_generator_prompt_selections "
+                "WHERE singleton_id = 1 ORDER BY position"
+            ).fetchall()
+            if tuple(str(row[1]) for row in rows) != expected_kinds:
+                raise CanonicalSchemaValidationError(
+                    "Generator state must contain every normalized prompt kind"
+                )
+            if str(rows[0][2]) == "off":
+                raise CanonicalSchemaValidationError(
+                    "Generator character selection cannot be disabled"
+                )
+
+        invalid_policy = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM global_prompt_policies
+            WHERE (policy_type = 'quality' AND content_level IS NOT NULL)
+               OR (policy_type = 'content_profile' AND content_level IS NULL)
+            """
+        ).fetchone()[0]
+        if int(invalid_policy):
+            raise CanonicalSchemaValidationError(
+                "Global prompt policies contain invalid policy scopes"
+            )
+
+        mismatched_current = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM current_image_catalog_compositions AS current
+            JOIN image_catalog_compositions AS composition
+              ON composition.id = current.composition_id
+            WHERE composition.image_id != current.image_id
+            """
+        ).fetchone()[0]
+        if int(mismatched_current):
+            raise CanonicalSchemaValidationError(
+                "Current image catalog compositions reference another image"
+            )
+
+        duplicate_kinds = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM (
+                SELECT membership.composition_id, component.kind
+                FROM image_catalog_composition_revisions AS membership
+                JOIN prompt_revisions AS revision
+                  ON revision.id = membership.revision_id
+                JOIN prompt_components AS component
+                  ON component.id = revision.component_id
+                GROUP BY membership.composition_id, component.kind
+                HAVING COUNT(*) > 1
+            )
+            """
+        ).fetchone()[0]
+        if int(duplicate_kinds):
+            raise CanonicalSchemaValidationError(
+                "Image catalog compositions contain duplicate prompt kinds"
+            )
+
+        invalid_promotion_reason = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM prompt_component_promotions
+            WHERE reason NOT IN (
+                'initial', 'migration_baseline', 'evidence',
+                'catalog_cleanup_baseline'
+            )
+            """
+        ).fetchone()[0]
+        if int(invalid_promotion_reason):
+            raise CanonicalSchemaValidationError(
+                "Prompt promotions contain an invalid reason"
+            )
+
+    @classmethod
+    def _validate_catalog_roles_v18(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        columns = cls._table_column_rows(connection, "prompt_components")
+        missing = sorted(
+            _REQUIRED_PROMPT_COMPONENT_COLUMNS_V18 - columns.keys()
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Prompt catalog roles are missing required columns: "
+                + ", ".join(missing)
+            )
+        invalid = connection.execute(
+            "SELECT COUNT(*) FROM prompt_components "
+            "WHERE catalog_role NOT IN ('catalog', 'generation_provenance')"
+        ).fetchone()[0]
+        if int(invalid):
+            raise CanonicalSchemaValidationError(
+                "Prompt components contain invalid catalog roles"
+            )
+        invalid_character = connection.execute(
+            "SELECT COUNT(*) FROM prompt_components "
+            "WHERE kind = 'character' AND catalog_role != 'catalog'"
+        ).fetchone()[0]
+        if int(invalid_character):
+            raise CanonicalSchemaValidationError(
+                "Character components cannot be provenance-only"
             )
 
     @classmethod

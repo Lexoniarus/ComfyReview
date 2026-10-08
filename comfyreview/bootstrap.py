@@ -105,6 +105,7 @@ from comfyreview.repositories.sqlite import (
     SqliteGenerationQueryRepository,
     SqliteGenerationRepository,
     SqliteGeneratorStateRepository,
+    SqliteGlobalPromptPolicyRepository,
     SqliteImageContentLevelRepository,
     SqliteImageContextRepository,
     SqliteImageFileRepository,
@@ -347,6 +348,9 @@ def build_application_container(
         renderer=prompt_renderer,
         preferences=preferences_repository,
         content_policy=PromptContentPolicy(),
+        global_policies=SqliteGlobalPromptPolicyRepository(
+            configured.canonical_database_path
+        ),
     )
     card_battler_model_resource = SqliteCardBattlerModelResource(
         configured.card_battler_model_database_path,

@@ -144,8 +144,10 @@ class SqliteRenderSetupQuery:
                 JOIN images AS image ON image.png_path = rating.png_path
                 JOIN generations AS generation
                     ON generation.id = image.generation_id
-                LEFT JOIN prompt_compositions AS composition
-                    ON composition.id = generation.prompt_composition_id
+                LEFT JOIN current_image_catalog_compositions AS current_catalog
+                    ON current_catalog.image_id = image.id
+                LEFT JOIN image_catalog_compositions AS composition
+                    ON composition.id = current_catalog.composition_id
                 LEFT JOIN image_review_summary AS summary
                     ON summary.image_id = image.id
                 LEFT JOIN generation_sampler_stages AS stage

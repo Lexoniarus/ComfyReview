@@ -1,5 +1,12 @@
 """Explicit offline import and audit adapters."""
 
+from comfyreview.importers.catalog_normalization import (
+    CatalogNormalizationAuditor,
+    CatalogNormalizationAuditResult,
+    CatalogNormalizationRebuilder,
+    CatalogNormalizationRebuildResult,
+    CatalogNormalizationValidationError,
+)
 from comfyreview.importers.content_levels import (
     ContentLevelAuditor,
     ContentLevelAuditResult,
@@ -56,6 +63,11 @@ from comfyreview.importers.legacy_provenance import (
 )
 
 __all__ = [
+    "CatalogNormalizationAuditor",
+    "CatalogNormalizationAuditResult",
+    "CatalogNormalizationRebuilder",
+    "CatalogNormalizationRebuildResult",
+    "CatalogNormalizationValidationError",
     "ContentLevelAuditor",
     "ContentLevelAuditResult",
     "ContentLevelRecovery",

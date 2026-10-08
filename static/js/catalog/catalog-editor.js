@@ -5,11 +5,15 @@ import { CatalogEvidenceView } from "./catalog-evidence-view.js";
 const editableKinds = [
   ["character", "Charakter"],
   ["scene", "Szene"],
+  ["atmosphere", "Atmosphäre"],
+  ["lighting", "Licht"],
   ["outfit", "Outfit"],
+  ["accessory", "Accessoire"],
   ["pose", "Pose"],
   ["expression", "Ausdruck"],
-  ["lighting", "Licht"],
-  ["modifier", "Modifier"],
+  ["framing", "Bildausschnitt"],
+  ["camera_angle", "Kamerawinkel"],
+  ["optical_effect", "Optischer Effekt"],
 ];
 
 /** @type {Array<[string, string]>} */

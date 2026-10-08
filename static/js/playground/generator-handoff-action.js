@@ -1,5 +1,6 @@
 const labels = Object.freeze({
   prompt: "Prompt & LoRAs übernehmen",
+  best_image_prompt: "Prompt & LoRAs des Bestbilds übernehmen",
   scope: "Prompt & LoRAs übernehmen",
   composition: "Prompt & LoRAs übernehmen",
   combination: "Prompt & LoRAs übernehmen",

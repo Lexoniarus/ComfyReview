@@ -16,11 +16,15 @@ export const parameterLabels = new Map([
 export const scopeKindLabels = new Map([
   ["character", "Charakter"],
   ["scene", "Szene"],
+  ["atmosphere", "Atmosphäre"],
+  ["lighting", "Licht"],
   ["outfit", "Outfit"],
+  ["accessory", "Accessoire"],
   ["pose", "Pose"],
   ["expression", "Ausdruck"],
-  ["lighting", "Licht"],
-  ["modifier", "Modifier"],
+  ["framing", "Bildausschnitt"],
+  ["camera_angle", "Kamerawinkel"],
+  ["optical_effect", "Optischer Effekt"],
 ]);
 
 /** @param {unknown} value */

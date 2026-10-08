@@ -7,6 +7,7 @@ import {
   readPlaygroundIntent,
 } from "../../static/js/playground/playground-intent.js";
 import { GeneratorStatePersistence } from "../../static/js/playground/generator-state-persistence.js";
+import { generatorPromptKinds } from "../../static/js/playground/prompt-kind-contract.js";
 import { VariantSession } from "../../static/js/playground/variant-session.js";
 import { PlaygroundController } from "../../static/js/surfaces/playground-controller.js";
 
@@ -304,51 +305,23 @@ describe("PlaygroundController", () => {
   });
 
   it("applies typed image prompt selections and all canonical LoRAs without creating a draft", async () => {
-    const promptSelectionState = {
-      selections: [
+    const fixedSelections = new Map([
+      [
+        "character",
         {
-          kind: "character",
-          mode: "fixed",
           component_uid: "character-a",
           revision_uid: "character-rev-1",
         },
-        {
-          kind: "scene",
-          mode: "fixed",
-          component_uid: "scene-a",
-          revision_uid: "scene-rev-3",
-        },
-        {
-          kind: "outfit",
-          mode: "off",
-          component_uid: null,
-          revision_uid: null,
-        },
-        {
-          kind: "pose",
-          mode: "off",
-          component_uid: null,
-          revision_uid: null,
-        },
-        {
-          kind: "expression",
-          mode: "off",
-          component_uid: null,
-          revision_uid: null,
-        },
-        {
-          kind: "lighting",
-          mode: "off",
-          component_uid: null,
-          revision_uid: null,
-        },
-        {
-          kind: "modifier",
-          mode: "off",
-          component_uid: null,
-          revision_uid: null,
-        },
       ],
+      ["scene", { component_uid: "scene-a", revision_uid: "scene-rev-3" }],
+    ]);
+    const promptSelectionState = {
+      selections: generatorPromptKinds.map((kind) => ({
+        kind,
+        mode: fixedSelections.has(kind) ? "fixed" : "off",
+        component_uid: fixedSelections.get(kind)?.component_uid || null,
+        revision_uid: fixedSelections.get(kind)?.revision_uid || null,
+      })),
       loras: [
         {
           lora_uid: "lora-style",
@@ -959,7 +932,7 @@ describe("PlaygroundController", () => {
           mode: "fixed",
         },
         {
-          kind: "modifier",
+          kind: "optical_effect",
           component_uid: null,
           revision_uid: null,
           mode: "off",
@@ -1028,10 +1001,10 @@ describe("PlaygroundController", () => {
           revision_uid: "scene-revision-old",
         },
         {
-          kind: "modifier",
+          kind: "optical_effect",
           mode: "fixed",
-          component_uid: "modifier-a",
-          revision_uid: "modifier-revision-a",
+          component_uid: "optical-effect-a",
+          revision_uid: "optical-effect-revision-a",
         },
       ],
       loras: [],
@@ -1065,7 +1038,7 @@ describe("PlaygroundController", () => {
       revision_uid: "scene-revision-historical",
     });
     expect(byKind.get("character")).toEqual(savedState.selections[0]);
-    expect(byKind.get("modifier")).toEqual(savedState.selections[2]);
+    expect(byKind.get("optical_effect")).toEqual(savedState.selections[2]);
     expect(fixture.urlCleaner.removeHandoff).toHaveBeenCalledOnce();
 
     await fixture.controller.prepare();
@@ -1579,7 +1552,7 @@ function createFixture(options = {}) {
           selection,
         ]),
       );
-      if (incomingSelections.length === 7) {
+      if (incomingSelections.length === generatorPromptKinds.length) {
         currentByKind.clear();
       }
       for (const selection of incomingSelections) {

@@ -21,11 +21,15 @@ class ScopeKind(StrEnum):
 
     CHARACTER = "character"
     SCENE = "scene"
+    ATMOSPHERE = "atmosphere"
+    LIGHTING = "lighting"
     OUTFIT = "outfit"
+    ACCESSORY = "accessory"
     POSE = "pose"
     EXPRESSION = "expression"
-    LIGHTING = "lighting"
-    MODIFIER = "modifier"
+    FRAMING = "framing"
+    CAMERA_ANGLE = "camera_angle"
+    OPTICAL_EFFECT = "optical_effect"
 
 
 class ImageClassification(StrEnum):

@@ -78,6 +78,7 @@ WHERE revision.revision_number = (
     FROM prompt_revisions AS candidate
     WHERE candidate.component_id = component.id
 )
+AND component.catalog_role = 'catalog'
 """
 )
 
@@ -178,7 +179,8 @@ class SqlitePromptCatalogRepository:
         try:
             connection.execute("BEGIN IMMEDIATE")
             component_row = connection.execute(
-                "SELECT id FROM prompt_components WHERE component_uid = ?",
+                "SELECT id FROM prompt_components "
+                "WHERE component_uid = ? AND catalog_role = 'catalog'",
                 (component_uid,),
             ).fetchone()
             if component_row is None:
@@ -247,7 +249,7 @@ class SqlitePromptCatalogRepository:
                 """
                 UPDATE prompt_components
                 SET name = ?, tags = ?, notes = ?, updated_at = datetime('now')
-                WHERE component_uid = ?
+                WHERE component_uid = ? AND catalog_role = 'catalog'
                 """,
                 (
                     command.name,
@@ -287,7 +289,7 @@ class SqlitePromptCatalogRepository:
                 UPDATE prompt_components
                 SET archived_at = CASE WHEN ? THEN datetime('now') ELSE NULL END,
                     updated_at = datetime('now')
-                WHERE component_uid = ?
+                WHERE component_uid = ? AND catalog_role = 'catalog'
                 """,
                 (int(archived), component_uid),
             )
@@ -311,7 +313,8 @@ class SqlitePromptCatalogRepository:
         try:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
-                "SELECT id FROM prompt_components WHERE component_uid = ?",
+                "SELECT id FROM prompt_components "
+                "WHERE component_uid = ? AND catalog_role = 'catalog'",
                 (metadata.component_uid,),
             ).fetchone()
             if row is None:
@@ -393,6 +396,7 @@ class SqlitePromptCatalogRepository:
                   ON revision.component_id = component.id
                 WHERE component.component_uid = ?
                   AND revision.revision_uid = ?
+                  AND component.catalog_role = 'catalog'
                 """,
                 (component_uid, source_revision_uid),
             ).fetchone()
@@ -544,11 +548,25 @@ class SqlitePromptCatalogRepository:
         self,
         composition_uid: str,
     ) -> tuple[PromptComponent, ...]:
-        """Read exact ordered revisions for one canonical composition."""
+        """Read exact ordered revisions for one current or authored composition."""
         connection = connect_read_only(self._database_path, rows=True)
         try:
             rows = connection.execute(
                 """
+                SELECT revision.revision_uid
+                FROM image_catalog_compositions AS composition
+                JOIN image_catalog_composition_revisions AS membership
+                    ON membership.composition_id = composition.id
+                JOIN prompt_revisions AS revision
+                    ON revision.id = membership.revision_id
+                WHERE composition.composition_uid = ?
+                ORDER BY membership.position
+                """,
+                (str(composition_uid or "").strip(),),
+            ).fetchall()
+            if not rows:
+                rows = connection.execute(
+                    """
                 SELECT revision.revision_uid
                 FROM prompt_compositions AS composition
                 JOIN prompt_composition_revisions AS membership
@@ -558,8 +576,8 @@ class SqlitePromptCatalogRepository:
                 WHERE composition.composition_uid = ?
                 ORDER BY membership.position, membership.slot
                 """,
-                (str(composition_uid or "").strip(),),
-            ).fetchall()
+                    (str(composition_uid or "").strip(),),
+                ).fetchall()
             return self._components_for_revisions(
                 connection,
                 tuple(str(row["revision_uid"]) for row in rows),

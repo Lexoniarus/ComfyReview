@@ -72,9 +72,11 @@ does not choose them.
 
 Profiles are not part of the active generation flow. The browser sends a
 format/orientation (`2:3`, `3:2`, `16:9`, `9:16`, `1:1`) and output class
-(`720`, `1080`, `2160`). The geometry policy resolves both a validated latent
-canvas and one of the 15 fixed target dimensions without crop before
-persistence.
+(`720`, `1080`, `2160`). The stable `2160` wire value represents maximum
+quality and retains the format's complete 4x AnimeSharp dimensions; the lower
+classes remain explicit downscaled outputs. The geometry policy resolves both
+a validated latent canvas and one of the 15 fixed target dimensions without
+crop before persistence.
 
 The default-character v4 graph fixes this path:
 

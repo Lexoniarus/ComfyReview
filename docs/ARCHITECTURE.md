@@ -1,10 +1,10 @@
 # ComfyReview Architecture
 
 Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, schema-v16 application support and Frontend V2
+analytics, native Generation, schema-v18 application support and Frontend V2
 including Settings are implemented and integrated on
-`refactor/review-boundary`, 2026-10-07. Final user acceptance and eventual
-integration into `master` remain open.
+`fix/playground-combination-diversity`, 2026-10-08. The private editorial
+mapping and production catalog cutover remain open.
 
 ## 1. Product boundary
 
@@ -49,6 +49,14 @@ canonical schema. Root `app.py` and `main.py` remain compatible entry points.
 Legacy database paths live in a separate `LegacyMigrationSettings` object used
 only by explicit audit, import and maintenance commands.
 
+Catalog-normalization rehearsal uses that same production composition root.
+An operator points `COMFYREVIEW_DATABASE` at the distinct rebuilt database,
+selects a separate local port and starts `python main.py`. The resulting Review,
+Ranking, Arena, Playground, Handoff, Scope and Analytics behavior therefore
+uses the real repositories, lifespan and worker rather than a migration-only
+inspection path. A rehearsal database that receives test writes is disposable
+and cannot be installed; accepted data is rebuilt fresh before replacement.
+
 ### 2.1 Card Battler model resource
 
 The pre-persistence Card Battler implementation reads design and rules facts
@@ -71,7 +79,7 @@ the post-proof persistence phase.
 
 ## 3. Canonical identity and runtime data
 
-The canonical database has an explicit schema version. Schema v16 is the active
+The canonical database has an explicit schema version. Schema v18 is the active
 shape: it retains the v4 identity/review cutover, adds the v5 revisioned prompt
 catalog, records v6 native output roles/content hashes, normalizes ordered
 prompt-revision atom usages in v7 and adds workspace preferences, generation
@@ -84,9 +92,11 @@ and `generation_uid` values are identity; PNG and optional sidecar paths are
 mutable attributes.
 
 Schema v11 adds only `image_geometry_projection`. It records actual PNG
-dimensions, classified format/orientation, nearest 720/1080/2160 short-edge
-class, the matched target dimensions, exact/approximate state and classifier
-version. It is derived, rebuildable and never replaces image UID identity.
+dimensions, classified format/orientation, the nearest nominal 720/1080/2160
+compatibility class, the matched target dimensions, exact/approximate state
+and classifier version. The highest class preserves the format's complete 4x
+AnimeSharp dimensions. The projection is derived, rebuildable and never
+replaces image UID identity.
 
 Schema v12 extends the existing stable LoRA identity into one canonical
 catalog. `lora_revisions` is immutable and owns default Model/CLIP strengths
@@ -112,6 +122,15 @@ append-only promotion facts. Schema v16 adds append-only manual-variant
 selection facts without changing candidate recipe identity. Sections 10.2 and
 10.3 describe the active guidance and analytics boundaries.
 
+Schema v17 adds versioned current image catalog compositions, versioned global
+quality/content policies and canonical atom/render evidence baselines. The
+original generation composition and full prompt snapshots remain immutable;
+Handoff, scopes, analytics, rating attribution and promotion consume the
+current image composition. Schema v18 adds `prompt_components.catalog_role` so
+superseded non-Character rows can remain as immutable generation provenance
+without appearing in the selectable catalog. Character rows may never be
+provenance-only.
+
 Canonical v4 facts include:
 
 - images and generation provenance;
@@ -134,7 +153,7 @@ remain derived immutable snapshots, not writable API inputs.
 
 Schema v8 introduced workspace preferences and generation profiles. The
 profile tables and generation profile columns remain dormant migration
-compatibility in v16, but no active container service, V2 endpoint, Settings
+compatibility in v18, but no active container service, V2 endpoint, Settings
 surface or Playground flow reads them. Generations still record the exact
 LoRAs they actually used. A loader is normalized only when a non-zero model or
 CLIP branch reaches a consumed sampler input. Historical `loras_json` and raw
@@ -148,7 +167,7 @@ read model. Services and browser surfaces do not duplicate OR/AND or content
 visibility semantics, and no path, prompt substring or image inspection is
 used to infer a missing level at runtime.
 
-Schema v10 separates automatic and manual classification. In the current v16
+Schema v10 separates automatic and manual classification. In the current v18
 runtime, automatic generation classification is the strictest level from
 authored prompt-component tags and the content-level snapshots of
 graph-effective, trigger-evidenced LoRA revisions. A current image override,
@@ -383,10 +402,11 @@ matching do not exist.
 
 Blueprint v4 maps `output_width` and `output_height` roles into a fixed
 AnimeSharp path: `VAEDecode -> 4x-AnimeSharp -> ImageSharpen -> Lanczos
-ImageScale -> SaveImage`. `GenerationGeometryPolicy` derives those target
-dimensions from a 720p, 1080p or 2160p short edge without cropping. Required
-nodes and `example-upscaler.pth` are discovered at the provider boundary and are
-validated before persistence or submission.
+ImageScale -> SaveImage`. `GenerationGeometryPolicy` derives 720p and 1080p
+targets or retains the complete 4x AnimeSharp dimensions for the highest
+quality class without cropping. Required nodes and `example-upscaler.pth` are
+discovered at the provider boundary and are validated before persistence or
+submission.
 
 ## 9. Schema lifecycle
 
@@ -511,12 +531,16 @@ The canonical cutover is intentionally not the end of the wider refactor.
   shared cards and inspectors show the same LoRA factors that the handoff
   applies; raw or triggerless loader provenance is not presented as usage.
   Analytics Scope actions carry only a typed component/revision source and
-  patch that prompt kind; Analytics Composition actions carry only the
-  composition UID, resolve its exact ordered revisions through one
-  Application `PromptSelection` operation, and replace the complete prompt
-  selection. The Composition draft renderer and API handoff project this same
-  validated selection, including active-component, content-level, historical
-  revision, Character and unique-kind rules. Multiple typed prompt sources in
+  patch that prompt kind. Aggregate Prompt Combination and Render Analytics
+  cards carry the stable image UID of their first server-ranked best image;
+  the normal image handoff then replaces the complete prompt selection and
+  ordered LoRA stack from that exact image. Render settings and individual
+  render parameters remain separate typed actions. Authored composition UIDs
+  and current image-catalog composition UIDs can both resolve their exact
+  ordered revisions through the Application `PromptSelection` operation. The
+  Composition draft renderer and API handoff project this same validated
+  selection, including active-component, content-level, historical revision,
+  Character and unique-kind rules. Multiple typed prompt sources in
   one intent are rejected visibly at the beginning of controller startup,
   before editor rendering, saved-state restore, handoff, persistence or
   cleanup. Both single-source Scope and Composition actions apply through the
