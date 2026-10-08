@@ -220,6 +220,13 @@ class CatalogNormalizationRebuilder:
                 raise CatalogNormalizationValidationError(
                     f"Unsupported source kind cannot be retained: {uid}"
                 )
+            if action == "keep":
+                for revision in source_non_character[uid]["revisions"]:
+                    _validate_atoms(
+                        revision["atoms"],
+                        owner=uid,
+                        allow_evidence=False,
+                    )
             if action == "drop" and targets:
                 raise CatalogNormalizationValidationError(
                     f"Dropped component cannot have targets: {uid}"

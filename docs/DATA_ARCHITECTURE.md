@@ -425,10 +425,12 @@ Audit reads the source transactionally, inventories all components, revisions,
 atoms, live/deleted images and original prompts, and writes a hash-bound report
 plus an ignored editorial mapping draft. Rebuild requires every source
 component and live image to be marked reviewed, rejects unsupported kinds or
-duplicate image groups, locks and re-hashes the source, upgrades only a
-temporary copy, and writes a distinct output database. `--replace` installs
-that database atomically after schema and cutover validation. Per the explicit
-operator decision for this one workflow, it creates no additional backup.
+duplicate image groups, and applies the same atom validation to retained
+revisions as to newly authored targets, including rejection of unresolved
+`or` alternatives. It locks and re-hashes the source, upgrades only a temporary
+copy, and writes a distinct output database. `--replace` installs that database
+atomically after schema and cutover validation. Per the explicit operator
+decision for this one workflow, it creates no additional backup.
 
 The first real output is an acceptance rehearsal, not a promotion candidate.
 It is selected with `COMFYREVIEW_DATABASE` and served on a separate port by

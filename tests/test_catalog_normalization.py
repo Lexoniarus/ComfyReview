@@ -795,3 +795,47 @@ def test_catalog_rebuild_rejects_or_alternatives_in_target_atoms(
             mapping_path,
             tmp_path / "output.sqlite3",
         )
+
+
+def test_catalog_rebuild_rejects_or_alternatives_in_retained_components(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "source.sqlite3"
+    CanonicalSchemaManager(database).prepare_startup()
+    with sqlite3.connect(database) as connection:
+        _insert_component(
+            connection,
+            uid="ambiguous-outfit",
+            kind="outfit",
+            name="Ambiguous Outfit",
+            atom="skirt or jeans",
+        )
+    audit_path = tmp_path / "audit.json"
+    mapping_path = tmp_path / "mapping.json"
+    CatalogNormalizationAuditor(database).audit(audit_path, mapping_path)
+    mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+    mapping["complete"] = True
+    mapping["source_components"][0]["reviewed"] = True
+    next(
+        item
+        for item in mapping["global_policies"]
+        if item["policy_type"] == "quality"
+    )["atoms"] = [
+        {
+            "scope": "neg",
+            "position": 0,
+            "text": "bad anatomy",
+            "weight_milli": 1000,
+        }
+    ]
+    mapping_path.write_text(json.dumps(mapping), encoding="utf-8")
+
+    with pytest.raises(
+        CatalogNormalizationValidationError,
+        match="unresolved or-alternative",
+    ):
+        CatalogNormalizationRebuilder(database).rebuild(
+            audit_path,
+            mapping_path,
+            tmp_path / "output.sqlite3",
+        )
