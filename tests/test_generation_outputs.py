@@ -404,6 +404,98 @@ def test_sqlite_output_repository_rejects_invalid_binding_payload(
         )
 
 
+def test_output_save_initializes_but_never_replaces_current_catalog_composition(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    _generation(
+        database_path,
+        {"output_bindings": [{"role": "primary", "node_id": "save"}]},
+    )
+    with sqlite3.connect(database_path) as connection:
+        component_id = connection.execute(
+            """
+            INSERT INTO prompt_components(
+                component_uid, kind, component_key, name, tags, notes
+            ) VALUES ('character-a', 'character', 'character-a',
+                      'Aiko', '[]', '')
+            RETURNING id
+            """
+        ).fetchone()[0]
+        revision_id = connection.execute(
+            """
+            INSERT INTO prompt_revisions(
+                revision_uid, component_id, revision_number,
+                positive_text, negative_text, content_hash
+            ) VALUES ('character-a-1', ?, 1, 'Aiko', '', 'character-a-1')
+            RETURNING id
+            """,
+            (component_id,),
+        ).fetchone()[0]
+        composition_id = connection.execute(
+            "INSERT INTO prompt_compositions(composition_uid) "
+            "VALUES ('generation-composition') RETURNING id"
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO prompt_composition_revisions(
+                composition_id, revision_id, slot, position
+            ) VALUES (?, ?, 'character', 0)
+            """,
+            (composition_id, revision_id),
+        )
+        connection.execute(
+            "UPDATE generations SET prompt_composition_id = ? WHERE id = 1",
+            (composition_id,),
+        )
+
+    repository = SqliteGenerationOutputRepository(database_path)
+    output = GenerationOutput(
+        "image-1", "primary", "save", 0, tmp_path / "image.png", "hash"
+    )
+    repository.save_outputs("generation-1", (output,))
+
+    with sqlite3.connect(database_path) as connection:
+        generated_composition_id = connection.execute(
+            "SELECT composition_id FROM current_image_catalog_compositions"
+        ).fetchone()[0]
+        editorial_composition_id = connection.execute(
+            """
+            INSERT INTO image_catalog_compositions(
+                composition_uid, image_id, version, source
+            ) VALUES ('editorial-image-1', 1, 2, 'editorial')
+            RETURNING id
+            """
+        ).fetchone()[0]
+        connection.execute(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            ) VALUES (?, ?, 0)
+            """,
+            (editorial_composition_id, revision_id),
+        )
+        connection.execute(
+            """
+            UPDATE current_image_catalog_compositions
+            SET composition_id = ? WHERE image_id = 1
+            """,
+            (editorial_composition_id,),
+        )
+
+    repository.save_outputs("generation-1", (output,))
+
+    with sqlite3.connect(database_path) as connection:
+        assert (
+            connection.execute(
+                "SELECT composition_id FROM current_image_catalog_compositions"
+            ).fetchone()[0]
+            == editorial_composition_id
+        )
+        assert editorial_composition_id != generated_composition_id
+
+
 def test_sqlite_output_repository_requires_every_expected_node(
     tmp_path: Path,
 ) -> None:

@@ -237,11 +237,12 @@ def _scope_statistics_base(filter_model: bool, filter_kind: bool) -> str:
             FROM prompt_components AS component
             JOIN prompt_revisions AS revision
                 ON revision.component_id = component.id
-            JOIN prompt_composition_revisions AS membership
+            JOIN image_catalog_composition_revisions AS membership
                 ON membership.revision_id = revision.id
-            JOIN generations AS generation
-                ON generation.prompt_composition_id = membership.composition_id
-            JOIN images AS image ON image.generation_id = generation.id
+            JOIN current_image_catalog_compositions AS current_catalog
+                ON current_catalog.composition_id = membership.composition_id
+            JOIN images AS image ON image.id = current_catalog.image_id
+            JOIN generations AS generation ON generation.id = image.generation_id
             JOIN image_review_summary AS summary ON summary.image_id = image.id
             WHERE image.deleted_at IS NULL
               AND {content_visibility_predicate()}
@@ -303,10 +304,11 @@ def _composition_statistics_base(filter_model: bool) -> str:
                 image.id AS image_id,
                 summary.rating_count,
                 summary.rating_sum
-            FROM prompt_compositions AS composition
-            JOIN generations AS generation
-                ON generation.prompt_composition_id = composition.id
-            JOIN images AS image ON image.generation_id = generation.id
+            FROM image_catalog_compositions AS composition
+            JOIN current_image_catalog_compositions AS current_catalog
+                ON current_catalog.composition_id = composition.id
+            JOIN images AS image ON image.id = current_catalog.image_id
+            JOIN generations AS generation ON generation.id = image.generation_id
             JOIN image_review_summary AS summary ON summary.image_id = image.id
             WHERE image.deleted_at IS NULL
               AND {content_visibility_predicate()}
@@ -360,11 +362,11 @@ def _composition_component_names(
         SELECT
             membership.composition_id,
             component.name
-        FROM prompt_composition_revisions AS membership
+        FROM image_catalog_composition_revisions AS membership
         JOIN prompt_revisions AS revision ON revision.id = membership.revision_id
         JOIN prompt_components AS component ON component.id = revision.component_id
         WHERE membership.composition_id IN ({placeholders})
-        ORDER BY membership.composition_id, membership.position, membership.slot
+        ORDER BY membership.composition_id, membership.position
         """,
         composition_ids,
     ).fetchall()
@@ -411,11 +413,12 @@ def _scope_example_images(
             FROM prompt_components AS component
             JOIN prompt_revisions AS revision
                 ON revision.component_id = component.id
-            JOIN prompt_composition_revisions AS membership
+            JOIN image_catalog_composition_revisions AS membership
                 ON membership.revision_id = revision.id
-            JOIN generations AS generation
-                ON generation.prompt_composition_id = membership.composition_id
-            JOIN images AS image ON image.generation_id = generation.id
+            JOIN current_image_catalog_compositions AS current_catalog
+                ON current_catalog.composition_id = membership.composition_id
+            JOIN images AS image ON image.id = current_catalog.image_id
+            JOIN generations AS generation ON generation.id = image.generation_id
             JOIN image_review_summary AS summary ON summary.image_id = image.id
             WHERE component.id IN ({placeholders})
               AND image.deleted_at IS NULL
@@ -463,10 +466,11 @@ def _composition_example_images(
                         summary.rating_count DESC,
                         image.image_uid
                 ) AS example_rank
-            FROM prompt_compositions AS composition
-            JOIN generations AS generation
-                ON generation.prompt_composition_id = composition.id
-            JOIN images AS image ON image.generation_id = generation.id
+            FROM image_catalog_compositions AS composition
+            JOIN current_image_catalog_compositions AS current_catalog
+                ON current_catalog.composition_id = composition.id
+            JOIN images AS image ON image.id = current_catalog.image_id
+            JOIN generations AS generation ON generation.id = image.generation_id
             JOIN image_review_summary AS summary ON summary.image_id = image.id
             WHERE composition.id IN ({placeholders})
               AND image.deleted_at IS NULL

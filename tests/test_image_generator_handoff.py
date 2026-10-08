@@ -213,6 +213,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
             ),
         ),
         prompt_snapshot=replace(image.prompt_snapshot, draft_overridden=False),
+        prompt_evidence=None,
         geometry=None,
     )
     handoff = ImageGeneratorHandoffService(
@@ -224,7 +225,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
     assert handoff.prompt_setup.component_uids == ("character-a",)
     assert handoff.prompt_setup.issues == (
         "lora_unavailable:missing.safetensors",
-        "unattributed_prompt_atoms",
+        "catalog_composition_unavailable",
     )
     assert handoff.render_setup.applicable is False
     assert handoff.render_setup.seed is None
@@ -249,7 +250,7 @@ def test_image_handoff_reports_unavailable_legacy_and_multistage_facts() -> (
     ).get("image-1")
     assert offline.prompt_setup.issues == (
         "capabilities_unavailable",
-        "unattributed_prompt_atoms",
+        "catalog_composition_unavailable",
     )
     assert offline.render_setup.applicable is False
 
@@ -330,6 +331,9 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
         "outfit-revision-3",
         "optical-effect-revision-1",
     )
+    assert tuple(
+        atom.text for atom in handoff.prompt_setup.positive_atoms
+    ) == ("hero",)
     with pytest.raises(FrozenInstanceError):
         handoff.prompt_setup.selections[0].__setattr__("position", 99)
 

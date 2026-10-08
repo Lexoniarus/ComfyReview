@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 from comfyreview.application import (
@@ -75,7 +76,7 @@ class SqliteGenerationOutputRepository:
                     (generation_id, output.node_id, output.output_index),
                 ).fetchone()
                 if existing is None:
-                    connection.execute(
+                    cursor = connection.execute(
                         """
                         INSERT INTO images(
                             image_uid, generation_id, output_node_id,
@@ -93,6 +94,7 @@ class SqliteGenerationOutputRepository:
                             output.content_hash,
                         ),
                     )
+                    image_id = int(cursor.lastrowid or 0)
                 elif (
                     str(existing["image_uid"]) != output.image_uid
                     or str(existing["output_role"]) != output.role
@@ -102,6 +104,19 @@ class SqliteGenerationOutputRepository:
                     raise RuntimeError(
                         f"Generation output identity conflict at {output.node_id}:{output.output_index}"
                     )
+                else:
+                    image_id = int(
+                        connection.execute(
+                            "SELECT id FROM images WHERE image_uid = ?",
+                            (output.image_uid,),
+                        ).fetchone()["id"]
+                    )
+                self._ensure_current_catalog_composition(
+                    connection,
+                    image_id=image_id,
+                    image_uid=output.image_uid,
+                    generation_id=generation_id,
+                )
             connection.commit()
             return outputs
         except Exception:
@@ -109,6 +124,59 @@ class SqliteGenerationOutputRepository:
             raise
         finally:
             connection.close()
+
+    @staticmethod
+    def _ensure_current_catalog_composition(
+        connection: sqlite3.Connection,
+        *,
+        image_id: int,
+        image_uid: str,
+        generation_id: int,
+    ) -> None:
+        generation = connection.execute(
+            "SELECT prompt_composition_id FROM generations WHERE id = ?",
+            (generation_id,),
+        ).fetchone()
+        if generation is None or generation["prompt_composition_id"] is None:
+            return
+        composition_uid = f"image-catalog-generation-{image_uid}"
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO image_catalog_compositions(
+                composition_uid, image_id, version, source
+            ) VALUES (?, ?, 1, 'generation')
+            """,
+            (composition_uid, image_id),
+        )
+        current = connection.execute(
+            "SELECT id FROM image_catalog_compositions "
+            "WHERE composition_uid = ?",
+            (composition_uid,),
+        ).fetchone()
+        composition_id = int(current["id"])
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            )
+            SELECT ?, membership.revision_id, membership.position
+            FROM generations AS generation
+            JOIN prompt_composition_revisions AS membership
+              ON membership.composition_id = generation.prompt_composition_id
+            WHERE generation.id = ?
+            ORDER BY membership.position, membership.slot
+            """,
+            (composition_id, generation_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO current_image_catalog_compositions(
+                image_id, composition_id
+            ) VALUES (?, ?)
+            ON CONFLICT(image_id) DO NOTHING
+            """,
+            (image_id, composition_id),
+        )
 
     def outputs_complete(self, generation_uid: str) -> bool:
         """Return whether every compiled output binding has a saved image."""

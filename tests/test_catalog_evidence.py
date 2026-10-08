@@ -249,7 +249,7 @@ def _insert_image(
             ),
         ).fetchone()[0]
     )
-    return int(
+    image_id = int(
         connection.execute(
             """
             INSERT INTO images(
@@ -266,3 +266,34 @@ def _insert_image(
             ),
         ).fetchone()[0]
     )
+    current_composition_id = int(
+        connection.execute(
+            """
+            INSERT INTO image_catalog_compositions(
+                composition_uid, image_id, version, source
+            ) VALUES (?, ?, 1, 'generation')
+            RETURNING id
+            """,
+            (f"image-composition-{index}", image_id),
+        ).fetchone()[0]
+    )
+    connection.execute(
+        """
+        INSERT INTO image_catalog_composition_revisions(
+            composition_id, revision_id, position
+        )
+        SELECT ?, revision_id, position
+        FROM prompt_composition_revisions
+        WHERE composition_id = ?
+        """,
+        (current_composition_id, composition_id),
+    )
+    connection.execute(
+        """
+        INSERT INTO current_image_catalog_compositions(
+            image_id, composition_id
+        ) VALUES (?, ?)
+        """,
+        (image_id, current_composition_id),
+    )
+    return image_id

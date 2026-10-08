@@ -39,13 +39,18 @@ def fetch_combo_stats(
 
     rows = con.execute(
         f"""
-        SELECT rating.model_branch, rating.checkpoint, rating.combo_key,
+        SELECT rating.model_branch, rating.checkpoint,
+               composition.composition_uid AS combo_key,
                rating.run, rating.rating, rating.deleted
         FROM ratings AS rating
         JOIN current_image_reviews AS current_review
           ON current_review.sequence = rating.run
         JOIN images AS image ON image.id = current_review.image_id
         JOIN generations AS generation ON generation.id = image.generation_id
+        JOIN current_image_catalog_compositions AS current_catalog
+          ON current_catalog.image_id = image.id
+        JOIN image_catalog_compositions AS composition
+          ON composition.id = current_catalog.composition_id
         {where}
         """,
         args,

@@ -1040,8 +1040,25 @@ class PlaygroundService:
         components = self._with_current_component_metadata(
             revision_projections
         )
-        positive = prompt_atom_usages_from_text(image.prompt_snapshot.positive)
-        negative = prompt_atom_usages_from_text(image.prompt_snapshot.negative)
+        evidence = image.prompt_evidence
+        if evidence is None:
+            positive = prompt_atom_usages_from_text(
+                image.prompt_snapshot.positive
+            )
+            negative = prompt_atom_usages_from_text(
+                image.prompt_snapshot.negative
+            )
+        else:
+            positive = tuple(
+                atom
+                for block in evidence.positive_blocks
+                for atom in prompt_atom_usages_from_text(block)
+            )
+            negative = tuple(
+                atom
+                for block in evidence.negative_blocks
+                for atom in prompt_atom_usages_from_text(block)
+            )
         if overrides is not None:
             positive = overrides.positive_atoms or positive
             negative = overrides.negative_atoms or negative
@@ -1053,7 +1070,7 @@ class PlaygroundService:
             prompt=RenderedPrompt(
                 positive_text=positive_text,
                 negative_text=negative_text,
-                notes="historical image snapshot",
+                notes="current image catalog composition",
                 revision_uids=revision_uids,
                 draft_overridden=(
                     image.prompt_snapshot.draft_overridden

@@ -2927,6 +2927,44 @@ class CanonicalSchemaManager:
             )
             """
         )
+        connection.execute(
+            """
+            INSERT INTO image_catalog_compositions(
+                composition_uid, image_id, version, source, created_at
+            )
+            SELECT 'image-catalog-generation-' || image.image_uid,
+                   image.id, 1, 'generation', image.last_seen_at
+            FROM images AS image
+            JOIN generations AS generation ON generation.id = image.generation_id
+            WHERE generation.prompt_composition_id IS NOT NULL
+            ORDER BY image.id
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            )
+            SELECT image_composition.id, membership.revision_id,
+                   membership.position
+            FROM image_catalog_compositions AS image_composition
+            JOIN images AS image ON image.id = image_composition.image_id
+            JOIN generations AS generation ON generation.id = image.generation_id
+            JOIN prompt_composition_revisions AS membership
+              ON membership.composition_id = generation.prompt_composition_id
+            ORDER BY image.id, membership.position, membership.slot
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO current_image_catalog_compositions(
+                image_id, composition_id, selected_at
+            )
+            SELECT image_id, id, created_at
+            FROM image_catalog_compositions
+            ORDER BY image_id
+            """
+        )
 
         connection.execute(
             """

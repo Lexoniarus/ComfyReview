@@ -105,7 +105,7 @@ class SqliteAnalyticsRepository:
     ) -> dict[str, tuple[AnalyticsImage, ...]]:
         """Read and group best live images for observed combo keys."""
         rows = self._image_rows(
-            expression="generation.combo_key",
+            expression="current_composition.composition_uid",
             values=combo_keys,
             model_branch=model_branch,
         )
@@ -304,6 +304,7 @@ class SqliteAnalyticsRepository:
             image_rows = connection.execute(
                 f"""
                 SELECT
+                    image.id AS image_id,
                     generation.id AS generation_id,
                     image.image_uid,
                     image.png_path,
@@ -322,12 +323,14 @@ class SqliteAnalyticsRepository:
             ).fetchall()
             component_rows = connection.execute(
                 """
-                SELECT DISTINCT generation.id AS generation_id, component.kind,
+                SELECT DISTINCT image.id AS image_id, component.kind,
                        component.component_uid, component.name,
                        revision.revision_uid
-                FROM generations AS generation
-                JOIN prompt_composition_revisions AS membership
-                  ON membership.composition_id = generation.prompt_composition_id
+                FROM images AS image
+                JOIN current_image_catalog_compositions AS current_catalog
+                  ON current_catalog.image_id = image.id
+                JOIN image_catalog_composition_revisions AS membership
+                  ON membership.composition_id = current_catalog.composition_id
                 JOIN prompt_revisions AS revision
                   ON revision.id = membership.revision_id
                 JOIN prompt_components AS component
@@ -337,7 +340,7 @@ class SqliteAnalyticsRepository:
                       'outfit', 'accessory', 'pose', 'expression',
                       'framing', 'camera_angle', 'optical_effect'
                   )
-                ORDER BY generation.id, membership.position
+                ORDER BY image.id, membership.position
                 """
             ).fetchall()
             lora_rows = connection.execute(
@@ -370,11 +373,9 @@ class SqliteAnalyticsRepository:
             ).fetchall()
         finally:
             connection.close()
-        components_by_generation: dict[int, list[PromptFactor]] = defaultdict(
-            list
-        )
+        components_by_image: dict[int, list[PromptFactor]] = defaultdict(list)
         for row in component_rows:
-            components_by_generation[int(row["generation_id"])].append(
+            components_by_image[int(row["image_id"])].append(
                 PromptFactor(
                     source="component",
                     kind=str(row["kind"]),
@@ -383,36 +384,35 @@ class SqliteAnalyticsRepository:
                     revision_uid=str(row["revision_uid"]),
                 )
             )
-        for row in lora_rows:
-            components_by_generation[int(row["generation_id"])].append(
-                PromptFactor(
-                    source="lora",
-                    kind="lora",
-                    uid=str(row["lora_uid"]),
-                    name=str(row["display_name"] or row["provider_name"]),
-                    revision_uid=str(row["revision_uid"]),
-                    applicable=(
-                        row["archived_at"] is None
-                        and bool(row["has_triggers"])
-                    ),
-                    reason=(
-                        None
-                        if row["archived_at"] is None
-                        and bool(row["has_triggers"])
-                        else "current_revision_unavailable"
-                    ),
-                    model_strength_milli=int(
-                        row["default_model_strength_milli"]
-                    ),
-                    clip_strength_milli=int(
-                        row["default_clip_strength_milli"]
-                    ),
-                )
+        image_ids_by_generation: dict[int, list[int]] = defaultdict(list)
+        for image_row in image_rows:
+            image_ids_by_generation[int(image_row["generation_id"])].append(
+                int(image_row["image_id"])
             )
+        for row in lora_rows:
+            factor = PromptFactor(
+                source="lora",
+                kind="lora",
+                uid=str(row["lora_uid"]),
+                name=str(row["display_name"] or row["provider_name"]),
+                revision_uid=str(row["revision_uid"]),
+                applicable=(
+                    row["archived_at"] is None and bool(row["has_triggers"])
+                ),
+                reason=(
+                    None
+                    if row["archived_at"] is None and bool(row["has_triggers"])
+                    else "current_revision_unavailable"
+                ),
+                model_strength_milli=int(row["default_model_strength_milli"]),
+                clip_strength_milli=int(row["default_clip_strength_milli"]),
+            )
+            for image_id in image_ids_by_generation[int(row["generation_id"])]:
+                components_by_image[image_id].append(factor)
         grouped: dict[tuple[str, ...], list[Any]] = defaultdict(list)
         factors_by_key: dict[tuple[str, ...], tuple[PromptFactor, ...]] = {}
         for row in image_rows:
-            factors = components_by_generation[int(row["generation_id"])]
+            factors = components_by_image[int(row["image_id"])]
             characters = [
                 factor for factor in factors if factor.kind == "character"
             ]
@@ -527,6 +527,10 @@ class SqliteAnalyticsRepository:
                         ON summary.image_id = image.id
                     LEFT JOIN image_geometry_projection AS geometry
                         ON geometry.image_id = image.id
+                    LEFT JOIN current_image_catalog_compositions AS current_catalog
+                        ON current_catalog.image_id = image.id
+                    LEFT JOIN image_catalog_compositions AS current_composition
+                        ON current_composition.id = current_catalog.composition_id
                     WHERE image.deleted_at IS NULL
                       AND {content_visibility_predicate()}
                       AND CAST({expression} AS TEXT) IN ({placeholders})

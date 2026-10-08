@@ -716,6 +716,33 @@ def _insert_analytics_fixture(database_path: Path, tmp_path: Path) -> None:
             """,
             (str(png_path), str(json_path)),
         )
+        current_composition = connection.execute(
+            """
+            INSERT INTO image_catalog_compositions(
+                composition_uid, image_id, version, source
+            ) VALUES ('composition-1', 1, 1, 'generation')
+            """
+        ).lastrowid
+        assert current_composition is not None
+        connection.executemany(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            ) VALUES (?, ?, ?)
+            """,
+            (
+                (current_composition, revision_id, position)
+                for position, revision_id in enumerate(revision_ids)
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO current_image_catalog_compositions(
+                image_id, composition_id
+            ) VALUES (1, ?)
+            """,
+            (current_composition,),
+        )
         connection.execute(
             """
             INSERT INTO review_events(
@@ -772,7 +799,7 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
     CanonicalSchemaManager(database_path).prepare_startup()
     _insert_analytics_fixture(database_path, tmp_path)
     repository = SqliteAnalyticsRepository(database_path)
-    combo_key = "character:1|scene:2|outfit:3"
+    current_composition_uid = "composition-1"
 
     token_stats = repository.list_prompt_token_statistics(
         model_branch="sdxl",
@@ -781,7 +808,7 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         limit=10,
     )
     combo_images = repository.list_best_images_for_combos(
-        (combo_key,),
+        (current_composition_uid,),
         model_branch="sdxl",
         limit_per_combo=3,
     )
@@ -821,7 +848,7 @@ def test_sqlite_analytics_reads_canonical_views_without_projection_databases(
         average_rating=8.0,
         rating_count=1,
     )
-    assert combo_images[combo_key][0].average_rating == 8.0
+    assert combo_images[current_composition_uid][0].average_rating == 8.0
     assert parameter_images["20"][0].rating_count == 1
     assert observed == (
         ObservedPromptCombination(
@@ -933,6 +960,37 @@ def test_observed_character_combinations_include_evidenced_lora_factors(
             ) VALUES ('image-2', 1, 'save', 1, ?)
             """,
             (str(second_png),),
+        )
+        current_composition = connection.execute(
+            """
+            INSERT INTO image_catalog_compositions(
+                composition_uid, image_id, version, source
+            ) VALUES ('composition-2', 2, 1, 'generation')
+            """
+        ).lastrowid
+        assert current_composition is not None
+        connection.execute(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            )
+            SELECT ?, revision_id, position
+            FROM image_catalog_composition_revisions
+            WHERE composition_id = (
+                SELECT composition_id
+                FROM current_image_catalog_compositions
+                WHERE image_id = 1
+            )
+            """,
+            (current_composition,),
+        )
+        connection.execute(
+            """
+            INSERT INTO current_image_catalog_compositions(
+                image_id, composition_id
+            ) VALUES (2, ?)
+            """,
+            (current_composition,),
         )
 
     combinations = SqliteAnalyticsRepository(
@@ -1061,7 +1119,7 @@ def test_sqlite_analytics_reports_query_canonical_compatibility_views(
         model="sdxl", min_n=1, limit=10
     )
 
-    assert combo_rows[0]["combo_key"] == ("character:1|scene:2|outfit:3")
+    assert combo_rows[0]["combo_key"] == "composition-1"
     assert recommendations["stable"][0]["avg_rating"] == 8.0
     assert {row["feat"] for row in parameters} == {
         "checkpoint",

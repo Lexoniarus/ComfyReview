@@ -223,9 +223,15 @@ def _filter_fragment(
     parameters: list[object] = []
     conditions.append(content_visibility_predicate())
     if filters.classification is ImageClassification.CLASSIFIED:
-        conditions.append("generation.prompt_composition_id IS NOT NULL")
+        conditions.append(
+            "EXISTS (SELECT 1 FROM current_image_catalog_compositions "
+            "AS current_catalog WHERE current_catalog.image_id = image.id)"
+        )
     elif filters.classification is ImageClassification.UNCLASSIFIED:
-        conditions.append("generation.prompt_composition_id IS NULL")
+        conditions.append(
+            "NOT EXISTS (SELECT 1 FROM current_image_catalog_compositions "
+            "AS current_catalog WHERE current_catalog.image_id = image.id)"
+        )
     if filters.model:
         conditions.append("generation.model_branch = ?")
         parameters.append(filters.model)
@@ -254,13 +260,14 @@ def _filter_fragment(
         placeholders = ", ".join("?" for _uid in component_uids)
         conditions.append(
             "EXISTS ("
-            "SELECT 1 FROM prompt_composition_revisions AS selected_membership "
+            "SELECT 1 FROM current_image_catalog_compositions AS selected_current "
+            "JOIN image_catalog_composition_revisions AS selected_membership "
+            "ON selected_membership.composition_id = selected_current.composition_id "
             "JOIN prompt_revisions AS selected_revision "
             "ON selected_revision.id = selected_membership.revision_id "
             "JOIN prompt_components AS selected_component "
             "ON selected_component.id = selected_revision.component_id "
-            "WHERE selected_membership.composition_id = "
-            "generation.prompt_composition_id "
+            "WHERE selected_current.image_id = image.id "
             "AND selected_component.kind = ? "
             f"AND selected_component.component_uid IN ({placeholders})"
             ")"
@@ -285,7 +292,7 @@ def _context_statement(where: str) -> str:
             generation.sampler,
             generation.scheduler,
             generation.denoise,
-            generation.prompt_composition_id,
+            current_catalog.composition_id AS current_catalog_composition_id,
             generation.workflow_hash AS graph_hash,
             CASE WHEN json_valid(generation.raw_metadata_json)
                 THEN json_extract(
@@ -329,6 +336,8 @@ def _context_statement(where: str) -> str:
             ON content_state.image_id = image.id
         LEFT JOIN image_geometry_projection AS geometry
             ON geometry.image_id = image.id
+        LEFT JOIN current_image_catalog_compositions AS current_catalog
+            ON current_catalog.image_id = image.id
         WHERE {where}
     """
 
@@ -377,11 +386,13 @@ def _facet_statement(where: str) -> str:
         WITH filtered_images AS (
             SELECT
                 image.id AS image_id,
-                generation.prompt_composition_id AS composition_id
+                current_catalog.composition_id AS composition_id
             FROM images AS image
             JOIN generations AS generation
                 ON generation.id = image.generation_id
             JOIN image_review_summary AS summary ON summary.image_id = image.id
+            LEFT JOIN current_image_catalog_compositions AS current_catalog
+                ON current_catalog.image_id = image.id
             WHERE {where}
         ),
         latest_revisions AS (
@@ -405,7 +416,7 @@ def _facet_statement(where: str) -> str:
             ON latest.component_id = component.id
         LEFT JOIN prompt_revisions AS used_revision
             ON used_revision.component_id = component.id
-        LEFT JOIN prompt_composition_revisions AS membership
+        LEFT JOIN image_catalog_composition_revisions AS membership
             ON membership.revision_id = used_revision.id
         LEFT JOIN filtered_images AS filtered
             ON filtered.composition_id = membership.composition_id
@@ -452,15 +463,16 @@ def _load_scopes(
             revision.positive_text,
             revision.negative_text
         FROM images AS image
-        JOIN generations AS generation ON generation.id = image.generation_id
-        JOIN prompt_composition_revisions AS membership
-            ON membership.composition_id = generation.prompt_composition_id
+        JOIN current_image_catalog_compositions AS current_catalog
+            ON current_catalog.image_id = image.id
+        JOIN image_catalog_composition_revisions AS membership
+            ON membership.composition_id = current_catalog.composition_id
         JOIN prompt_revisions AS revision ON revision.id = membership.revision_id
         JOIN prompt_components AS component
             ON component.id = revision.component_id
         WHERE image.id IN ({placeholders})
           AND component.kind IN ({kind_placeholders})
-        ORDER BY image.id, membership.position, membership.slot
+        ORDER BY image.id, membership.position
         """,
         (*image_ids, *_SCOPE_KINDS),
     ).fetchall()
@@ -528,7 +540,7 @@ def _map_context(
     scopes = tuple(record[0] for record in scope_records)
     positive = str(row["positive_prompt"] or "")
     negative = str(row["negative_prompt"] or "")
-    classified = row["prompt_composition_id"] is not None
+    classified = row["current_catalog_composition_id"] is not None
     return ImageContext(
         image_uid=str(row["image_uid"]),
         generation_uid=str(row["generation_uid"]),

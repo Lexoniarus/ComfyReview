@@ -1906,6 +1906,7 @@ def test_playground_service_uses_authoritative_image_snapshot() -> None:
     service = _service(_CatalogService(_catalog()))
     image = SimpleNamespace(
         scopes=(),
+        prompt_evidence=None,
         prompt_snapshot=SimpleNamespace(
             positive="historic style, character",
             negative="historic blur",
@@ -1923,6 +1924,10 @@ def test_playground_service_uses_authoritative_image_snapshot() -> None:
 
     grouped_image = SimpleNamespace(
         scopes=(SimpleNamespace(revision_uid="revision-character-a"),),
+        prompt_evidence=SimpleNamespace(
+            positive_blocks=("current character",),
+            negative_blocks=("current negative",),
+        ),
         prompt_snapshot=SimpleNamespace(
             positive="historic style, character",
             negative="historic blur",
