@@ -3,6 +3,8 @@
 from comfyreview.importers.catalog_normalization import (
     CatalogNormalizationAuditor,
     CatalogNormalizationAuditResult,
+    CatalogNormalizationRebuilder,
+    CatalogNormalizationRebuildResult,
     CatalogNormalizationValidationError,
 )
 from comfyreview.importers.content_levels import (
@@ -63,6 +65,8 @@ from comfyreview.importers.legacy_provenance import (
 __all__ = [
     "CatalogNormalizationAuditor",
     "CatalogNormalizationAuditResult",
+    "CatalogNormalizationRebuilder",
+    "CatalogNormalizationRebuildResult",
     "CatalogNormalizationValidationError",
     "ContentLevelAuditor",
     "ContentLevelAuditResult",

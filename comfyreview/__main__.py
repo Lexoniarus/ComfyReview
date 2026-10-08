@@ -20,6 +20,7 @@ from comfyreview.application import (
 )
 from comfyreview.importers import (
     CatalogNormalizationAuditor,
+    CatalogNormalizationRebuilder,
     CatalogNormalizationValidationError,
     ContentLevelAuditor,
     ContentLevelRecovery,
@@ -206,13 +207,19 @@ def _parser() -> argparse.ArgumentParser:
     catalog_audit.add_argument("--database", type=Path)
     catalog_audit.add_argument("--report", type=Path)
     catalog_audit.add_argument("--mapping", type=Path)
+    catalog_rebuild = catalog_actions.add_parser("rebuild")
+    catalog_rebuild.add_argument("--database", type=Path)
+    catalog_rebuild.add_argument("--audit", type=Path)
+    catalog_rebuild.add_argument("--mapping", type=Path)
+    catalog_rebuild.add_argument("--output", type=Path, required=True)
+    catalog_rebuild.add_argument("--replace", action="store_true")
     return parser
 
 
 def _run_catalog_normalization(options: argparse.Namespace) -> int:
     settings = load_settings()
     database_path = options.database or settings.canonical_database_path
-    report_path = options.report or (
+    report_path = getattr(options, "report", None) or (
         settings.data_directory
         / "reports"
         / "catalog-normalization-audit.json"
@@ -222,16 +229,38 @@ def _run_catalog_normalization(options: argparse.Namespace) -> int:
         / "rehearsals"
         / "catalog-normalization-mapping.json"
     )
-    result = CatalogNormalizationAuditor(database_path).audit(
+    if options.action == "rebuild":
+        rebuild_result = CatalogNormalizationRebuilder(database_path).rebuild(
+            options.audit or report_path,
+            mapping_path,
+            options.output,
+            replace_source=bool(options.replace),
+        )
+        print(
+            json.dumps(
+                {
+                    "output_path": str(rebuild_result.output_path),
+                    "replaced_source": rebuild_result.replaced_source,
+                    "live_images": rebuild_result.live_images,
+                    "removed_images": rebuild_result.removed_images,
+                    "atom_baselines": rebuild_result.atom_baselines,
+                    "render_baselines": rebuild_result.render_baselines,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+        return 0
+    audit_result = CatalogNormalizationAuditor(database_path).audit(
         report_path,
         mapping_path,
     )
     print(
         json.dumps(
             {
-                "report_path": str(result.report_path),
-                "mapping_path": str(result.mapping_path),
-                **result.summary,
+                "report_path": str(audit_result.report_path),
+                "mapping_path": str(audit_result.mapping_path),
+                **audit_result.summary,
             },
             ensure_ascii=False,
             sort_keys=True,
