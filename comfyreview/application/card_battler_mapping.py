@@ -15,6 +15,7 @@ from comfyreview.application.card_battler_model import (
     FallbackCandidate,
     SemanticAffinity,
 )
+from comfyreview.domain.card_battler import CardImprint
 
 
 class CardImprintMappingError(RuntimeError):
@@ -56,26 +57,6 @@ class SemanticImageProfile:
         keys = [signal.concept_key for signal in self.signals]
         if len(keys) != len(set(keys)):
             raise ValueError("duplicate semantic concept keys are invalid")
-
-
-@dataclass(frozen=True, slots=True)
-class CardImprint:
-    """Persistent four-axis Card DNA plus deterministic provenance."""
-
-    world_style: str
-    card_class: str
-    combat_role: str
-    trait_lineage: str
-    source_image_uid: str
-    semantic_revision: str
-    ruleset_key: str
-    ruleset_version: int
-    mapping_policy_key: str
-    mapping_policy_version: int
-    rng_policy_key: str
-    rng_policy_version: int
-    rng_algorithm: str
-    explicit_seed: int
 
 
 @dataclass(frozen=True, slots=True)
