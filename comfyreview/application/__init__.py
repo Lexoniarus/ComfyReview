@@ -48,6 +48,13 @@ from comfyreview.application.card_battler_mapping import (
     SemanticSignal,
     Sha256CounterV1,
 )
+from comfyreview.application.card_battler_materialization import (
+    CardBalancePolicy,
+    CardMaterializationModelRepository,
+    StatProfileAffinity,
+    StatProfileDefinition,
+    TierBalanceProfile,
+)
 from comfyreview.application.card_battler_model import (
     CardBattlerMappingPolicy,
     CardBattlerModelError,
@@ -492,6 +499,11 @@ __all__ = [
     "CardBattlerRulesetRef",
     "CardBattlerMappingPolicy",
     "CardBattlerRngPolicy",
+    "CardBalancePolicy",
+    "CardMaterializationModelRepository",
+    "StatProfileAffinity",
+    "StatProfileDefinition",
+    "TierBalanceProfile",
     "CompatibilityFact",
     "FallbackCandidate",
     "SemanticAffinity",

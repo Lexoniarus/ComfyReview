@@ -246,6 +246,54 @@ def _create_model_database(
                 weight_milli INTEGER NOT NULL,
                 PRIMARY KEY (mapping_policy_id, lineage_id)
             );
+            CREATE TABLE balance_policies (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                policy_key TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                config_json TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE tier_balance_profiles (
+                tier_id INTEGER PRIMARY KEY REFERENCES development_tiers(id),
+                balance_policy_id INTEGER NOT NULL REFERENCES balance_policies(id),
+                stat_budget INTEGER NOT NULL,
+                mechanic_budget_milli INTEGER NOT NULL,
+                min_atk INTEGER NOT NULL,
+                max_atk INTEGER NOT NULL,
+                min_def INTEGER NOT NULL,
+                max_def INTEGER NOT NULL,
+                max_traits INTEGER NOT NULL,
+                parameter_scale_milli INTEGER NOT NULL
+            );
+            CREATE TABLE stat_profiles (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                atk_share_milli INTEGER NOT NULL,
+                def_share_milli INTEGER NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE class_stat_profile_affinity (
+                class_id INTEGER NOT NULL REFERENCES card_classes(id),
+                stat_profile_id INTEGER NOT NULL REFERENCES stat_profiles(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (class_id, stat_profile_id)
+            );
+            CREATE TABLE role_stat_profile_affinity (
+                role_id INTEGER NOT NULL REFERENCES combat_roles(id),
+                stat_profile_id INTEGER NOT NULL REFERENCES stat_profiles(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (role_id, stat_profile_id)
+            );
+            CREATE TABLE lineage_stat_profile_affinity (
+                lineage_id INTEGER NOT NULL REFERENCES trait_lineages(id),
+                stat_profile_id INTEGER NOT NULL REFERENCES stat_profiles(id),
+                weight_milli INTEGER NOT NULL,
+                PRIMARY KEY (lineage_id, stat_profile_id)
+            );
             """
         )
         connection.executemany(
@@ -418,6 +466,48 @@ def _create_model_database(
                 '"runtime_hash_is_not_randomness":true}',
             ),
         )
+        connection.execute(
+            """
+            INSERT INTO balance_policies(
+                id, ruleset_id, policy_key, version, config_json, active
+            ) VALUES (1, 1, 'prototype_balance', 2, ?, 1)
+            """,
+            (
+                '{"atk_def_minimum":0,"calibration_status":"prototype",'
+                '"no_negative_stats":true,"stat_rounding_step":50,'
+                '"trait_budget_is_milli":true}',
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO stat_profiles(
+                id, ruleset_id, key, name, atk_share_milli,
+                def_share_milli, description, active
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                (2, "offensive", "Offensive", 650, 350, "ATK leaning"),
+                (1, "balanced", "Balanced", 500, 500, "Even shares"),
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO tier_balance_profiles(
+                tier_id, balance_policy_id, stat_budget,
+                mechanic_budget_milli, min_atk, max_atk, min_def, max_def,
+                max_traits, parameter_scale_milli
+            ) VALUES (1, 1, 3000, 1000, 600, 2400, 600, 2400, 1, 1000)
+            """
+        )
+        for table, source_column in (
+            ("class_stat_profile_affinity", "class_id"),
+            ("role_stat_profile_affinity", "role_id"),
+            ("lineage_stat_profile_affinity", "lineage_id"),
+        ):
+            connection.executemany(
+                f"INSERT INTO {table}({source_column}, stat_profile_id, weight_milli) VALUES (?, ?, ?)",
+                ((1, 1, 700), (1, 2, 900), (2, 1, 800), (2, 2, 600)),
+            )
         for table, target_column in (
             ("semantic_world_style_affinity", "world_style_id"),
             ("semantic_class_affinity", "class_id"),
@@ -577,6 +667,7 @@ def test_model_resource_caches_success_and_lends_short_read_only_connections(
         (policy.kind, policy.key, policy.version)
         for policy in first.active_policies
     ] == [
+        ("balance", "prototype_balance", 2),
         ("mapping", "semantic_imprint_mapping", 2),
         ("rng", "deterministic_rng", 2),
     ]
@@ -726,6 +817,10 @@ def test_model_resource_rejects_failed_integrity_check(tmp_path: Path) -> None:
             "not an integer",
         ),
         ("UPDATE rulesets SET status = 'retired'", "active ruleset"),
+        (
+            "UPDATE balance_policies SET active = 0",
+            "active balance policy",
+        ),
         (
             "UPDATE mapping_policies SET active = 0",
             "active mapping policy",

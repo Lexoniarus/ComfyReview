@@ -291,10 +291,74 @@ CARD_BATTLER_MAPPING_SCHEMA = CardBattlerModelSchemaRequirement(
     ),
 )
 
+CARD_MATERIALIZATION_SCHEMA = CardBattlerModelSchemaRequirement(
+    group="card-materialization",
+    tables=(
+        CardBattlerModelTableRequirement(
+            "balance_policies",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "policy_key",
+                    "version",
+                    "config_json",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "tier_balance_profiles",
+            frozenset(
+                {
+                    "tier_id",
+                    "balance_policy_id",
+                    "stat_budget",
+                    "mechanic_budget_milli",
+                    "min_atk",
+                    "max_atk",
+                    "min_def",
+                    "max_def",
+                    "max_traits",
+                    "parameter_scale_milli",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "stat_profiles",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "key",
+                    "name",
+                    "atk_share_milli",
+                    "def_share_milli",
+                    "description",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "class_stat_profile_affinity",
+            frozenset({"class_id", "stat_profile_id", "weight_milli"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "role_stat_profile_affinity",
+            frozenset({"role_id", "stat_profile_id", "weight_milli"}),
+        ),
+        CardBattlerModelTableRequirement(
+            "lineage_stat_profile_affinity",
+            frozenset({"lineage_id", "stat_profile_id", "weight_milli"}),
+        ),
+    ),
+)
+
 CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     MODEL_IDENTITY_SCHEMA,
     FOUNDATIONAL_CARD_BATTLER_SCHEMA,
     CARD_BATTLER_MAPPING_SCHEMA,
+    CARD_MATERIALIZATION_SCHEMA,
 )
 
 
@@ -533,6 +597,7 @@ class SqliteCardBattlerModelResource:
     ) -> tuple[CardBattlerModelPolicyRef, ...]:
         policies: list[CardBattlerModelPolicyRef] = []
         for kind, table in (
+            ("balance", "balance_policies"),
             ("mapping", "mapping_policies"),
             ("rng", "rng_policies"),
         ):
