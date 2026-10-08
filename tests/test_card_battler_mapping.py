@@ -91,7 +91,7 @@ class _ModelRepository:
         self.lineages = tuple(
             TraitLineageDefinition(key, key.title(), "") for key in keys
         )
-        self.affinities = (
+        self.affinities: tuple[SemanticAffinity, ...] = (
             SemanticAffinity("bright", "alpha", 900),
             SemanticAffinity("bright", "beta", 700),
             SemanticAffinity("bright", "gamma", 500),
@@ -119,10 +119,16 @@ class _ModelRepository:
         self.class_role_compatibility_facts = self.compatibility
         self.class_lineage_compatibility_facts = self.compatibility
         self.role_lineage_compatibility_facts = self.compatibility
-        self.world_affinities = self.affinities
-        self.class_affinity_facts = self.affinities
-        self.role_affinity_facts = self.affinities
-        self.lineage_affinity_facts = self.affinities
+        self.world_affinities: tuple[SemanticAffinity, ...] = self.affinities
+        self.class_affinity_facts: tuple[SemanticAffinity, ...] = (
+            self.affinities
+        )
+        self.role_affinity_facts: tuple[SemanticAffinity, ...] = (
+            self.affinities
+        )
+        self.lineage_affinity_facts: tuple[SemanticAffinity, ...] = (
+            self.affinities
+        )
         self.world_fallback = self.fallback
         self.class_fallback = self.fallback
         self.role_fallback = self.fallback
@@ -407,9 +413,7 @@ def test_weak_semantic_evidence_uses_only_configured_fallback() -> None:
         item.semantic_component_milli == 0 for item in result.candidates
     )
     allowed = {"alpha", "beta", "gamma", "delta"}
-    assert all(
-        item.world_style in allowed for item in result.candidates
-    )
+    assert all(item.world_style in allowed for item in result.candidates)
     assert result.selected_candidate.fallback_prior_milli > 0
 
 
@@ -581,10 +585,12 @@ def test_card_imprint_provenance_and_identity_remain_distinct() -> None:
     assert imprint.source_image_uid == "image-001"
     assert imprint.semantic_revision == "semantic-v7"
     assert (imprint.ruleset_key, imprint.ruleset_version) == (
-        "card_battler_prototype", 2
+        "card_battler_prototype",
+        2,
     )
     assert (imprint.mapping_policy_key, imprint.mapping_policy_version) == (
-        "semantic_imprint_mapping", 2
+        "semantic_imprint_mapping",
+        2,
     )
     assert (
         imprint.rng_policy_key,

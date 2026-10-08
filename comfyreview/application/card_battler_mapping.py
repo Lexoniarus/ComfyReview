@@ -106,6 +106,7 @@ class ImprintCandidateScore:
     compatibility_milli: tuple[int, int, int, int]
     axis_fallback_prior_milli: tuple[int, int, int, int]
 
+
 @dataclass(frozen=True, slots=True)
 class CardImprintMappingResult:
     """Selected full candidate, one draw counter, and the top pool."""
@@ -296,7 +297,9 @@ class CardImprintMapper:
                 (role.key, lineage.key),
             )
             compatible_weights: list[int] = []
-            for index, pair in zip(compatibility_indexes, relations):
+            for index, pair in zip(
+                compatibility_indexes, relations, strict=True
+            ):
                 fact = index.get(pair)
                 if (
                     fact is None
@@ -327,9 +330,7 @@ class CardImprintMapper:
                 compatible_weights[3],
             )
             semantic_component = self._rounded_mean(semantics)
-            compatibility_component = self._rounded_mean(
-                compatibility_weights
-            )
+            compatibility_component = self._rounded_mean(compatibility_weights)
             fallback_prior_component = self._rounded_mean(priors)
             final_score = self._final_score(
                 semantic_component,
@@ -354,7 +355,9 @@ class CardImprintMapper:
                     final_score_milli=final_score,
                     fallback_dimensions=tuple(
                         name
-                        for name, item in zip(self._DIMENSIONS, axes)
+                        for name, item in zip(
+                            self._DIMENSIONS, axes, strict=True
+                        )
                         if item.fallback_admitted
                     ),
                     axis_semantic_milli=semantics,

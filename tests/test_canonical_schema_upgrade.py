@@ -1383,7 +1383,8 @@ def test_version_seventeen_upgrade_adds_catalog_roles(
     assert source.read_bytes() == source_before
     with sqlite3.connect(output) as connection:
         columns = {
-            row[1]: row for row in connection.execute(
+            row[1]: row
+            for row in connection.execute(
                 "PRAGMA table_info(prompt_components)"
             )
         }

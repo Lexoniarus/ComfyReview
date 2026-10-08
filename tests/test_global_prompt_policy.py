@@ -60,7 +60,7 @@ def test_sqlite_policy_reader_selects_quality_and_enabled_content_profiles(
                 "INSERT INTO prompt_atoms(canonical_text) VALUES (?) RETURNING id",
                 (text,),
             ).fetchone()[0]
-        policies = (
+        policy_rows = (
             ("quality-1", "quality", "quality", 1, "Quality", None),
             (
                 "suggestive-1",
@@ -79,7 +79,7 @@ def test_sqlite_policy_reader_selects_quality_and_enabled_content_profiles(
                 "explicit",
             ),
         )
-        for position, policy in enumerate(policies):
+        for position, policy in enumerate(policy_rows):
             policy_id = connection.execute(
                 """
                 INSERT INTO global_prompt_policies(
