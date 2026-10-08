@@ -89,12 +89,14 @@ from comfyreview.repositories.filesystem import (
     JsonWorkflowBlueprintRepository,
 )
 from comfyreview.repositories.sqlite import (
+    CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS,
     CanonicalSchemaManager,
     SqliteAnalyticsCoverageRepository,
     SqliteAnalyticsReportRepository,
     SqliteAnalyticsRepository,
     SqliteArenaRepository,
     SqliteCardBattlerModelRepository,
+    SqliteCardBattlerModelResource,
     SqliteCatalogEvidenceRepository,
     SqliteCompositionAnalyticsRepository,
     SqliteCurationRepository,
@@ -345,8 +347,12 @@ def build_application_container(
         preferences=preferences_repository,
         content_policy=PromptContentPolicy(),
     )
+    card_battler_model_resource = SqliteCardBattlerModelResource(
+        configured.card_battler_model_database_path,
+        CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS,
+    )
     card_battler_model = SqliteCardBattlerModelRepository(
-        configured.card_battler_model_database_path
+        card_battler_model_resource
     )
     return ApplicationContainer(
         settings=configured,

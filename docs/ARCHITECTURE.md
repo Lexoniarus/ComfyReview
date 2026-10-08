@@ -49,6 +49,26 @@ canonical schema. Root `app.py` and `main.py` remain compatible entry points.
 Legacy database paths live in a separate `LegacyMigrationSettings` object used
 only by explicit audit, import and maintenance commands.
 
+### 2.1 Card Battler model resource
+
+The pre-persistence Card Battler implementation reads design and rules facts
+from the external `card_battler.sqlite3` model database. The composition root
+creates one `SqliteCardBattlerModelResource` and injects it into focused SQLite
+read adapters. On first access that owner performs the complete database
+identity, schema-v3 table/column contract, integrity, foreign-key, active
+ruleset and active-policy validation exactly once per application container.
+The validated snapshot or its typed failure is cached for that resource
+lifetime. Adapters subsequently use only short-lived `mode=ro`, `query_only`
+connections; the model resource never creates schema, repairs data or opens a
+writable connection. Replacing the file requires a new application container
+or process restart.
+
+Schema requirements are registered in named read-area groups. A model table
+cannot become authoritative for a new adapter until its required columns are
+part of the shared validation contract. This database remains model/design
+input only; no card identity or other runtime game fact is persisted before
+the post-proof persistence phase.
+
 ## 3. Canonical identity and runtime data
 
 The canonical database has an explicit schema version. Schema v16 is the active

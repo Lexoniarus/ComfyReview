@@ -15,6 +15,12 @@ from comfyreview.repositories.sqlite.canonical_schema import (
 from comfyreview.repositories.sqlite.card_battler_model import (
     SqliteCardBattlerModelRepository,
 )
+from comfyreview.repositories.sqlite.card_battler_model_resource import (
+    CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS,
+    CardBattlerModelSchemaRequirement,
+    CardBattlerModelTableRequirement,
+    SqliteCardBattlerModelResource,
+)
 from comfyreview.repositories.sqlite.catalog_evidence import (
     SqliteCatalogEvidenceRepository,
 )
@@ -96,6 +102,10 @@ __all__ = [
     "CanonicalSchemaManager",
     "CanonicalSchemaValidationError",
     "SqliteCardBattlerModelRepository",
+    "SqliteCardBattlerModelResource",
+    "CardBattlerModelSchemaRequirement",
+    "CardBattlerModelTableRequirement",
+    "CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS",
     "SqliteCatalogEvidenceRepository",
     "LegacySchemaManager",
     "SqliteOutputImageRepository",

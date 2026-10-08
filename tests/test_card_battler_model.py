@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -15,6 +17,12 @@ from comfyreview.application.card_battler_model import (
 )
 from comfyreview.repositories.sqlite.card_battler_model import (
     SqliteCardBattlerModelRepository,
+)
+from comfyreview.repositories.sqlite.card_battler_model_resource import (
+    CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS,
+    CardBattlerModelSchemaRequirement,
+    CardBattlerModelTableRequirement,
+    SqliteCardBattlerModelResource,
 )
 from comfyreview.settings import load_settings
 
@@ -537,6 +545,270 @@ def test_valid_model_reads_metadata_ruleset_and_foundational_catalogs(
     ) == (2, 2, 2, 2, 2, 2, 2, 2)
     assert summary.integrity_ok is True
     assert summary.foreign_key_violation_count == 0
+
+
+def test_model_resource_caches_success_and_lends_short_read_only_connections(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    resource = SqliteCardBattlerModelResource(
+        path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+
+    with patch.object(
+        resource,
+        "_validate_connection",
+        wraps=resource._validate_connection,
+    ) as validate:
+        first = resource.validation()
+        second = resource.validation()
+        with resource.connect() as connection:
+            assert connection.execute("PRAGMA query_only").fetchone()[0] == 1
+            with pytest.raises(sqlite3.OperationalError):
+                connection.execute("DELETE FROM schema_meta")
+        with pytest.raises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1")
+
+    assert first is second
+    assert validate.call_count == 1
+    assert first.active_ruleset == resource.validation().active_ruleset
+    assert [
+        (policy.kind, policy.key, policy.version)
+        for policy in first.active_policies
+    ] == [
+        ("mapping", "semantic_imprint_mapping", 2),
+        ("rng", "deterministic_rng", 2),
+    ]
+
+
+def test_model_resource_caches_validation_failure_without_rescanning(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "wrong.sqlite3"
+    _create_model_database(path, database_name="not_the_model")
+    resource = SqliteCardBattlerModelResource(
+        path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+
+    with patch.object(
+        resource,
+        "_validate_connection",
+        wraps=resource._validate_connection,
+    ) as validate:
+        messages = []
+        for _ in range(2):
+            with pytest.raises(CardBattlerModelInvalid) as raised:
+                resource.validation()
+            messages.append(str(raised.value))
+
+    assert messages[0] == messages[1]
+    assert validate.call_count == 1
+
+
+def test_model_resource_validation_is_thread_safe(tmp_path: Path) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    resource = SqliteCardBattlerModelResource(
+        path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+
+    with patch.object(
+        resource,
+        "_validate_connection",
+        wraps=resource._validate_connection,
+    ) as validate:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            validations = tuple(
+                executor.map(lambda _: resource.validation(), range(24))
+            )
+
+    assert all(item is validations[0] for item in validations)
+    assert validate.call_count == 1
+
+
+def test_model_resource_rejects_registered_missing_columns(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    extra_requirement = CardBattlerModelSchemaRequirement(
+        group="future-read-area",
+        tables=(
+            CardBattlerModelTableRequirement(
+                table="rulesets",
+                columns=frozenset({"future_contract_column"}),
+            ),
+        ),
+    )
+    resource = SqliteCardBattlerModelResource(
+        path,
+        CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS + (extra_requirement,),
+    )
+
+    with pytest.raises(
+        CardBattlerModelInvalid, match="future_contract_column"
+    ):
+        resource.validation()
+
+
+def test_model_resource_normalizes_connection_scope_failures(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    resource = SqliteCardBattlerModelResource(
+        path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+
+    with pytest.raises(CardBattlerModelInvalid, match="decode failed"):
+        with resource.connect():
+            raise ValueError("decode failed")
+    with pytest.raises(CardBattlerModelInvalid, match="sentinel"):
+        with resource.connect():
+            raise CardBattlerModelInvalid("sentinel")
+
+
+def test_model_resource_rejects_directory_and_open_failures(
+    tmp_path: Path,
+) -> None:
+    directory_resource = SqliteCardBattlerModelResource(
+        tmp_path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+    with pytest.raises(CardBattlerModelInvalid, match="not a file"):
+        directory_resource.validation()
+
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    resource = SqliteCardBattlerModelResource(
+        path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+    with patch(
+        "comfyreview.repositories.sqlite.card_battler_model_resource."
+        "connect_read_only",
+        side_effect=sqlite3.DatabaseError("open failed"),
+    ):
+        with pytest.raises(CardBattlerModelInvalid, match="cannot open"):
+            resource.validation()
+
+
+def test_model_resource_rejects_failed_integrity_check(tmp_path: Path) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    resource = SqliteCardBattlerModelResource(
+        path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+    connection = resource._open_connection()
+    wrapped = Mock(wraps=connection)
+
+    def execute(
+        statement: str, parameters: tuple[str | int, ...] = ()
+    ) -> object:
+        if statement == "PRAGMA integrity_check":
+            cursor = Mock()
+            cursor.fetchall.return_value = [("broken",)]
+            return cursor
+        return connection.execute(statement, parameters)
+
+    wrapped.execute.side_effect = execute
+    with patch.object(resource, "_open_connection", return_value=wrapped):
+        with pytest.raises(CardBattlerModelInvalid, match="integrity_check"):
+            resource.validation()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("DELETE FROM schema_meta WHERE key = 'database_name'", "identity"),
+        (
+            "UPDATE schema_meta SET value = 'invalid' "
+            "WHERE key = 'schema_version'",
+            "not an integer",
+        ),
+        ("UPDATE rulesets SET status = 'retired'", "active ruleset"),
+        (
+            "UPDATE mapping_policies SET active = 0",
+            "active mapping policy",
+        ),
+        ("UPDATE rng_policies SET active = 0", "active rng policy"),
+    ),
+)
+def test_model_resource_rejects_unresolvable_identity_and_active_contracts(
+    tmp_path: Path,
+    mutation: str,
+    message: str,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(mutation)
+        connection.commit()
+    finally:
+        connection.close()
+
+    resource = SqliteCardBattlerModelResource(
+        path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+    with pytest.raises(CardBattlerModelInvalid, match=message):
+        resource.validation()
+
+
+def test_model_resource_rejects_missing_identity_table(tmp_path: Path) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("DROP TABLE schema_meta")
+        connection.commit()
+    finally:
+        connection.close()
+
+    resource = SqliteCardBattlerModelResource(
+        path, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+    )
+    with pytest.raises(CardBattlerModelInvalid, match="schema_meta"):
+        resource.validation()
+
+
+@pytest.mark.parametrize(
+    "requirement",
+    (
+        CardBattlerModelSchemaRequirement(group="", tables=()),
+        CardBattlerModelSchemaRequirement(
+            group="invalid-table",
+            tables=(
+                CardBattlerModelTableRequirement(
+                    table="bad-name", columns=frozenset({"column"})
+                ),
+            ),
+        ),
+        CardBattlerModelSchemaRequirement(
+            group="empty-columns",
+            tables=(
+                CardBattlerModelTableRequirement(
+                    table="rulesets", columns=frozenset()
+                ),
+            ),
+        ),
+        CardBattlerModelSchemaRequirement(
+            group="invalid-column",
+            tables=(
+                CardBattlerModelTableRequirement(
+                    table="rulesets", columns=frozenset({"bad-name"})
+                ),
+            ),
+        ),
+    ),
+)
+def test_model_resource_rejects_invalid_schema_registrations(
+    tmp_path: Path,
+    requirement: CardBattlerModelSchemaRequirement,
+) -> None:
+    with pytest.raises(ValueError, match="schema|table|column"):
+        SqliteCardBattlerModelResource(
+            tmp_path / "unused.sqlite3", (requirement,)
+        )
 
 
 def test_missing_model_database_is_normalized(tmp_path: Path) -> None:

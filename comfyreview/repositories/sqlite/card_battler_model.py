@@ -4,17 +4,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 from comfyreview.application.card_battler_model import (
     CardBattlerMappingPolicy,
     CardBattlerModelInvalid,
     CardBattlerModelMetadata,
-    CardBattlerModelNotFound,
     CardBattlerModelSummary,
-    CardBattlerModelVersionUnsupported,
     CardBattlerRngPolicy,
     CardBattlerRulesetRef,
     CardClassDefinition,
@@ -28,168 +25,29 @@ from comfyreview.application.card_battler_model import (
     TraitLineageDefinition,
     WorldStyleDefinition,
 )
-from comfyreview.repositories.sqlite.connection import connect_read_only
-
-_EXPECTED_DATABASE_NAME = "card_battler_model"
-_SUPPORTED_SCHEMA_VERSIONS = frozenset({3})
-_REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
-    "schema_meta": frozenset({"key", "value"}),
-    "semantic_vocabularies": frozenset(
-        {"id", "vocabulary_key", "version", "status", "description"}
-    ),
-    "rulesets": frozenset(
-        {
-            "id",
-            "ruleset_key",
-            "version",
-            "name",
-            "status",
-            "semantic_vocabulary_id",
-            "description",
-        }
-    ),
-    "semantic_categories": frozenset(
-        {"id", "vocabulary_id", "key", "name", "description"}
-    ),
-    "semantic_concepts": frozenset(
-        {
-            "id",
-            "vocabulary_id",
-            "category_id",
-            "key",
-            "name",
-            "description",
-            "active",
-        }
-    ),
-    "semantic_aliases": frozenset(
-        {"id", "vocabulary_id", "alias", "concept_id"}
-    ),
-    "world_styles": frozenset(
-        {
-            "id",
-            "ruleset_id",
-            "key",
-            "name",
-            "parent_style_id",
-            "description",
-            "active",
-        }
-    ),
-    "card_classes": frozenset(
-        {"id", "ruleset_id", "key", "name", "description", "active"}
-    ),
-    "combat_roles": frozenset(
-        {"id", "ruleset_id", "key", "name", "description", "active"}
-    ),
-    "trait_lineages": frozenset(
-        {"id", "ruleset_id", "key", "name", "description", "active"}
-    ),
-    "rarities": frozenset(
-        {
-            "id",
-            "ruleset_id",
-            "key",
-            "name",
-            "ordinal",
-            "max_traits",
-            "active",
-        }
-    ),
-    "development_tiers": frozenset(
-        {
-            "id",
-            "ruleset_id",
-            "rarity_id",
-            "level",
-            "ordinal",
-            "next_tier_id",
-            "development_locked",
-        }
-    ),
-    "mechanic_templates": frozenset(
-        {
-            "id",
-            "ruleset_id",
-            "key",
-            "internal_name",
-            "description",
-            "base_weight_milli",
-            "active",
-        }
-    ),
-    "visual_prompt_atoms": frozenset(
-        {
-            "id",
-            "ruleset_id",
-            "key",
-            "canonical_text",
-            "category",
-            "active",
-        }
-    ),
-    "mapping_policies": frozenset(
-        {"id", "ruleset_id", "policy_key", "version", "config_json", "active"}
-    ),
-    "rng_policies": frozenset(
-        {
-            "id",
-            "ruleset_id",
-            "policy_key",
-            "version",
-            "algorithm",
-            "config_json",
-            "active",
-        }
-    ),
-    "semantic_world_style_affinity": frozenset(
-        {"concept_id", "world_style_id", "weight_milli"}
-    ),
-    "semantic_class_affinity": frozenset(
-        {"concept_id", "class_id", "weight_milli"}
-    ),
-    "semantic_role_affinity": frozenset(
-        {"concept_id", "role_id", "weight_milli"}
-    ),
-    "semantic_lineage_affinity": frozenset(
-        {"concept_id", "lineage_id", "weight_milli"}
-    ),
-    "world_style_class_compatibility": frozenset(
-        {"world_style_id", "class_id", "weight_milli", "enabled"}
-    ),
-    "class_role_compatibility": frozenset(
-        {"class_id", "role_id", "weight_milli", "enabled"}
-    ),
-    "class_lineage_compatibility": frozenset(
-        {"class_id", "lineage_id", "weight_milli", "enabled"}
-    ),
-    "role_lineage_compatibility": frozenset(
-        {"role_id", "lineage_id", "weight_milli", "enabled"}
-    ),
-    "mapping_fallback_world_styles": frozenset(
-        {"mapping_policy_id", "world_style_id", "weight_milli"}
-    ),
-    "mapping_fallback_classes": frozenset(
-        {"mapping_policy_id", "class_id", "weight_milli"}
-    ),
-    "mapping_fallback_roles": frozenset(
-        {"mapping_policy_id", "role_id", "weight_milli"}
-    ),
-    "mapping_fallback_lineages": frozenset(
-        {"mapping_policy_id", "lineage_id", "weight_milli"}
-    ),
-}
+from comfyreview.repositories.sqlite.card_battler_model_resource import (
+    CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS,
+    SqliteCardBattlerModelResource,
+)
 
 
 class SqliteCardBattlerModelRepository:
     """Read a validated Card Battler model without ever mutating it."""
 
-    def __init__(self, database_path: Path) -> None:
-        self._database_path = Path(database_path)
+    def __init__(
+        self, database: Path | SqliteCardBattlerModelResource
+    ) -> None:
+        self._resource = (
+            database
+            if isinstance(database, SqliteCardBattlerModelResource)
+            else SqliteCardBattlerModelResource(
+                database, CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS
+            )
+        )
+        self._database_path = self._resource.database_path
 
     def metadata(self) -> CardBattlerModelMetadata:
-        with self._validated_connection() as connection:
-            return self._read_metadata(connection)
+        return self._resource.validation().metadata
 
     def resolve_ruleset(
         self,
@@ -197,6 +55,8 @@ class SqliteCardBattlerModelRepository:
         key: str | None = None,
         version: int | None = None,
     ) -> CardBattlerRulesetRef:
+        if key is None and version is None:
+            return self._resource.validation().active_ruleset
         with self._validated_connection() as connection:
             _, ruleset = self._resolve_ruleset(connection, key, version)
             return ruleset
@@ -713,159 +573,10 @@ class SqliteCardBattlerModelRepository:
                 foreign_key_violation_count=0,
             )
 
-    @contextmanager
-    def _validated_connection(self) -> Iterator[sqlite3.Connection]:
-        connection = self._open_connection()
-        try:
-            self._validate_connection(connection)
-            yield connection
-        except (
-            CardBattlerModelInvalid,
-            CardBattlerModelNotFound,
-            CardBattlerModelVersionUnsupported,
-        ):
-            raise
-        except (
-            sqlite3.DatabaseError,
-            KeyError,
-            TypeError,
-            ValueError,
-        ) as error:
-            raise self._invalid(str(error)) from error
-        finally:
-            connection.close()
-
-    def _open_connection(self) -> sqlite3.Connection:
-        path = self._database_path.expanduser().resolve()
-        if not path.exists():
-            raise CardBattlerModelNotFound(
-                f"Card Battler model database does not exist: {path}"
-            )
-        if not path.is_file():
-            raise self._invalid(
-                f"configured Card Battler model path is not a file: {path}"
-            )
-        try:
-            connection = connect_read_only(path, rows=True)
-            connection.execute("PRAGMA query_only = ON")
-            return connection
-        except (OSError, sqlite3.DatabaseError) as error:
-            raise self._invalid(
-                f"cannot open model database: {error}"
-            ) from error
-
-    def _validate_connection(self, connection: sqlite3.Connection) -> None:
-        self._validate_metadata_schema(connection)
-        metadata = self._read_metadata(connection)
-        if metadata.database_name != _EXPECTED_DATABASE_NAME:
-            raise self._invalid(
-                "unexpected database identity "
-                f"{metadata.database_name!r}; expected "
-                f"{_EXPECTED_DATABASE_NAME!r}"
-            )
-        if metadata.schema_version not in _SUPPORTED_SCHEMA_VERSIONS:
-            supported = ", ".join(
-                str(version) for version in sorted(_SUPPORTED_SCHEMA_VERSIONS)
-            )
-            raise CardBattlerModelVersionUnsupported(
-                "unsupported Card Battler model schema version "
-                f"{metadata.schema_version}; supported: {supported}"
-            )
-        self._validate_foundational_schema(connection)
-        integrity = connection.execute("PRAGMA integrity_check").fetchall()
-        if not integrity or any(
-            str(row[0]).lower() != "ok" for row in integrity
-        ):
-            raise self._invalid("SQLite integrity_check did not report ok")
-        foreign_keys = connection.execute(
-            "PRAGMA foreign_key_check"
-        ).fetchall()
-        if foreign_keys:
-            raise self._invalid(
-                "SQLite foreign_key_check reported "
-                f"{len(foreign_keys)} violation(s)"
-            )
-        self._resolve_ruleset(connection, None, None)
-
-    def _validate_metadata_schema(
+    def _validated_connection(
         self,
-        connection: sqlite3.Connection,
-    ) -> None:
-        table = connection.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table' AND name = 'schema_meta'
-            """
-        ).fetchone()
-        if table is None:
-            raise self._invalid("missing required table: schema_meta")
-        columns = {
-            str(row["name"])
-            for row in connection.execute(
-                "PRAGMA table_info(schema_meta)"
-            ).fetchall()
-        }
-        missing = sorted(_REQUIRED_COLUMNS["schema_meta"] - columns)
-        if missing:
-            raise self._invalid(
-                "table 'schema_meta' is missing required column(s): "
-                + ", ".join(missing)
-            )
-
-    def _validate_foundational_schema(
-        self,
-        connection: sqlite3.Connection,
-    ) -> None:
-        table_rows = connection.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-            """
-        ).fetchall()
-        available = {str(row["name"]) for row in table_rows}
-        missing = sorted(_REQUIRED_COLUMNS.keys() - available)
-        if missing:
-            raise self._invalid(
-                "missing required table(s): " + ", ".join(missing)
-            )
-        for table, required in _REQUIRED_COLUMNS.items():
-            columns = {
-                str(row["name"])
-                for row in connection.execute(
-                    f"PRAGMA table_info({table})"
-                ).fetchall()
-            }
-            missing_columns = sorted(required - columns)
-            if missing_columns:
-                raise self._invalid(
-                    f"table {table!r} is missing required column(s): "
-                    + ", ".join(missing_columns)
-                )
-
-    def _read_metadata(
-        self,
-        connection: sqlite3.Connection,
-    ) -> CardBattlerModelMetadata:
-        rows = connection.execute(
-            "SELECT key, value FROM schema_meta ORDER BY key COLLATE BINARY"
-        ).fetchall()
-        values = {str(row["key"]): str(row["value"]) for row in rows}
-        if "database_name" not in values or "schema_version" not in values:
-            raise self._invalid("schema_meta is missing model identity fields")
-        try:
-            schema_version = int(values["schema_version"])
-        except ValueError as error:
-            raise self._invalid("schema_version is not an integer") from error
-        return CardBattlerModelMetadata(
-            database_name=values["database_name"],
-            schema_version=schema_version,
-            seed_version=values.get("seed_version"),
-            purpose=values.get("purpose"),
-            authority=values.get("authority"),
-            audit_status=values.get("audit_status"),
-        )
+    ) -> AbstractContextManager[sqlite3.Connection]:
+        return self._resource.connect()
 
     def _resolve_ruleset(
         self,
@@ -923,7 +634,8 @@ class SqliteCardBattlerModelRepository:
         ruleset: CardBattlerRulesetRef | None,
     ) -> tuple[int, CardBattlerRulesetRef]:
         if ruleset is None:
-            return self._resolve_ruleset(connection, None, None)
+            validation = self._resource.validation()
+            return validation.active_ruleset_id, validation.active_ruleset
         return self._resolve_ruleset(
             connection,
             ruleset.key,
