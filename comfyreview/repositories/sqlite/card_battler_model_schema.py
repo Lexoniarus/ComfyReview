@@ -549,6 +549,97 @@ CARD_MECHANIC_STRUCTURE_SCHEMA = CardBattlerModelSchemaRequirement(
     ),
 )
 
+CARD_DEVELOPMENT_POLICY_SCHEMA = CardBattlerModelSchemaRequirement(
+    group="card-development-policy",
+    tables=(
+        CardBattlerModelTableRequirement(
+            "development_policies",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "policy_key",
+                    "version",
+                    "config_json",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "development_action_types",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "key",
+                    "name",
+                    "description",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "tier_development_action_weights",
+            frozenset(
+                {"tier_id", "action_type_id", "weight_milli", "enabled"}
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "rarities",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "key",
+                    "name",
+                    "ordinal",
+                    "max_traits",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "development_tiers",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "rarity_id",
+                    "level",
+                    "ordinal",
+                    "next_tier_id",
+                    "development_locked",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "balance_policies",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "policy_key",
+                    "version",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "tier_balance_profiles",
+            frozenset(
+                {
+                    "tier_id",
+                    "balance_policy_id",
+                    "stat_budget",
+                    "mechanic_budget_milli",
+                    "max_traits",
+                    "parameter_scale_milli",
+                }
+            ),
+        ),
+    ),
+)
+
 CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     MODEL_IDENTITY_SCHEMA,
     FOUNDATIONAL_CARD_BATTLER_SCHEMA,
@@ -556,4 +647,5 @@ CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     CARD_MATERIALIZATION_SCHEMA,
     CARD_MECHANIC_CATALOG_SCHEMA,
     CARD_MECHANIC_STRUCTURE_SCHEMA,
+    CARD_DEVELOPMENT_POLICY_SCHEMA,
 )

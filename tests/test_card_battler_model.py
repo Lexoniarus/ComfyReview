@@ -136,6 +136,30 @@ def _create_model_database(
                 next_tier_id INTEGER REFERENCES development_tiers(id),
                 development_locked INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE development_policies (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                policy_key TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                config_json TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE development_action_types (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE tier_development_action_weights (
+                tier_id INTEGER NOT NULL REFERENCES development_tiers(id),
+                action_type_id INTEGER NOT NULL
+                    REFERENCES development_action_types(id),
+                weight_milli INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (tier_id, action_type_id)
+            );
             CREATE TABLE trigger_types (
                 id INTEGER PRIMARY KEY,
                 ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
@@ -599,11 +623,11 @@ def _create_model_database(
             """
             INSERT INTO rarities(
                 id, ruleset_id, key, name, ordinal, max_traits, active
-            ) VALUES (?, 1, ?, ?, ?, 1, 1)
+            ) VALUES (?, 1, ?, ?, ?, ?, 1)
             """,
             (
-                (1, "common", "Common", 1),
-                (2, "rare", "Rare", 2),
+                (1, "common", "Common", 1, 1),
+                (2, "rare", "Rare", 2, 2),
             ),
         )
         connection.execute(
@@ -621,6 +645,65 @@ def _create_model_database(
                 next_tier_id, development_locked
             ) VALUES (1, 1, 1, 1, 1, 2, 0)
             """
+        )
+        connection.execute(
+            """
+            INSERT INTO development_policies(
+                id, ruleset_id, policy_key, version, config_json, active
+            ) VALUES (1, 1, 'lineage_preserving_development', 2, ?, 1)
+            """,
+            (
+                '{"cross_lineage_requires_compatibility":true,'
+                '"immutable_imprint_dimensions":['
+                '"world_style","card_class","combat_role","trait_lineage"],'
+                '"legendary_locked_in_prototype":true,'
+                '"prefer_existing_lineage":true,'
+                '"primary_trait_actions":['
+                '"add_first_trait","improve_existing_trait",'
+                '"add_compatible_trait"]}',
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO development_action_types(
+                id, ruleset_id, key, name, description, active
+            ) VALUES (?, 1, ?, ?, ?, 1)
+            """,
+            (
+                (
+                    1,
+                    "add_first_trait",
+                    "Add First Trait",
+                    "Create the first trait",
+                ),
+                (
+                    2,
+                    "improve_existing_trait",
+                    "Improve Existing Trait",
+                    "Improve an existing trait",
+                ),
+                (
+                    3,
+                    "add_compatible_trait",
+                    "Add Compatible Trait",
+                    "Add a compatible trait",
+                ),
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO tier_development_action_weights(
+                tier_id, action_type_id, weight_milli, enabled
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (
+                (1, 3, 0, 0),
+                (1, 1, 1000, 1),
+                (1, 2, 800, 1),
+                (2, 3, 350, 1),
+                (2, 1, 50, 1),
+                (2, 2, 800, 1),
+            ),
         )
         connection.executemany(
             """
@@ -749,14 +832,18 @@ def _create_model_database(
                 (1, "balanced", "Balanced", 500, 500, "Even shares"),
             ),
         )
-        connection.execute(
+        connection.executemany(
             """
             INSERT INTO tier_balance_profiles(
                 tier_id, balance_policy_id, stat_budget,
                 mechanic_budget_milli, min_atk, max_atk, min_def, max_def,
                 max_traits, parameter_scale_milli
-            ) VALUES (1, 1, 3000, 1000, 600, 2400, 600, 2400, 1, 1000)
-            """
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (1, 3000, 1000, 600, 2400, 600, 2400, 1, 1000),
+                (2, 4000, 1500, 800, 3200, 800, 3200, 2, 1200),
+            ),
         )
         for table, source_column in (
             ("class_stat_profile_affinity", "class_id"),
@@ -1066,6 +1153,7 @@ def test_model_resource_caches_success_and_lends_short_read_only_connections(
         for policy in first.active_policies
     ] == [
         ("balance", "prototype_balance", 2),
+        ("development", "lineage_preserving_development", 2),
         ("mapping", "semantic_imprint_mapping", 2),
         ("rng", "deterministic_rng", 2),
     ]

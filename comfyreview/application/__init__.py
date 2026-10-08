@@ -38,6 +38,12 @@ from comfyreview.application.arena import (
     RecordArenaDecisionCommand,
 )
 from comfyreview.application.card_battler_common import CommonCardMaterializer
+from comfyreview.application.card_battler_development import (
+    CardDevelopmentModelRepository,
+    CardDevelopmentPolicy,
+    DevelopmentTierModel,
+    TierDevelopmentActionWeight,
+)
 from comfyreview.application.card_battler_mapping import (
     CandidateScore,
     CardImprint,
@@ -532,6 +538,8 @@ __all__ = [
     "CardBattlerMappingPolicy",
     "CardBattlerRngPolicy",
     "CardBalancePolicy",
+    "CardDevelopmentModelRepository",
+    "CardDevelopmentPolicy",
     "CommonCardMaterializer",
     "CardStatMaterializer",
     "InitialTraitCandidateScore",
@@ -573,6 +581,7 @@ __all__ = [
     "CardClassDefinition",
     "CombatRoleDefinition",
     "DevelopmentTierDefinition",
+    "DevelopmentTierModel",
     "DomainSeparatedCardRandom",
     "CanonicalRuleRenderer",
     "CanonicalRuleRenderingError",
@@ -580,6 +589,7 @@ __all__ = [
     "MechanicTemplateReference",
     "SemanticConceptDefinition",
     "TraitLineageDefinition",
+    "TierDevelopmentActionWeight",
     "WorldStyleDefinition",
     "CanonicalOutputImageRecord",
     "CanonicalOutputImageSource",

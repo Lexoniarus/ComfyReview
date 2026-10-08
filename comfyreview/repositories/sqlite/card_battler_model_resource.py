@@ -290,6 +290,7 @@ class SqliteCardBattlerModelResource:
         policies: list[CardBattlerModelPolicyRef] = []
         for kind, table in (
             ("balance", "balance_policies"),
+            ("development", "development_policies"),
             ("mapping", "mapping_policies"),
             ("rng", "rng_policies"),
         ):
