@@ -1735,13 +1735,13 @@ describe("Playground browser components", () => {
     preview.dispose();
   });
 
-  it("renders separate top two- and three-component evidence", () => {
+  it("renders separate two- and three-additional-factor evidence", () => {
     const root = document.createElement("div");
     const navigator = { open: vi.fn(), openIntent: vi.fn() };
     const view = new TopCombinationsView(root, navigator);
 
     view.render({
-      two_component: [
+      two_additional_factors: [
         {
           label: "Aiko + Rooftop",
           image_count: 2,
@@ -1770,13 +1770,13 @@ describe("Playground browser components", () => {
         },
         null,
       ],
-      three_component: [],
+      three_additional_factors: [],
     });
 
-    expect(root.textContent).toContain("Top 2er-Kombinationen");
     expect(root.textContent).toContain(
-      "Zwei tatsächlich gemeinsam verwendete Faktoren",
+      "Top-Kombinationen mit 2 Zusatzfaktoren",
     );
+    expect(root.textContent).toContain("Der Charakter ist immer enthalten");
     expect(root.textContent).toContain("Aiko + Rooftop");
     expect(root.textContent).toContain("2 Bilder · 4 Bewertungen · Ø 8,5 / 10");
     expect(root.textContent).toContain("Noch keine ausreichend belegten");
@@ -1832,7 +1832,7 @@ describe("Playground browser components", () => {
     expect(root.children).toHaveLength(0);
   });
 
-  it("renders independent two- and three-component rows per character", () => {
+  it("renders independent additional-factor rows per character", () => {
     const root = document.createElement("div");
     const view = new TopCombinationsView(root, {
       open: vi.fn(),
@@ -1844,14 +1844,14 @@ describe("Playground browser components", () => {
         {
           character_uid: "character-a",
           character_name: "Aiko",
-          two_component: [{ label: "Aiko + Rooftop" }],
-          three_component: [{ label: "Aiko + Rooftop + Uniform" }],
+          two_additional_factors: [{ label: "Aiko + Rooftop" }],
+          three_additional_factors: [{ label: "Aiko + Rooftop + Uniform" }],
         },
         {
           character_uid: "character-b",
           character_name: "Hina",
-          two_component: [{ label: "Hina + Park" }],
-          three_component: [],
+          two_additional_factors: [{ label: "Hina + Park" }],
+          three_additional_factors: [],
         },
       ],
     });
@@ -1874,7 +1874,7 @@ describe("Playground browser components", () => {
         {
           character_uid: "character-a",
           character_name: "Aiko",
-          two_component: [
+          two_additional_factors: [
             {
               label: "Aiko + Rooftop",
               factors: [
@@ -1884,7 +1884,7 @@ describe("Playground browser components", () => {
               ],
             },
           ],
-          three_component: [
+          three_additional_factors: [
             {
               label: "Aiko + Rooftop + Uniform",
               factors: [
@@ -1958,7 +1958,7 @@ describe("Playground browser components", () => {
     const navigator = { open: vi.fn(), openIntent: vi.fn() };
     const view = new TopCombinationsView(root, navigator);
     view.render({
-      two_component: [
+      two_additional_factors: [
         {
           factors: [
             promptFactor("character", "character-a"),
@@ -1983,7 +1983,7 @@ describe("Playground browser components", () => {
     const navigator = { open: vi.fn(), openIntent: vi.fn() };
     const view = new TopCombinationsView(root, navigator);
     view.render({
-      two_component: [
+      two_additional_factors: [
         { factors: [promptFactor("character", "character-a")] },
         {
           factors: [
@@ -2014,7 +2014,7 @@ describe("Playground browser components", () => {
           ],
         },
       ],
-      three_component: [
+      three_additional_factors: [
         { factors: [promptFactor("character", "character-a")] },
       ],
     });

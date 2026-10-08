@@ -890,7 +890,7 @@ class _AnalyticsPages:
                 {
                     "character_uid": "character-a",
                     "character_name": "Aiko",
-                    "two_component": [
+                    "two_additional_factors": [
                         {
                             "combo_key": "character-a|scene-a",
                             "component_uids": ["character-a", "scene-a"],
@@ -904,7 +904,7 @@ class _AnalyticsPages:
                             ],
                         }
                     ],
-                    "three_component": [],
+                    "three_additional_factors": [],
                 }
             ]
         }
@@ -1341,7 +1341,7 @@ def test_v2_playground_reads_catalog_and_native_capabilities() -> None:
     }
     combinations = client.get("/api/v2/playground/top-combinations")
     assert combinations.status_code == 200
-    assert combinations.json()["characters"][0]["two_component"][0][
+    assert combinations.json()["characters"][0]["two_additional_factors"][0][
         "component_uids"
     ] == [
         "character-a",

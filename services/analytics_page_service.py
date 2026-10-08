@@ -13,6 +13,7 @@ from comfyreview.application import (
     CompositionAnalyticsService,
     ObservedPromptCombination,
     ParameterValueStatistic,
+    PlaygroundCombinationSelectionPolicy,
     RenderAnalyticsService,
     RenderParameter,
     RenderSetupStatistic,
@@ -36,12 +37,14 @@ class AnalyticsPageService:
         reports: AnalyticsReportService,
         render_analytics: RenderAnalyticsService,
         composition_analytics: CompositionAnalyticsService,
+        playground_combinations: PlaygroundCombinationSelectionPolicy,
         image_url: ImageUrlResolver,
     ) -> None:
         self._analytics = analytics
         self._reports = reports
         self._render_analytics = render_analytics
         self._composition_analytics = composition_analytics
+        self._playground_combinations = playground_combinations
         self._image_url = image_url
 
     def composition_context(
@@ -86,41 +89,31 @@ class AnalyticsPageService:
         *,
         limit: int = 8,
     ) -> dict[str, Any]:
-        """Build top canonical two- and three-component examples."""
+        """Build diverse two- and three-additional-factor examples."""
         two_groups = self._analytics.observed_combinations_by_character(
-            combo_size=2,
-            limit_per_character=int(limit),
+            additional_factor_count=2,
         )
         three_groups = self._analytics.observed_combinations_by_character(
-            combo_size=3,
-            limit_per_character=int(limit),
+            additional_factor_count=3,
         )
-        group_uids = dict.fromkeys(
-            [group.character_uid for group in two_groups]
-            + [group.character_uid for group in three_groups]
+        selections = self._playground_combinations.select(
+            two_additional_factors=two_groups,
+            three_additional_factors=three_groups,
+            limit_per_group=int(limit),
         )
-        two_by_uid = {group.character_uid: group for group in two_groups}
-        three_by_uid = {group.character_uid: group for group in three_groups}
         return {
             "characters": [
                 {
-                    "character_uid": character_uid,
-                    "character_name": (
-                        two_by_uid.get(character_uid)
-                        or three_by_uid[character_uid]
-                    ).character_name,
-                    "two_component": self._combination_views(
-                        two_by_uid[character_uid].combinations
-                        if character_uid in two_by_uid
-                        else ()
+                    "character_uid": selection.character_uid,
+                    "character_name": selection.character_name,
+                    "two_additional_factors": self._combination_views(
+                        selection.two_additional_factors
                     ),
-                    "three_component": self._combination_views(
-                        three_by_uid[character_uid].combinations
-                        if character_uid in three_by_uid
-                        else ()
+                    "three_additional_factors": self._combination_views(
+                        selection.three_additional_factors
                     ),
                 }
-                for character_uid in group_uids
+                for selection in selections
             ]
         }
 

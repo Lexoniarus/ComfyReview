@@ -501,12 +501,12 @@ The canonical cutover is intentionally not the end of the wider refactor.
   before editor rendering, saved-state restore, handoff, persistence or
   cleanup. Both single-source Scope and Composition actions apply through the
   shared rollback/persist operation and clear only their typed source after the
-  normal generator state is saved. Top Combinations carries a typed
-  `promptCombination` source containing only kind/component/revision selections.
-  Its producer validates exact member counts and maps the known ordered
-  `two_component` and `three_component` response shapes to Character/Scene and
-  Character/Scene/Outfit; the stateless projector applies only those kinds as
-  a partial patch, leaving all other selections and LoRAs unchanged. After
+  normal generator state is saved. Top Combinations carries a typed combination
+  source containing exact kind/component/revision selections plus applicable
+  LoRA revisions and strengths. The `two_additional_factors` and
+  `three_additional_factors` response fields count observed factors beside the
+  always-present Character. Their producer rejects incomplete or unavailable
+  factors before the stateless projector applies the exact selection. After
   successful apply and generator-state persistence, only that typed source is
   removed from the current URL. The injected URL cleanup preserves unrelated
   query parameters; failed or ambiguous handoffs leave the source URL
@@ -682,10 +682,13 @@ geometry are deliberately absent from this optimizer contract. Prompt
 combinations remain a separate canonical composition query. Image URLs are
 added only at the HTTP presentation boundary from stable image IDs.
 
-`AnalyticsService.observed_combinations_by_character` groups those observed
-composition facts by stable character UID and applies the result limit inside
-each group. The Playground presenter therefore receives independently ranked
-Top-2 and Top-3 rows without deriving character identity in the browser.
+`AnalyticsService.observed_combinations_by_character` groups the complete
+ranked candidate set by stable character UID for an explicit additional-factor
+count. `PlaygroundCombinationSelectionPolicy` then fills the two- and
+three-additional-factor groups in alternating passes, preferring a distinct
+best-image UID across both groups before deterministically falling back to the
+remaining ranked candidates. The Playground presenter only translates that
+selection and never derives character identity or diversity in the browser.
 
 ## 11. Observability and quality
 
