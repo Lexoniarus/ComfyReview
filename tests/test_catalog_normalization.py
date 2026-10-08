@@ -642,3 +642,31 @@ def test_catalog_rebuild_can_atomically_replace_source_without_backup(
         assert connection.execute(
             "SELECT COUNT(*) FROM global_prompt_policies WHERE active = 1"
         ).fetchone() == (6,)
+
+
+def test_catalog_rebuild_rejects_or_alternatives_in_target_atoms(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "source.sqlite3"
+    _seed_rebuild_source(database, tmp_path)
+    audit_path = tmp_path / "audit.json"
+    mapping_path = tmp_path / "mapping.json"
+    CatalogNormalizationAuditor(database).audit(audit_path, mapping_path)
+    _complete_rebuild_mapping(mapping_path)
+    mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+    target = mapping["target_components"][0]
+    target["atoms"][0]["text"] = "mist or fog"
+    target["revision_uid"] = prompt_revision_identity(
+        target["component_uid"], "mist or fog", ""
+    )[0]
+    mapping_path.write_text(json.dumps(mapping), encoding="utf-8")
+
+    with pytest.raises(
+        CatalogNormalizationValidationError,
+        match="or-alternative",
+    ):
+        CatalogNormalizationRebuilder(database).rebuild(
+            audit_path,
+            mapping_path,
+            tmp_path / "output.sqlite3",
+        )

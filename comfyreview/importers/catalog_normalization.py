@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import tempfile
 from collections import Counter
@@ -1735,6 +1736,10 @@ def _validate_atoms(
         if scope not in {"pos", "neg"} or not text:
             raise CatalogNormalizationValidationError(
                 f"Invalid atom scope or text in {owner}"
+            )
+        if re.search(r"\bor\b", text, flags=re.IGNORECASE):
+            raise CatalogNormalizationValidationError(
+                f"Atom contains an unresolved or-alternative in {owner}"
             )
         if position < 0 or weight <= 0:
             raise CatalogNormalizationValidationError(
