@@ -750,6 +750,8 @@ class CanonicalSchemaManager:
         self,
         backup_directory: Path | None = None,
         legacy_generator_state_path: Path | None = None,
+        *,
+        create_backup: bool = True,
     ) -> CanonicalSchemaReport:
         """Back up and explicitly upgrade a supported older schema."""
         if not self._database_path.exists():
@@ -827,7 +829,9 @@ class CanonicalSchemaManager:
             legacy_generator_state_path
         )
 
-        backup_path = self._create_backup(backup_directory)
+        backup_path = (
+            self._create_backup(backup_directory) if create_backup else None
+        )
         source_path = self._database_path
         migration_path = source_path.with_name(
             f".{source_path.name}.{uuid4().hex}.upgrade"

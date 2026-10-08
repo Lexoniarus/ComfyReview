@@ -19,6 +19,8 @@ from comfyreview.application import (
     PromptVariantGuidanceService,
 )
 from comfyreview.importers import (
+    CatalogNormalizationAuditor,
+    CatalogNormalizationValidationError,
     ContentLevelAuditor,
     ContentLevelRecovery,
     ContentLevelRecoveryValidationError,
@@ -196,7 +198,46 @@ def _parser() -> argparse.ArgumentParser:
     for action_name in ("audit", "reconcile"):
         action = promotion_actions.add_parser(action_name)
         action.add_argument("--database", type=Path)
+    catalog_normalization = commands.add_parser("catalog-normalization")
+    catalog_actions = catalog_normalization.add_subparsers(
+        dest="action", required=True
+    )
+    catalog_audit = catalog_actions.add_parser("audit")
+    catalog_audit.add_argument("--database", type=Path)
+    catalog_audit.add_argument("--report", type=Path)
+    catalog_audit.add_argument("--mapping", type=Path)
     return parser
+
+
+def _run_catalog_normalization(options: argparse.Namespace) -> int:
+    settings = load_settings()
+    database_path = options.database or settings.canonical_database_path
+    report_path = options.report or (
+        settings.data_directory
+        / "reports"
+        / "catalog-normalization-audit.json"
+    )
+    mapping_path = options.mapping or (
+        settings.data_directory
+        / "rehearsals"
+        / "catalog-normalization-mapping.json"
+    )
+    result = CatalogNormalizationAuditor(database_path).audit(
+        report_path,
+        mapping_path,
+    )
+    print(
+        json.dumps(
+            {
+                "report_path": str(result.report_path),
+                "mapping_path": str(result.mapping_path),
+                **result.summary,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0
 
 
 def _run_prompt_promotions(options: argparse.Namespace) -> int:
@@ -642,6 +683,8 @@ def main(arguments: list[str] | None = None) -> int:
             return _run_generation(options)
         if options.command == "prompt-promotions":
             return _run_prompt_promotions(options)
+        if options.command == "catalog-normalization":
+            return _run_catalog_normalization(options)
         if options.command == "content-levels":
             return _run_content_levels(options)
         return _run_legacy_output(options)
@@ -679,6 +722,9 @@ def main(arguments: list[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
     except ContentLevelRecoveryValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except CatalogNormalizationValidationError as error:
         print(str(error), file=sys.stderr)
         return 2
     except GenerationValidationError as error:
