@@ -245,6 +245,32 @@ def _create_model_database(
                 category TEXT NOT NULL,
                 active INTEGER NOT NULL DEFAULT 1
             );
+            CREATE TABLE prompt_projection_policies (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                policy_key TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                config_json TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE visual_progression_profiles (
+                tier_id INTEGER PRIMARY KEY REFERENCES development_tiers(id),
+                world_intensity_milli INTEGER NOT NULL,
+                class_intensity_milli INTEGER NOT NULL,
+                role_intensity_milli INTEGER NOT NULL,
+                lineage_intensity_milli INTEGER NOT NULL,
+                mechanic_intensity_milli INTEGER NOT NULL,
+                semantic_preservation_milli INTEGER NOT NULL
+            );
+            CREATE TABLE prompt_groups (
+                id INTEGER PRIMARY KEY,
+                ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
+                key TEXT NOT NULL,
+                name TEXT NOT NULL,
+                min_selected INTEGER NOT NULL,
+                max_selected INTEGER NOT NULL,
+                description TEXT NOT NULL
+            );
             CREATE TABLE mapping_policies (
                 id INTEGER PRIMARY KEY,
                 ruleset_id INTEGER NOT NULL REFERENCES rulesets(id),
@@ -814,6 +840,46 @@ def _create_model_database(
             (
                 (2, "zeta", "zeta atom"),
                 (1, "alpha", "alpha atom"),
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO prompt_projection_policies(
+                id, ruleset_id, policy_key, version, config_json, active
+            ) VALUES (1, 1, 'weighted_atom_projection', 3, ?, 1)
+            """,
+            (
+                '{"apply_intensity_channels":true,'
+                '"origin_semantics_are_upstream_inputs":true,'
+                '"render_syntax":"{atom:weight}",'
+                '"respect_exclusion_groups":true,'
+                '"respect_forbidden_bindings":true,'
+                '"stable_order":["priority_asc","source_type_asc",'
+                '"atom_key_asc"],"weight_decimals":2,"weight_scale":1000}',
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO visual_progression_profiles(
+                tier_id, world_intensity_milli, class_intensity_milli,
+                role_intensity_milli, lineage_intensity_milli,
+                mechanic_intensity_milli, semantic_preservation_milli
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (1, 150, 120, 80, 60, 40, 950),
+                (2, 300, 250, 200, 150, 100, 900),
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO prompt_groups(
+                id, ruleset_id, key, name, min_selected, max_selected, description
+            ) VALUES (?, 1, ?, ?, ?, ?, ?)
+            """,
+            (
+                (2, "armor", "Armor", 0, 1, "Armor profile"),
+                (1, "weapon", "Weapon", 0, 1, "Primary weapon"),
             ),
         )
         connection.execute(

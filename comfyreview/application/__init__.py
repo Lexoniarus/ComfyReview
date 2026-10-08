@@ -130,6 +130,12 @@ from comfyreview.application.card_battler_trait_selection import (
     InitialTraitSelection,
     InitialTraitSelector,
 )
+from comfyreview.application.card_battler_visual_model import (
+    CardVisualModelRepository,
+    PromptGroupDefinition,
+    VisualProgressionProfile,
+    VisualProjectionPolicy,
+)
 from comfyreview.application.catalog_evidence import (
     CatalogEvidenceImage,
     CatalogEvidenceRepository,
@@ -615,6 +621,10 @@ __all__ = [
     "ExistingTraitImprovementPolicy",
     "CardDevelopmentService",
     "WorldStyleDefinition",
+    "CardVisualModelRepository",
+    "PromptGroupDefinition",
+    "VisualProgressionProfile",
+    "VisualProjectionPolicy",
     "CanonicalOutputImageRecord",
     "CanonicalOutputImageSource",
     "CANONICAL_CONTENT_LEVEL_TAGS",

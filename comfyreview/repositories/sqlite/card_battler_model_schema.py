@@ -725,6 +725,57 @@ CARD_DEVELOPMENT_COMPATIBILITY_SCHEMA = CardBattlerModelSchemaRequirement(
     ),
 )
 
+CARD_VISUAL_PROGRESSION_SCHEMA = CardBattlerModelSchemaRequirement(
+    group="card-visual-progression",
+    tables=(
+        CardBattlerModelTableRequirement(
+            "prompt_projection_policies",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "policy_key",
+                    "version",
+                    "config_json",
+                    "active",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "visual_progression_profiles",
+            frozenset(
+                {
+                    "tier_id",
+                    "world_intensity_milli",
+                    "class_intensity_milli",
+                    "role_intensity_milli",
+                    "lineage_intensity_milli",
+                    "mechanic_intensity_milli",
+                    "semantic_preservation_milli",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "prompt_groups",
+            frozenset(
+                {
+                    "id",
+                    "ruleset_id",
+                    "key",
+                    "name",
+                    "min_selected",
+                    "max_selected",
+                    "description",
+                }
+            ),
+        ),
+        CardBattlerModelTableRequirement(
+            "development_tiers",
+            frozenset({"id", "ruleset_id", "ordinal"}),
+        ),
+    ),
+)
+
 CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     MODEL_IDENTITY_SCHEMA,
     FOUNDATIONAL_CARD_BATTLER_SCHEMA,
@@ -735,4 +786,5 @@ CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS = (
     CARD_DEVELOPMENT_POLICY_SCHEMA,
     CARD_DEVELOPMENT_PROGRESSION_SCHEMA,
     CARD_DEVELOPMENT_COMPATIBILITY_SCHEMA,
+    CARD_VISUAL_PROGRESSION_SCHEMA,
 )
