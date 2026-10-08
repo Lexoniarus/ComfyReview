@@ -50,6 +50,9 @@ from comfyreview.application.card_battler_development import (
     MechanicUpgradeKind,
     TierDevelopmentActionWeight,
 )
+from comfyreview.application.card_battler_development_improvement import (
+    ExistingTraitImprovementPolicy,
+)
 from comfyreview.application.card_battler_mapping import (
     CandidateScore,
     CardImprint,
@@ -602,6 +605,7 @@ __all__ = [
     "SemanticConceptDefinition",
     "TraitLineageDefinition",
     "TierDevelopmentActionWeight",
+    "ExistingTraitImprovementPolicy",
     "WorldStyleDefinition",
     "CanonicalOutputImageRecord",
     "CanonicalOutputImageSource",
