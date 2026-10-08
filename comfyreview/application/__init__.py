@@ -140,6 +140,10 @@ from comfyreview.application.card_battler_visual_model import (
     VisualPromptAtomDefinition,
     VisualPromptBinding,
 )
+from comfyreview.application.card_battler_visual_projection import (
+    VisualPromptProjectionError,
+    VisualPromptProjector,
+)
 from comfyreview.application.card_battler_visuals import (
     VISUAL_PROMPT_PROJECTION_REVISION,
     VisualPromptAtom,
@@ -640,6 +644,8 @@ __all__ = [
     "VisualProgressionProfile",
     "VisualPromptAtomDefinition",
     "VisualPromptBinding",
+    "VisualPromptProjectionError",
+    "VisualPromptProjector",
     "VISUAL_PROMPT_PROJECTION_REVISION",
     "VisualPromptAtom",
     "VisualPromptAtomSource",
