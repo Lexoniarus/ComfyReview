@@ -620,6 +620,9 @@ def prepare_playground_draft(
             "positive_atoms": atom_response(positive_atoms),
             "negative_atoms": atom_response(negative_atoms),
             "revision_uids": draft.prompt.revision_uids,
+            "global_policy_revision_uids": (
+                draft.prompt.global_policy_revision_uids
+            ),
             "draft_overridden": draft.prompt.draft_overridden,
             "groups": (
                 [
@@ -1186,6 +1189,9 @@ def prepared_variant_response(
         "positive_atoms": atom_response(positive_atoms),
         "negative_atoms": atom_response(negative_atoms),
         "revision_uids": draft.prompt.revision_uids,
+        "global_policy_revision_uids": (
+            draft.prompt.global_policy_revision_uids
+        ),
         "draft_overridden": draft.prompt.draft_overridden,
         "groups": [*prompt_groups, *lora_prompt_groups],
         "prompt_groups": prompt_groups,

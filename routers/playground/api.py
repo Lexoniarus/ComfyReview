@@ -63,7 +63,7 @@ def playground_api_previews(
     minimum_hits = max(_nonnegative_int(payload.get("min_hits"), default=1), 1)
     minimum_runs = _nonnegative_int(
         payload.get("min_runs"),
-        default=container.settings.minimum_runs,
+        default=1,
     )
     model_branch = str(payload.get("model_branch") or "")
     views = container.prompt_catalog_views

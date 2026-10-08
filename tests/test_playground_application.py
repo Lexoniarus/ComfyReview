@@ -14,6 +14,7 @@ from comfyreview.application import (
     ConfirmPlaygroundDraftCommand,
     ContentLevel,
     CreatePromptComponentCommand,
+    GlobalPromptPolicyRevision,
     ManualPromptSelection,
     MaterializePromptCandidateCommand,
     PlaygroundService,
@@ -590,6 +591,7 @@ def test_playground_sqlite_defaults_to_promoted_revision_not_latest_history(
         renderer=PromptRenderer(),
         preferences=_Preferences(),
         content_policy=PromptContentPolicy(),
+        global_policies=_GlobalPolicies(),
     )
     disabled_kinds = (
         "scene",
@@ -701,6 +703,7 @@ def test_playground_applies_one_exact_candidate_without_changing_other_groups(
         renderer=PromptRenderer(),
         preferences=_Preferences(),
         content_policy=PromptContentPolicy(),
+        global_policies=_GlobalPolicies(),
     )
 
     draft = playground.prepare_draft(
@@ -1193,14 +1196,94 @@ class _Preferences:
         return preferences
 
 
-def _service(catalog: _CatalogService) -> PlaygroundService:
+class _GlobalPolicies:
+    def __init__(self, policies=()) -> None:
+        self.policies = policies
+
+    def list_active(self, enabled_content_levels):
+        return self.policies
+
+
+def _service(catalog: _CatalogService, policies=()) -> PlaygroundService:
     return PlaygroundService(
         catalog=catalog,
         selection_policy=PromptSelectionPolicy(),
         renderer=PromptRenderer(),
         preferences=_Preferences(),
         content_policy=PromptContentPolicy(),
+        global_policies=_GlobalPolicies(policies),
     )
+
+
+def test_playground_applies_exact_global_policy_revision_after_components() -> (
+    None
+):
+    quality = GlobalPromptPolicyRevision(
+        "quality-1",
+        "quality",
+        "quality",
+        1,
+        "Quality",
+        None,
+        positive_atoms=(PromptAtomUsage("person", 700),),
+        negative_atoms=(
+            PromptAtomUsage("bad anatomy", 700),
+            PromptAtomUsage("bad hands", 900),
+        ),
+    )
+    service = _service(_CatalogService(_catalog()), (quality,))
+
+    draft = service.prepare_draft(
+        PromptSelectionCommand(
+            character_component_uid="character-a",
+            character_revision_uid="revision-character-a",
+            disabled_kinds=(
+                "scene",
+                "atmosphere",
+                "lighting",
+                "outfit",
+                "accessory",
+                "pose",
+                "expression",
+                "framing",
+                "camera_angle",
+                "optical_effect",
+            ),
+            seed=17,
+        )
+    )
+
+    assert draft.prompt.global_policy_revision_uids == ("quality-1",)
+    assert draft.prompt.positive_atoms[0] == PromptAtomUsage("person", 1000)
+    assert draft.prompt.negative_atoms == (
+        PromptAtomUsage("bad anatomy", 1000),
+        PromptAtomUsage("bad hands", 900),
+    )
+    confirmed = service.confirm_draft(
+        ConfirmPlaygroundDraftCommand(
+            prompt_selections=(
+                PromptRevisionSelection(
+                    "character", "character-a", "revision-character-a"
+                ),
+            ),
+            positive_atoms=draft.prompt.positive_atoms,
+            negative_atoms=draft.prompt.negative_atoms,
+            global_policy_revision_uids=("quality-1",),
+        )
+    )
+    assert confirmed.prompt.global_policy_revision_uids == ("quality-1",)
+    with pytest.raises(PromptSelectionError, match="policy revision changed"):
+        service.confirm_draft(
+            ConfirmPlaygroundDraftCommand(
+                prompt_selections=(
+                    PromptRevisionSelection(
+                        "character", "character-a", "revision-character-a"
+                    ),
+                ),
+                positive_atoms=draft.prompt.positive_atoms,
+                negative_atoms=draft.prompt.negative_atoms,
+            )
+        )
 
 
 def test_playground_component_override_changes_only_exact_prompt_group() -> (
@@ -1632,6 +1715,7 @@ def test_playground_service_rechecks_content_level_for_exact_confirmation() -> (
             )
         ),
         content_policy=PromptContentPolicy(),
+        global_policies=_GlobalPolicies(),
     )
 
     with pytest.raises(PromptSelectionError, match="disabled content level"):

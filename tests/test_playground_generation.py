@@ -37,6 +37,7 @@ def _draft() -> PlaygroundGenerationDraft:
             True,
             prompt_atom_usages_from_text("hero"),
             prompt_atom_usages_from_text("blur"),
+            global_policy_revision_uids=("quality-1",),
         ),
         checkpoint="models/NetaYume.safetensors",
         sampler=GenerationSamplerSettings(
@@ -72,6 +73,7 @@ def test_playground_generation_policy_builds_reproducible_request() -> None:
     assert request.prompt.positive_atoms == prompt_atom_usages_from_text(
         "hero"
     )
+    assert request.prompt.global_policy_revision_uids == ("quality-1",)
     assert request.output_policy.output_subdirectory == "playground/Hero_Name"
     assert request.output_policy.filename_prefix == "Hero_Name_draft_1"
     assert request.output_policy.expected_roles == ("primary",)

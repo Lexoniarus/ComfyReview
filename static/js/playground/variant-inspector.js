@@ -75,6 +75,11 @@ export function variantGenerationPayload(variant) {
     source_image_uid: variant.source_image_uid || null,
     positive_atoms: atomValues(variant.positive_atoms),
     negative_atoms: atomValues(variant.negative_atoms),
+    global_policy_revision_uids: Array.isArray(
+      variant.global_policy_revision_uids,
+    )
+      ? [...variant.global_policy_revision_uids]
+      : [],
     checkpoint: generation.checkpoint,
     aspect_format: generation.aspect_format,
     resolution_class: generation.resolution_class,

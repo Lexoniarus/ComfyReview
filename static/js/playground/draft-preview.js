@@ -167,6 +167,11 @@ export class DraftPreview {
       source_image_uid: this.draft.source_image_uid || null,
       positive_atoms: this.#reviewedAtoms("positive"),
       negative_atoms: this.#reviewedAtoms("negative"),
+      global_policy_revision_uids: Array.isArray(
+        this.draft.global_policy_revision_uids,
+      )
+        ? [...this.draft.global_policy_revision_uids]
+        : [],
       checkpoint: settings.checkpoint,
       aspect_format: settings.aspect_format,
       resolution_class: settings.resolution_class,

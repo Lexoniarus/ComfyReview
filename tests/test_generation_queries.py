@@ -46,7 +46,9 @@ class _Repository:
     def get_generation(self, generation_uid):
         if generation_uid == "missing":
             return None
-        return GenerationDetail(_summary(), "positive", "negative", (), (), ())
+        return GenerationDetail(
+            _summary(), "positive", "negative", (), (), (), ()
+        )
 
 
 def test_generation_query_service_reads_persisted_lifecycle_state() -> None:

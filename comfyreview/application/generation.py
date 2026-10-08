@@ -64,6 +64,7 @@ class GenerationPromptSnapshot:
     positive_atoms: tuple[PromptAtomUsage, ...] = ()
     negative_atoms: tuple[PromptAtomUsage, ...] = ()
     prompt_groups: tuple[GenerationPromptGroup, ...] = ()
+    global_policy_revision_uids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

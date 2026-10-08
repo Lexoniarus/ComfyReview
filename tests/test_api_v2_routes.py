@@ -721,6 +721,7 @@ class _GenerationQueries:
             positive_prompt="positive",
             negative_prompt="negative",
             revision_uids=("revision-character-a",),
+            global_policy_revision_uids=("quality-1",),
             sampler_stages=(
                 SimpleNamespace(
                     role="base_sampler",
@@ -2295,6 +2296,7 @@ def test_v2_generation_reads_expose_lifecycle_outputs_and_urls() -> None:
     assert listing.status_code == 200
     assert listing.json()["items"][0]["status"] == "completed"
     assert detail.status_code == 200
+    assert detail.json()["global_policy_revision_uids"] == ["quality-1"]
     assert detail.json()["outputs"][0] == {
         "image_uid": "image-1",
         "role": "primary",

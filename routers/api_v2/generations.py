@@ -99,6 +99,7 @@ class PlaygroundGenerationRequest(BaseModel):
     source_image_uid: str | None = None
     positive_atoms: list[PromptAtomRequest]
     negative_atoms: list[PromptAtomRequest]
+    global_policy_revision_uids: list[str] = Field(default_factory=list)
     checkpoint: str
     aspect_format: AspectFormat
     resolution_class: ResolutionClass
@@ -281,8 +282,15 @@ def generation_draft(
                 ),
                 positive_atoms=positive_atoms,
                 negative_atoms=negative_atoms,
+                global_policy_revision_uids=tuple(
+                    payload.global_policy_revision_uids
+                ),
             )
         )
+    if tuple(payload.global_policy_revision_uids) != (
+        confirmed.prompt.global_policy_revision_uids
+    ):
+        raise PromptSelectionError("global prompt policy revision changed")
     character = next(
         (
             component
@@ -511,6 +519,9 @@ def detail_response(
         "positive_prompt": generation.positive_prompt,
         "negative_prompt": generation.negative_prompt,
         "revision_uids": generation.revision_uids,
+        "global_policy_revision_uids": (
+            generation.global_policy_revision_uids
+        ),
         "sampler_stages": [
             {
                 "role": stage.role,

@@ -57,6 +57,9 @@ class SqliteGenerationRepository:
                     "blueprint_uid": generation.compiled_workflow.blueprint_uid,
                     "blueprint_version": generation.compiled_workflow.blueprint_version,
                     "revision_uids": generation.request.prompt.revision_uids,
+                    "global_policy_revision_uids": (
+                        generation.request.prompt.global_policy_revision_uids
+                    ),
                     "output_policy": {
                         "output_subdirectory": generation.request.output_policy.output_subdirectory,
                         "filename_prefix": generation.request.output_policy.filename_prefix,
@@ -160,6 +163,11 @@ class SqliteGenerationRepository:
                 generation.generation_uid,
                 generation.request.prompt.prompt_groups,
             )
+            self._persist_global_prompt_policies(
+                connection,
+                generation_id,
+                generation.request.prompt.global_policy_revision_uids,
+            )
             for order, stage in enumerate(
                 generation.compiled_workflow.sampler_stages
             ):
@@ -221,6 +229,31 @@ class SqliteGenerationRepository:
             raise
         finally:
             connection.close()
+
+    @staticmethod
+    def _persist_global_prompt_policies(
+        connection: sqlite3.Connection,
+        generation_id: int,
+        policy_uids: tuple[str, ...],
+    ) -> None:
+        if len(set(policy_uids)) != len(policy_uids):
+            raise ValueError("duplicate global prompt policy revision")
+        for position, policy_uid in enumerate(policy_uids):
+            cursor = connection.execute(
+                """
+                INSERT INTO generation_global_prompt_policies(
+                    generation_id, policy_id, position
+                )
+                SELECT ?, id, ?
+                FROM global_prompt_policies
+                WHERE policy_uid = ?
+                """,
+                (generation_id, position, policy_uid),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError(
+                    f"unknown global prompt policy revision: {policy_uid}"
+                )
 
     @staticmethod
     def _loras_json(generation: PreparedGeneration) -> str:
