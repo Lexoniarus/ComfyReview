@@ -604,6 +604,37 @@ def test_catalog_content_edits_deduplicate_candidates_and_atom_identity(
         ).fetchone() == (3,)
 
 
+def test_prompt_catalog_hides_generation_provenance_components(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "comfyreview.sqlite3"
+    CanonicalSchemaManager(database_path).prepare_startup()
+    service = PromptCatalogService(
+        repository=SqlitePromptCatalogRepository(database_path),
+        identities=_FixedIdentities(),
+    )
+    created = service.create_component(_create_command())
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE prompt_components "
+            "SET catalog_role = 'generation_provenance' "
+            "WHERE component_uid = ?",
+            (created.component_uid,),
+        )
+
+    assert service.list_components(include_archived=True) == ()
+    with pytest.raises(KeyError, match="Unknown prompt component"):
+        service.get_component(created.component_uid)
+    with pytest.raises(KeyError, match="Unknown prompt component"):
+        service.add_revision(
+            RevisePromptComponentCommand(
+                component_uid=created.component_uid,
+                positive_atoms=(PromptAtomUsage("changed", 1000),),
+                negative_atoms=(),
+            )
+        )
+
+
 def test_catalog_records_an_existing_calculated_recipe_as_manual(
     tmp_path: Path,
 ) -> None:

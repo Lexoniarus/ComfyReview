@@ -22,7 +22,7 @@ from comfyreview.domain import (
     render_prompt_atom_usages,
 )
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 _MIN_UPGRADE_VERSION = 1
 
 _SCHEMA_V1_SQL = r"""
@@ -613,6 +613,10 @@ _REQUIRED_OBJECTS_V17 = {
     "image_catalog_compositions": "table",
     "render_evidence_baselines": "table",
 }
+_REQUIRED_OBJECTS_V18 = dict(_REQUIRED_OBJECTS_V17)
+_REQUIRED_PROMPT_COMPONENT_COLUMNS_V18 = (
+    _REQUIRED_PROMPT_COMPONENT_COLUMNS_V5 | {"catalog_role"}
+)
 _REQUIRED_PROMPT_MANUAL_VARIANT_COLUMNS_V16 = {
     "id",
     "manual_variant_uid",
@@ -776,10 +780,11 @@ class CanonicalSchemaManager:
             14,
             15,
             16,
+            17,
         }:
             raise CanonicalSchemaValidationError(
                 "Unsupported canonical schema version "
-                f"{current_version}; expected 1 through 16, or "
+                f"{current_version}; expected 1 through 17, or "
                 f"{SCHEMA_VERSION}"
             )
 
@@ -813,8 +818,10 @@ class CanonicalSchemaManager:
             self._validate_version_fourteen()
         elif current_version == 15:
             self._validate_version_fifteen()
-        else:
+        elif current_version == 16:
             self._validate_version_sixteen()
+        else:
+            self._validate_version_seventeen()
 
         legacy_generator_state = self._read_legacy_generator_state(
             legacy_generator_state_path
@@ -864,7 +871,9 @@ class CanonicalSchemaManager:
                     self._upgrade_v14_to_v15(connection)
                 if current_version <= 15:
                     self._upgrade_v15_to_v16(connection)
-                self._upgrade_v16_to_v17(connection)
+                if current_version <= 16:
+                    self._upgrade_v16_to_v17(connection)
+                self._upgrade_v17_to_v18(connection)
                 connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
             except Exception:
@@ -1004,6 +1013,9 @@ class CanonicalSchemaManager:
                 connection.execute("BEGIN IMMEDIATE")
                 self._upgrade_v16_to_v17(connection)
                 connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+                self._upgrade_v17_to_v18(connection)
+                connection.commit()
                 connection.execute("PRAGMA foreign_keys = ON")
                 self._validate_connection(connection)
             finally:
@@ -1033,6 +1045,7 @@ class CanonicalSchemaManager:
                 14,
                 15,
                 16,
+                17,
             }:
                 raise CanonicalSchemaValidationError(
                     f"Canonical schema version {version} requires an "
@@ -1309,6 +1322,25 @@ class CanonicalSchemaManager:
         finally:
             connection.close()
 
+    def _validate_version_seventeen(self) -> None:
+        connection = self._open_read_only()
+        try:
+            if self._schema_version(connection) != 17:
+                raise CanonicalSchemaValidationError(
+                    "Expected canonical schema version 17 before upgrade"
+                )
+            self._validate_integrity(connection)
+            self._validate_required_objects(connection, _REQUIRED_OBJECTS_V17)
+            self._validate_metadata_version(connection, 17)
+            self._validate_prompt_catalog_v5(connection)
+            self._validate_prompt_catalog_v7(connection)
+            self._validate_generator_state_v13(connection)
+            self._validate_prompt_variants_v15(connection)
+            self._validate_manual_variants_v16(connection)
+            self._validate_catalog_normalization_v17(connection)
+        finally:
+            connection.close()
+
     def _validate_connection(self, connection: sqlite3.Connection) -> None:
         version = self._schema_version(connection)
         if version != SCHEMA_VERSION:
@@ -1317,7 +1349,7 @@ class CanonicalSchemaManager:
                 f"{version}; expected {SCHEMA_VERSION}"
             )
         self._validate_integrity(connection)
-        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V17)
+        self._validate_required_objects(connection, _REQUIRED_OBJECTS_V18)
         self._validate_metadata_version(connection, SCHEMA_VERSION)
         self._validate_generation_columns(connection)
         self._validate_output_identity_v6(connection)
@@ -1333,6 +1365,7 @@ class CanonicalSchemaManager:
         self._validate_prompt_variants_v15(connection)
         self._validate_manual_variants_v16(connection)
         self._validate_catalog_normalization_v17(connection)
+        self._validate_catalog_roles_v18(connection)
 
     def _upgrade_v1_to_v2(self, connection: sqlite3.Connection) -> None:
         statements = (
@@ -3035,6 +3068,24 @@ class CanonicalSchemaManager:
         connection.execute("PRAGMA user_version = 17")
 
     @staticmethod
+    def _upgrade_v17_to_v18(connection: sqlite3.Connection) -> None:
+        """Separate the selectable catalog from immutable provenance."""
+        connection.execute(
+            "ALTER TABLE prompt_components ADD COLUMN catalog_role TEXT "
+            "NOT NULL DEFAULT 'catalog' CHECK (catalog_role IN ("
+            "'catalog', 'generation_provenance'))"
+        )
+        connection.execute(
+            "CREATE INDEX idx_prompt_components_catalog_role "
+            "ON prompt_components(catalog_role, kind, archived_at)"
+        )
+        connection.execute(
+            "UPDATE schema_metadata SET value = '18' "
+            "WHERE key = 'schema_version'"
+        )
+        connection.execute("PRAGMA user_version = 18")
+
+    @staticmethod
     def _backfill_exact_generation_prompt_groups(
         connection: sqlite3.Connection,
     ) -> None:
@@ -4297,6 +4348,37 @@ class CanonicalSchemaManager:
         if int(invalid_promotion_reason):
             raise CanonicalSchemaValidationError(
                 "Prompt promotions contain an invalid reason"
+            )
+
+    @classmethod
+    def _validate_catalog_roles_v18(
+        cls,
+        connection: sqlite3.Connection,
+    ) -> None:
+        columns = cls._table_column_rows(connection, "prompt_components")
+        missing = sorted(
+            _REQUIRED_PROMPT_COMPONENT_COLUMNS_V18 - columns.keys()
+        )
+        if missing:
+            raise CanonicalSchemaValidationError(
+                "Prompt catalog roles are missing required columns: "
+                + ", ".join(missing)
+            )
+        invalid = connection.execute(
+            "SELECT COUNT(*) FROM prompt_components "
+            "WHERE catalog_role NOT IN ('catalog', 'generation_provenance')"
+        ).fetchone()[0]
+        if int(invalid):
+            raise CanonicalSchemaValidationError(
+                "Prompt components contain invalid catalog roles"
+            )
+        invalid_character = connection.execute(
+            "SELECT COUNT(*) FROM prompt_components "
+            "WHERE kind = 'character' AND catalog_role != 'catalog'"
+        ).fetchone()[0]
+        if int(invalid_character):
+            raise CanonicalSchemaValidationError(
+                "Character components cannot be provenance-only"
             )
 
     @classmethod
