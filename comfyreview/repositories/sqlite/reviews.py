@@ -140,6 +140,7 @@ class SqliteReviewRepository:
             self._apply_learning_delta(
                 connection,
                 generation_id=generation_id,
+                image_id=image_id,
                 rating=0,
                 deleted=True,
                 delta=-1,
@@ -148,6 +149,7 @@ class SqliteReviewRepository:
             self._apply_learning_delta(
                 connection,
                 generation_id=generation_id,
+                image_id=image_id,
                 rating=int(previous["rating"]),
                 deleted=False,
                 delta=-1,
@@ -169,6 +171,7 @@ class SqliteReviewRepository:
             self._apply_learning_delta(
                 connection,
                 generation_id=generation_id,
+                image_id=image_id,
                 rating=0,
                 deleted=True,
                 delta=1,
@@ -199,6 +202,7 @@ class SqliteReviewRepository:
             self._apply_learning_delta(
                 connection,
                 generation_id=generation_id,
+                image_id=image_id,
                 rating=rating,
                 deleted=False,
                 delta=1,
@@ -274,6 +278,7 @@ class SqliteReviewRepository:
         connection: sqlite3.Connection,
         *,
         generation_id: int,
+        image_id: int,
         rating: int,
         deleted: bool,
         delta: int,
@@ -287,9 +292,7 @@ class SqliteReviewRepository:
                 scheduler,
                 steps,
                 cfg,
-                denoise,
-                positive_prompt_id,
-                negative_prompt_id
+                denoise
             FROM generations
             WHERE id = ?
             """,
@@ -298,29 +301,34 @@ class SqliteReviewRepository:
         if generation is None:
             raise RuntimeError("Generation missing during learning update")
         score = 0 if deleted else int(rating)
-        for scope, prompt_id in (
-            ("pos", int(generation["positive_prompt_id"])),
-            ("neg", int(generation["negative_prompt_id"])),
-        ):
-            memberships = connection.execute(
-                """
-                SELECT atom_id, weight_milli
-                FROM prompt_memberships
-                WHERE prompt_id = ?
-                """,
-                (prompt_id,),
-            ).fetchall()
-            for membership in memberships:
-                self._update_atom_stat(
-                    connection,
-                    atom_id=int(membership["atom_id"]),
-                    scope=scope,
-                    model_branch=str(generation["model_branch"] or ""),
-                    weight_milli=int(membership["weight_milli"]),
-                    score=score,
-                    deleted=deleted,
-                    delta=delta,
-                )
+        memberships = connection.execute(
+            """
+            SELECT usage.atom_id, usage.scope, usage.weight_milli
+            FROM current_image_catalog_compositions AS current_catalog
+            JOIN image_catalog_composition_revisions AS membership
+              ON membership.composition_id = current_catalog.composition_id
+            JOIN prompt_revision_atom_usages AS usage
+              ON usage.revision_id = membership.revision_id
+            WHERE current_catalog.image_id = ?
+            ORDER BY membership.position, usage.scope, usage.position
+            """,
+            (image_id,),
+        ).fetchall()
+        if not memberships:
+            raise RuntimeError(
+                "Current catalog composition is unavailable for review"
+            )
+        for membership in memberships:
+            self._update_atom_stat(
+                connection,
+                atom_id=int(membership["atom_id"]),
+                scope=str(membership["scope"]),
+                model_branch=str(generation["model_branch"] or ""),
+                weight_milli=int(membership["weight_milli"]),
+                score=score,
+                deleted=deleted,
+                delta=delta,
+            )
         self._update_render_stat(
             connection,
             generation=generation,
