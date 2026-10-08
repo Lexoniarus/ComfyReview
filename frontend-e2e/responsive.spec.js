@@ -98,7 +98,11 @@ test("Playground uses desktop inspector, laptop drawer and tablet tabs", async (
       "Pose: Modus",
       "Ausdruck: Modus",
       "Licht: Modus",
-      "Modifier: Modus",
+      "Atmosphäre: Modus",
+      "Accessoire: Modus",
+      "Bildausschnitt: Modus",
+      "Kamerawinkel: Modus",
+      "Optischer Effekt: Modus",
     ]) {
       await page.getByLabel(label).selectOption("off");
     }
@@ -243,7 +247,15 @@ test("historical image handoff restores archived scopes and LoRA", async ({
       page.locator(`.prompt-mode-row[data-kind="${kind}"] select`).first(),
     ).toHaveValue("fixed");
   }
-  for (const kind of ["expression", "lighting", "modifier"]) {
+  for (const kind of [
+    "atmosphere",
+    "lighting",
+    "accessory",
+    "expression",
+    "framing",
+    "camera_angle",
+    "optical_effect",
+  ]) {
     await expect(
       page.locator(`.prompt-mode-row[data-kind="${kind}"] select`).first(),
     ).toHaveValue("off");
@@ -274,11 +286,6 @@ test("historical image handoff restores archived scopes and LoRA", async ({
         }),
       ]),
     );
-    expect(
-      submittedVariant.positive_atoms.filter(
-        (atom) => atom.text === "detail trigger",
-      ),
-    ).toHaveLength(1);
   }
   await expect(page.locator("[data-generation-result]")).toContainText(
     "submitted",

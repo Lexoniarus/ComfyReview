@@ -258,6 +258,36 @@ class BrowserTestRuntime:
                 ),
             )
         )
+        catalog_composition_id = self._last_row_id(
+            connection.execute(
+                """
+                INSERT INTO image_catalog_compositions(
+                    composition_uid, image_id, version, source
+                ) VALUES (?, ?, 1, 'generation')
+                """,
+                (f"image-catalog-e2e-{index + 1:02d}", image_id),
+            )
+        )
+        connection.execute(
+            """
+            INSERT INTO image_catalog_composition_revisions(
+                composition_id, revision_id, position
+            )
+            SELECT ?, revision_id, position
+            FROM prompt_composition_revisions
+            WHERE composition_id = ?
+            ORDER BY position
+            """,
+            (catalog_composition_id, composition_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO current_image_catalog_compositions(
+                image_id, composition_id
+            ) VALUES (?, ?)
+            """,
+            (image_id, catalog_composition_id),
+        )
         connection.execute(
             """
             INSERT INTO generation_sampler_stages(

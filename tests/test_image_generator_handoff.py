@@ -35,6 +35,7 @@ from comfyreview.application.image_queries import (
     GenerationSettings,
     ImageContext,
 )
+from comfyreview.domain import PromptAtomUsage
 
 
 class _Images:
@@ -295,7 +296,17 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
 
     handoff = ImageGeneratorHandoffService(
         images=cast(Any, _Images(image)),
-        repository=_Facts(ImageGenerationFacts((stage,), ())),
+        repository=_Facts(
+            ImageGenerationFacts(
+                (stage,),
+                (),
+                lora_positive_atoms=(
+                    PromptAtomUsage(" HERO ", 1250),
+                    PromptAtomUsage("detail trigger", 1000),
+                ),
+                lora_negative_atoms=(PromptAtomUsage("lora negative", 900),),
+            )
+        ),
         capabilities=_Capabilities(),
     ).get("image-1")
 
@@ -333,7 +344,11 @@ def test_image_handoff_preserves_ordered_typed_prompt_selections() -> None:
     )
     assert tuple(
         atom.text for atom in handoff.prompt_setup.positive_atoms
-    ) == ("hero",)
+    ) == ("hero", "detail trigger")
+    assert handoff.prompt_setup.positive_atoms[0].weight_milli == 1000
+    assert tuple(
+        atom.text for atom in handoff.prompt_setup.negative_atoms
+    ) == ("blur", "lora negative")
     with pytest.raises(FrozenInstanceError):
         handoff.prompt_setup.selections[0].__setattr__("position", 99)
 
