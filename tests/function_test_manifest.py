@@ -1,6 +1,10 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_development_traits:RegisteredMechanicUpgradePolicy.improve": (
+        "tests/test_card_battler_development_traits.py::"
+        "test_registered_upgrade_policy_materializes_a_lineage_legal_edge"
+    ),
     "comfyreview.application.card_battler_development:DevelopmentPlanner.plan": (
         "tests/test_card_battler_development_planning.py::"
         "test_development_planner_builds_the_exact_next_tier_golden_plan"
