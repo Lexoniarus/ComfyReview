@@ -121,6 +121,24 @@ def _repository(tmp_path: Path) -> SqliteGeneratorStateRepository:
     return SqliteGeneratorStateRepository(database_path)
 
 
+def _drop_last_selection(payload: dict[str, object]) -> None:
+    cast(list[object], payload["selections"]).pop()
+
+
+def _disable_character(payload: dict[str, object]) -> None:
+    character = cast(
+        dict[str, object], cast(list[object], payload["selections"])[0]
+    )
+    character.update(
+        {
+            "mode": "off",
+            "component_uid": None,
+            "revision_uid": None,
+            "candidate_uid": None,
+        }
+    )
+
+
 def test_generator_state_round_trips_normalized_catalog_references(
     tmp_path: Path,
 ) -> None:
@@ -197,6 +215,8 @@ def test_generator_state_reports_missing_and_unknown_lora_keys_together() -> (
         (lambda value: value.pop("checkpoint"), "missing"),
         (lambda value: value.update({"selections": "bad"}), "selections"),
         (lambda value: value.update({"loras": "bad"}), "loras"),
+        (_drop_last_selection, "selections missing"),
+        (_disable_character, "character selection cannot be disabled"),
         (lambda value: value.update({"selections": [1]}), "selection must"),
         (
             lambda value: value.update(

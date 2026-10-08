@@ -1980,10 +1980,11 @@ def test_playground_service_rejects_policy_disallowed_compositions() -> None:
 
 
 def test_playground_service_requires_a_composition_identity() -> None:
+    service = _service(_CatalogService(_catalog()))
     with pytest.raises(PromptSelectionError, match="composition_uid"):
-        _service(_CatalogService(_catalog())).resolve_composition_selection(
-            " "
-        )
+        service.resolve_composition_selection(" ")
+    with pytest.raises(PromptSelectionError, match="character revision"):
+        service.resolve_composition_selection("missing-composition")
 
 
 def test_playground_service_uses_authoritative_image_snapshot() -> None:
@@ -2005,6 +2006,16 @@ def test_playground_service_uses_authoritative_image_snapshot() -> None:
     assert draft.prompt.negative_text == "historic blur"
     assert draft.prompt.revision_uids == ()
     assert draft.prompt.draft_overridden is True
+
+    snapshot_override = service.prepare_image_snapshot(
+        cast(Any, image),
+        overrides=PromptDraftOverrides(
+            positive_atoms=prompt_atom_usages_from_text("manual positive"),
+            negative_atoms=prompt_atom_usages_from_text("manual negative"),
+        ),
+    )
+    assert snapshot_override.prompt.positive_text == "manual positive"
+    assert snapshot_override.prompt.negative_text == "manual negative"
 
     grouped_image = SimpleNamespace(
         scopes=(SimpleNamespace(revision_uid="revision-character-a"),),
