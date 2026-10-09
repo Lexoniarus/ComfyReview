@@ -510,7 +510,7 @@ früher deferred vierte Modus ist mit `ten_point_calibration` durch `PM-098` und
 Dieser Abschnitt ist der produktseitige Zielvertrag für die nächste
 Frontend-Korrektur. Er hat für Spielerablauf, Benennung und Screenbudget Vorrang
 vor den heute implementierten Phasen in
-[`initial-game-mode-state-machines.md`](../README.md#fehlende-vorgängerquellen).
+[`initial-game-mode-state-machines.md`](../foundation/initial-game-mode-state-machines.md).
 Der Foundation-Vertrag bleibt bis zur Korrektur die Wahrheit darüber, was der
 Server heute tatsächlich ausführt; er definiert nicht mehr das gewünschte
 Spielerlebnis.
@@ -784,7 +784,7 @@ kanonischen Trial-Flow oder nach Advanced migriert werden.
 
 Die heute implementierten Sessionphasen, semantischen Actions, Completion
 Contracts und Lifecycle-Folgen von Vierer-Qualifier, Weakest Link und Arena stehen in
-[Foundation-Zustandsvertrag](../README.md#fehlende-vorgängerquellen).
+[Foundation-Zustandsvertrag](../foundation/initial-game-mode-state-machines.md).
 Diese Bestandsaufnahme beschreibt nur ihre bisherige Produktrolle. Der
 verlinkte Foundation-Vertrag ist für den aktuell implementierten technischen
 Stand autoritativ, weicht aber in den unter `GAP-026` festgehaltenen Punkten vom
