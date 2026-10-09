@@ -11,6 +11,7 @@
 | **IN_PROGRESS** | [Aktuelle Arbeiten](ACTIVE_WORK.md) und [POCs](pocs/README.md) | Generator-/Datenbank-Optimierung, derzeitiger Card-Battler-POC, nicht abgeschlossene Integration |
 | **WORKING_DIRECTION** | [Projektentwicklung](PROJECT_EVOLUTION.md) | Warum Card Battler zuerst, danach Social/Chats, Academy/Schuljahr und die visuelle VN zuletzt |
 | **WORKING_VISION** | [Character-Chronicles-Zielbild](character-chronicles/vision/README.md) | **Kurze, klar lesbare Produktziele** ohne alte technische Festlegungen |
+| **DECIDED_FOR_SCOPE** | [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md) | Tatsächlich bestätigte Vorgaben mit konkretem Geltungsbereich; getrennt von Zielen, Präferenzen und unbeschlossenen Schutzvorschlägen |
 | **OPEN** | [Offene Entscheidungen](OPEN_DECISIONS.md) | Was noch nicht entschieden oder operativ verifiziert ist |
 | **CURRENT_TECH_REFERENCE** | [Architektur](ARCHITECTURE.md), [Datenarchitektur](DATA_ARCHITECTURE.md), [Frontend V2](FRONTEND_V2_DESIGN.md) | **ComfyReviews derzeitige Implementierungsverträge**, keine Architekturvorgabe für das spätere Spiel |
 | **CURRENT_OPERATIONS** | [Datenbank-/Wartungsbefehle](OPERATIONS.md) | CLI, Import, Recovery und `--replace` mit separater Sicherheits-/Freigabegrenze |
@@ -32,6 +33,7 @@ docs/
   PROJECT_EVOLUTION.md                WORKING_DIRECTION
   OPERATIONS.md                       CURRENT_OPERATIONS (Migration/Import)
   OPEN_DECISIONS.md                   OPEN
+  CONFIRMED_CONSTRAINTS.md           DECIDED_FOR_SCOPE / Präferenzen / Optionen
   DECISION_POLICY.md                  Statusdefinitionen und Entscheidungsregeln
   ARCHITECTURE.md, DATA_ARCHITECTURE.md, ...  CURRENT_TECH_REFERENCE
   pocs/
@@ -53,6 +55,7 @@ docs/
 - `CURRENT_CODE` bedeutet **heute nachgewiesenen ComfyReview-Code** (Commit/Tests).
 - `IN_PROGRESS` bedeutet **Arbeit/POC läuft**, nicht freigegeben.
 - `WORKING_VISION` bedeutet **inhaltlich angestrebte Richtung**, keine beschlossene Detailarchitektur.
+- `DECIDED_FOR_SCOPE` ist **nur für den benannten Bereich verbindlich**; Zielwerte und als `CANDIDATE` markierte Umsetzungsvorschläge sind das nicht.
 - `SOURCE_MATERIAL` und `HISTORICAL_*` enthalten absichtlich auch **alte, einander widersprechende „autoritative“ Aussagen**. Diese sind jetzt ausdrücklich **Originalquellen**, nicht aktiver Auftrag.
 
 Für Regeln zur Einordnung und Bestätigung einzelner Entscheidungen: [Documentation Guide](DOCUMENTATION_GUIDE.md) und [Decision Policy](DECISION_POLICY.md). Für Installations- und Betriebsschritte: [Repository-README](../README.md).
