@@ -6,6 +6,13 @@
 
 ## Für jede Aussage unterscheiden
 
+**Aussagenstatus ist nicht Dokumentklasse.** Diese Tabelle ordnet einzelne
+Entscheidungen, Hypothesen und Belege ein. Die **Dokumentklassen** und ihre
+führenden Dateien stehen in der [Dokumentationslandkarte](README.md) und im
+[Dokumentationsleitfaden](DOCUMENTATION_GUIDE.md). Eine aktuell markierte
+Quelle oder ein Index kann historische `DECIDED`-Zitate enthalten, ohne
+dass diese dadurch wieder gültig werden.
+
 | Kennzeichnung | Bedeutung | Verbindlichkeit |
 | --- | --- | --- |
 | **CURRENT_CODE** | Verhalten ist an einem konkreten ComfyReview-Commit nachweisbar | Beschreibung des Ist-Codes; kann künftig refaktoriert werden |
