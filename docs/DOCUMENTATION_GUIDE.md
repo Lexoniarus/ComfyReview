@@ -81,13 +81,33 @@ Relative Markdown-Links vom Quellpfad aus prüfen; Archivtexte bei Anpassungen m
 
 Geprüft auf dem Dokumentationsbranch `docs/structure-and-status-2026-10-09`:
 
-- **63 Markdown-Dateien**, 645 durch den einfachen Markdown-/Referenzlink-Scanner erfasste Linkangaben: **keine fehlenden relativen Dateiziele** im geprüften Git-Tree. Externe URLs und absolute GitHub-Heading-Anker wurden dadurch **nicht** umfassend validiert.
-- Zwei erkennbar veraltete interne Überschriftenanker in importierten Quelltexten wurden repariert; die verbleibenden intern referenzierten Hauptkapitel (`gewonnene-reihenfolge-aus-den-bisherigen-versuchen` und `fehlende-vorgängerquellen`) sind im Zieltext vorhanden.
+- **65 im PR geänderte Markdown-Dateien** plus eine archivierte TXT-Datei
+  wurden am PR-Head nach den technischen Korrekturen nochmals gelesen
+  (nicht mit einer vollständigen Repository-Dateibauminventur verwechseln).
+  Ein einfacher Markdown-Link-Scanner erkannte **703 Inline-Linkangaben**.
+  **Keine fehlenden relativen `.md`-/`.txt`-Dateiziele** unter den geprüften
+  PR-Dateien; externe URLs und beliebige Code-/Asset-Links sind damit **nicht**
+  automatisch verifiziert. Die **14 gefundenen internen Kapitelverweise**
+  führen zu bestehenden Überschriften in den drei referenzierten Dateien
+  (einschließlich Unicode-Anker `fehlende-vorgängerquellen`).
+- Die zuvor reparierten alten Kapitelanker bleiben erhalten. Die neue
+  [Canonical-DB-Archivquelle](archive/canonical-data-operator-evidence-2026-10-01-to-07.md)
+  bewahrt historische Live-Zahlen und source-spezifische Inventare, statt
+  diese in `CURRENT_TECH_REFERENCE` als heutige Invarianten zu führen.
+  Die aktive Architektur verweist auf den archivierten Projection Audit,
+  die aktuelle Datenarchitektur auf Blueprint v4.
 - Die **24 ausführlichen Konzepttexte** liegen ausschließlich unter `character-chronicles/sources/` als `SOURCE_MATERIAL`. Frühere „verbindlich“-Behauptungen werden jeweils ausdrücklich als **übernommene Quellenfassung** markiert, nicht als aktuelle Festlegung.
 - Das aktuelle Zielbild liegt **getrennt** unter `character-chronicles/vision/`: Card Battler → Social/Chats → Academy/Schuljahr → visuelle VN zuletzt, mit POC-getriebener Anpassung.
 - Aktuelle Implementierung/POC/Status/Datenbankbetrieb und lange historische Operator-/Refactor-/README-Protokolle haben **getrennte Dokumente und klare Zuständigkeiten**.
 - Der Stand von ComfyReview ist ausdrücklich **nicht fertig**. Codeunterstützung für Schema v18 ist kein Beleg für private Live-DB-Cutover-Abnahme. Der frühere, verworfene Chronicle-Code ist als historische Quelle dokumentiert, nicht als aktuelle Architektur.
 
-**Nicht als erledigt behauptet:** semantische Satz-für-Satz-Abnahme aller überlieferten, teils widersprüchlichen Quellen, fachliche Freigabe der gesamten künftigen Spielmechanik, GitHub-/externe Linkziele, Real-Hardware-/privater-Datenbank-Smoke oder ein neuer erfolgreicher CI-Lauf auf dem finalen Dokumentations-Commit. Die strukturelle Konsistenzprüfung ersetzt keine dieser Prüfungen.
+**Nicht als erledigt behauptet:** semantische Satz-für-Satz-Abnahme
+aller überlieferten, teils widersprüchlichen Quellen; fachliche
+Freigabe der gesamten künftigen Spielmechanik; umfassende Validierung
+externer URLs, Code-/Asset-Links und GitHub-Heading-Anker; Real-Hardware-
+oder privater-Datenbank-Smoke; und **CI-Erfolg für den endgültigen
+Dokumentations-Head**, solange für genau dessen Commit kein erfolgreicher
+Workflow nachgewiesen ist. Die strukturelle Konsistenzprüfung ersetzt
+keine dieser Prüfungen.
 
 Bei späteren Änderungen müssen die jeweiligen Dokumenttypen nach `CURRENT_CODE`, `IN_PROGRESS`, `WORKING_VISION` oder `SOURCE_MATERIAL` aktualisiert und die relativen Links erneut geprüft werden.
