@@ -144,6 +144,11 @@ path toward Character Chronicles. This evolution uses POCs; **do not**
 turn imported concepts, old M6/schema claims or discarded architecture into
 binding rules merely because a historical document says “approved”.
 
+The [documentation map](docs/README.md) assigns a single current owner
+for each category: general status, active POCs, refactor acceptance, open
+decisions, operations, working vision and historical evidence. Keep those
+boundaries consistent rather than duplicating live status in historical text.
+
 When ComfyReview behavior or architecture changes, update the relevant
 documents **for the current code**:
 
@@ -151,7 +156,8 @@ documents **for the current code**:
 - `docs/ARCHITECTURE.md` for the current runtime
 - `docs/DATA_ARCHITECTURE.md` for present persistence/migration semantics
 - `docs/CODING_STANDARDS.md` for current engineering baseline
-- `docs/REFACTOR_PLAN.md` for ongoing refactor work and its history
+- `docs/REFACTOR_PLAN.md` for current refactor scope and pending acceptance;
+  its older slice history belongs to `docs/archive/refactor-slice-history-2026-10-09.md`
 - `docs/project_status.md`, `docs/IMPLEMENTATION_AUDIT.md` for
   implementation claims, with exact commit/CI evidence
 - `docs/ACTIVE_WORK.md` and `docs/pocs/` for in-progress experiments
