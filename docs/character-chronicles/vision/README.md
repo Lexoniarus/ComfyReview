@@ -25,6 +25,33 @@ Diese Übersicht beschreibt **was und ungefähr in welcher Reihenfolge**, nicht
 historischen Schemas oder M6-Gates, keine fixierten Termine.
 [Entwicklungsbegründung](../../PROJECT_EVOLUTION.md).
 
+## Ein zusammenhängendes Spielerlebnis, keine drei isolierten Spiele
+
+[Card Battler](card-battler.md), [Timeline und Social Network](social-network.md)
+sowie die spätere [Storyline](storyline.md) und
+[Visual Novel](visual-novel.md) sollen **ineinandergreifende Spielschleifen**
+einer gemeinsamen Welt bilden. Die Entwicklungsreihenfolge legt **nicht**
+fest, dass Spielende zwingend dieselbe Reihenfolge durchlaufen müssen.
+Unterschiedliche Interessen können später verschiedene **Einstiegspunkte**
+ermöglichen: über Karten und ihre Entwicklung, Kontakte und Chats oder
+erzählerische Situationen.
+
+Als **Beispiele für einen erst zu erprobenden Zusammenhang** kann eine
+gespielte Karte Anlass für eine Social-Interaktion sein, ein Post kann eine
+Storysituation eröffnen oder eine erzählerische Entscheidung den Kontext
+für spätere Kartenaktivitäten verändern. Diese Beispiele definieren
+**noch keine** konkreten Belohnungen, Statusübergänge, Match-/Chat-APIs,
+Pflichtabhängigkeiten oder ein festes Freischaltsystem. Die Daten- und
+Spielwirkungen müssen für den jeweiligen POC gesondert bestätigt werden.
+
+Die langfristige Absicht ist ein **zusammenhängendes Spielgefühl** und
+keine Sammlung bloß verlinkter Werkzeuge. Wie seine verschiedenen
+Oberflächen aussehen, welche gemeinsame Zustandslogik benötigt wird und
+wie die Übergänge funktionieren, bleibt Gegenstand späterer
+Spieler- und Technik-POCs. Die aktuelle ComfyReview-Entwicklungsoberfläche
+ist dadurch weder automatisch das Game-Frontend noch zur Ablösung
+freigegeben.
+
 ## Wo die Details herkommen
 
 Die [24 ausführlichen importierten Quellfassungen](../sources/README.md) dokumentieren viele Spielideen, konkrete Regelvarianten und technische Überlegungen. Sie mischen frühere ComfyReview-Vorarbeiten, einen verworfenen Character-Chronicle-Codeansatz und neuere inhaltliche Ergänzungen. **Sie sind Quellen**, keine automatisch angenommenen Bauverträge.
