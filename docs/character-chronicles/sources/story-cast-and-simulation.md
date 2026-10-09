@@ -476,7 +476,7 @@ relevanten Ausschnitte. Er erzeugt daraus `ComponentIntent`-Objekte in den
 Präferenzbändern `aligned`, `adjacent` und `exploratory`. Erst danach erzeugen
 Component Designer und Prompt Lexicalizer einen `SemanticSpec` beziehungsweise
 gewichtbare Promptatome. Der vollständige Vertrag steht in
-[Foundation-Vertrag zum persönlichen Content Compiler](../README.md#fehlende-vorgängerquellen).
+[Foundation-Vertrag zum persönlichen Content Compiler](../foundation/adaptive-generation-learning.md#persönlicher-content-compiler-statt-ausgeliefertem-inhaltskatalog).
 
 Ein vollständiger optischer Übersetzungsweg lautet damit beispielsweise:
 
