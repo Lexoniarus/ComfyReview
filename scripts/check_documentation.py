@@ -10,6 +10,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_INDEX_FILES = {"README.md", "SOURCE_RELATIONSHIP.md"}
 SOURCE_BOUNDARY = "## Übernommene Quellenfassung"
 SOURCE_BANNER = "SOURCE_MATERIAL – NICHT VERBINDLICH"
+HISTORICAL_MVP_PATH = Path(
+    "docs/character-chronicles/history/full-mvp-draft-2026-08.md"
+)
+HISTORICAL_MVP_BODY_START = "\nStatus: Konzeptentwurf"
 LINK_PATTERN = re.compile(r"!?\[[^\]]+\]\((?P<target><[^>]+>|[^)\n]+)\)")
 HEADING_PATTERN = re.compile(r"^#{1,6}\s+(.+?)\s*$")
 REQUIRED_FILES = (
@@ -36,6 +40,8 @@ def _visible_source_text(path: Path, root: Path, content: str) -> str:
         return ""
     if path.parent == source_dir and path.name not in SOURCE_INDEX_FILES:
         return content.split(SOURCE_BOUNDARY, 1)[0]
+    if path == root / HISTORICAL_MVP_PATH:
+        return content.split(HISTORICAL_MVP_BODY_START, 1)[0]
     return content
 
 
@@ -91,6 +97,18 @@ def find_documentation_issues(root: Path = ROOT) -> list[str]:
                 f"{source.relative_to(root)}"
             )
 
+    historical_mvp = root / HISTORICAL_MVP_PATH
+    if historical_mvp.is_file():
+        historical_text = historical_mvp.read_text(encoding="utf-8")
+        preface, boundary, _ = historical_text.partition(
+            HISTORICAL_MVP_BODY_START
+        )
+        if not boundary or "`HISTORICAL_EVIDENCE`" not in preface:
+            issues.append(
+                "missing historical MVP preface or original boundary: "
+                f"{historical_mvp.relative_to(root)}"
+            )
+
     files = sorted((*root.glob("*.md"), *docs.rglob("*.md")))
     heading_cache: dict[Path, set[str]] = {}
     for source in files:
@@ -116,7 +134,11 @@ def find_documentation_issues(root: Path = ROOT) -> list[str]:
                     continue
                 destination, _, fragment = url.partition("#")
                 destination = unquote(destination.split("?", 1)[0])
-                target = (source.parent / destination).resolve()
+                target = (
+                    source
+                    if not destination
+                    else (source.parent / destination).resolve()
+                )
                 location = f"{source.relative_to(root)}:{line_no}"
                 if not target.is_relative_to(root):
                     issues.append(
