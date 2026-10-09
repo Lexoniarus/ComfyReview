@@ -18,6 +18,11 @@ from comfyreview.providers.image_geometry import (
 from comfyreview.providers.legacy_output_import import (
     LocalLegacyOutputImportSource,
 )
+from comfyreview.providers.lm_studio import (
+    LmStudioJsonResponse,
+    NativeLmStudioProvider,
+    UrlLibLmStudioJsonTransport,
+)
 from comfyreview.providers.output_images import CanonicalOutputImageCatalog
 from comfyreview.providers.prompt_identities import (
     UuidGenerationIdentitySource,
@@ -34,9 +39,12 @@ __all__ = [
     "InvalidPngError",
     "PngHeaderDimensionReader",
     "JsonHttpResponse",
+    "LmStudioJsonResponse",
     "NativeComfyUiProvider",
+    "NativeLmStudioProvider",
     "OutputFileUrlMapper",
     "UrlLibJsonTransport",
+    "UrlLibLmStudioJsonTransport",
     "UuidGenerationIdentitySource",
     "UuidGenerationProfileIdentitySource",
     "UuidPromptIdentitySource",
