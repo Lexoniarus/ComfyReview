@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 
 _CURATION_SET_KEYS = (
@@ -37,6 +38,11 @@ class Settings:
     default_unrated_only: bool
     soft_delete_to_trash: bool
     comfyui_base_url: str
+    lm_studio_base_url: str
+    lm_studio_vision_model: str
+    lm_studio_text_model: str
+    lm_studio_request_timeout_seconds: float
+    lm_studio_lifecycle_timeout_seconds: float
     workflows_directory: Path
     comfyui_checkpoints_directory: Path
     ssl_enabled: bool
@@ -86,6 +92,21 @@ def _read_env_file(path: Path) -> dict[str, str]:
 def _integer(values: Mapping[str, str], name: str, default: int) -> int:
     value = values.get(name)
     return default if value is None or not value.strip() else int(value)
+
+
+def _positive_float(
+    values: Mapping[str, str], name: str, default: float
+) -> float:
+    """Read a positive finite timeout from the configuration mapping."""
+    raw_value = values.get(name)
+    value = (
+        default
+        if raw_value is None or not raw_value.strip()
+        else float(raw_value)
+    )
+    if not isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be a positive finite number")
+    return value
 
 
 def _boolean(values: Mapping[str, str], name: str, default: bool) -> bool:
@@ -188,6 +209,28 @@ def load_settings(
         comfyui_base_url=values.get(
             "COMFYREVIEW_COMFYUI_BASE_URL",
             "http://127.0.0.1:8188",
+        ),
+        lm_studio_base_url=values.get(
+            "COMFYREVIEW_LM_STUDIO_BASE_URL",
+            "http://127.0.0.1:1234",
+        ),
+        lm_studio_vision_model=values.get(
+            "COMFYREVIEW_LM_STUDIO_VISION_MODEL",
+            "",
+        ),
+        lm_studio_text_model=values.get(
+            "COMFYREVIEW_LM_STUDIO_TEXT_MODEL",
+            "",
+        ),
+        lm_studio_request_timeout_seconds=_positive_float(
+            values,
+            "COMFYREVIEW_LM_STUDIO_REQUEST_TIMEOUT_SECONDS",
+            120.0,
+        ),
+        lm_studio_lifecycle_timeout_seconds=_positive_float(
+            values,
+            "COMFYREVIEW_LM_STUDIO_LIFECYCLE_TIMEOUT_SECONDS",
+            180.0,
         ),
         workflows_directory=workflows_directory,
         comfyui_checkpoints_directory=_path(
