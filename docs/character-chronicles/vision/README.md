@@ -1,6 +1,6 @@
 # Character Chronicles – fachliches Zielbild
 
-**Dokumenttyp:** `WORKING_VISION` · **Stand:** 2026-10-09 · **Geltung:** langfristige Produktidee aus der fortlaufenden ComfyReview-Entwicklung; **kein** fertiger Architekturvertrag, implementiertes Produkt oder fixierter Milestone-Plan.
+**Dokumentklasse:** `WORKING_VISION` · **Stand:** 2026-10-09 · **Geltung:** langfristige Produktidee aus der fortlaufenden ComfyReview-Entwicklung; **kein** fertiger Architekturvertrag, implementiertes Produkt oder fixierter Milestone-Plan.
 
 ## Was als Richtung feststeht
 
