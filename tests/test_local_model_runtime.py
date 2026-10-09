@@ -296,8 +296,8 @@ def test_retry_failed_unload_cannot_touch_unrelated_instances() -> None:
     provider = _FakeProvider(
         (LocalModelDescriptor("first"), LocalModelDescriptor("second"))
     )
-    provider.on_load = (
-        lambda model_id: first if model_id == "first" else second
+    provider.on_load = lambda model_id: (
+        first if model_id == "first" else second
     )
     runtime = LocalModelRuntime(provider)
     first_lease = runtime.acquire("first")
