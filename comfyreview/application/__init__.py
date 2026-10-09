@@ -342,6 +342,10 @@ from comfyreview.application.lifecycle import (
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
+from comfyreview.application.local_model_runtime import (
+    LocalModelLease,
+    LocalModelRuntime,
+)
 from comfyreview.application.local_models import (
     LocalModelConnectionError,
     LocalModelDescriptor,
@@ -809,9 +813,11 @@ __all__ = [
     "LocalModelDescriptor",
     "LocalModelError",
     "LocalModelInstance",
+    "LocalModelLease",
     "LocalModelLifecycleError",
     "LocalModelProtocolError",
     "LocalModelProvider",
+    "LocalModelRuntime",
     "LocalModelTimeoutError",
     "LocalModelUnavailableError",
     "LoraCatalogRepository",

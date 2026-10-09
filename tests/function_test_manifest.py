@@ -1,6 +1,14 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.local_model_runtime:LocalModelRuntime.acquire": (
+        "tests/test_local_model_runtime.py::"
+        "test_owned_model_reuses_instance_until_final_release"
+    ),
+    "comfyreview.application.local_model_runtime:LocalModelRuntime.release": (
+        "tests/test_local_model_runtime.py::"
+        "test_failed_final_unload_is_recoverable_and_blocks_new_leases"
+    ),
     "comfyreview.application.card_battler_generation_prompt:CardEvolutionPromptAdapter.adapt": (
         "tests/test_card_battler_generation_prompt.py::"
         "test_card_prompt_adapter_preserves_scopes_weights_and_order"
