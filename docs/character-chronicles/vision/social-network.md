@@ -1,6 +1,6 @@
 # Social Network – Timeline und Charakter-Chats
 
-**Dokumenttyp:** `WORKING_VISION` · **Entwicklungsorientierung:** nach einem tragfähigen Card Battler, vor der vollständigen visuellen VN · **Status in ComfyReview:** Zielidee, kein integriertes Gesamtsystem.
+**Dokumentklasse:** `WORKING_VISION` · **Entwicklungsorientierung:** nach einem tragfähigen Card Battler, vor der vollständigen visuellen VN · **Status in ComfyReview:** Zielidee, kein integriertes Gesamtsystem.
 
 ## Fachliche Absicht
 
