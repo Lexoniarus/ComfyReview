@@ -1,6 +1,6 @@
 # Archiviertes Projektstatus-Protokoll (Stand der Dokumentation 2026-10-09)
 
-**Dokumentklasse: HISTORICAL_OPERATOR_LOG – KEIN AKTUELLER STATUS.**
+**Dokumentklasse:** `HISTORICAL_LOG` · **Rolle:** früheres Status-/Operatorprotokoll – **KEIN AKTUELLER STATUS**.
 
 Der folgende vollständige Text ist das **detaillierte frühere Status- und Betriebsprotokoll**. Darin vorkommende Wörter wie „live“, „current“, „latest“, „abgenommen“, historische Datenbankzeilen und lokale ComfyUI-Smokes gelten **jeweils nur für den berichteten damaligen Zustand**. Die realen Datenbanken, Backups und privaten Reports sind nicht Teil dieses Git-Repositories und wurden hier nicht neu vermessen.
 
