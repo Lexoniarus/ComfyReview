@@ -4,16 +4,35 @@
 
 **Stand:** 2026-10-09. ComfyReview wird weiterhin entwickelt und soll sich **langfristig zu Character Chronicles** entwickeln. Die Technik wird mit POCs überprüft; Konzepte werden nicht automatisch zum Implementierungsvertrag.
 
-## Welche Dokumente beantworten welche Frage?
+## Dokumentklassen, führende Stellen und Geltung
 
-| Kategorie | Führende Dokumente | Bedeutung |
+Die [Dokumentationslandkarte](README.md) ist die **führende
+Zuständigkeitsübersicht**. Hier gelten dieselben Klassen; eine **Rolle** wie
+„Index“, „Operatorbericht“ oder „Refactor-Abnahme“ ist **keine neue
+Verbindlichkeitsstufe**.
+
+| Dokumentklasse | Führende Dokumente | Bedeutung |
 | --- | --- | --- |
-| **CURRENT_CODE** | [Code-Ist-Audit](IMPLEMENTATION_AUDIT.md), [Architektur](ARCHITECTURE.md), [Datenarchitektur](DATA_ARCHITECTURE.md) | Funktion im ComfyReview-Branch mit Pfad/Commit nachweisbar |
-| **IN_PROGRESS / POC** | [Aktive Arbeit](ACTIVE_WORK.md), [POCs](pocs/README.md) | Erprobung, Refactoring oder Betrieb im Fluss, nicht automatisch fertig |
-| **DECIDED_FOR_SCOPE** | [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md) | Ausdrücklich bestätigte Vorgaben **nur im genannten Geltungsbereich**; Zielwerte, Präferenzen und Schutzoptionen bleiben getrennt |
-| **VISION / CANDIDATE** | [Projektentwicklung](PROJECT_EVOLUTION.md), [Character Chronicles](character-chronicles/README.md) | Fachliche Ideen und prüfbare Möglichkeiten |
-| **HISTORICAL / REJECTED / SUPERSEDED** | [Archiv](archive/README.md), [alter Chronicle-Code-Audit](character-chronicles/HISTORICAL_CODE_AUDIT.md), [früherer Entwurf](character-chronicles/history/full-mvp-draft-2026-08.md) | Frühere tatsächlich gebaute oder behauptete Lösungen, **keine** automatische heutige Vorgabe |
-| **OPEN** | [Offene Entscheidungen](OPEN_DECISIONS.md) | Noch nicht geklärte Fragen, keine Milestone-Liste |
+| **CURRENT_CODE** | [Code-Ist-Audit](IMPLEMENTATION_AUDIT.md) | Nachweisbarer Code **am benannten Commit**, nicht automatisch operativ abgenommen |
+| **CURRENT_STATUS** | [Projektstatus](project_status.md); [Refactor-Abnahme](REFACTOR_PLAN.md) nur im Teilbereich | Aktueller Status und offene Abnahmen, **nicht** alte Slice-Chronik |
+| **IN_PROGRESS** | [Aktive Arbeit](ACTIVE_WORK.md), [POCs](pocs/README.md) | Laufende Entwicklung und Experimente, kein fertiges Product Outcome |
+| **WORKING_DIRECTION** | [Projektentwicklung](PROJECT_EVOLUTION.md) | Prioritätsrichtung, keine starren Milestones |
+| **WORKING_VISION** | [Chronicles-Zielbild](character-chronicles/vision/README.md) | Fachliche Absicht, keine endgültige Technikentscheidung |
+| **DECIDED_FOR_SCOPE** | [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md) | Bestätigte Vorgaben **nur im erklärten Geltungsbereich**; dort separat markierte Kandidaten bleiben offen |
+| **OPEN** | [Offene Entscheidungen](OPEN_DECISIONS.md) | Nur ungelöste Entscheidungen, nicht zweiter Projektstatus |
+| **CURRENT_TECH_REFERENCE** | [Architektur](ARCHITECTURE.md), [Datenarchitektur](DATA_ARCHITECTURE.md), [Frontend V2](FRONTEND_V2_DESIGN.md) | Technische Verträge für den **gegenwärtigen ComfyReview-Code**, nicht für jede spätere Chronicles-Version |
+| **CURRENT_OPERATIONS** | [Operations](OPERATIONS.md), [Legacy-Output-Import](LEGACY_OUTPUT_IMPORT.md) als Detail | Heute gültige CLI und vorsichtige Wartungsverfahren, auch für historische Daten |
+| **ENGINEERING_RULES** | [AGENTS](../AGENTS.md), [Coding Standards](CODING_STANDARDS.md) | Regeln für neuen/geänderten aktuellen Code |
+| **GOVERNANCE** | Dieser Leitfaden, [Decision Policy](DECISION_POLICY.md) | Dokumenten- und Entscheidungsregeln |
+| **SOURCE_MATERIAL** | [Importierte Quellen](character-chronicles/sources/README.md), [Herkunftsmatrix](character-chronicles/sources/SOURCE_RELATIONSHIP.md) | Frühere Texte und ihre Quellenzuordnung, **keine** aktive Spezifikation |
+| **HISTORICAL_EVIDENCE** | [Alter Chronicle-Code-Audit](character-chronicles/HISTORICAL_CODE_AUDIT.md), [Archiv](archive/README.md) | Frühere Entwürfe, technische Nachweise, veraltete Vertragsaussagen |
+| **HISTORICAL_LOG** | [Archivierter Refactor-Verlauf](archive/refactor-slice-history-2026-10-09.md), [frühere Operatorberichte](archive/project-status-log-2026-10-09.md) | Zeitgebundene damalige Slices/Operationen, **kein** aktueller Status |
+
+**Wichtig:** Eine **Dokumentklasse** ordnet den Gesamttext ein.
+Ein **Aussagenstatus** wie `CANDIDATE`, `POC_RESULT`, `DECIDED_FOR_SCOPE`
+oder `REJECTED` klassifiziert nur die jeweilige Aussage. Zitate aus
+`SOURCE_MATERIAL` behalten selbst dann **keine aktuelle Verbindlichkeit**,
+wenn sie in der Originalquelle „DECIDED“ heißen.
 
 [Entscheidungsstatus ausführlich](DECISION_POLICY.md).
 
