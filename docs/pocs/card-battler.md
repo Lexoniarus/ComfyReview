@@ -19,10 +19,18 @@ Die [App](../../comfyreview/bootstrap.py) erzeugt Modell-Adapter und Mapper; die
 
 ## Konkreter Erstversuch: eine Karte von der Bildwahl bis zur Sammlung
 
-**Status:** aktuell vereinbarter **POC-Zielablauf**, noch **kein**
-nachgewiesenes End-to-End-Feature. Zunächst soll die **Kartenerzeugung und
--entwicklung** spielerseitig funktionieren; eine fertige Match-Engine ist dafür
-keine Voraussetzung.
+**Status:** aktuell vereinbarter **ComfyReview-Entwicklungs-POC**,
+noch **kein** nachgewiesenes End-to-End-Feature. Zunächst sollen
+**Kartenerzeugung und -entwicklung** erprobt werden; eine fertige
+Match-Engine ist dafür keine Voraussetzung.
+
+**Wichtig ist der Unterschied zum späteren Spiel:** Im **ComfyReview-POC**
+darf der Nutzer alle vier vorgeschlagenen Bilder verwerfen und neue
+Kandidaten generieren, um Qualität und Passung iterativ zu prüfen.
+Im geplanten **Character Chronicles** soll dagegen **eine der vier
+Varianten ausgewählt** werden. Die Entwicklungsfunktion »alle
+ablehnen und erneut versuchen« wird daher **nicht** stillschweigend
+zur Spielmechanik. [Späteres Spielerziel](../character-chronicles/vision/card-battler.md).
 
 1. **Ein Quellbild wählen.** Pro Durchlauf wird **genau ein** bereits
    vorhandenes Bild aus ComfyReview als Ausgangspunkt gewählt. Es werden nicht
@@ -152,6 +160,10 @@ und keine dauerhaft unveränderlichen Spielregeln:
 Die Abnahme dieser Kriterien muss mit konkreter Laufzeit- und
 Bedienevidenz belegt werden. Isolierte grüne Algorithmentests
 oder vier generierte Dateien reichen dafür nicht aus.
+**Die abschließenden manuellen Funktions- und Bedientests sowie
+die POC-Abnahme führt der Projektinhaber selbst durch.**
+Entwickler- und CI-Tests liefern dafür Vorprüfung, ersetzen aber
+keine persönliche Abnahme.
 
 ## Warum der Card Battler gerade zuerst kommt
 

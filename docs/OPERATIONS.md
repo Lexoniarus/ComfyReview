@@ -91,6 +91,45 @@ execution is prohibited until all explicit acceptance, backup and shutdown
 conditions are met.** Listing this example does not claim any local cutover
 was approved, executed or successful.
 
+### Gezielte Katalog- und Generierungs-Reconciliation
+
+These are **existing maintenance commands**, not replacements for the
+audited catalog-normalization cutover above. On a supported, validated
+canonical database, preview prompt-promotion decisions without changing
+catalog facts:
+
+```bash
+python -m comfyreview prompt-promotions audit
+```
+
+Only after reviewing the affected components and the real data
+may an operator run the **writing** follow-up:
+
+```bash
+python -m comfyreview prompt-promotions reconcile
+```
+
+It can append catalog promotion facts. An audit result or green CI run
+is **not** operator approval for a write against the private runtime
+database; preserve a verified backup and review the consequences first.
+
+A specific generation in `reconciliation_required` may be reconciled
+against its persisted output facts and ComfyUI state:
+
+```bash
+python -m comfyreview generation reconcile GENERATION_UID
+# Only if the correct ComfyUI prompt ID has been verified:
+python -m comfyreview generation reconcile GENERATION_UID --prompt-id PROMPT_ID
+```
+
+This can update generation state and collect/recover outputs; it does
+**not** automatically resubmit the generation. Use only the confirmed
+generation/prompt identity and correct ComfyUI/output configuration.
+If the status remains `reconciliation_required`, the command reports
+that outstanding condition instead of declaring success. Neither
+reconciliation procedure constitutes the final practical tests or
+acceptance: **the project owner performs and confirms those tests**.
+
 The v11 geometry rebuild reads PNG headers outside a write transaction and
 then atomically replaces the rebuildable projection. Missing or malformed
 files are reported as diagnostics; source images and stored paths are never

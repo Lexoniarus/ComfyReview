@@ -84,13 +84,21 @@ und [offene Umsetzung](OPEN_DECISIONS.md).
   und strukturierte Antworten bevorzugen, Tokenumfang reduzieren und
   unnötige Agenten-Schleifen vermeiden. Konkrete Provider-, Prompt- und
   Tokenlimits bleiben prüfbare Optionen.
-- **Card-Battler-Erstversuch:** Der aktuelle
-  [POC](pocs/card-battler.md#konkreter-erstversuch-eine-karte-von-der-bildwahl-bis-zur-sammlung)
-  verwendet **ein Quellbild**, erstellt Karteninhalt und **vier passende
-  Bildalternativen**, lässt **eine** auswählen und erlaubt später eine
-  Entwicklung derselben Karte. **40 Karten** sind das erste Testdeck-Ziel,
-  **nicht** die global beschlossene Deckgröße oder ein fertig
-  implementierter Funktionsumfang.
+- **ComfyReview-Entwicklungs-POC (jetzt):** Der
+  [erste Kartenversuch](pocs/card-battler.md#konkreter-erstversuch-eine-karte-von-der-bildwahl-bis-zur-sammlung)
+  nimmt **ein Quellbild**, leitet Karteninhalt ab und erzeugt **vier
+  Bildalternativen**. Für die technische und kreative Erprobung darf der
+  Nutzer **eine auswählen oder alle vier ablehnen und neu generieren**.
+  Ablehnung erstellt keine Karte und verändert bei einer Entwicklung
+  keine bereits bestätigte Karte. **40 Karten** sind das erste
+  Testdeck-Ziel, nicht eine endgültige Deckgrößenregel.
+- **Character Chronicles (späteres Spielerziel):** Für die
+  Kartenentstehung soll **eine der vier angebotenen Bildvarianten
+  ausgewählt** und übernommen werden. Die Möglichkeit, in ComfyReview
+  alle vier zu verwerfen, ist eine **Entwicklungs-/POC-Funktion** und
+  damit keine automatisch übernommene Regel des späteren Spiels.
+  Weder POC noch Spielziel sind bereits als vollständige
+  End-to-End-Funktion implementiert.
 - **Produktrichtung:** **Ungefähre Arbeitsorientierung:** Card Battler
   zuerst, danach Timeline, Social Network mit Charakter-Chats, Storyline
   und **VN-Content zuletzt**. Academy/Schuljahr ist ein möglicher

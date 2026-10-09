@@ -47,16 +47,33 @@ Wichtige Werte:
 
 ## Qualität und Mitwirkung
 
-Entwicklungstests:
+Für **vollständige lokale Entwicklungstests** werden zusätzlich zu
+Python 3.11+ **Node.js 24+**, npm und Playwright Chromium benötigt.
+Diese Werkzeuge sind **nicht für den normalen App-Start** erforderlich.
 
 ```bash
 pip install -r requirements-dev.txt
+npm ci
+npx playwright install chromium
+
 python -m pytest
 python scripts/check_documentation.py
 python scripts/quality.py
 ```
 
-Das Repo hat eine Python-/Frontend-/Browser-Qualitätsbasis; **ein erfolgreicher Testlauf gilt nur für den jeweils geprüften Commit**. Die [verifizierte CI-Evidenz](docs/IMPLEMENTATION_AUDIT.md) ist nicht mit lokaler Benutzer-/Datenbankabnahme gleichzusetzen.
+Unter Linux können zusätzliche Chromium-Systembibliotheken erforderlich
+sein; die [GitHub-CI](.github/workflows/quality.yml) installiert sie mit
+`npx playwright install --with-deps chromium`. Das vollständige Quality-Gate
+führt Python-Prüfungen und über `npm run quality` auch ESLint, Prettier,
+Stylelint, `checkJs`, Vitest und Playwright aus.
+
+**Automatische Prüfungen und die abschließenden Tests sind getrennt:**
+Der **Projektinhaber führt die finalen manuellen Funktions-, UI- und
+Provider-Tests selbst durch**, ebenso jede Abnahme an seiner privaten
+Datenbank. Ein grüner CI-Lauf für einen konkreten Commit ist technische
+Vorprüfung, **keine** stellvertretend erteilte Benutzer- oder
+Releasefreigabe. [Code-/CI-Evidenz](docs/IMPLEMENTATION_AUDIT.md) und
+[Engineering-Regeln](docs/CODING_STANDARDS.md) beschreiben diese Grenzen.
 
 Code-Änderungen müssen die [Engineering-Regeln](AGENTS.md) beachten. Exports und vollständige Dataset-/LoRA-Verpackung sind nicht als fertig integrierte Produktionspipeline zu behandeln.
 

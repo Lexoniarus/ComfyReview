@@ -113,9 +113,14 @@ extend an existing violation merely because it already exists.
 - Before each intermediate commit, run focused behavior tests plus formatting,
   linting and typing for every changed file. This targeted mode is feedback,
   not integration evidence.
-- The complete shared quality gate must run formatting, linting, typing, tests,
-  coverage and architecture checks at the end of every refactor slice and
-  before integration.
+- The complete shared quality gate must run formatting, linting, typing,
+  automated Python/frontend/browser tests, coverage and architecture checks
+  at the end of every refactor slice and before integration.
+- **The project owner performs the final manual tests and acceptance.**
+  Developer/CI checks and tool-based review are necessary preparation, not
+  proof of final real UI, provider or private-database acceptance. Record
+  final user test outcomes only when supplied or explicitly confirmed by
+  the project owner; do not assert them from a green CI run.
 
 ## Logging and tracing
 

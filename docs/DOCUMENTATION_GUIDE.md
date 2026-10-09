@@ -41,7 +41,12 @@ wenn sie in der Originalquelle „DECIDED“ heißen.
 - **Code vorhanden:** Modul/Modell existiert.
 - **Getesteter POC:** Tests belegen einen abgegrenzten Algorithmus oder Adapter.
 - **Runtime-wired:** Service und Router/Frontend sind aktiv angebunden.
-- **Operativ abgenommen:** Konkrete lokale Daten, Provider, Benutzer-/Releasefreigabe nachgewiesen.
+- **Automatisch geprüft:** CI/Entwicklertests haben einen benannten Commit
+  getestet; das ist **keine** abschließende Nutzerabnahme.
+- **Abschließend manuell getestet und abgenommen:** Der **Projektinhaber**
+  hat die tatsächlichen UI-/Funktions-/Providerabläufe selbst getestet und
+  die Abnahme ausdrücklich bestätigt; bei Datenmigrationen zusätzlich
+  den konkreten privaten Datenbestand und die operativen Schritte.
 - **Langfristige Vision:** ausdrücklich **keine** technische Fertigstellungsbehauptung.
 
 Den technischen Ist-Zustand des Dokumenten-Imports gegen [`a5f4131`](https://github.com/Lexoniarus/ComfyReview/commit/a5f4131bb76c1ff655892d287d19fcd401917d32) prüfen; [`76d71f9`](https://github.com/Lexoniarus/ComfyReview/commit/76d71f9c7723701664785aeaf07e0d7375a4f36a) fügte Inhalte ohne Änderung der Anwendungsmodule hinzu. Der Branch entwickelt sich anschließend weiter: Einen früheren Commit nicht endlos als „heute aktuell“ zitieren, wenn neue Commits vorliegen.

@@ -10,20 +10,32 @@ Bilder und daraus entwickelte Karten sollen einen **wirklich spielbaren Card Bat
 
 Der [aktuelle ComfyReview-POC](../../pocs/card-battler.md) enthält getestete Typen, CardImprint-Mapping, deterministische Stats/Mechaniken/Trait-Entwicklung, Modelladapter und Visual-Prompt-Projektion. **Das ist keine komplette Match-, Deck- oder Karten-Sammlungsoberfläche.** Die konkreten nächsten technischen Arbeitsschritte ergeben sich aus dem POC und seiner Integrationsprüfung.
 
-## Aktuelles, begrenztes POC-Ziel
+## Späteres Spielerziel in Character Chronicles
+
+Im späteren Spiel soll die Kartenerzeugung **vier zum Karteninhalt
+passende Bildvarianten** anbieten, aus denen der Spieler **eine
+auswählt** und als Karte übernimmt. Die Auswahl ist Teil des
+angestrebten Spielerlebnisses, **nicht** bereits implementiert und
+noch kein Vertrag über Renderer, Kartenspeicherung oder Kampfregeln.
+
+## Aktueller ComfyReview-Entwicklungs-POC
 
 Der [aktive Versuch in ComfyReview](../../pocs/card-battler.md#konkreter-erstversuch-eine-karte-von-der-bildwahl-bis-zur-sammlung)
-soll **jeweils ein vorhandenes Bild** als Ausgangspunkt nehmen, daraus
-**zusammenpassende Kartenwerte und Kartentext** entwerfen, **vier passende
-Bildvarianten** anbieten und den Spieler **eine** davon für die Karte
-auswählen lassen. Eine bestehende Karte soll danach mit demselben
-Auswahlprinzip weiterentwickelt werden können. Für ein erstes Testdeck
-sollen so **40 einzelne Karten** entstehen. Eine kleine Oberfläche
-für Erzeugung, Auswahl, Sammlung und Entwicklung gehört zum Versuch.
+beginnt jeweils mit **einem vorhandenen Bild**, aus dem zusammenpassende
+Kartenwerte, Kartentext und vier neue Bildalternativen hervorgehen
+sollen. **Während der Entwicklung** darf der Nutzer eine Alternative
+auswählen **oder alle vier ablehnen und erneut generieren**. Auch bei
+einer Weiterentwicklung bleibt die zuletzt bestätigte Karte bei
+Ablehnung unverändert. Dieses zusätzliche Ablehnungs-/Retry-Verhalten
+dient der Erprobung in ComfyReview und ist **keine automatisch gültige
+Spielregel für Character Chronicles**.
 
-**Das ist ein gegenwärtiges Experimentziel, weder bereits implementierte
-End-to-End-Funktion noch endgültige Spielregel.** Insbesondere sind die
-40 Karten nicht als generelle Pflichtgröße jedes künftigen Decks festgelegt.
+Für den POC sollen so schrittweise **40 einzeln bestätigte Karten**
+als erstes Testdeck entstehen. Eine kleine Oberfläche für
+Erzeugung, Vergleich, Sammlung und Entwicklung gehört zum Versuch.
+**Der POC ist weder eine bereits fertige End-to-End-Funktion noch
+eine endgültige Spielregel.** Die Zahl 40 ist insbesondere keine
+allgemeine spätere Deckgrößenvorgabe.
 
 ## Bewusst nicht festgelegt
 

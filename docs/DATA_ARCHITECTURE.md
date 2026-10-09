@@ -428,10 +428,16 @@ editorial pass. Rebuild requires every source
 component and live image to be marked reviewed, rejects unsupported kinds or
 duplicate image groups, rejects every Non-Character `keep` decision, and
 requires every replacement to use a new component UID with exactly revision
-1. All ten Non-Character groups must be populated with source-derived entries;
-unresolved `or` alternatives, archived selectable entries and `modifier` are
-validation failures. The mapping checksum is validated in addition to its
-audit and source hashes. It locks and re-hashes the source, upgrades only a
+1. All ten Non-Character groups must have target components referenced by
+reviewed source decisions; unresolved `or` alternatives, archived
+selectable entries and `modifier` are validation failures. The
+validator checks completeness, groups, UIDs, structural references and
+hash bindings, **not whether the editorial semantic interpretation is
+factually correct**. Marking a mapping `reviewed` cannot prove that
+its prompts were split or classified appropriately. The operator must
+review that meaning separately before accepting the rehearsal and any
+cutover. The mapping checksum is validated in addition to its audit
+and source hashes. It locks and re-hashes the source, upgrades only a
 temporary copy, and writes a distinct output database. `--replace` installs
 that database atomically after schema and cutover validation. Per the explicit
 operator decision for this one workflow, it creates no additional backup.
@@ -492,13 +498,17 @@ retained as raw provenance, including disconnected or triggerless nodes; the
 explicit audit/recovery path normalizes only fully evidenced values.
 
 Schema v9 adds an ordered content-level relation and validated image width and
-height fields. Without another schema change, every prompt component now stores
-exactly one canonical `content_level_*` marker in its existing metadata JSON;
-the repository exposes it as a typed field and removes it from descriptive
-tags. Legacy aliases are read only when no canonical marker exists. The shared
-visibility predicate gates ranking, review candidates, Arena pairs, Scope
-facets, Analytics, Catalog evidence and Playground from the immutable
-generation-level snapshot plus an optional image override. Later catalog edits
+height fields. The active catalog create/edit path now writes exactly one
+canonical `content_level_*` marker to component metadata without another
+schema change. **Historical components need not yet carry that marker**:
+reads prefer the canonical level, otherwise accept recognized legacy aliases,
+or default to `standard` if no classification exists. Conflicting
+canonical markers, or conflicting legacy levels without a canonical marker,
+are rejected. The repository exposes the resulting typed level and removes
+canonical markers from descriptive tags. The shared visibility predicate
+gates ranking, review candidates, Arena pairs, Scope facets, Analytics,
+Catalog evidence and Playground from the immutable generation-level
+snapshot plus an optional image override. Later catalog edits
 therefore never change historical image visibility implicitly.
 
 Schema v10 makes stable LoRA identity and generation snapshots canonical.
