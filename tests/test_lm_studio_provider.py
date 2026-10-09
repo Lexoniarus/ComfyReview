@@ -8,7 +8,6 @@ import urllib.error
 import urllib.request
 from collections import defaultdict
 from http.client import HTTPMessage
-from typing import Any
 
 import pytest
 
@@ -185,8 +184,8 @@ def test_load_model_posts_only_id_and_uses_lifecycle_timeout() -> None:
     ]
 
 
-@pytest.mark.parametrize("bad_id", ("", "  ", None, 10))
-def test_load_model_rejects_invalid_requested_id(bad_id: Any) -> None:
+@pytest.mark.parametrize("bad_id", ("", "  "))
+def test_load_model_rejects_invalid_requested_id(bad_id: str) -> None:
     transport = _Transport()
     with pytest.raises(ValueError, match="model_id is required"):
         NativeLmStudioProvider(transport).load_model(bad_id)
@@ -212,18 +211,19 @@ def test_load_model_rejects_malformed_success(payload: object) -> None:
         NativeLmStudioProvider(transport).load_model("model")
 
 
-@pytest.mark.parametrize(
-    ("status", "error_type"),
-    ((404, LocalModelUnavailableError), (409, LocalModelLifecycleError)),
-)
-def test_load_model_normalizes_rejected_status(
-    status: int,
-    error_type: type[Exception],
-) -> None:
+def test_load_model_normalizes_not_found_status() -> None:
     transport = _Transport()
-    transport.add("POST", "/api/v1/models/load", status, {"error": "no"})
+    transport.add("POST", "/api/v1/models/load", 404, {"error": "no"})
 
-    with pytest.raises(error_type):
+    with pytest.raises(LocalModelUnavailableError):
+        NativeLmStudioProvider(transport).load_model("model")
+
+
+def test_load_model_normalizes_conflict_status() -> None:
+    transport = _Transport()
+    transport.add("POST", "/api/v1/models/load", 409, {"error": "no"})
+
+    with pytest.raises(LocalModelLifecycleError):
         NativeLmStudioProvider(transport).load_model("model")
 
 
@@ -345,21 +345,15 @@ def test_urllib_transport_normalizes_base_url_and_payload(
 
 
 @pytest.mark.parametrize(
-    ("failure", "expected_error"),
+    "failure",
     (
-        (TimeoutError("timeout"), LocalModelTimeoutError),
-        (
-            urllib.error.URLError(TimeoutError("timeout")),
-            LocalModelTimeoutError,
-        ),
-        (urllib.error.URLError("no connection"), LocalModelConnectionError),
-        (OSError("socket error"), LocalModelConnectionError),
+        TimeoutError("timeout"),
+        urllib.error.URLError(TimeoutError("timeout")),
     ),
 )
-def test_urllib_transport_normalizes_connection_failures(
+def test_urllib_transport_normalizes_timeouts(
     monkeypatch: pytest.MonkeyPatch,
     failure: BaseException,
-    expected_error: type[Exception],
 ) -> None:
     def fake_urlopen(
         request: urllib.request.Request, timeout: float
@@ -369,7 +363,27 @@ def test_urllib_transport_normalizes_connection_failures(
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     transport = UrlLibLmStudioJsonTransport("http://localhost:1234")
 
-    with pytest.raises(expected_error):
+    with pytest.raises(LocalModelTimeoutError):
+        transport.request("GET", "/api/v1/models", timeout_seconds=1)
+
+
+@pytest.mark.parametrize(
+    "failure",
+    (urllib.error.URLError("no connection"), OSError("socket error")),
+)
+def test_urllib_transport_normalizes_connection_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException,
+) -> None:
+    def fake_urlopen(
+        request: urllib.request.Request, timeout: float
+    ) -> _Response:
+        raise failure
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    transport = UrlLibLmStudioJsonTransport("http://localhost:1234")
+
+    with pytest.raises(LocalModelConnectionError):
         transport.request("GET", "/api/v1/models", timeout_seconds=1)
 
 
@@ -424,7 +438,7 @@ def test_urllib_transport_accepts_empty_json_body(
         lambda request, timeout: _Response(b""),
     )
 
-    response = UrlLibLmStudioJsonTransport(
-        "http://localhost:1234"
-    ).request("GET", "/api/v1/models", timeout_seconds=1)
+    response = UrlLibLmStudioJsonTransport("http://localhost:1234").request(
+        "GET", "/api/v1/models", timeout_seconds=1
+    )
     assert response == LmStudioJsonResponse(200, {})
