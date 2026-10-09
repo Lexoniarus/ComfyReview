@@ -68,9 +68,14 @@ extend an existing violation merely because it already exists.
 - Semantic workflow compilation belongs to a dedicated `WorkflowCompiler`.
   The compiler maps explicit roles to graph inputs and outputs; it does not
   perform HTTP calls or decide output naming policy.
-- Workflow submission, job polling, output collection and capability discovery
-  belong to the ComfyUI provider boundary. The provider receives an already
-  compiled graph and has no knowledge of prompt, sampler or output roles.
+- The ComfyUI provider owns workflow submission, external job status/history,
+  capability discovery and retrieval of raw output descriptors. It accepts
+  already compiled graphs and does not interpret semantic prompt/sampler roles.
+- The application-owned `GenerationOutputCollector` combines those raw
+  descriptors with the injected filesystem output source, canonical SQLite
+  output repository and optional image-geometry projection. File validation,
+  output identity and canonical persistence do not belong inside the ComfyUI
+  API provider.
 - Long-running ComfyUI jobs are modeled as asynchronous work. A client timeout
   is not equivalent to a failed generation.
 - Generated image identity and generation metadata must remain reproducible
