@@ -14,4 +14,9 @@ POCs sind hier **bewusst ein legitimer Teil der fortlaufenden Produktentwicklung
 
 Für neue POCs genügt zunächst: **Fragestellung**, **bereits vorhandener Code/Test**, **aktuell ausprobiert**, **was noch unbewiesen ist**, **welche Entscheidung offen bleibt** und – wenn bekannt – **Ergebnis/Verwerfung**. Keine detaillierte Roadmap, bevor es dafür eine reale Entscheidung gibt.
 
+Die **sechs früher auf dem falschen Branch notierten POC-Kandidaten** sind
+[einzeln zugeordnet](../DECISION_POC_RECONCILIATION.md#einzelzuordnung-der-früheren-poc-vorschläge).
+Sie bilden weder ein neues verpflichtendes Register noch sechs bereits
+gestartete POCs. Der **aktuelle Karten-Erstversuch** bleibt oben verlinkt.
+
 [Gesamtrichtung](../PROJECT_EVOLUTION.md) · [Architekturregeln für Entscheidungen](../DECISION_POLICY.md)
