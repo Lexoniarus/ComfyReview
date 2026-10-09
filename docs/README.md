@@ -2,6 +2,28 @@
 
 **Stand:** 2026-10-09 · **Projekt:** ComfyReview wird aktiv weiterentwickelt und soll langfristig zu Character Chronicles werden. **Die Produktentwicklung ist nicht fertig und ihre technische Zukunft nicht festgeschrieben.**
 
+## Projektzustand in drei Sätzen
+
+**Heute:** ComfyReview ist die laufend überarbeitete ComfyUI-Review- und
+Generator-Anwendung. **Schema v18 im Code** heißt nicht, dass die private
+Datenbank bereits migriert und operativ abgenommen wurde. Der Card Battler
+ist **aktiver POC**, kein vollständig spielbares Produkt.
+
+**Zielrichtung:** Aus **derselben Codebasis** soll langfristig Character
+Chronicles entstehen. Die **ungefähre**, durch POCs veränderbare
+Entwicklungsorientierung lautet:
+**Card Battler → Timeline → Social Network mit Charakter-Chats → Storyline →
+Visual-Novel-Content zuletzt**. Timeline ist zunächst ein begrenzter sozialer
+Slice, Social/Chat die breitere Plattform; Academy/Schuljahr bleibt ein
+**möglicher Welt-/Storykontext**, keine zusätzlich festgelegte Pflichtphase.
+[Entwicklungsbegründung](PROJECT_EVOLUTION.md) ·
+[Vision mit getrennten Bereichen](character-chronicles/vision/README.md).
+
+**Vergangenheit:** Der frühere Character-Chronicles-Codeansatz wurde
+verworfen. Seine 24 ausführlichen importierten Konzepte sind
+**[Quellenmaterial](character-chronicles/sources/README.md)**, keine
+aktuellen technischen oder fachlichen Pflichtverträge.
+
 ## Welches Dokument ist wofür gültig?
 
 | Geltung | Dokument | Hier findet man … |
@@ -9,7 +31,7 @@
 | **CURRENT_CODE** | [Implementation Audit](IMPLEMENTATION_AUDIT.md) | Nachweisbarer ComfyReview-Code an einem konkreten Commit; Grenzen seiner Aussagekraft |
 | **CURRENT_STATUS** | [Projektstatus](project_status.md) als Gesamtübersicht; [Refactor-Abnahmestand](REFACTOR_PLAN.md) für den Refactor | Was heute belegt ist und welche Integrations-/Betriebsabnahmen im jeweiligen Bereich offen sind; **keine** historische Slice-Chronik |
 | **IN_PROGRESS** | [Aktuelle Arbeiten](ACTIVE_WORK.md) und [POCs](pocs/README.md) | Generator-/Datenbank-Optimierung, derzeitiger Card-Battler-POC, nicht abgeschlossene Integration |
-| **WORKING_DIRECTION** | [Projektentwicklung](PROJECT_EVOLUTION.md) | Warum Card Battler zuerst, danach Social/Chats, Academy/Schuljahr und die visuelle VN zuletzt |
+| **WORKING_DIRECTION** | [Projektentwicklung](PROJECT_EVOLUTION.md) | Warum Card Battler zuerst, dann Timeline, Social Network mit Chats, Storyline und VN-Content zuletzt; Academy/Schuljahr ist möglicher Storykontext |
 | **WORKING_VISION** | [Character-Chronicles-Zielbild](character-chronicles/vision/README.md) | **Kurze, klar lesbare Produktziele** ohne alte technische Festlegungen |
 | **DECIDED_FOR_SCOPE** | [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md) | Tatsächlich bestätigte Vorgaben mit konkretem Geltungsbereich; getrennt von Zielen, Präferenzen und unbeschlossenen Schutzvorschlägen |
 | **OPEN** | [Offene Entscheidungen](OPEN_DECISIONS.md) | Was noch nicht entschieden oder operativ verifiziert ist |
@@ -44,8 +66,9 @@ docs/
     card-battler.md                    Laufender POC, kein fertig spielbares Produkt
   character-chronicles/
     vision/                            WORKING_VISION – kurze, aktuelle Zielbilder
-      card-battler.md, social-network.md,
-      academy-and-world.md, visual-novel.md
+      card-battler.md, timeline.md, social-network.md,
+      storyline.md, academy-and-world.md (Weltkontext),
+      visual-novel.md
     sources/                           SOURCE_MATERIAL – 24 lange importierte Texte
     history/                           Frühere Gesamtentwürfe
     HISTORICAL_CODE_AUDIT.md          Verworfener alter Code-/Abnahmestand

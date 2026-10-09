@@ -51,10 +51,13 @@ werden **nicht** hierher übernommen, nur weil sie früher so benannt wurden.
   Entwicklung derselben Karte. **40 Karten** sind das erste Testdeck-Ziel,
   **nicht** die global beschlossene Deckgröße oder ein fertig
   implementierter Funktionsumfang.
-- **Produktrichtung:** Card Battler zuerst, danach Social Network
-  (Timeline/Charakter-Chats), Academy/Schuljahr und die visuelle VN
-  zuletzt. Siehe [Project Evolution](PROJECT_EVOLUTION.md): Das ist eine
-  begründete **Priorität**, kein starrer Milestone- oder Architekturvertrag.
+- **Produktrichtung:** **Ungefähre Arbeitsorientierung:** Card Battler
+  zuerst, danach Timeline, Social Network mit Charakter-Chats, Storyline
+  und **VN-Content zuletzt**. Academy/Schuljahr ist ein möglicher
+  Story-/Weltkontext, **keine zusätzlich beschlossene Pflichtphase**.
+  Siehe [Project Evolution](PROJECT_EVOLUTION.md). Diese Orientierung
+  ist eine **Arbeitspräferenz**, kein starrer Milestone- oder
+  Architekturvertrag.
 
 ## Noch nicht beschlossene Schutzoptionen – CANDIDATE
 

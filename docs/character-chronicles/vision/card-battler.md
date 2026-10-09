@@ -4,7 +4,7 @@
 
 ## Fachliche Absicht
 
-Bilder und daraus entwickelte Karten sollen einen **wirklich spielbaren Card Battler** tragen. Bevor die soziale Welt oder die visuelle VN groß ausgebaut werden, soll ein funktionierender Spielkern existieren, an dem Regelmechaniken, Kartenentwicklung und Benutzerabläufe erprobt werden können.
+Bilder und daraus entwickelte Karten sollen einen **wirklich spielbaren Card Battler** tragen. Bevor Timeline, die breitere Social-/Chat-Plattform, Storyline oder VN-Content groß ausgebaut werden, soll ein funktionierender Spielkern existieren, an dem Regelmechaniken, Kartenentwicklung und Benutzerabläufe erprobt werden können.
 
 ## Was heute schon da ist
 
@@ -35,4 +35,4 @@ sind **diskutierte oder historische Varianten** – nicht automatisch gültige
 Anforderungen. Die [ausführlichen Kartenkonzepte](../sources/README.md)
 können hierfür als Ideenfundus dienen.
 
-**Abhängigkeit:** Der Card Battler soll zuerst funktional erprobt werden. Social-/Academy-/VN-Arbeit darf Ideen oder kleine Spikes vorbereiten, soll den Spielkern aber nicht durch eine verfrühte Gesamtruntime ersetzen.
+**Abhängigkeit:** Der Card Battler soll zuerst funktional erprobt werden. Spätere Schwerpunkte sind **Timeline → Social Network mit Chats → Storyline → VN-Content zuletzt**. Academy/Schuljahr ist möglicher Weltkontext der Storyline, kein zusätzlich beschlossenes Release-Gate. Kleine übergreifende POCs sind zulässig, dürfen aber den Spielkern nicht durch eine vorgezogene Gesamtruntime ersetzen.

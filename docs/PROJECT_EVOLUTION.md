@@ -27,43 +27,35 @@ Das ist eine **Arbeitslogik**, keine Roadmap mit Releasegates. Ein POC darf sich
 
 ## Gewonnene Reihenfolge aus den bisherigen Versuchen
 
-**Entwicklungsorientierung vom 2026-10-09, kein starrer Meilensteinplan:**
-Die Ideen für Card Battler, Worldbuilding, Academy und Character Chronicles
-haben erst im Laufe der Versuche zu einem zusammenhängenden Produktbild
-gefunden. Der frühere Chronicle-Ansatz ging mit umfangreicher Architektur,
-Spiel- und VN-Organisation voraus, bevor die heute wichtigeren spielerischen
-Grundlagen hinreichend geklärt waren. Das ist eine Erkenntnis über die
-**sinnvolle Reihenfolge** – kein Urteil, dass sämtliche früheren Ideen
-wertlos oder sämtliche damaligen POCs gescheitert seien.
+**Stand 2026-10-09 – bewusst ungefähr, keine starre Roadmap:**
+Die Ideen für Card Battler, Worldbuilding und Character Chronicles haben
+erst im Laufe der Experimente zusammengefunden. Der frühere Chronicle-Ansatz
+ging mit umfassender Architektur und VN-/Academy-Planung voraus, bevor die
+heute wichtigeren spielerischen Grundlagen hinreichend geklärt waren.
+Diese Erfahrung begründet **die Reihenfolge der nächsten Schwerpunkte**,
+nicht die Wiederherstellung des früheren Projekts.
 
-1. **Card Battler – aktuelle Priorität.** Im vorhandenen ComfyReview-Code
-   zuerst die Card-Battler-Funktionen über isolierte Algorithmen hinaus in
-   Richtung eines tatsächlich funktionierenden, testbaren Spielkerns
-   entwickeln. Der aktuelle [POC](pocs/card-battler.md) liefert Belege, nicht
-   bereits die endgültigen Spielregeln oder UI-Verträge.
-2. **Social Network – nächste größere Produktschicht.** Eine Timeline und
-   eine Chat-Oberfläche für Interaktionen mit den Charakteren geben diesen
-   eine soziale Präsenz, bevor eine vollständige VN-Szenenbühne existiert.
-   Technische Umsetzung, Datenmodell und Detailumfang bleiben offen.
-3. **Academy / Schuljahr – dazwischen aufbauen.** Schuljahresstruktur,
-   Figurenentwicklung, Beziehungen und Fortschritt verbinden die zuvor
-   entwickelten Spiel- und Sozialfunktionen zu einem fortlaufenden
-   Welt-/Spielkontext. Die genaue zeitliche Verzahnung **mit** dem Social
-   Network muss nicht bereits als eigene Phase feststehen.
-4. **Visuelle VN – bewusst zuletzt.** Erst nach tragfähigen
-   Spiel-/Interaktions-/Schuljahressystemen wird die aufwendige szenische
-   Präsentation zum Gesamterlebnis ausgebaut. Insbesondere
-   **Freistellung, Segmentierung/Matting und das konsistente
-   Zusammensetzen visueller Szenelemente** sind deutlich riskanter als
-   reine Timeline- oder Chat-Oberflächen. Diese technischen Probleme
-   dürfen durch **kleine frühere Feasibility-POCs** untersucht werden;
-   das macht die vollständige VN aber **nicht** zum nächsten
-   Implementierungsschritt.
+| Orientierung | Spielerisches Ziel | Was damit ausdrücklich **nicht** festgelegt ist |
+| --- | --- | --- |
+| **1. Card Battler – zuerst** | Den aktiven [Card-Battler-POC](pocs/card-battler.md) vom getesteten Bibliothekscode zu einem tatsächlich funktionierenden, spielerisch prüfbaren Kartenloop weiterentwickeln | Kein alter Sieben-Phasen-Plan, kein fertig spielbares PvE, keine unveränderliche 40-Karten-Regel |
+| **2. Timeline – anschließend** | Eine verständliche zeitliche/soziale Oberfläche und Interaktionen zunächst als begrenzten Slice erproben; Grundlage für die spätere Plattform | Noch kein beschlossenes Datenmodell, keine vollständige Social-Network-Runtime und keine feste Academy-Kalendermechanik |
+| **3. Social Network mit Chat-Interaktion** | Timeline/soziale Präsenz zu einer Plattform mit Charakter-Chats und weiteren Interaktionen ausbauen | Kein schon beschlossener LLM-, RAG-, Feed-, Relationship- oder Provider-Vertrag |
+| **4. Storyline** | Figuren, Ereignisse, Beziehungen und Progression in einen erzählerischen Zusammenhang stellen; **Academy/Schuljahr** ist dafür ein mögliches Worldbuilding-/Zeitgerüst | Keine obligatorische gesonderte „Academy-Phase“, keine zwei Jahre, 336 Tage oder alter Story-Reducer als bindende Vorgabe |
+| **5. Visual-Novel-Content – zuletzt** | Die zuvor entwickelten Spiel-/Interaktions-/Storysysteme erst am Ende durch eigentliche szenische VN-Inhalte und konsistente visuelle Präsentation ergänzen | Keine vorgezogene große Sprite-/Szenenproduktionsphase. Kleine frühere Feasibility-POCs für Freistellung, Segmentierung/Matting und Szenenkomposition bleiben sinnvoll |
 
-Diese Reihenfolge ist eine **begründete Arbeitsrichtung und Abhängigkeit**,
-kein bereits bestätigter MVP-Zuschnitt, keine Verpflichtung auf vier
-Projektphasen und keine Übernahme früherer Schema-/Guardian-/Frontend-
-Verträge. Die Ergebnisse jedes POCs können Umfang und Übergänge verändern.
+**Timeline und Social Network sind fachlich eng verwandt, werden aber für die
+Entwicklungsorientierung als aufeinander aufbauende Schwerpunkte bezeichnet:**
+erst den Timeline-Slice erproben, danach die breitere Plattform samt Chat.
+Ebenso ist **Storyline** der spätere Entwicklungsbereich; Academy/Schuljahr
+beschreibt eine mögliche Welt und Zeitstruktur darin, keinen zusätzlichen
+zwingenden Milestone. Die eigentliche **VN-Content-Entwicklung ist zuletzt**.
+
+Diese fünf Punkte sind eine **veränderbare Richtung**, kein festgelegter MVP,
+kein formaler Release-Gate-Plan und keine Übernahme früherer M4-/M6-/Schema-
+oder Frontend-Verträge. Kleinere übergreifende POCs können aus technischen
+Gründen vorgezogen werden, ohne dass damit späterer Produktumfang als fertig
+oder beschlossen gilt. [Einfaches Zielbild](character-chronicles/vision/README.md)
+und [offene Entscheidungen](OPEN_DECISIONS.md).
 
 ## Was heute tatsächlich vorhanden ist
 

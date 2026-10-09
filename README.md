@@ -61,7 +61,7 @@ Code-Änderungen müssen die [Engineering-Regeln](AGENTS.md) beachten. Exports u
 
 ## Langfristige Entwicklung
 
-**ComfyReview soll sich zu Character Chronicles entwickeln** – POC- und erfahrungsgetrieben, nicht als starrer Komplettbauplan. Die derzeitige priorisierte Richtung ist **erst ein funktionierender Card Battler, dann Social Network mit Timeline und Charakter-Chats, Academy/Schuljahr als Welt-/Progressionsrahmen und die visuelle VN zuletzt**. Für die VN sind Figurenfreistellung, Matting und konsistente Szenenkomposition besondere technische Herausforderungen.
+**ComfyReview soll sich zu Character Chronicles entwickeln** – POC- und erfahrungsgetrieben, nicht als starrer Komplettbauplan. Die derzeitige **ungefähre Entwicklungsorientierung** lautet **Card Battler → Timeline → Social Network mit Charakter-Chats → Storyline → Visual-Novel-Content zuletzt**. Die Timeline kann zunächst als eigenständig erprobbarer Einstieg in die spätere Social-Plattform entstehen; das legt keine getrennten Releases fest. **Academy/Schuljahr ist ein möglicher Welt- und Fortschrittsrahmen der Storyline, keine zusätzlich beschlossene Pflichtphase.** Für spätere VN-Inhalte sind Figurenfreistellung, Matting und konsistente Szenenkomposition besondere technische Herausforderungen; begrenzte frühe Machbarkeits-POCs sind möglich.
 
 [Einfaches Zielbild](docs/character-chronicles/vision/README.md) · [Entwicklungslogik](docs/PROJECT_EVOLUTION.md) · [Ausführliche, aber **nicht verbindliche** Quelltexte](docs/character-chronicles/sources/README.md) · [Alte verworfene Chronicle-Technik](docs/character-chronicles/HISTORICAL_CODE_AUDIT.md).
 

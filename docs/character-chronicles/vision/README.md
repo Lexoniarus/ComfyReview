@@ -6,14 +6,24 @@
 
 ComfyReview ist die **aktuelle, noch in Entwicklung befindliche Anwendung**. Die gewachsene Vision heißt **Character Chronicles**: Bildgenerierung und -bewertung sollen sich langfristig zu einem Spielerlebnis mit Karten, Charakteren, einer sozialen Welt, einem Academy-/Schuljahreskontext und schließlich visuellen Szenen entwickeln. Wie genau das gebaut wird, entscheiden **POCs und tatsächliche Erfahrungen**, nicht ältere technische Konzepte.
 
-Die aktuell beschriebene **Priorität/Abhängigkeit**, ohne starre Release-Gates:
+Die derzeitige **ungefähre Entwicklungsorientierung** (keine starren
+Release-Gates und keine bereits beschlossene Gesamtarchitektur):
 
-1. **[Card Battler](card-battler.md)** – zuerst ein tatsächlich funktionierender, testbarer Spielkern; aktuell der konkrete POC.
-2. **[Social Network](social-network.md)** – soziale Präsenz mit Timeline und Chat-Oberflächen für die Charaktere; noch keine fertig integrierte Funktion.
-3. **[Academy und Schuljahr](academy-and-world.md)** – Beziehungen, Welt, Fortschritt und Schuljahresstruktur; kann sich in der Ausarbeitung mit Social überschneiden.
-4. **[Visuelle VN](visual-novel.md)** – bewusst zuletzt als aufwendige szenische Präsentation. Freistellung, Matting und konsistente Bildkomposition sind zusätzliche Risiken, die zuvor in kleinen Techniktests erprobt werden dürfen.
+1. **[Card Battler](card-battler.md)** – zuerst ein tatsächlich funktionierender Spielkern; aktuell der konkrete POC.
+2. **[Timeline](timeline.md)** – als nächster begrenzter, sozialer Interaktions- und Darstellungsslice; Details und Datenmodell noch offen.
+3. **[Social Network mit Charakter-Chats](social-network.md)** – die breitere soziale Plattform aufbauend auf beziehungsweise verzahnt mit der Timeline.
+4. **[Storyline](storyline.md)** – Ereignisse, Figurenentwicklung, Beziehungen und Progression in einen erzählerischen Zusammenhang bringen. **[Academy/Schuljahr](academy-and-world.md)** ist dabei ein mögliches Worldbuilding-/Zeitgerüst, keine gesondert beschlossene Pflichtphase.
+5. **[Visual-Novel-Content](visual-novel.md)** – zuletzt die aufwendigen szenischen Inhalte und Präsentationen. Frühere kleine Technik-POCs zu Freistellung, Matting und Bildkomposition bleiben möglich.
 
-Diese Übersicht beschreibt **was und ungefähr in welcher Abhängigkeit**, nicht **wie genau**: Es gibt keine beschlossene Gesamtarchitektur, keine fixierte MVP-Grenze, keine verbindlichen Schemata/M6-Gates und keinen veröffentlichten Zeitplan.
+**Timeline → Social/Chat** unterscheidet Entwicklungsschwerpunkte, nicht
+zwangsläufig zwei unabhängig veröffentlichte Produkte. **Storyline** umfasst
+das später zu definierende Erzählsystem; die alte Academy-Kalender- und
+Zwei-Jahres-Spezifikation ist nicht automatisch beschlossen.
+
+Diese Übersicht beschreibt **was und ungefähr in welcher Reihenfolge**, nicht
+**wie genau**: Kein beschlossener Gesamt-MVP, keine verpflichtenden
+historischen Schemas oder M6-Gates, keine fixierten Termine.
+[Entwicklungsbegründung](../../PROJECT_EVOLUTION.md).
 
 ## Wo die Details herkommen
 

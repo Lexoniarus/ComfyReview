@@ -78,11 +78,13 @@ kompletter VN-, Guardian- oder Schuljahres-Laufzeit zu beginnen, soll
 der Card Battler zunächst als **spielerischer Kern in ComfyReview**
 tatsächlich funktionieren und in der Praxis erprobt werden.
 
-Danach ist die übergeordnete Idee eine **Social-Network-Timeline samt
-Charakter-Chats**; die **Academy-/Schuljahresentwicklung** wird daran
-angeschlossen, während die **vollständige visuelle VN zuletzt** folgt.
-Figurenfreistellung und Szenenkomposition sind erheblich komplexere
-Bild-/Asset-Aufgaben und **keine Voraussetzung für den jetzigen POC**.
+Danach ist die ungefähre Entwicklungsorientierung **Timeline →
+Social Network mit Charakter-Chats → Storyline → VN-Content zuletzt**.
+Die Timeline kann zuerst als kleiner Social-Slice erprobt werden, ohne
+sofort die vollständige Plattform zu bauen. **Academy/Schuljahr** ist
+ein möglicher Story-/Weltkontext, aber keine zusätzlich beschlossene
+Pflichtphase. Figurenfreistellung und Szenenkomposition sind erheblich
+komplexere Bild-/Asset-Aufgaben und **keine Voraussetzung für diesen POC**.
 [Entwicklungsorientierung](../PROJECT_EVOLUTION.md#gewonnene-reihenfolge-aus-den-bisherigen-versuchen).
 
 Das definiert weder eine feste Deck-/Kampfarchitektur noch ein Releasegate,

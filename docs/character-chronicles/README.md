@@ -7,10 +7,11 @@
 
 Die **[bereinigte Vision](vision/README.md)** ist der richtige Einstieg. Sie erklärt die derzeitige Arbeitsorientierung ohne versteckte Altverträge:
 
-1. [Card Battler](vision/card-battler.md) – aktueller Schwerpunkt, zunächst spielbar und testbar.
-2. [Social Network](vision/social-network.md) – Timeline und Chats mit Charakteren.
-3. [Academy/Schuljahr und Welt](vision/academy-and-world.md) – soziale Entwicklung, Fortschritt und Spielkontext; kann mit Social überlappen.
-4. [Visuelle VN](vision/visual-novel.md) – **letzter großer Produktausbau** wegen Figurenfreistellung, Matting und komplexer Szenenkomposition. Einzelne frühe Technik-POCs bleiben möglich.
+1. [Card Battler](vision/card-battler.md) – aktueller Schwerpunkt: POC zunächst spielerseitig erprobbar machen.
+2. [Timeline](vision/timeline.md) – nächster begrenzter sozialer/zeitlicher Interaktionsslice.
+3. [Social Network mit Charakter-Chats](vision/social-network.md) – breitere Plattform aufbauend auf der Timeline.
+4. [Storyline](vision/storyline.md) – Ereignisse, Figurenentwicklung und Fortschritt; [Academy/Schuljahr](vision/academy-and-world.md) bleibt ein möglicher Weltkontext, **keine zusätzliche Pflichtphase**.
+5. [Visual-Novel-Content](vision/visual-novel.md) – **zuletzt**, mit möglichen früheren kleinen Technik-POCs für Matting und Szenenkomposition.
 
 **Keine** dieser Seiten setzt bereits einen genauen MVP, Release-Termin, verbindliche Datenbankschemas oder zwingende technische Etappen fest.
 

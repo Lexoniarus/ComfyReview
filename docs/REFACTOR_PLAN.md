@@ -33,6 +33,6 @@ Der Generator wurde zuletzt erheblich überarbeitet (Blueprint v4, Workflow-Comp
 ## Nicht mit dem Refactor verwechseln
 
 Der **Card Battler wird gerade als POC entwickelt** und ist kein abgeschlossener Bestandteil dieser Refactor-Abnahme. [POC](pocs/card-battler.md).  
-**Character Chronicles** ist die langfristige Produktrichtung – **Card Battler zuerst, danach Social/Timeline/Charakter-Chats, Academy/Schuljahr und visuelle VN zuletzt**. Das ist eine priorisierte Arbeitsrichtung, kein durch historische Slices automatisch gültiger Architektur-/Milestonevertrag. [Zielbild](character-chronicles/vision/README.md).
+**Character Chronicles** ist die langfristige Produktrichtung – **Card Battler zuerst, danach Timeline, Social Network mit Charakter-Chats, Storyline und VN-Content zuletzt**. Academy/Schuljahr ist möglicher Welt-/Storykontext und **keine** zusätzlich festgelegte Pflichtphase. Das ist eine ungefähr priorisierte Arbeitsrichtung, kein aus historischen Slices abgeleiteter Architektur- oder Milestonevertrag. [Zielbild](character-chronicles/vision/README.md).
 
 Vergangene Rehearsals, lokale Smoke-Ergebnisse und einzelne historische Commit-Slices sind in der [vollständigen Refactor-Chronik](archive/refactor-slice-history-2026-10-09.md) lesbar, aber ausdrücklich **HISTORICAL_LOG**.

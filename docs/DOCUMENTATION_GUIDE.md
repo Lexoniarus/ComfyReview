@@ -77,7 +77,14 @@ Eine neue, bindende Entscheidung braucht einen konkreten Scope, Alternativen, Be
 
 Relative Markdown-Links vom Quellpfad aus prüfen; Archivtexte bei Anpassungen möglichst nicht semantisch überschreiben, sondern durch Kontext-Banner einordnen. CI-Ergebnisse nur mit Commit/Run zitieren; lokale Datenbank-/Hardware-Aussagen nicht aus Testcode extrapolieren. **Keine Meilensteine oder Design-Festlegungen erfinden**, solange das Experiment und die Entscheidung offen sind.
 
-## Qualitätsprüfung dieser Bereinigung (2026-10-09)
+## Qualitätsprüfung der ursprünglichen Branch-Bereinigung (2026-10-09)
+
+**Zeitgebundener Prüfbericht:** Die folgenden Mengen und Linkergebnisse
+beziehen sich auf den **zuvor geprüften Dokumentations-Head**. Sie sind
+nicht automatisch ein neuer Testnachweis für jede spätere
+Änderung an `docs/structure-and-status-2026-10-09`. Nach
+Aktualisierungen müssen aktive Links und Quellgrenzen erneut überprüft
+und die Ergebnisse dem zugehörigen Commit zugeordnet werden.
 
 Geprüft auf dem Dokumentationsbranch `docs/structure-and-status-2026-10-09`:
 
@@ -108,7 +115,7 @@ Geprüft auf dem Dokumentationsbranch `docs/structure-and-status-2026-10-09`:
   Die aktive Architektur verweist auf den archivierten Projection Audit,
   die aktuelle Datenarchitektur auf Blueprint v4.
 - Die **24 ausführlichen Konzepttexte** liegen ausschließlich unter `character-chronicles/sources/` als `SOURCE_MATERIAL`. Frühere „verbindlich“-Behauptungen werden jeweils ausdrücklich als **übernommene Quellenfassung** markiert, nicht als aktuelle Festlegung.
-- Das aktuelle Zielbild liegt **getrennt** unter `character-chronicles/vision/`: Card Battler → Social/Chats → Academy/Schuljahr → visuelle VN zuletzt, mit POC-getriebener Anpassung.
+- Das aktuelle Zielbild liegt **getrennt** unter `character-chronicles/vision/`: **Card Battler → Timeline → Social Network mit Chat → Storyline → VN-Content zuletzt**. Academy/Schuljahr ist dabei möglicher Worldbuilding-/Storykontext, **keine zusätzlich beschlossene Pflichtphase**. Die Orientierung ist POC-getrieben und nicht starr.
 - Aktuelle Implementierung/POC/Status/Datenbankbetrieb und lange historische Operator-/Refactor-/README-Protokolle haben **getrennte Dokumente und klare Zuständigkeiten**.
 - Der Stand von ComfyReview ist ausdrücklich **nicht fertig**. Codeunterstützung für Schema v18 ist kein Beleg für private Live-DB-Cutover-Abnahme. Der frühere, verworfene Chronicle-Code ist als historische Quelle dokumentiert, nicht als aktuelle Architektur.
 

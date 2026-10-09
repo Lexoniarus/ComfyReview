@@ -25,7 +25,7 @@ Diese Feststellungen bezeichnen **vorhandenen und eingebundenen Code**, nicht di
 | **Generator** | Jüngst stark überarbeitet. Die vorhandenen Services sind angebunden, aber weitere Bedien-/Provider-Abnahmen und Änderungen sind möglich |
 | **Katalog und Datenbank** | Normalisierung/Rebuild, Schema und Testabdeckung sind umgesetzt. Die **private reale Datenbank**, redaktionelle Mappings, operativer `--replace`-Cutover und Akzeptanz sind davon getrennt und nicht aus Git als vollständig abgeschlossen nachweisbar |
 | **Abnahme und Integration** | Manuelle visuelle/operative Akzeptanz und die Integration der Refactor-Basis in `master` sind eigene Entscheidungen |
-| **Langfristiges Character Chronicles** | Fachliche Vision mit Card Battler → Timeline/Charakter-Chats → Academy/Schuljahr → visuelle VN zuletzt. **Keine** heute implementierte vollständige Spiel- oder VN-Runtime, **kein** festgelegter Milestone-/Technikplan. [Vision](character-chronicles/vision/README.md) |
+| **Langfristiges Character Chronicles** | **Grobe Orientierung:** Card Battler → Timeline → Social Network mit Charakter-Chats → Storyline → VN-Content **zuletzt**. Academy/Schuljahr ist mögliche Story-/Weltgestaltung, keine gesondert beschlossene Pflichtphase. **Keine** heute implementierte vollständige Spiel-, Social- oder VN-Runtime und **kein** fester Milestone-/Technikplan. [Vision](character-chronicles/vision/README.md) |
 
 Externe Versuche oder private lokale Daten werden **nicht** als angebundene ComfyReview-Funktionen ausgegeben.
 

@@ -149,6 +149,16 @@ path toward Character Chronicles. This evolution uses POCs; **do not**
 turn imported concepts, old M6/schema claims or discarded architecture into
 binding rules merely because a historical document says “approved”.
 
+For product-documentation changes, retain the **approximate** current
+priority as **Card Battler → Timeline → Social Network with character
+chat → Storyline → VN content last**. Timeline may be the first bounded
+social slice; Academy/school-year is a *possible story/world context*, **not
+an extra approved mandatory release phase**. Future implementation detail,
+phase boundaries and technical choices remain open until explicitly reviewed.
+Do not translate this orientation into a rigid schedule, POC ban or a
+revived historical Chronicle MVP. Source of truth:
+`docs/PROJECT_EVOLUTION.md` and `docs/character-chronicles/vision/README.md`.
+
 Historical `docs/character-chronicles/sources/` content must keep its
 original wording **and original relative links**. Do not retarget legacy
 Foundation/M4/M6 references to present-day `vision/` or `README.md` pages.

@@ -1,10 +1,10 @@
-# Social Network – Timeline und Charakter-Chats
+# Social Network – Plattform mit Charakter-Chats
 
-**Dokumentklasse:** `WORKING_VISION` · **Entwicklungsorientierung:** nach einem tragfähigen Card Battler, vor der vollständigen visuellen VN · **Status in ComfyReview:** Zielidee, kein integriertes Gesamtsystem.
+**Dokumentklasse:** `WORKING_VISION` · **Entwicklungsorientierung:** nach dem Card Battler und einem ersten [Timeline-Slice](timeline.md), vor Storyline und VN-Content · **Status in ComfyReview:** Zielidee, kein integriertes Gesamtsystem.
 
 ## Fachliche Absicht
 
-Die Figuren erhalten eine **soziale Präsenz**, mit der die Spielenden interagieren können. Im Mittelpunkt stehen eine **Timeline** und **Chat-Oberflächen mit Charakteren**. So entsteht der erste soziale und erzählerische Kontakt, ohne alle Dialoge und Begegnungen bereits in aufwendig zusammengesetzten VN-Szenen darstellen zu müssen.
+Die Figuren sollen eine **soziale Präsenz** erhalten, mit der Spielende interagieren können. Nach einem zunächst begrenzten [Timeline-Slice](timeline.md) ist das **breitere Social Network mit Chat-Interaktion** der nächste Entwicklungsschwerpunkt: Charakter-Chats und weitere Plattformfunktionen bauen auf dem Timeline-Kontext auf beziehungsweise verzahnen sich mit ihm. Ob die beiden Schwerpunkte technisch oder als Releases getrennt bleiben, ist **nicht entschieden**. So werden erste soziale und erzählerische Kontakte möglich, ohne bereits aufwendig zusammengesetzte VN-Szenen vorauszusetzen.
 
 Dieses Social Network soll später Platz für die übergreifende Welt und den Academy-/Schuljahreskontext bieten. Wie Post-/Reaktionsmodelle, Nachrichten, Zustandsübergänge, KI-Unterstützung und Beziehungen im Detail aussehen, muss erst erprobt werden.
 
@@ -15,4 +15,4 @@ Dieses Social Network soll später Platz für die übergreifende Welt und den Ac
 - Alte Network-/Social-Vorgaben aus [importierten Quelltexten](../sources/README.md) sind **Ideen und historische Lösungen**, keine automatisch geltenden Spezifikationen.
 - Der visuelle VN-Szenenrenderer ist **keine Voraussetzung** dafür, dass Timeline und Chat als Interaktionssysteme sinnvoll funktionieren.
 
-**Nächste fachliche Verbindung:** [Academy/Schuljahr](academy-and-world.md). Deren Entwicklung kann sich mit dem Social Network überschneiden; eine starre Trennung in Releases ist nicht festgelegt.
+**Nächster Entwicklungsbereich:** [Storyline](storyline.md). [Academy/Schuljahr](academy-and-world.md) ist ein möglicher Welt- und Fortschrittskontext dieser Storyline, **keine zusätzlich beschlossene eigenständige Pflichtphase**. Die technische Umsetzung kann sich mit Social/Chat überlappen, ohne die grobe Orientierung zu einem starren Releaseplan zu machen.
