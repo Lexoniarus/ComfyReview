@@ -1,6 +1,10 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_generation_prompt:CardEvolutionPromptAdapter.adapt": (
+        "tests/test_card_battler_generation_prompt.py::"
+        "test_card_prompt_adapter_preserves_scopes_weights_and_order"
+    ),
     "comfyreview.application.card_battler_visual_projection:VisualPromptProjector.project": (
         "tests/test_card_battler_visual_projection.py::"
         "test_visual_prompt_projector_builds_stable_golden_recipe"
