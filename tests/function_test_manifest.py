@@ -1,6 +1,14 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.local_model_structured_inference:LocalStructuredInferenceRequest.schema_document": (
+        "tests/test_local_model_structured_inference.py::"
+        "test_request_snapshots_schema_and_hides_its_contents"
+    ),
+    "comfyreview.application.local_model_structured_inference:LocalStructuredInferenceResult.value": (
+        "tests/test_local_model_structured_inference.py::"
+        "test_result_is_typed_immutable_and_defensive"
+    ),
     "comfyreview.application.local_model_runtime:LocalModelRuntime.acquire": (
         "tests/test_local_model_runtime.py::"
         "test_owned_model_reuses_instance_until_final_release"

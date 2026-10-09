@@ -349,6 +349,13 @@ from comfyreview.application.local_model_inference import (
     LocalInferenceUsage,
     LocalModelInferenceError,
 )
+from comfyreview.application.local_model_structured_inference import (
+    JsonValue,
+    LocalModelStructuredOutputError,
+    LocalStructuredInferenceProvider,
+    LocalStructuredInferenceRequest,
+    LocalStructuredInferenceResult,
+)
 from comfyreview.application.local_model_runtime import (
     LocalModelLease,
     LocalModelRuntime,
@@ -820,6 +827,11 @@ __all__ = [
     "LocalInferenceRequest",
     "LocalInferenceResult",
     "LocalInferenceUsage",
+    "JsonValue",
+    "LocalModelStructuredOutputError",
+    "LocalStructuredInferenceProvider",
+    "LocalStructuredInferenceRequest",
+    "LocalStructuredInferenceResult",
     "LocalModelConnectionError",
     "LocalModelDescriptor",
     "LocalModelError",
