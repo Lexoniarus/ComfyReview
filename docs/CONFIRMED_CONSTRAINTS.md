@@ -13,6 +13,17 @@ werden **nicht** hierher übernommen, nur weil sie früher so benannt wurden.
 
 ## Bestätigte Vorgaben – DECIDED_FOR_SCOPE
 
+### Kontinuierliche Produktentwicklung (kein automatisch bindender Technologiepfad)
+
+**Geltungsbereich:** Das aktuelle, weiterhin entwickelte **ComfyReview**
+soll schrittweise in Richtung **Character Chronicles** wachsen. Es wird
+dadurch weder ein zweites unabhängig verpflichtendes Produkt noch ein
+automatischer Repository-Split oder Big-Bang-Rebuild beschlossen. Die
+übernommenen Bausteine, spätere App-Struktur und Technologie bleiben
+jeweils anhand von POCs und konkreten Entscheidungen zu prüfen.
+[Projektentwicklung](PROJECT_EVOLUTION.md) und
+[historischer Entscheidungsabgleich](DECISION_POC_RECONCILIATION.md).
+
 ### KI-API-Kosten: eine gemeinsame Monatsobergrenze
 
 - **Geltungsbereich:** Sämtliche **kostenpflichtigen externen KI-API-Aufrufe**
