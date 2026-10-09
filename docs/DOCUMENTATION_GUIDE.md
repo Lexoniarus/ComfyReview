@@ -84,7 +84,7 @@ Geprüft auf dem Dokumentationsbranch `docs/structure-and-status-2026-10-09`:
 - **65 im PR geänderte Markdown-Dateien** plus eine archivierte TXT-Datei
   wurden am PR-Head nach den technischen Korrekturen nochmals gelesen
   (nicht mit einer vollständigen Repository-Dateibauminventur verwechseln).
-  Ein einfacher Markdown-Link-Scanner erkannte **703 Inline-Linkangaben**.
+  Ein einfacher Markdown-Link-Scanner erkannte **704 Inline-Linkangaben**.
   **Keine fehlenden relativen `.md`-/`.txt`-Dateiziele** unter den geprüften
   PR-Dateien; externe URLs und beliebige Code-/Asset-Links sind damit **nicht**
   automatisch verifiziert. Die **14 gefundenen internen Kapitelverweise**
