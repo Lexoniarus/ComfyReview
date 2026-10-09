@@ -312,11 +312,14 @@ def test_urllib_transport_normalizes_base_url_and_payload(
     def fake_urlopen(
         request: urllib.request.Request, timeout: float
     ) -> _Response:
+        request_data = request.data
+        assert isinstance(request_data, bytes)
+
         recorded.append(
             (
                 request.get_method(),
                 request.full_url,
-                request.data,
+                request_data,
                 timeout,
                 request.headers.get("Content-type", ""),
             )
@@ -437,9 +440,5 @@ def test_urllib_transport_accepts_empty_json_body(
     )
 
     transport = UrlLibLmStudioJsonTransport("http://localhost:1234")
-    response = transport.request(
-        "GET",
-        "/api/v1/models",
-        timeout_seconds=1,
-    )
+    response = transport.request("GET", "/api/v1/models", timeout_seconds=1)
     assert response == LmStudioJsonResponse(200, {})
