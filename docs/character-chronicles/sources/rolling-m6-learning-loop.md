@@ -758,7 +758,7 @@ für den Audit erhalten. Das gebundene, hardwarequalifizierte Promptprofil und
 der Filter überleben Neustarts. Es gibt keine künstliche Rundenzahlbegrenzung,
 keinen zweiten Generierungsweg und keine synthetische Spielerakzeptanz.
 
-Der [Schema-47-Implementierungsnachweis](../README.md#fehlende-vorgängerquellen)
+Der [Schema-47-Implementierungsnachweis](../acceptance/m6.7/02-rolling-loop.md)
 trennt automatisierte Tests, DB-Kopie, realen Providerlauf und Spielerabnahme.
 Zwei zusammenhängende abgeschlossene Lernzyklen müssen Bewertung → Auswahl →
 Kontext → Vorschlag → Recipe-Diff → Folgebewertung belegen. Unabhängige gefüllte
