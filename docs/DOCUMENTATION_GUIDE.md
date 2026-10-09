@@ -77,6 +77,34 @@ Eine neue, bindende Entscheidung braucht einen konkreten Scope, Alternativen, Be
 
 Relative Markdown-Links vom Quellpfad aus prüfen; Archivtexte bei Anpassungen möglichst nicht semantisch überschreiben, sondern durch Kontext-Banner einordnen. CI-Ergebnisse nur mit Commit/Run zitieren; lokale Datenbank-/Hardware-Aussagen nicht aus Testcode extrapolieren. **Keine Meilensteine oder Design-Festlegungen erfinden**, solange das Experiment und die Entscheidung offen sind.
 
+## Laufende automatisierte Dokumentationsprüfung
+
+Für die **aktuelle** Dokumentationsstruktur steht
+[`scripts/check_documentation.py`](../scripts/check_documentation.py)
+zur Verfügung:
+
+```bash
+python scripts/check_documentation.py
+python -m pytest tests/test_documentation_links.py
+```
+
+Die Prüfung ist über
+[`tests/test_documentation_links.py`](../tests/test_documentation_links.py)
+in das reguläre Pytest-/Quality-Gate eingebunden. Sie prüft
+**alle gegenwärtigen Markdown-Navigationsverweise** im Root und unter
+`docs/`, relative Dateiziele und Kapitelanker, 24 sichtbare
+`SOURCE_MATERIAL`-Warnungen sowie die Grenze vor dem übernommenen
+Originaltext. **Bei den 24 historischen Quellen wird nur der aktuelle
+Vorspann geprüft**; darin enthaltene ursprüngliche Foundation-/M4-/M6-
+Links werden nicht als defekte aktuelle Navigation eingestuft. Das
+historische Textarchiv unter `docs/archive/` wird ebenfalls nicht
+als aktiver Dokumentationsinhalt ausgewertet, seine Indexseiten jedoch schon.
+
+Diese Prüfung ersetzt **keine semantische Fachfreigabe**,
+keine Prüfung externer URLs und keine Abnahme von Anwendung,
+Provider oder privater Datenbank. Ergebnisse gelten nur für den
+jeweils geprüften Commit.
+
 ## Qualitätsprüfung der ursprünglichen Branch-Bereinigung (2026-10-09)
 
 **Zeitgebundener Prüfbericht:** Die folgenden Mengen und Linkergebnisse
