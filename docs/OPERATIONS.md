@@ -64,8 +64,17 @@ compositions containing them deliberately resolve to no selectable handoff.
 
 Manual ratings or other writes make this rehearsal file disposable. Stop
 `main.py`, clear the temporary environment variables, and never install the
-tested file. After explicit acceptance, rebuild once more from the unchanged
-source and reviewed mapping while the canonical application is stopped:
+tested file.
+
+**Danger – conditional operator example, not approval to execute:** Only after
+**explicit acceptance** of the rehearsal, confirmation that the original source
+and reviewed mapping still match their audited hashes, independent **verified
+backup** of the actual production database, and shutdown of the canonical
+application may the operator consider a **fresh rebuild with `--replace`**.
+The `--replace` operation **does not create an additional backup**, so an
+existing checked backup and a rollback plan are prerequisites. The following
+command is an **example for that approved situation**, not a step to execute
+during audit or rehearsal:
 
 ```powershell
 Remove-Item Env:COMFYREVIEW_DATABASE
@@ -77,8 +86,10 @@ python main.py
 ```
 
 If the source hash changed after audit, rebuild stops and requires a new audit
-and editorial review. The final `--replace` command is intentionally withheld
-until the rehearsal has been accepted explicitly.
+and editorial review. **The command is documented above, not withheld; its
+execution is prohibited until all explicit acceptance, backup and shutdown
+conditions are met.** Listing this example does not claim any local cutover
+was approved, executed or successful.
 
 The v11 geometry rebuild reads PNG headers outside a write transaction and
 then atomically replaces the rebuildable projection. Missing or malformed
