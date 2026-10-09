@@ -100,6 +100,13 @@ Links werden nicht als defekte aktuelle Navigation eingestuft. Das
 historische Textarchiv unter `docs/archive/` wird ebenfalls nicht
 als aktiver Dokumentationsinhalt ausgewertet, seine Indexseiten jedoch schon.
 
+Zusätzlich vergleichen die Tests die **24 übernommenen Fachtext-Originalkörper**
+und **fünf historische Archiv-Originalfassungen** mit den Git-Blob-Hashes
+des Ausgangsstands `76d71f9`. Warnbanner und aktuelle Einordnungen dürfen
+angepasst werden; der historische Originaltext einschließlich seiner alten
+Verweise darf nicht stillschweigend verändert werden. Die Checks dienen der
+Herkunftstreue, **nicht** der fachlichen Freigabe historischer Aussagen.
+
 Diese Prüfung ersetzt **keine semantische Fachfreigabe**,
 keine Prüfung externer URLs und keine Abnahme von Anwendung,
 Provider oder privater Datenbank. Ergebnisse gelten nur für den

@@ -12,20 +12,12 @@ Der folgende vollständige Text ist das **detaillierte frühere Status- und Betr
 
 # Project Status
 
-> **Code and CI verification:** [Implementation Audit](../IMPLEMENTATION_AUDIT.md)
-> (2026-10-09, pre-document source commit `a5f4131`). This document separates current
-> runtime, tested-but-offline Card Battler algorithms and historical operator
-> reports that cannot be checked from Git. See [Open decisions](../OPEN_DECISIONS.md).
-
 ## Summary
 
 ComfyReview is a local-first FastAPI workflow tool for reviewing, comparing,
-curating, analysing and reproducibly regenerating ComfyUI outputs. It remains
-**actively under development** and is the current codebase for a longer
-evolution toward **Character Chronicles**. The refactor branch supports one
-canonical writable SQLite schema v18 and a native ES-module Frontend V2;
-that **does not prove** a private operator cutover or product completion.
-See [Active Work](../ACTIVE_WORK.md) and [Project Evolution](../PROJECT_EVOLUTION.md).
+curating, analysing and reproducibly regenerating ComfyUI outputs. The
+integrated refactor base uses one canonical writable SQLite database and a
+native ES-module Frontend V2.
 
 ## Implemented state
 
@@ -69,51 +61,20 @@ See [Active Work](../ACTIVE_WORK.md) and [Project Evolution](../PROJECT_EVOLUTIO
 - shared Python/frontend quality gate with architecture tests, coverage and
   Playwright browser acceptance.
 
-## Verification and scope boundaries
+## Approved future product direction
 
-**Repository-verified:** canonical schema v18, registered APIs and services,
-native ComfyUI generation lifecycle, Frontend V2, Review/Arena/Curation,
-Catalog and Analytics. **CI-verified:** the exact run linked below.
+A functional Card Battler prototype is approved as a post-refactor product
+target. It is not implemented and is not part of current refactor acceptance.
+ComfyReview will first prove the bounded Card Battler before Character
+Chronicles may reuse it.
 
-**Historically reported rather than independently rechecked:** personal
-database row counts, catalog mapping/rebuild approvals, backup/cutover files
-and local ComfyUI smoke results. Those require ignored operator artifacts.
-
-**Not part of the audited current ComfyReview runtime:** the broader
-Chronicles school-year simulation, Champion/Quest/VN/social, LLM/RAG/Guardian,
-Academy year-end LoRA training/validation and New Game Plus. Some imported
-documents describe a **previous discarded Chronicle codebase**; their
-“Schema 47–58” and M6 statements are **not** ComfyReview's canonical schema
-v18 and are not automatically a renewed implementation commitment.
-See the [Imported-concept source relationship](../character-chronicles/sources/SOURCE_RELATIONSHIP.md).
-
-## Current POCs and long-term product direction
-
-The **Card Battler is currently an active ComfyReview POC**, not a dormant
-initiative. The code already contains tested read-only model/schema adapters,
-semantic CardImprint mapping, deterministic stat/mechanic and Trait
-development, and visual prompt projection. A **playable** collection, deck,
-match/API or user interface is not integrated in this audited revision.
-[Card Battler POC](../pocs/card-battler.md).
-
-The **Generator was recently reworked** and its current Blueprint-v4
-compiler, lifecycle and native output flow are wired. **Canonical database
-and catalog optimization remain active work**; schema v18 in source control,
-a rehearsed output database and an accepted real cutover are different
-states. See [Current Work](../ACTIVE_WORK.md).
-
-**Character Chronicles is the long-term direction of ComfyReview**, not
-an entirely independent successor unrelated to this code. Development proceeds
-through POCs; not every current or former technical solution is intended to
-survive. The imported [concepts](../character-chronicles/README.md) contain
-possible product ideas **and** assumptions from a **previous, abandoned
-Chronicle implementation direction**. No old versioned database model,
-orchestration topology, game ruleset or release-gate sequence becomes a
-binding future architecture merely by inclusion.
-
-The old [ComfyReview Card Battler plan](../archive/card-battler-target-2026-10-02.md)
-is planning history that may inform the **active** POC but does not dictate its
-next steps. [Architecture decision policy](../DECISION_POLICY.md).
+The target progresses from explicit manual image-to-card development and a
+card collection through deterministic card functions, deck construction, a
+server-authoritative local PvE game, anti-farm battle experience, revisioned
+card evolution and its interactive board. Character Chronicles-specific
+campaign, Champion, VN and social progression systems are excluded. The full
+contract is documented in the
+[Card Battler target](CARD_BATTLER_TARGET.md).
 
 ## Runtime rules
 
@@ -258,13 +219,9 @@ both outputs canonically.
 ## Acceptance and integration state
 
 The catalog-normalization implementation slices are committed on
-`fix/playground-combination-diversity`. On audited commit `76d71f9`, [GitHub Actions Quality run #37901248379](https://github.com/Lexoniarus/ComfyReview/actions/runs/37901248379)
-completed successfully on 2026-10-09 (Linux Python 3.11/3.14 and Windows
-Python 3.14). The Linux Python 3.11 log confirms **1,061 Python tests
-passed**, **181 Vitest tests passed**, **15 Playwright tests passed**,
-**100% Python-core statement coverage**, and **100% frontend
-statement/function/line coverage** (86.05% branch coverage). This is
-**commit-specific CI evidence**, not a fresh local hardware/provider smoke.
+`fix/playground-combination-diversity`. The latest full shared quality gate is
+green: 770 Python tests, 181 frontend tests and 14 Playwright acceptance tests
+pass, with 100% Python-Core and frontend statement, function and line coverage.
 The private editorial mapping and the explicit real-database `--replace`
 cutover remain separate operator work. A dedicated behavior test now rebuilds
 a fixture database and serves it through the real `python main.py` subprocess;

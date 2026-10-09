@@ -1,8 +1,9 @@
+**Dokumentklasse:** `HISTORICAL_EVIDENCE` · **Rolle:** unveränderter historischer Gesamtentwurf (August 2026), kein aktueller MVP-Vertrag.
+
+> **Historische Konzeptquelle.** Die Originalfassung bewahrt ihre damaligen Architektur-, Freigabe- und Linkaussagen vollständig, auch wenn damalige Ziele heute fehlen. Diese früheren Entscheidungen gelten **nicht** automatisch für das laufende ComfyReview/Character-Chronicles-Projekt. Aktuelle Einordnung: [Projektentwicklung](../../PROJECT_EVOLUTION.md), [Zielbild](../vision/README.md) und [Entscheidungsregeln](../../DECISION_POLICY.md).
+
+<!-- HISTORICAL_ORIGINAL_BODY_START -->
 # ComfyReview – vollständiger MVP-Zielentwurf: Chronicle, Chat und Prompt Recovery
-
-**Dokumentklasse:** `HISTORICAL_EVIDENCE` · **Rolle:** historischer Gesamtentwurf, kein aktueller MVP-Vertrag.
-
-> **Historische Konzeptquelle (neu eingeordnet 2026-10-09):** Dieses August-2026-Langdokument enthält Ideen und technische Annahmen aus früheren ComfyReview-/Chronicle-Überlegungen, einschließlich einer **inzwischen verworfenen Character-Chronicles-Entwicklungsrichtung**. **ComfyReview wird aktuell weiterentwickelt und soll langfristig zu Character Chronicles werden**, aber nicht durch verpflichtende Übernahme dieses alten MVP-Plans. Der damalige „autoritative“ Wortlaut ist historische Quelle, **kein** bestätigter heutiger Ablauf, keine bindende Schema-/UI-/Workerarchitektur und kein implementierter aktueller Produktstand. [Projektentwicklung](../../PROJECT_EVOLUTION.md) · [Ideensammlung](../README.md) · [Entscheidungsregeln](../../DECISION_POLICY.md).
 
 Status: Konzeptentwurf  
 Stand: 28. August 2026
@@ -17,7 +18,7 @@ Teils veraltet und überholt
 > konkurrierender finaler MVP-Scope.
 
 Modulare Zielarchitektur, Roadmap und Traceability:
-[`../README.md`](../README.md). Dieses Langdokument bleibt
+[`docs/post-mvp/README.md`](docs/post-mvp/README.md). Dieses Langdokument bleibt
 als Herleitung und Detailreferenz erhalten; neue implementierungsrelevante
 Entscheidungen werden primär im zuständigen Modulvertrag gepflegt.
 
@@ -38,9 +39,9 @@ null, eine oder mehrere validierte Character-LoRAs als wählbare
 New-Game-Plus-Basen entstehen. Der Spieler entscheidet selbst, welche
 qualifizierten Figuren übernommen werden.
 Bei widersprüchlichen älteren Aussagen in diesem Dokument gilt
-[`../sources/year-end-lora-and-new-game-plus.md`](../sources/year-end-lora-and-new-game-plus.md).
+[`docs/vnext-mvp/06-run-lora-and-new-game-plus.md`](docs/vnext-mvp/06-run-lora-and-new-game-plus.md).
 Der verbindliche Lern- und Tuningloop ist in
-[`../sources/rolling-m6-learning-loop.md`](../sources/rolling-m6-learning-loop.md)
+[`docs/vnext-mvp/07-adaptive-generation-learning.md`](docs/vnext-mvp/07-adaptive-generation-learning.md)
 beschrieben.
 
 Terminologiehinweis: Die im MVP sichtbaren historischen **Memory Trials** werden intern als `campaign_archive_*` beziehungsweise Archive Validation gespeichert. Die in diesem Dokument beschriebenen späteren Memory Trials betreffen Persönlichkeitsachsen und Relationship-/Story-State. Beide Systeme dürfen dieselbe verständliche UI-Sprache verwenden, besitzen aber getrennte Domänenobjekte und Evidenzräume.
@@ -3285,7 +3286,7 @@ Kleine atmosphärische Statisten sind nur zulässig, wenn der jeweilige Place Co
 Freistellung ist kein nachträglicher Reparaturtrick für beliebige Szenenbilder, sondern Teil einer eigenen Sprite-Pipeline.
 
 Der autoritative Kurzvertrag steht in
-[`../sources/visual-assets-quests-and-gates.md`](../sources/visual-assets-quests-and-gates.md).
+[`docs/post-mvp/04-visual-assets-quests-and-gates.md`](docs/post-mvp/04-visual-assets-quests-and-gates.md).
 Ein Visual Requirement kompiliert dafür einen versionierten
 `SpriteProductionJob`; ein einzelner ComfyUI-Renderjob ist noch kein fertiges
 Spiel-Asset.
@@ -6417,7 +6418,7 @@ AND Ensemble Development Gate
 
 Scene-Asset-Runden und Focus-Character-Play-Runden sind getrennte Budgets. Notwendige Build Games, Qualifier und Recovery laufen so lange, bis für jedes blockierende Requirement ein akzeptierter und technisch validierter `APPROVED` Champion vorliegt, und verbrauchen keinen der höchstens drei Playgate-Plätze. Das Focus Character Play Gate fordert nur dann aktuelle Qualitäts-, Stability-, Profile- oder Champion-Challenges der Fokusfigur, wenn der Scene Contract oder ihre aktuelle Character-/Assetrollen-Confidence eine konkrete offene Frage benennt.
 
-Nicht nur die erste Runde, sondern jeder Routine-VN-Schritt mit bereits bewährtem Profil darf `0` Pflicht-Trials besitzen. Neue Assetrollen, niedrige Confidence, eine neue Workflow-/Modell-/LoRA-/Renderprofilrevision oder eine besondere Character-Challenge können ein bis drei Runden verlangen. Auch bei `0` Pflicht-Trials bleiben freiwillige Character Trials bis zum gemeinsamen Dreierlimit möglich. Der vollständige Vertrag steht in [`../sources/generation-profiles-and-trials.md`](../sources/generation-profiles-and-trials.md).
+Nicht nur die erste Runde, sondern jeder Routine-VN-Schritt mit bereits bewährtem Profil darf `0` Pflicht-Trials besitzen. Neue Assetrollen, niedrige Confidence, eine neue Workflow-/Modell-/LoRA-/Renderprofilrevision oder eine besondere Character-Challenge können ein bis drei Runden verlangen. Auch bei `0` Pflicht-Trials bleiben freiwillige Character Trials bis zum gemeinsamen Dreierlimit möglich. Der vollständige Vertrag steht in [`docs/post-mvp/10-generation-profiles-and-trials.md`](docs/post-mvp/10-generation-profiles-and-trials.md).
 
 ### 37.2 Quest, Game Run und Progress Credit sind getrennte Objekte
 
@@ -6495,7 +6496,7 @@ Character-unabhängige Environment-, Style- und Render-Quests stehen im selben v
 
 Der vollständige Spielmoduskatalog und die bildweise zweite Begründungsrunde
 stehen in
-[`../sources/game-modes-and-guided-evidence.md`](../sources/game-modes-and-guided-evidence.md).
+[`docs/post-mvp/11-game-modes-and-guided-evidence.md`](docs/post-mvp/11-game-modes-and-guided-evidence.md).
 
 #### Game Mode und Generierungsfokus
 
@@ -7120,7 +7121,7 @@ Wechselt das Current Profile die Farbgruppe, darf das Chronicle die neue aktuell
 Dieser Abschnitt ist der autoritative Chronicle-Vertrag für die Verbindung aus
 Schuljahresabschluss, Storyfortschritt, visueller LoRA-Reife und New Game Plus.
 Die ausführbare Zerlegung für die Roadmap steht zusätzlich in
-[`../sources/year-end-lora-and-new-game-plus.md`](../sources/year-end-lora-and-new-game-plus.md).
+[`docs/post-mvp/06-year-end-lora-and-new-game-plus.md`](docs/post-mvp/06-year-end-lora-and-new-game-plus.md).
 
 ### 39.1 Schuljahresabschluss und LoRA-Validierung sind getrennt
 

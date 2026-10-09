@@ -14,20 +14,18 @@
 > [pre-import baseline](../IMPLEMENTATION_AUDIT.md);
 > [open decisions](../OPEN_DECISIONS.md).
 
+## Historische Originalfassung (unverändert)
+
+<!-- HISTORICAL_ORIGINAL_BODY_START -->
+# ComfyReview Card Battler Target
+
 Document role: approved post-refactor product and architecture target for a
 functional Card Battler prototype implemented in ComfyReview before later reuse
 in Character Chronicles.
 
-Status: approved **playable-product target** (2026-10-02), **not** a
-completed or accepted runtime feature. **Source recheck 2026-10-09:** real
-Card Battler Python library/prototype code already exists (read-only model,
-semantic mapping, deterministic mechanics, Trait development, visual-prompt
-projection) with automated tests. However, no registered card collection,
-crafting/deck/match API or player UI is implemented. This document preserves the **desired boundary at the time it was written**;
-it is neither current Card-Battler-POC acceptance nor an instruction to
-implement every phase as written. [Active POC](../pocs/card-battler.md).
-See [ComfyReview code baseline](../IMPLEMENTATION_AUDIT.md) and
-[open decisions](../OPEN_DECISIONS.md).
+Status: target contract approved on 2026-10-02; not implemented. Nothing in
+this document describes current runtime behaviour, a current schema, a current
+API or an acceptance requirement of the active ComfyReview refactor.
 
 ## 1. Purpose and delivery boundary
 
@@ -41,11 +39,9 @@ around it.
 This target deliberately does not make the Card Battler part of refactor
 acceptance. Work begins only after the current refactor has reached its required
 acceptance state, unless a later explicit planning decision changes that order.
-The implemented content policy, stable identity, generation and output
-quality, plus the tested *offline Card Battler model and algorithms*, are
-preparatory foundations. They are **not a shipped Card Battler vertical slice**
-without the explicit player command, persistent CardIdentity, UI and acceptance
-tests required below.
+The implemented content-policy, canonical identity, generation and
+output-quality boundaries are foundations for that later work, not Card Battler
+implementation.
 
 The Character Chronicles design documents are the design source for this
 target, not a runtime dependency. This document restates the subset that
@@ -496,17 +492,6 @@ Stable foreign keys bind canonical facts. Derived presentation assets and
 projections are explicitly marked rebuildable. Retried commands use stable
 command or idempotency keys and cannot create duplicate cards, confirmed
 compositions, deck revisions or match transitions.
-
-## Verified groundwork versus delivery phases
-
-The offline foundations are implemented in
-[`comfyreview/application/card_battler_*`](../../comfyreview/application),
-[`comfyreview/domain/card_battler`](../../comfyreview/domain/card_battler),
-and the [read-only external model adapter](../../comfyreview/repositories/sqlite/card_battler_model_resource.py);
-the [existing card tests](../../tests/test_card_battler_development_golden_path.py)
-exercise deterministic behavior. The model database itself is **not
-committed**, and these algorithms are **not** a playable end-to-end user flow.
-For individual deliverables see [historical status and open decisions](../OPEN_DECISIONS.md).
 
 ## 12. Binding implementation order
 

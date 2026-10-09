@@ -40,28 +40,17 @@ The current repository demonstrates a usable local review system with audited im
 
 It should not be treated as a polished packaged desktop application. The project is best understood as a practical tool and portfolio project that documents a real local AI workflow.
 
-ComfyReview is **still actively being developed**. The Generator was recently
-reworked (Blueprint v4, compilation, lifecycle and handoff), while the canonical
-database and prompt catalog are being optimized; the implementation and the
-real operator database cutover are **separate** evidence levels.
+A functional Card Battler is an approved future product target after the
+current refactor; it is not implemented or part of the current feature list.
+Its manual card-development, deterministic rules, deck, local PvE and
+battle-driven card-evolution boundaries are documented in the
+[Card Battler target](docs/CARD_BATTLER_TARGET.md).
 
-The **Card Battler is active POC work within ComfyReview**. The repository
-already includes tested card-domain models, semantic mapping, deterministic
-mechanics/trait development and visual prompt projection. A complete playable
-collection, deck or PvE match UI/API is not yet demonstrated by this code.
-See the [current Card Battler POC](../../docs/pocs/card-battler.md).
+For a more detailed scope overview, see:
 
-**ComfyReview is intended to evolve in the long term into Character Chronicles**.
-The journey is iterative: experiments may validate, reshape or reject earlier
-choices. The [imported Character Chronicles concepts](../../docs/character-chronicles/README.md)
-describe possible future content and some technical assumptions from an
-**earlier, abandoned Chronicle implementation direction**. Those old
-architectures, schemas and milestone sequences are **not** automatically
-accepted for the ongoing project.
-
-Start with [Project Evolution](../../docs/PROJECT_EVOLUTION.md),
-[Current Work](../../docs/ACTIVE_WORK.md), [Code Audit](../../docs/IMPLEMENTATION_AUDIT.md)
-and [Open Decisions](../../docs/OPEN_DECISIONS.md).
+```text
+docs/project_status.md
+```
 
 ---
 
@@ -195,7 +184,7 @@ pip install -r requirements-dev.txt
 
 ### Configuration
 
-ComfyReview loads typed configuration through `comfyreview/settings.py`, optional environment variables, and
+ComfyReview is configured through `config.py`, optional environment variables, and
 an optional local `.env` file (copy `.env.example` to `.env`). Explicit environment
 variables take precedence over values from `.env`.
 
@@ -548,7 +537,7 @@ ComfyReview/
 ├── comfyreview/              # settings, bootstrap, lifecycle ports/adapters
 ├── app.py
 ├── main.py
-├── docs/                     # runtime, product targets, audit and archive
+├── config.py
 ├── routers/                  # page routes and API endpoints
 ├── services/                 # HTTP/view composition awaiting final audit
 ├── quality/                  # versioned quality and architecture baselines
@@ -713,8 +702,8 @@ the function-test manifest and 100% statement coverage for the defined Python
 core. Existing pre-baseline violations remain visible in versioned ratchet
 files; new and changed Python files must pass without adding exceptions.
 
-The automated tests use deterministic fixtures; private generated PNG/JSON
-outputs and real runtime databases are not shipped in the repository.
+The repository may include sample PNG and JSON files that can be used as
+audited import input for local testing.
 
 ---
 
@@ -731,23 +720,18 @@ outputs and real runtime databases are not shipped in the repository.
 - Frontend V2 uses Jinja shells and native ES modules; Playground previews and
   submission use immutable canonical prompt revisions and the native
   GenerationService
-- Private migration counts, local database cutovers and real ComfyUI smoke
-  tests need separate operator evidence; the
-  [audit](../../docs/IMPLEMENTATION_AUDIT.md) distinguishes these claims
+- Public documentation may lag behind internal workflow experiments
 
 ---
 
 ## Not the goal of this version
 
-Stable identities and canonical Review, Arena and Curation persistence **are
-already implemented**. The following remain beyond the current runtime:
-
-- A **completed** Card Battler: work is **actively underway** as a POC and
-  is not yet an accepted playable product
-- A fully realized Character Chronicles experience: **long-term evolution
-  goal**, with mechanics and architecture still subject to experimentation
+- Fully redesigned data identity model
+- Full separation of curation truth from physical folder layout
 - Final export or packaging architecture for future LoRA dataset builds
-- Multi-user hosting, cloud deployment and public SaaS operation
+- Multi-user hosting
+- Cloud deployment
+- Public SaaS operation
 
 ---
 
@@ -757,8 +741,7 @@ This is primarily a personal local workflow tool, but the public repository docu
 
 If you change behavior in this project, avoid silently breaking the workflow assumptions that make the app useful in practice:
 
-- PNG/JSON pairs for **audited historical import only**; native canonical
-  generation does not require a JSON sidecar
+- required PNG and JSON pairing
 - character/set filtering semantics
 - generator state persistence
 - lazy loading behavior in generator-related views

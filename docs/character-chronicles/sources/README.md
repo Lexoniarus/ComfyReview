@@ -37,7 +37,7 @@ Diese Quellen enthalten auch **konkrete Regel-/Technikbehauptungen**. Sie sind P
 - [Spielerseitige Begriffe und Tonfall](player-facing-terminology-and-voice.md)
 - [Academy-Ende, LoRA-Audit und New Game Plus](year-end-lora-and-new-game-plus.md)
 
-Diese Texte bewahren **inhaltliche Ideen**. Die aktuelle Priorität bleibt trotzdem [Card Battler → Social/Chats → Academy/Schuljahr → visuelle VN zuletzt](../vision/README.md); ältere Quelltexte können andere Reihenfolgen behaupten.
+Diese Texte bewahren **inhaltliche Ideen**. Die derzeitige grobe Entwicklungsorientierung lautet weiterhin [Card Battler → Timeline → Social Network mit Charakter-Chats → Storyline → VN-Content zuletzt](../vision/README.md). Academy/Schuljahr ist dabei ein möglicher Story-/Weltkontext, **keine zusätzliche Pflichtphase**. Ältere Quelltexte können andere Reihenfolgen behaupten.
 
 ### Alte Foundation-, Generator-, KI-, Daten- und Frontend-Ansätze
 

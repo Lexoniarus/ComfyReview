@@ -11,16 +11,14 @@
 
 # ComfyReview Refactor Plan
 
-Status: source rechecked on `refactor/review-boundary` against the
-**pre-document-import code commit `a5f4131`** (2026-10-09). The Generator
-was recently revised, and canonical schema v18, Frontend V2 and catalog
-code exist. The **actual data/catalog normalization and private cutover
-remain active, not completed by code alone**. [Codebaseline CI](https://github.com/Lexoniarus/ComfyReview/actions/runs/37769483557)
-passed. This document is primarily a **historical refactor slice log**:
-private database promotions, real ComfyUI smoke observations and operator
-acceptance are reported historical actions, **not** independently reproduced
-by reading the repository. See [Implementation Audit](../IMPLEMENTATION_AUDIT.md),
-[Open decisions](../OPEN_DECISIONS.md) and [Project Status](../project_status.md).
+Status: the canonical backend cutover, normalized structured prompt catalog,
+schema-v18 support and Frontend V2 overhaul are implemented on
+`fix/playground-combination-diversity`, 2026-10-08. Analytics collections are bounded,
+Playground handoffs are explicit, generation profiles are dormant migration
+compatibility, Settings is a complete product surface, the Inspector is
+composed from focused views and Playwright covers the browser acceptance
+contract. The feature slices are merged into the refactor base; final user
+acceptance and eventual integration into `master` remain separate decisions.
 
 The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
@@ -632,11 +630,6 @@ architecture checks and the function-to-test manifest also passed.
 
 ## Integration and acceptance state
 
-The following live database/rehearsal/provider items are **historical
-operator reports**; the ignored private data, backups and hardware are not
-included for independent verification. The source-based and CI evidence is
-recorded in [Implementation Audit](../IMPLEMENTATION_AUDIT.md).
-
 The previously completed implementation slices and their automated integration
 gates remain valid for their stated scope. Prompt-variant guidance and
 evidence-based catalog promotion and its shared quality gate are complete. The
@@ -662,30 +655,28 @@ feature branch was merged into `refactor/review-boundary`; user-facing visual
 acceptance and eventual integration into `master` remain separate release
 actions.
 
-## Active Card Battler POC and earlier planning
+## Approved post-refactor product target: Card Battler
 
-The Card Battler is **currently an active ComfyReview POC**. The code
-already contains a tested read-only model/schema adapter, CardImprint
-mapping, deterministic mechanics/stat materialization, Trait development
-and visual prompt projection. A complete player Card Collection/Deck/PvE
-API or UI is **not** integrated in the audited tree.
-[Active POC status](../pocs/card-battler.md).
+Status: approved future product and architecture target; not implemented and
+not part of refactor acceptance.
 
-The earlier [seven-phase Card Battler plan](../archive/card-battler-target-2026-10-02.md)
-predates the 2026-10-09 concept import. It remains **historical exploration**
-and may contain useful experiments, but **does not prescribe the current
-development sequence or the final game architecture**.
+After the refactor is accepted, ComfyReview is intended to become the proving
+ground for a bounded functional Card Battler. The binding scope, deterministic
+mechanics, content eligibility, stable identity and seven-phase delivery order
+are defined in the [Card Battler target](CARD_BATTLER_TARGET.md). The sequence
+starts with explicit manual image-to-card development and collection, then adds
+deterministic card functions, revisioned decks, local server-authoritative PvE,
+battle-driven development and visual evolution, the interactive interface and
+only finally Character Chronicles reuse.
 
-ComfyReview is intended to **evolve toward Character Chronicles**. The
-[imported concepts](../character-chronicles/README.md) include a mix of product
-vision and technical assumptions from an **earlier discarded Character
-Chronicles implementation direction**. Those earlier frontend, database,
-M6, worker and story/quest architectures must **not** be carried forward as
-requirements by default. Which components survive will be learned via POCs
-and explicit decisions. [Project Evolution](../PROJECT_EVOLUTION.md).
+This target does not reopen completed refactor decisions. Card Battler state
+will use explicit versioned migrations and its own domain boundaries; it will
+not import Character Chronicles campaign, Champion, VN or social progression
+systems into ComfyReview.
 
-This file records ComfyReview refactor history and still-open acceptance,
-not a finalized future implementation roadmap.
+Each intermediate commit runs focused tests and static checks for changed
+files. The targeted command is feedback only. Every completed slice and the
+final integration require a successful full `python scripts/quality.py` run.
 
 ## Invariants for final acceptance
 
@@ -706,7 +697,7 @@ not a finalized future implementation roadmap.
 
 - a SPA rewrite;
 - cloud or multi-user deployment;
-- implementing the then-proposed Card Battler during refactor acceptance;
+- implementing the approved Card Battler during refactor acceptance;
 - Character Chronicles campaign, Champion, VN, social or progression systems;
 - copying rebuildable legacy aggregate tables unchanged;
 - preserving obsolete path-based runtime architecture for compatibility.
