@@ -18,8 +18,8 @@ persönliche Einschätzungen und Gerüchte können sich widersprechen. Für
 Spielende kann daraus die Möglichkeit entstehen, Perspektiven zu vergleichen,
 gezielt nachzufragen und Informationen selbst einzuordnen.
 
-Als **fachliche Leitidee** sollen mindestens folgende Ebenen auseinander-
-gehalten werden: **was tatsächlich passiert ist**, **wer davon weiß**,
+Als **fachliche Leitidee** sollen mindestens folgende Ebenen getrennt
+betrachtet werden: **was tatsächlich passiert ist**, **wer davon weiß**,
 **was eine Figur glaubt oder vermutet** und **was öffentlich beziehungsweise
 privat kommuniziert wurde**. Ein Gerücht ist deshalb nicht automatisch
 Weltwahrheit, ein öffentlicher Post nicht die vollständige Sicht seines
