@@ -8,19 +8,31 @@ mapping and production catalog cutover remain open.
 
 ## 1. Product boundary
 
-ComfyReview is a local-first application for discovering ComfyUI outputs,
-reviewing and comparing images, assigning curated sets, analysing review data
-and handing reproducible settings back to ComfyUI. Character Chronicles
-campaign, Champion, VN, social, embeddings and RAG systems are outside this
-refactor.
+ComfyReview is **currently** a local-first application for discovering ComfyUI
+outputs, reviewing and comparing images, assigning curated sets, analysing
+review data and handing reproducible settings back to ComfyUI. The historic
+Character Chronicles campaign, Champion, VN, social, embeddings and RAG
+systems are **not** part of this refactor or its acceptance.
 
-A functional Card Battler prototype is an approved post-refactor ComfyReview
-product target, not current runtime behaviour or a refactor acceptance
-requirement. Its manual card-development, deterministic-rules, deck,
-server-authoritative PvE and battle-driven evolution boundaries are defined in
-the [Card Battler target](CARD_BATTLER_TARGET.md). Character Chronicles may
-later reuse that bounded implementation without becoming a runtime dependency
-of ComfyReview.
+**Long-term product direction:** this ComfyReview codebase will gradually
+evolve into Character Chronicles in the following order: Card Battler,
+Timeline, Social Network with chat interaction, Storyline and **VN content
+last**. This is a [future roadmap](ROADMAP.md), not current implementation.
+A separately assumed hand-off to another project is **not** the default plan.
+The previous Character Chronicles attempt is
+[archived](archive/character-chronicles-v1/README.md); none of its old
+architectural, schema or story contracts is automatically authoritative.
+[Decisions](DECISIONS.md) and [POCs](POC_REGISTER.md) govern future adoption.
+
+A functional Card Battler is the first **approved bounded post-refactor
+target** and is not currently a playable product or part of refactor
+acceptance. Its manual card-development, deterministic-rules, deck,
+server-authoritative PvE and battle-driven evolution boundaries are defined
+in the [Card Battler target](CARD_BATTLER_TARGET.md). Preparatory
+model/resource adapters already exist (see section 2.1), but they do not
+establish a live persistent Match, complete game UI or executable PvE
+acceptance. The future game core must remain modular for later stages of the
+same evolving codebase.
 
 ## 2. Layering and composition
 

@@ -51,18 +51,43 @@ native ES-module Frontend V2.
 
 ## Approved future product direction
 
-A functional Card Battler prototype is approved as a post-refactor product
-target. It is not implemented and is not part of current refactor acceptance.
-ComfyReview will first prove the bounded Card Battler before Character
-Chronicles may reuse it.
+**Current source of truth:** [documentation index](README.md),
+[phase roadmap](ROADMAP.md), [restart decisions](DECISIONS.md) and
+[POC register](POC_REGISTER.md). ComfyReview is the implemented local
+review/generation foundation; **this codebase is intended to evolve gradually
+into Character Chronicles**, rather than handing a finished Battler to a
+separately assumed product. The **abandoned** earlier Character Chronicles
+development attempt is [archived](archive/character-chronicles-v1/README.md)
+as historical non-normative reference.
 
-The target progresses from explicit manual image-to-card development and a
-card collection through deterministic card functions, deck construction, a
-server-authoritative local PvE game, anti-farm battle experience, revisioned
-card evolution and its interactive board. Character Chronicles-specific
-campaign, Champion, VN and social progression systems are excluded. The full
-contract is documented in the
+The desired development order is **Card Battler → Timeline → Social Network
+with chat interaction → Storyline → Visual-Novel content** (VN content last).
+The order is the product direction, **not** automatic approval of the historical
+Chronicle MVP, its dates, schemas, cast, game rules, or user screens.
+Later-phase scope and interfaces require new decisions and POCs.
+
+### Phase 1: bounded Card Battler
+
+A functional server-authoritative Card Battler remains the first approved
+post-refactor **product target**, and is not part of the current refactor
+acceptance. The explicit source-to-card, collection, deterministic mechanics,
+deck, local PvE, development/evolution and UI target is described in the
 [Card Battler target](CARD_BATTLER_TARGET.md).
+
+**Implemented vs. target:** the branch contains Card Battler model/design readers,
+domain/value objects and development/service adapters, as described in
+[Architecture §2.1](ARCHITECTURE.md#21-card-battler-model-resource). These
+pre-persistence or preparatory boundaries are **not a playable PvE Battler**.
+Card game runtime, final prototype deck/board values and active gameplay
+acceptance remain future work. Legacy Character Chronicles concepts
+(e.g. 40-card deck, Champion, Academy progression and VN/network rules)
+are not dependencies or authoritative parameters of this first phase.
+
+## Future phases
+
+Timeline, Social/Chat, Storyline and VN Content have separate
+[non-binding scope placeholders](future/README.md). No historical Chronicle
+contract is automatically promoted into those phases.
 
 ## Runtime rules
 

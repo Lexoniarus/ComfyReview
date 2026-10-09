@@ -5,6 +5,12 @@ Status: accepted implementation reference on `refactor/review-boundary`,
 
 ## Product frame
 
+**Scope boundary:** this is the accepted **current ComfyReview tool UI**
+design reference, not the later Character Chronicles Timeline, social/chat,
+story or VN interface. Future UX requires phase-specific decisions under
+[ROADMAP.md](ROADMAP.md) and [DECISIONS.md](DECISIONS.md); the archived
+Character Chronicles screen maps are not automatically authoritative.
+
 Frontend V2 is a desktop-oriented creative and analysis tool for anime image
 production. Its stable spatial language is:
 

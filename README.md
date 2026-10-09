@@ -30,11 +30,26 @@ The current repository demonstrates a usable local review system with audited im
 
 It should not be treated as a polished packaged desktop application. The project is best understood as a practical tool and portfolio project that documents a real local AI workflow.
 
-A functional Card Battler is an approved future product target after the
-current refactor; it is not implemented or part of the current feature list.
+A functional Card Battler remains an approved **post-refactor target**, not a
+current user-facing feature or an acceptance requirement of the present refactor.
 Its manual card-development, deterministic rules, deck, local PvE and
 battle-driven card-evolution boundaries are documented in the
 [Card Battler target](docs/CARD_BATTLER_TARGET.md).
+
+For the **current documentation authority and development direction**, start with
+[Documentation index](docs/README.md), [Roadmap](docs/ROADMAP.md),
+[Decision register](docs/DECISIONS.md) and [POC register](docs/POC_REGISTER.md).
+The current codebase is intended to **evolve step by step into Character Chronicles**:
+**Card Battler → Timeline → Social Network with chat interaction → Storyline →
+Visual-Novel content (last)**. The earlier Character Chronicles development
+attempt was discarded; its preserved documents are [historical only](docs/archive/character-chronicles-v1/README.md)
+and do not define the present MVP or current feature requirements.
+
+The Card Battler target describes a **bounded first product phase**, not the
+former Character Chronicles 40-card game. Some model/design and development
+components already exist in this branch; **a complete playable PvE Card Battler
+is not implemented**. Specific parameters and later-stage designs require
+new decisions and proofs. The current review/refactor acceptance remains separate.
 
 For a more detailed scope overview, see:
 
