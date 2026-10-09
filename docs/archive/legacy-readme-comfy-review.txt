@@ -1,15 +1,26 @@
+ARCHIVIERTER ORIGINALTEXT â€“ NICHT ALS AKTUELLE ANLEITUNG VERWENDEN
+Stand der historischen Fassung: vor der Dokumentationsbereinigung vom 09.10.2026.
+Der nachfolgende ursprÃ¼ngliche Text beschreibt frÃ¼here ComfyReview-Technik.
+Insbesondere ist der behauptete zwingende ComfyUI-Custom-Node-/Sidecar-Zwang
+fÃ¼r die heutige native Generierung NICHT mehr gÃ¼ltig. Historische Sidecars
+dienen lediglich dem expliziten Legacy-Import. Aktuelle Informationen:
+  README.md (Repository-Root)
+  docs/ARCHITECTURE.md
+  docs/OPERATIONS.md
+Der folgende historische Originaltext ist unverÃ¤ndert erhalten.
+--------------------------------------------------------------------------
 ComfyReview
-ComfyReview ist eine lokale Web App auf Basis von FastAPI, die Render Ergebnisse aus ComfyUI einsammelt, bewertbar macht und daraus Auswertungen ableitet. Zusätzlich gibt es einen Playground Generator, der aus UI Eingaben Prompts und Render Parameter baut und Jobs direkt an ComfyUI übergibt.
-Dieses README ist bewusst sehr ausführlich. Es beschreibt jede Datei im Repository, jede Funktion, die Datenquellen und Datensenken, plus den zwingend notwendigen Custom Node auf ComfyUI Seite.
+ComfyReview ist eine lokale Web App auf Basis von FastAPI, die Render Ergebnisse aus ComfyUI einsammelt, bewertbar macht und daraus Auswertungen ableitet. ZusÃ¤tzlich gibt es einen Playground Generator, der aus UI Eingaben Prompts und Render Parameter baut und Jobs direkt an ComfyUI Ã¼bergibt.
+Dieses README ist bewusst sehr ausfÃ¼hrlich. Es beschreibt jede Datei im Repository, jede Funktion, die Datenquellen und Datensenken, plus den zwingend notwendigen Custom Node auf ComfyUI Seite.
 
 1. Zwingende Voraussetzung in ComfyUI
-ComfyReview benötigt einen Custom Node in ComfyUI, weil die App ein konsistentes Sidecar JSON Schema pro Bild erwartet.
+ComfyReview benÃ¶tigt einen Custom Node in ComfyUI, weil die App ein konsistentes Sidecar JSON Schema pro Bild erwartet.
 Custom Node Datei - alex_nodes.py
 Node Name - name_meta_export
-Warum zwingend - ComfyReview basiert auf einem Sidecar JSON pro PNG - Dieses JSON muss die tatsächlichen Render Werte enthalten, insbesondere seed, steps, cfg, sampler, scheduler, denoise, checkpoint - Diese Werte müssen direkt aus dem Prompt Graph gelesen werden, nicht aus UI Feldern, nicht aus Neben Nodes
-Was name_meta_export liefert - PNG Datei - JSON Datei mit identischem Basenamen - JSON enthält pos_prompt und neg_prompt - JSON enthält ksampler Werte als Render Wahrheit - JSON enthält comfy_prompt_graph für Reproduzierbarkeit
-Name Meta Export Details - Exportiert timestamp, checkpoint, model_base - Extrahiert KSampler Inputs aus dem ersten KSampler Node - Extrahiert Prompt Strings aus PrimitiveStringMultiline oder PrimitiveString Nodes - Bevorzugt über _meta.title, Titel Prompt und Negative Prompt - Fallback über feste IDs 26:24 für positiv, 25:24 für negativ - Erzeugt Dateinamen mit - model_base - sampler - scheduler - steps - cfg - seed - timestamp
-Konsequenz - Ohne diesen Node sind Metadaten inkonsistent - Ohne diesen Node kann der Scanner keine stabile DB aufbauen - Ohne diesen Node sind Stats und Reproduzierbarkeit nicht verlässlich
+Warum zwingend - ComfyReview basiert auf einem Sidecar JSON pro PNG - Dieses JSON muss die tatsÃ¤chlichen Render Werte enthalten, insbesondere seed, steps, cfg, sampler, scheduler, denoise, checkpoint - Diese Werte mÃ¼ssen direkt aus dem Prompt Graph gelesen werden, nicht aus UI Feldern, nicht aus Neben Nodes
+Was name_meta_export liefert - PNG Datei - JSON Datei mit identischem Basenamen - JSON enthÃ¤lt pos_prompt und neg_prompt - JSON enthÃ¤lt ksampler Werte als Render Wahrheit - JSON enthÃ¤lt comfy_prompt_graph fÃ¼r Reproduzierbarkeit
+Name Meta Export Details - Exportiert timestamp, checkpoint, model_base - Extrahiert KSampler Inputs aus dem ersten KSampler Node - Extrahiert Prompt Strings aus PrimitiveStringMultiline oder PrimitiveString Nodes - Bevorzugt Ã¼ber _meta.title, Titel Prompt und Negative Prompt - Fallback Ã¼ber feste IDs 26:24 fÃ¼r positiv, 25:24 fÃ¼r negativ - Erzeugt Dateinamen mit - model_base - sampler - scheduler - steps - cfg - seed - timestamp
+Konsequenz - Ohne diesen Node sind Metadaten inkonsistent - Ohne diesen Node kann der Scanner keine stabile DB aufbauen - Ohne diesen Node sind Stats und Reproduzierbarkeit nicht verlÃ¤sslich
 
 2. Datenobjekt pro Render
 Pro Render existiert ein Paar - PNG - JSON Sidecar
@@ -28,7 +39,7 @@ o denoise
 * pos_prompt
 * neg_prompt
 * comfy_prompt_graph
-Wichtig - chosen_line ist kompatibilitätsgetrieben und darf nicht als Render Wahrheit betrachtet werden - Render Wahrheit kommt aus ksampler, direkt aus dem Prompt Graph
+Wichtig - chosen_line ist kompatibilitÃ¤tsgetrieben und darf nicht als Render Wahrheit betrachtet werden - Render Wahrheit kommt aus ksampler, direkt aus dem Prompt Graph
 
 3. Systemarchitektur
 3.1 Schichten
@@ -52,11 +63,11 @@ o HTTP Adapter zu ComfyUI
 o Workflow Laden
 o Workflow Patchen
 o Prompt Enqueue
-3.2 Hauptdatenflüsse
+3.2 HauptdatenflÃ¼sse
 * Output Root zu DB
 o scanner.py liest PNG plus JSON und schreibt nach ratings.sqlite3
 * DB zu UI
-o routers lesen über services und stores
+o routers lesen Ã¼ber services und stores
 * UI zu DB
 o Ratings und Arena Votes werden persistiert
 * UI zu ComfyUI
@@ -66,14 +77,14 @@ o ComfyClient patched Workflow und enqueued
 4. Quickstart
 4.1 Voraussetzungen
 * Python Umgebung
-* ComfyUI läuft lokal oder im Netzwerk
+* ComfyUI lÃ¤uft lokal oder im Netzwerk
 * Custom Node name_meta_export ist in ComfyUI installiert und im Workflow verbaut
 * OUTPUT_ROOT zeigt auf den ComfyUI Output Ordner
 Hinweis zu Dependencies - Im ZIP ist kein requirements.txt enthalten - Aus den Imports ergibt sich mindestens fastapi, uvicorn, jinja2, starlette
 4.2 Start
-1. config.py prüfen
+1. config.py prÃ¼fen
 2. main.py starten
-3. Browser öffnen
+3. Browser Ã¶ffnen
 
 5. Konfiguration
 Datei - config.py
@@ -89,7 +100,7 @@ Templates - templates Ordner
 Workflows - data/workflows
 SQLite Dateien - ratings.sqlite3 - arena.sqlite3 - prompt_tokens.sqlite3 - data/playground.sqlite3 - data/combo_prompts.sqlite3
 
-7. Datei für Datei Referenz
+7. Datei fÃ¼r Datei Referenz
 7.1 main.py
 Rolle - Startet uvicorn
 Funktionen - keine top level Funktionen
@@ -110,7 +121,7 @@ Datenquelle - templates Ordner
 Datenziel - routers verwenden templates zum rendern
 
 7.4 models.py
-Rolle - Enthält Datenmodelle für UI Kontext
+Rolle - EnthÃ¤lt Datenmodelle fÃ¼r UI Kontext
 Funktionen - keine
 Klassen - MetaViewModel
 Datenquelle - meta_view baut diese Strukturen
@@ -130,7 +141,7 @@ o Quelle JSON Struktur
 o Ziel seed, steps, cfg, sampler, scheduler, denoise, checkpoint
 * build_preview
 o Quelle prompt strings
-o Ziel gekürzte Vorschau
+o Ziel gekÃ¼rzte Vorschau
 * build_meta_view
 o Quelle png_path, json_path
 o Ziel MetaViewModel kompatibles dict
@@ -148,7 +159,7 @@ o Quelle OUTPUT_ROOT
 o Ziel list newest items
 * group_by_day
 o Quelle item list
-o Ziel gruppiert für UI
+o Ziel gruppiert fÃ¼r UI
 Datenquellen - Dateisystem - JSON Sidecars - ratings.sqlite3
 Datensenken - Router Seiten
 
@@ -167,7 +178,7 @@ o Ziel combo_key string
 * scan_output
 o Quelle OUTPUT_ROOT
 o Ziel list of items
-o Nebenwirkung DB Upsert über stores
+o Nebenwirkung DB Upsert Ã¼ber stores
 * move_to_trash
 o Quelle png_path, json_path
 o Ziel TRASH_ROOT, optional soft delete
@@ -175,7 +186,7 @@ Datenquellen - OUTPUT_ROOT - JSON Sidecars - config SOFT_DELETE_TO_TRASH
 Datensenken - ratings.sqlite3 - TRASH_ROOT
 
 7.7 db_store.py
-Rolle - Re export Fassade - Zentraler Importpunkt für DB Funktionen
+Rolle - Re export Fassade - Zentraler Importpunkt fÃ¼r DB Funktionen
 Funktionen - keine eigenen
 Datenquelle - stores Module
 Datenziel - routers und services importieren von hier
@@ -270,12 +281,12 @@ o Quelle workflow dict
 o Ziel bool
 * _iter_nodes
 o Quelle workflow dict
-o Ziel generator über nodes
+o Ziel generator Ã¼ber nodes
 * patch_workflow_for_run
 o Quelle workflow plus atomare Parameter
 o Ziel patched workflow
 o patcht
-* PrimitiveStringMultiline für pos und neg
+* PrimitiveStringMultiline fÃ¼r pos und neg
 * name_meta_export inputs subdir
 * checkpoint loader ckpt_name
 * erster KSampler Node inputs seed, steps, cfg, sampler_name, scheduler, denoise
@@ -290,7 +301,7 @@ o Quelle workflow
 o Ziel POST /prompt
 * enqueue_from_playground
 o Quelle character_name, prompts, parameter
-o Ziel lädt workflow, patched, enqueued
+o Ziel lÃ¤dt workflow, patched, enqueued
 * _get_from_object_info
 o Quelle ComfyUI /object_info
 o Ziel list of values
@@ -304,7 +315,7 @@ Datensenken - ComfyUI /prompt
 Rolle - Kombiniert Playground Items zu einem Prompt
 Top Level Funktionen - effective_tags - _join_prompt_blocks - build_prompts
 Klasse - PlaygroundGenerator
-Methoden - init - Quelle db_path - Ziel hält Pfade
+Methoden - init - Quelle db_path - Ziel hÃ¤lt Pfade
 * generate
 o Quelle character_id, manual picks, flags
 o Ziel dict mit
@@ -361,7 +372,7 @@ Rolle - SQLite Verbindungen - Schema Sicherstellung
 
 10.2 stores/images_store.py
 Funktionen - fetch_images - fetch_image_by_id - update_image_path
-Rolle - Reads und Updates für rating rows
+Rolle - Reads und Updates fÃ¼r rating rows
 
 10.3 stores/playground_store.py
 Rolle - Playground CRUD - Token Stats Helper
@@ -411,17 +422,17 @@ Datensenken - HTML Output im Browser
 Pfad - data/workflows
 Dateien - _default_character.json - Aiko.json - Kaori.json
 Rolle - Blueprint - ComfyClient patched diesen Workflow je Run
-Wichtig - name_meta_export muss in diesen Workflows vorhanden sein - PrimitiveStringMultiline Nodes für Prompt und Negative Prompt müssen existieren
+Wichtig - name_meta_export muss in diesen Workflows vorhanden sein - PrimitiveStringMultiline Nodes fÃ¼r Prompt und Negative Prompt mÃ¼ssen existieren
 
-13. Häufige Fehlerbilder und was sie bedeuten
+13. HÃ¤ufige Fehlerbilder und was sie bedeuten
 13.1 Seite zeigt keine Bilder
 Ursachen - OUTPUT_ROOT zeigt auf falschen Ordner - /files Mount fehlt - scanner hat keine Rows in ratings.sqlite3 - PNG existieren ohne JSON, require_json filtert sie
 13.2 Seed kommt nicht korrekt an
-Ursachen - ComfyClient patched den falschen Node - Workflow enthält mehrere KSampler und der falsche wird gepatcht - name_meta_export liest einen anderen KSampler als der gepatchte
-Regel - ComfyClient patcht den ersten KSampler - name_meta_export liest den ersten KSampler - Diese beiden müssen in deinem Workflow identisch sein
+Ursachen - ComfyClient patched den falschen Node - Workflow enthÃ¤lt mehrere KSampler und der falsche wird gepatcht - name_meta_export liest einen anderen KSampler als der gepatchte
+Regel - ComfyClient patcht den ersten KSampler - name_meta_export liest den ersten KSampler - Diese beiden mÃ¼ssen in deinem Workflow identisch sein
 13.3 Batch zieht immer gleiche Szene
-Ursache - Randomisierung passiert außerhalb der Batch Schleife
-Regel - Pro Run innerhalb einer Batch müssen Random Picks neu erfolgen
+Ursache - Randomisierung passiert auÃŸerhalb der Batch Schleife
+Regel - Pro Run innerhalb einer Batch mÃ¼ssen Random Picks neu erfolgen
 
 14. Prinzip
 ComfyReview ist ein geschlossener Kreislauf:
@@ -433,9 +444,9 @@ Dieser Abschnitt listet die konkreten SQL Statements, so wie sie im Code stehen.
 15.1 ratings.sqlite3
 Schema Definition
 Quelle: stores/db_core.py, Funktion _ensure_schema
-CREATE TABLE - CREATE TABLE IF NOT EXISTS ratings ( id INTEGER PRIMARY KEY AUTOINCREMENT, png_path TEXT NOT NULL, json_path TEXT NOT NULL, run INTEGER NOT NULL DEFAULT 1, model_branch TEXT NOT NULL, checkpoint TEXT NOT NULL, combo_key TEXT NOT NULL, rating INTEGER, deleted INTEGER NOT NULL DEFAULT 0, rating_count INTEGER NOT NULL DEFAULT 1, steps INTEGER, cfg REAL, sampler TEXT, scheduler TEXT, denoise REAL, loras_json TEXT DEFAULT ’‘, pos_prompt TEXT DEFAULT’‘, neg_prompt TEXT DEFAULT’’ )
+CREATE TABLE - CREATE TABLE IF NOT EXISTS ratings ( id INTEGER PRIMARY KEY AUTOINCREMENT, png_path TEXT NOT NULL, json_path TEXT NOT NULL, run INTEGER NOT NULL DEFAULT 1, model_branch TEXT NOT NULL, checkpoint TEXT NOT NULL, combo_key TEXT NOT NULL, rating INTEGER, deleted INTEGER NOT NULL DEFAULT 0, rating_count INTEGER NOT NULL DEFAULT 1, steps INTEGER, cfg REAL, sampler TEXT, scheduler TEXT, denoise REAL, loras_json TEXT DEFAULT Â’Â‘, pos_prompt TEXT DEFAULTÂ’Â‘, neg_prompt TEXT DEFAULTÂ’Â’ )
 Indizes - CREATE INDEX IF NOT EXISTS idx_ratings_json_run ON ratings(json_path, run) - CREATE INDEX IF NOT EXISTS idx_ratings_model ON ratings(model_branch) - CREATE INDEX IF NOT EXISTS idx_ratings_combo ON ratings(model_branch, combo_key) - CREATE INDEX IF NOT EXISTS idx_ratings_deleted ON ratings(deleted) - CREATE INDEX IF NOT EXISTS idx_ratings_rating ON ratings(rating)
-Migrationen - PRAGMA table_info(ratings) - ALTER TABLE ratings ADD COLUMN steps INTEGER - ALTER TABLE ratings ADD COLUMN cfg REAL - ALTER TABLE ratings ADD COLUMN sampler TEXT - ALTER TABLE ratings ADD COLUMN scheduler TEXT - ALTER TABLE ratings ADD COLUMN denoise REAL - ALTER TABLE ratings ADD COLUMN loras_json TEXT DEFAULT ’’ - ALTER TABLE ratings ADD COLUMN pos_prompt TEXT DEFAULT ’’ - ALTER TABLE ratings ADD COLUMN neg_prompt TEXT DEFAULT ’’
+Migrationen - PRAGMA table_info(ratings) - ALTER TABLE ratings ADD COLUMN steps INTEGER - ALTER TABLE ratings ADD COLUMN cfg REAL - ALTER TABLE ratings ADD COLUMN sampler TEXT - ALTER TABLE ratings ADD COLUMN scheduler TEXT - ALTER TABLE ratings ADD COLUMN denoise REAL - ALTER TABLE ratings ADD COLUMN loras_json TEXT DEFAULT Â’Â’ - ALTER TABLE ratings ADD COLUMN pos_prompt TEXT DEFAULT Â’Â’ - ALTER TABLE ratings ADD COLUMN neg_prompt TEXT DEFAULT Â’Â’
 Insert Run
 Quelle: stores/db_core.py, Funktion insert_or_update_rating
 1) Bestimmt next_run
@@ -465,7 +476,7 @@ Schema Definition
 Quelle: prompt_store.py, Funktion _ensure_schema
 * CREATE TABLE IF NOT EXISTS tokens ( id INTEGER PRIMARY KEY AUTOINCREMENT, json_path TEXT NOT NULL, run INTEGER NOT NULL, model_branch TEXT NOT NULL, scope TEXT NOT NULL, token TEXT NOT NULL, rating INTEGER, deleted INTEGER NOT NULL DEFAULT 0 )
 Indizes - CREATE INDEX IF NOT EXISTS idx_tokens_model ON tokens(model_branch) - CREATE INDEX IF NOT EXISTS idx_tokens_scope ON tokens(scope) - CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token) - CREATE INDEX IF NOT EXISTS idx_tokens_json ON tokens(json_path) - CREATE INDEX IF NOT EXISTS idx_tokens_run ON tokens(run)
-Migrationen - PRAGMA table_info(tokens) - ALTER TABLE tokens ADD COLUMN json_path TEXT NOT NULL DEFAULT ’’ - ALTER TABLE tokens ADD COLUMN run INTEGER NOT NULL DEFAULT 0
+Migrationen - PRAGMA table_info(tokens) - ALTER TABLE tokens ADD COLUMN json_path TEXT NOT NULL DEFAULT Â’Â’ - ALTER TABLE tokens ADD COLUMN run INTEGER NOT NULL DEFAULT 0
 Rebuild aus ratings
 Quelle: prompt_store.py, Funktion rebuild_prompt_db
 1) Reset
@@ -477,12 +488,12 @@ Quelle: prompt_store.py, Funktion rebuild_prompt_db
 Token Stats
 Quelle: prompt_store.py, Funktion fetch_token_stats
 * SELECT token, COUNT() as n, AVG(CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END) as mean_score, AVG(CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END) - 1.645  ( CASE WHEN COUNT() > 1 THEN sqrt( AVG((CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END)  (CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END)) - AVG(CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END) * AVG(CASE WHEN deleted=0 AND rating IS NOT NULL THEN rating END) ) ELSE 0 END ) / sqrt(COUNT(*)) as lb05 FROM tokens WHERE scope = ? {AND model_branch = ?} GROUP BY token HAVING n >= ? ORDER BY lb05 DESC, mean_score DESC, n DESC LIMIT ?
-Token Stats für eine Token Liste
+Token Stats fÃ¼r eine Token Liste
 Quelle: stores/playground_store.py, Funktion fetch_token_stats_for_tokens
-* SELECT token, rating FROM tokens WHERE deleted = 0 AND rating IS NOT NULL AND scope = ? AND token IN (?, ?, …) {AND model_branch = ?}
+* SELECT token, rating FROM tokens WHERE deleted = 0 AND rating IS NOT NULL AND scope = ? AND token IN (?, ?, Â…) {AND model_branch = ?}
 Best Match Candidate Query
 Quelle: stores/prompt_tokens_match.py, Funktion fetch_best_match_preview
-* SELECT json_path, COUNT(DISTINCT token) AS hits FROM tokens WHERE deleted = 0 AND scope = ? AND token IN (?, ?, …) AND json_path IS NOT NULL AND json_path != ’’ {AND model_branch = ?} GROUP BY json_path HAVING hits >= ? ORDER BY hits DESC LIMIT ?
+* SELECT json_path, COUNT(DISTINCT token) AS hits FROM tokens WHERE deleted = 0 AND scope = ? AND token IN (?, ?, Â…) AND json_path IS NOT NULL AND json_path != Â’Â’ {AND model_branch = ?} GROUP BY json_path HAVING hits >= ? ORDER BY hits DESC LIMIT ?
 
 15.3 arena.sqlite3
 Schema Definition
@@ -499,9 +510,9 @@ Quelle: arena_store.py, Funktion insert_match
 15.4 data/playground.sqlite3
 Schema Definition
 Quelle: stores/playground_store.py, Funktion _ensure_schema
-Tabelle - CREATE TABLE IF NOT EXISTS playground_items ( id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, name TEXT NOT NULL, key TEXT NOT NULL, tags TEXT DEFAULT ’‘, pos TEXT DEFAULT’‘, neg TEXT DEFAULT’‘, notes TEXT DEFAULT’’, created_at TEXT NOT NULL, updated_at TEXT NOT NULL )
+Tabelle - CREATE TABLE IF NOT EXISTS playground_items ( id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, name TEXT NOT NULL, key TEXT NOT NULL, tags TEXT DEFAULT Â’Â‘, pos TEXT DEFAULTÂ’Â‘, neg TEXT DEFAULTÂ’Â‘, notes TEXT DEFAULTÂ’Â’, created_at TEXT NOT NULL, updated_at TEXT NOT NULL )
 Indizes - CREATE INDEX IF NOT EXISTS idx_playground_kind_name ON playground_items(kind, name) - CREATE INDEX IF NOT EXISTS idx_playground_key ON playground_items(key)
-Migrationen - PRAGMA table_info(playground_items) - ALTER TABLE playground_items ADD COLUMN notes TEXT DEFAULT ’’
+Migrationen - PRAGMA table_info(playground_items) - ALTER TABLE playground_items ADD COLUMN notes TEXT DEFAULT Â’Â’
 List Items
 Quelle: stores/playground_store.py, Funktion list_items
 * SELECT id, kind, name, key, tags, pos, neg, notes, created_at, updated_at FROM playground_items WHERE 1=1 {AND kind = ?} {AND (name LIKE ? OR key LIKE ? OR tags LIKE ?)} ORDER BY kind ASC, name ASC LIMIT ? OFFSET ?
@@ -528,7 +539,7 @@ Quelle: stores/playground_store.py, Funktion list_recent_items
 * SELECT id, kind, name, key, tags, pos, neg, notes, created_at, updated_at FROM playground_items ORDER BY updated_at DESC LIMIT ?
 Batch by IDs
 Quelle: stores/playground_store.py, Funktion get_items_by_ids
-* SELECT id, kind, name, key, tags, pos, neg, notes, created_at, updated_at FROM playground_items WHERE id IN (?, ?, …)
+* SELECT id, kind, name, key, tags, pos, neg, notes, created_at, updated_at FROM playground_items WHERE id IN (?, ?, Â…)
 
 15.5 data/images.sqlite3
 Schema
