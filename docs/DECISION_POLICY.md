@@ -19,6 +19,18 @@
 
 Ein bereits als „DECIDED“ oder „verbindlich“ markierter alter Entwurf bleibt zunächst **HISTORICAL_CLAIM**, bis geklärt ist, auf welchen damaligen Stand er sich bezog und ob er in der aktuellen Richtung noch passt.
 
+## Aktuell bestätigte Rahmenbedingungen
+
+Die [scopebezogenen bestätigten Vorgaben](CONFIRMED_CONSTRAINTS.md) stehen
+getrennt von offenen Entscheidungen und historischen Konzeptverträgen. Dort
+wird beispielsweise die **eine gemeinsame Monatsobergrenze von unter 10 €**
+für externe KI-API-Aufrufe im ComfyReview-/Character-Chronicles-Vorhaben
+festgehalten, einschließlich Entwicklungsexperimenten und späterer Nutzung.
+Ein vorgeschlagener App-seitiger Stopp bei ungefähr 8 € ist dagegen eine
+**noch nicht bestätigte Schutzoption**, kein bereits bestehender Mechanismus.
+Präferenzen und aktuelle POC-Ziele werden ausdrücklich **nicht** zu festen
+Datenbank-, Provider- oder Spielregeln erklärt.
+
 ## Besondere Altlast: früherer Character-Chronicles-Stand
 
 Es gab einen **verworfenen früheren Character-Chronicles-Implementierungsstand**. In importierten Dokumenten tauchen dazu ein Vite-/TypeScript-Frontend, Chronicle-Events, M6-Planung, Schema-44-bis-58-Aussagen und umfassende Guardian-/Orchestrierungsannahmen auf. Deren Quellcode befindet sich **nicht** im aktuellen ComfyReview-Tree,
@@ -50,4 +62,5 @@ Es entsteht **nicht** allein durch Sortieren von Dokumenten ein verbindlicher Me
 - [Laufende Arbeiten](ACTIVE_WORK.md), [Card-Battler-POC](pocs/card-battler.md)
 - [Character-Chronicles-Zielmaterial](character-chronicles/README.md)
 - [Früherer Card-Battler-Zielplan](archive/card-battler-target-2026-10-02.md)
+- [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md)
 - [Status und offene Fragen](OPEN_DECISIONS.md)
