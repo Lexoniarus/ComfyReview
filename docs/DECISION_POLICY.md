@@ -70,4 +70,5 @@ Es entsteht **nicht** allein durch Sortieren von Dokumenten ein verbindlicher Me
 - [Character-Chronicles-Zielmaterial](character-chronicles/README.md)
 - [Früherer Card-Battler-Zielplan](archive/card-battler-target-2026-10-02.md)
 - [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md)
+- [Abgleich der früher fehlplatzierten CRCC- und POC-IDs](DECISION_POC_RECONCILIATION.md) – Herkunft, keine neue Beschlussautorität
 - [Status und offene Fragen](OPEN_DECISIONS.md)
