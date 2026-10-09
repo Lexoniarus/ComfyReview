@@ -348,12 +348,10 @@ derived from ordered slot, position and revision-UID tuples; paths are not
 involved. Audit format version 2 prevents the discarded fixed-slot report from
 being imported.
 
-The completed 2026-10-01 live run linked 363 of 379 generations: 29 rendered
-exactly from their recovered memberships and 334 retained additional historical
-draft text in the canonical prompt snapshot. Sixteen generations remain
-unlinked: two have ambiguous expression evidence and fourteen have no
-sufficient catalog evidence. There were no conflicts. These are observed data
-results, not hard-coded importer expectations.
+Earlier live composition-import counts and their unresolved cases are retained
+solely in the [archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md). They are
+historical source observations, not current database inventory, schema
+invariants or reconstruction defaults.
 
 The v14 legacy-provenance recovery completes retained generation relationships
 from three explicitly labelled evidence
@@ -380,26 +378,12 @@ fragment correction; recovery then creates a new normalized prompt row and
 relinks only the named generations. Review facts, image identity and
 content-level state are not rewritten.
 
-The reviewed 2026-10-06 recovery covered 389 generations and 384 active images.
-Against the pre-recovery runtime source it classified 119 embedded recipes,
-no remaining exact enrichments and 203 reviewed reconstructions, created 117
-historical revisions plus 12 archived recovered detail concepts, relinked 192
-generations and applied 18 hash-bound prompt corrections. The validated output
-was promoted only after preserving the prior runtime database as a backup and
-was then served again on the LAN runtime.
-
-No ordinary scene, outfit, pose, expression, lighting or framing block remains
-unidentified. Seventeen images retain prompt-side LoRA trigger atoms that are
-owned by their normalized LoRA provenance rather than prompt-component
-memberships. The earlier combined modifier and lighting revisions remain
-historical source/provenance facts until the catalog-normalization cutover;
-they are not valid normalized target components. Six active and two deleted
-Hina generations had their missing expression/lighting separator restored and
-were linked to separate historical expression and lighting revisions. All 18
-formerly structural active-image residuals are therefore resolved; the only
-remaining positive atoms outside normal component memberships are attributable
-LoRA triggers. These are curated data facts, not runtime heuristics or importer
-constants.
+The implementation separates embedded-recipe evidence, unique exact matches
+and reviewed semantic reconstruction. **Dated operator totals and item-specific
+repairs** are retained in the [archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md);
+they must not be treated as current runtime counts or universal validation
+rules. Any remaining unknown or ambiguous provenance in a newly audited
+database is reported rather than guessed.
 
 ## 5.2 Current catalog composition and normalization
 
@@ -483,7 +467,11 @@ add to the projections without mutating the baseline facts.
 Character components are excluded from semantic cleanup. Rebuild validation
 compares their internal IDs, UIDs, archive states, revisions, atom identities,
 weights, complete promotion history, selected standards, manual candidates and
-manual-variant bindings. When Aiko exists, exactly 24 revisions are required.
+manual-variant bindings. No fixed per-character revision count is imposed by this documentation:
+source-specific revision counts (including the earlier Aiko snapshot) are
+recorded in the [archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md).
+Rebuild acceptance compares the character's entire existing revision history
+against the audited source instead of enforcing an old inventory count.
 
 ## 5.3 Workspace preferences, content, profiles and LoRA usage
 
@@ -495,7 +483,7 @@ not read by the active runtime, Settings, Playground or V2 API.
 
 New generations persist the concrete LoRA stack used after validation and
 compilation. Capability discovery supplies available names, while the
-`WorkflowCompiler` alone inserts the ordered loader chain into Blueprint v2.
+`WorkflowCompiler` alone inserts the ordered loader chain into the active Blueprint v4.
 The ComfyUI provider still receives only a compiled graph. A normalized
 generation LoRA must have at least one non-zero model or CLIP branch connected
 to a sampler-consumed graph path and at least one exact trigger from its bound
@@ -545,15 +533,10 @@ the compiled graph and final scoped prompt prove real use. The offline
 provenance recovery applies the same rule to history and refuses promotion
 unless every active prompt atom and every retained LoRA binding is unambiguous.
 
-The live 2026-10-07 promotion copied the v12 runtime through v13 and v14 into a
-new database before replacement. Its bound audit covered 414 generations and
-393 active images, reported zero unattributed or over-attributed atoms and zero
-ambiguous LoRA bindings, and retained 19 exact trigger-evidenced LoRA usages.
-It removed 832 unsupported normalized usage rows while preserving the stored
-raw graphs. Independent validation reported `integrity_check = ok`, no foreign
-key errors, no retained null LoRA revision and complete editable handoffs for
-all 393 active images when all content levels were enabled. The unchanged v12
-source remains as the promotion backup.
+Historical v12-to-v14 promotion counts and its evidence-bound acceptance
+results are documented in the [archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md).
+They do not establish the version or content of a current private runtime
+database. Schema and validation semantics above remain code contracts.
 
 Historical reclassification is a separate two-step operation: preview returns
 the affected generation/image counts and catalog revision, and apply requires
@@ -566,9 +549,11 @@ projection atomically. The effective level is the override when one exists,
 otherwise the inferred generation level.
 
 Prompt-catalog repair uses the separate `content-levels audit/recover`
-workflow. Its versioned curation enumerates all 803 active and archived stable
-component UIDs and binds each decision to the latest revision UID and content
-hash. The audit binds database and curation hashes and previews component,
+workflow. Its versioned curation binds every
+relevant source component UID and each editorial decision to the latest
+revision UID and content hash. Source-specific row counts are archived in the
+[archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md).
+The audit binds database and curation hashes and previews component,
 generation and image transitions. Recovery copies the source into a new
 database, updates canonical markers and generation snapshots, and removes
 graph-inactive LoRA selections from the normalized relation in one short
