@@ -1,6 +1,6 @@
 # Herkunftsmatrix: Konzeptideen, ComfyReview-Code und frühere Chronicle-POCs
 
-**Dokumentklasse:** `SOURCE_INDEX` – Vergleich importierter Quellideen mit früherem und aktuellem Code.
+**Dokumentklasse:** `SOURCE_MATERIAL` · **Rolle:** Herkunfts- und Versionsindex; vergleicht importierte Quellen mit früherem und aktuellem Code, **kein** neuer Implementierungsauftrag.
 
 **Vergleichsstand:** 2026-10-09 · **aktuelle ComfyReview-Codebasis vor Dokumentenimport:** [`a5f4131`](https://github.com/Lexoniarus/ComfyReview/commit/a5f4131bb76c1ff655892d287d19fcd401917d32).
 
