@@ -4,7 +4,16 @@
 
 ## Fachliche Absicht
 
-**Die eigentliche VN-Content-Entwicklung kommt zuletzt.** Die Visual Novel soll die dann vorhandenen Figuren, Timeline-/Social-Interaktionen und die [Storyline](storyline.md) später **szenisch** erlebbar machen. Ein möglicher [Academy-/Schuljahresrahmen](academy-and-world.md) kann zu dieser Geschichte gehören, ist aber keine vorgeschriebene zusätzliche Entwicklungsphase. Die VN ist **nicht** der technische Startpunkt; kleinere vorbereitende Machbarkeits-POCs sind davon zu unterscheiden.
+**Die eigentliche VN-Content-Entwicklung kommt zuletzt**, aber
+**die Visual Novel mit Dating-Sim-Elementen ist der langfristige
+emotionale Kern von Character Chronicles**. In der [bestätigten
+Kobe-/Academy-Welt](world.md) sollen Figuren, Beziehungen,
+Timeline-/Social-Interaktionen und die [Storyline](storyline.md)
+schließlich szenisch erlebbar werden. Die beiden Academy-Jahre
+sind fachlicher Weltkern, **keine zusätzliche verbindliche
+Implementierungsphase**. Die VN ist **nicht** der technische
+Startpunkt; kleinere vorbereitende Machbarkeits-POCs sind
+davon zu unterscheiden.
 
 ## Warum diese Arbeit bewusst später kommt
 

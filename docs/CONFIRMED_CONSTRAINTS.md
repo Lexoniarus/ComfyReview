@@ -24,6 +24,45 @@ jeweils anhand von POCs und konkreten Entscheidungen zu prüfen.
 [Projektentwicklung](PROJECT_EVOLUTION.md) und
 [historischer Entscheidungsabgleich](DECISION_POC_RECONCILIATION.md).
 
+### Bestätigte Character-Chronicles-Welt – DECIDED_FOR_SCOPE
+
+**Geltungsbereich:** Die **langfristige fachliche Zielwelt und das
+angestrebte Spielerlebnis**, nicht die technische Implementierung.
+
+- **Ort/Zeit/Genre:** Japan, Haupthandlungsort **Kobe**, Einstieg
+  **2032**; bodenständige **animeorientierte Near Future** ohne
+  Cyberpunk-, Fantasy- oder postapokalyptische Grundprämisse.
+- **Academy:** Der volljährige Protagonist zieht neu nach Kobe und
+  erlebt **zwei postsekundäre Academy-Jahre** unter jungen Erwachsenen.
+  Academy, Wohnen, Stadt, Familie, Clubs, Freundschaften und Zukunft
+  bilden das Lebensumfeld. Die Academy ist **kein optionaler
+  Weltkontext**, aber auch **keine zusätzliche Technik-Releasephase**.
+- **Figuren:** Eigenständige Menschen mit Biografien, Wissen,
+  Beziehungen, Wohnorten und Zielen. Das ausführliche fachliche
+  Zielbild umfasst **16 Fokusfiguren** und weitere soziale Nebenrollen;
+  ihre konkrete Generierung und technische Persistenz bleibt zu erproben.
+- **Gesellschaft:** Eine schon vor Spielbeginn etablierte,
+  generationenprägende **globale Social- und Card-Battler-Kultur**.
+  Posts, bildhaft dargestellte persönliche Momente, Karten,
+  direkte/öffentliche Duelle und ihre sozialen Folgen gehören
+  zusammen. Zustimmung zur Verwendung persönlicher Darstellungen
+  und Grenzen ihrer Öffentlichkeit gehören zur Welt.
+- **Spielerlebnis:** Die **storygetriebene VN mit Dating-Sim-Elementen**
+  ist langfristig der emotionale Schwerpunkt. Karten, Network,
+  Chats, Alltag und Wettbewerbe sind ineinandergreifende
+  Aktivitäten; **Card Battler zuerst entwickeln** ist keine
+  Entscheidung, ihn zum alleinigen Hauptziel des fertigen Spiels zu machen.
+
+[Ausführliche aktuelle Weltvision](character-chronicles/vision/world.md)
+übernimmt den fachlichen Weltkern der historischen Konzepte.
+Der Weg über POCs, technische Architektur, UI, Kartendaten und
+Regeldetails sowie einzelne konkrete Welt-Ausprägungen können
+weiterentwickelt werden. **Weder Weltkern noch langfristige
+Spielerabsicht werden durch technische POCs stillschweigend
+abgewählt.** Änderungen am Weltziel bedürfen einer neuen
+bewussten fachlichen Entscheidung; überlieferte Schema-/M6-,
+Kalender- und Phasenverträge gelten dadurch nicht automatisch.
+
 ### Späterer fachlicher Meilenstein: Spielwelt und technische Bildproduktion
 
 **Geltungsbereich:** Das langfristige Character-Chronicles-Spielerlebnis.
@@ -101,8 +140,9 @@ und [offene Umsetzung](OPEN_DECISIONS.md).
   End-to-End-Funktion implementiert.
 - **Produktrichtung:** **Ungefähre Arbeitsorientierung:** Card Battler
   zuerst, danach Timeline, Social Network mit Charakter-Chats, Storyline
-  und **VN-Content zuletzt**. Academy/Schuljahr ist ein möglicher
-  Story-/Weltkontext, **keine zusätzlich beschlossene Pflichtphase**.
+  und **VN-Content zuletzt**. Die Academy ist **bestätigter
+  Welt-/Storykontext**, aber keine zusätzlich beschlossene
+  Implementierungsphase.
   Siehe [Project Evolution](PROJECT_EVOLUTION.md). Diese Orientierung
   ist eine **Arbeitspräferenz**, kein starrer Milestone- oder
   Architekturvertrag.

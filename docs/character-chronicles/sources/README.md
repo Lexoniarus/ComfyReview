@@ -2,11 +2,27 @@
 
 **Dokumentklasse:** `SOURCE_MATERIAL` · **Herkunft:** ComfyReview-Konzeptimport vom 2026-10-09 · **Entscheidungsstatus:** ungeprüft, teils historisch, teils inhaltlich weiterverwendbar.
 
-**Hier stehen die vollständigen 24 importierten Fachtexte zur Recherche – nicht die aktuelle, bestätigte Projektdokumentation.** Diese Sammlung enthält zugleich ältere Implementierungs- und Abnahmeaussagen aus einem später verworfenen Character-Chronicle-Ansatz, teils nach dem Archivstand ergänzte Produktideen sowie detaillierte technische Vorschläge. **„Autoritativ“, „verbindlich“, „Baseline abgeschlossen“, „MVP“ und Schema 47–58 sind Originalbegriffe früherer Arbeitsstände – kein aktueller Auftrag.**
+**Hier stehen die vollständigen 24 importierten Fachtexte als unveränderte
+Quellenfassungen – nicht als allein gültige aktuelle Spezifikation.**
+Der ausgearbeitete **Weltkern** ist inzwischen ausdrücklich als
+[Character-Chronicles-Zielwelt](../vision/world.md) bestätigt:
+Kobe/Japan ab 2032, zwei erwachsene Academy-Jahre, eine etablierte
+globale Social-/Card-Battler-Kultur, Figuren mit eigener Geschichte
+und eine langfristig VN-/beziehungsgetriebene Erfahrung.
+Die Quelltexte selbst enthalten daneben alte technische Architektur,
+M4-/M6-/Schema-, Regel-, Kalender- und Abnahmebehauptungen des
+verworfenen Ansatzes. Ihre damaligen Begriffe »autoritativer Vertrag«,
+»verbindlich«, »MVP« und »Baseline abgeschlossen« werden **nicht**
+allein durch die Bestätigung des Weltbilds zu heutigen Bauaufträgen.
+Die fachliche Zielwelt kann durch ausdrückliche Entscheidungen weiter
+präzisiert werden; der konkrete Weg bleibt POC-getrieben.
 
 ## Wohin stattdessen für den gültigen Überblick?
 
-- **[Arbeits-Zielbild](../vision/README.md):** kurze fachliche Richtung, priorisierte Bereiche und offene Punkte.
+- **[Bestätigte Zielwelt](../vision/world.md):** Ort, Zeit, Academy,
+  Gesellschaft, Figuren, Karten- und Storyzusammenhang.
+- **[Gesamtzielbild](../vision/README.md):** Entwicklungsorientierung,
+  aktuelle POC-Grenzen und noch offene Details.
 - **[Laufender ComfyReview-Code](../../ACTIVE_WORK.md):** technische Gegenwart, Generator/Datenbank in Arbeit und Card-Battler-POC.
 - **[Code-Ist-Audit](../../IMPLEMENTATION_AUDIT.md):** konkrete Quellcode-/Testbelege.
 - **[Quellen- und Versionsabgleich](SOURCE_RELATIONSHIP.md):** für alle 24 Texte Herkunft und technische Altannahmen.

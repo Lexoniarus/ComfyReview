@@ -42,9 +42,13 @@ keine normative Wirkung.
 | `CRCC-005` | Eigentliche VN-Content-Entwicklung zuletzt | **WORKING_DIRECTION**; kleine frühere Feasibility-POCs zu Freistellung, Matting, Schnittstellen und Komposition bleiben möglich | [Projektentwicklung](PROJECT_EVOLUTION.md), [VN-Zielbild](character-chronicles/vision/visual-novel.md) |
 | `CRCC-006` | Alter ComfyReview-Card-Battler-Zielvertrag sei für „Phase 1“ aktiv genehmigt | **Als automatische Genehmigung nicht übernommen**: Das [frühere Plandokument](archive/card-battler-target-2026-10-02.md) bleibt `HISTORICAL_CLAIM`/Ideenquelle. **IN_PROGRESS** ist nur der getrennt benannte aktuelle Karten-POC; Match-, Deck-, CB-1-bis-CB-7- und Persistenzvorgaben bleiben zu prüfen | [Card-Battler-POC](pocs/card-battler.md), [Offene Entscheidungen](OPEN_DECISIONS.md) |
 
-Die ungefähre Produktausrichtung ist mit den früheren Quellen kompatibel.
-**Academy/Schuljahr** ist aktuell ein möglicher Storyline-/Worldbuilding-Kontext,
-**keine sechste Pflichtphase**. Weder die früheren `CRCC-`-IDs noch die
+Die ungefähre technische Produktausrichtung ist mit den Quellen kompatibel.
+**Der Weltkern ist inzwischen bestätigt**: Kobe/Japan ab 2032,
+zwei Academy-Jahre für Erwachsene, die bestehende Social-/Battler-Kultur
+und eine langfristig VN-/beziehungsorientierte Geschichte.
+**Academy/Schuljahr ist in der Welt verbindliches Ziel**, aber
+**keine sechste technische Pflichtphase**.
+[Zielwelt](character-chronicles/vision/world.md). Weder die früheren `CRCC-`-IDs noch die
 früheren Card-Battler-`CB-`-Slices werden automatisch zu neuen
 Implementierungs-Gates.
 
@@ -62,7 +66,7 @@ beschrieben.
 | `POC-002` | Kartenkunst-, Darstellungs- und Renderingpipeline prüfen | **CANDIDATE** für technische Pipeline/UX. Der **ComfyReview-Entwicklungs-POC** erlaubt vier Bildoptionen, Auswahl oder vollständiges Ablehnen und Neugenerieren. In **Character Chronicles** soll später eine der vier Varianten ausgewählt werden. Die POC-Verwerfung ist keine automatisch gültige Spielregel; kein Renderer oder fertiger Art-Workflow ist dadurch beschlossen | [Card-Battler-POC](pocs/card-battler.md), [Vision](character-chronicles/vision/card-battler.md) |
 | `POC-003` | Bedeutung, Zustandsmodell und UI einer Timeline erproben | **CANDIDATE**; Minimalumfang und Akzeptanz noch offen, kein separater Pflichtrelease | [Timeline-Zielbild](character-chronicles/vision/timeline.md), [Offene Entscheidungen](OPEN_DECISIONS.md) |
 | `POC-004` | Posts, Charakter-Chats, Zustände und Providergrenzen erproben | **CANDIDATE**; Social/Chat baut fachlich auf einem Timeline-Slice auf, technische Plattform offen | [Social-Network-Zielbild](character-chronicles/vision/social-network.md), [Offene Entscheidungen](OPEN_DECISIONS.md) |
-| `POC-005` | Storyentscheidungen, Zustand und Rückwirkung erproben | **CANDIDATE**; Academy/Schuljahr könnte der Story einen Rahmen geben, altes Campaign-Schema ist keine Pflicht | [Storyline-Zielbild](character-chronicles/vision/storyline.md), [Offene Entscheidungen](OPEN_DECISIONS.md) |
+| `POC-005` | Storyentscheidungen, Zustand und Rückwirkung erproben | **CANDIDATE** für die Umsetzung der **bestätigten zwei Academy-Jahre**; altes Campaign-Schema und alte DayInstance-Vorgaben sind keine Pflicht | [Storyline-Zielbild](character-chronicles/vision/storyline.md), [Offene Entscheidungen](OPEN_DECISIONS.md) |
 | `POC-006` | VN-Asset-/Content-Ausspielpipeline erproben | **CANDIDATE für den späteren Content-Ausbau**; kleine vorgelagerte technische Machbarkeitsversuche bleiben möglich | [VN-Zielbild](character-chronicles/vision/visual-novel.md) |
 
 ## Was aus der früheren Fassung nicht still übernommen wird

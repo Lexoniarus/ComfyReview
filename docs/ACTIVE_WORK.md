@@ -30,15 +30,17 @@ Die derzeitige **ungefähre** Reihenfolge danach ist **Timeline → Social
 Network mit Charakter-Chats → Storyline → Visual-Novel-Content zuletzt**.
 Die Timeline kann ein eigenständig prüfbarer erster Social-Slice sein,
 bevor die umfassendere Plattform/Chat-Interaktion entsteht; das ist
-**kein bereits beschlossener eigener Release**. **Academy/Schuljahr**
-ist ein möglicher Worldbuilding-/Fortschrittsrahmen für die Storyline,
-nicht ein zusätzlicher verpflichtender Meilenstein.
+**kein bereits beschlossener eigener Release**. Die **zwei
+Academy-Jahre in Kobe sind bestätigter Weltkern**, aber
+keine zusätzlich verpflichtende Implementierungsphase.
+[Weltvision](character-chronicles/vision/world.md).
 
 Damit ist **kein** weiterer Code als bereits implementiert behauptet:
 Timeline, Social-/Chat-Plattform, Storyline und VN-Content sind in der
 geprüften ComfyReview-API **noch keine fertig integrierten Funktionen**.
-Academy-/Schuljahressimulation ist ebenfalls kein nachgewiesener
-Produktbestand oder verbindlich festgelegter Story-Mechanismus.
+Academy-/Schuljahressimulation ist ebenfalls **nicht implementiert**:
+Das bestätigte Worldbuilding verpflichtet nicht zu den früheren
+Kalender-, Guardian- oder Datenbankverträgen.
 Freistellung/Matting und das konsistente Montieren von Szenenbildern
 bleiben für den VN-Teil gesondert zu prüfende technische Risiken.
 

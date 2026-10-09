@@ -14,15 +14,21 @@ Chronicles entstehen. Die **ungefähre**, durch POCs veränderbare
 Entwicklungsorientierung lautet:
 **Card Battler → Timeline → Social Network mit Charakter-Chats → Storyline →
 Visual-Novel-Content zuletzt**. Timeline ist zunächst ein begrenzter sozialer
-Slice, Social/Chat die breitere Plattform; Academy/Schuljahr bleibt ein
-**möglicher Welt-/Storykontext**, keine zusätzlich festgelegte Pflichtphase.
+Slice, Social/Chat die breitere Plattform. **Die Welt ist fachlich
+bestätigt:** Kobe/Japan ab 2032, zwei Academy-Jahre für Erwachsene,
+eine etablierte globale Social- und Kartenkultur, persönliche Figuren
+und eine langfristig storygetriebene VN. Die Academy ist **kein
+optionaler Weltkontext**, aber auch keine zusätzliche verpflichtende
+Implementierungsphase. [Bestätigte Welt](character-chronicles/vision/world.md) ·
 [Entwicklungsbegründung](PROJECT_EVOLUTION.md) ·
-[Vision mit getrennten Bereichen](character-chronicles/vision/README.md).
+[Gesamtvision](character-chronicles/vision/README.md).
 
 **Vergangenheit:** Der frühere Character-Chronicles-Codeansatz wurde
 verworfen. Seine 24 ausführlichen importierten Konzepte sind
-**[Quellenmaterial](character-chronicles/sources/README.md)**, keine
-aktuellen technischen oder fachlichen Pflichtverträge.
+**[Quellenmaterial](character-chronicles/sources/README.md)**.
+Ihr **inhaltlicher Weltkern wurde inzwischen ausdrücklich als Ziel
+bestätigt**; alte technische Verträge und mechanische Detailregeln
+werden dadurch nicht automatisch wieder verbindlich.
 
 ## Welches Dokument ist wofür gültig?
 
@@ -31,8 +37,8 @@ aktuellen technischen oder fachlichen Pflichtverträge.
 | **CURRENT_CODE** | [Implementation Audit](IMPLEMENTATION_AUDIT.md) | Nachweisbarer ComfyReview-Code an einem konkreten Commit; Grenzen seiner Aussagekraft |
 | **CURRENT_STATUS** | [Projektstatus](project_status.md) als Gesamtübersicht; [Refactor-Abnahmestand](REFACTOR_PLAN.md) für den Refactor | Was heute belegt ist und welche Integrations-/Betriebsabnahmen im jeweiligen Bereich offen sind; **keine** historische Slice-Chronik |
 | **IN_PROGRESS** | [Aktuelle Arbeiten](ACTIVE_WORK.md) und [POCs](pocs/README.md) | Generator-/Datenbank-Optimierung, derzeitiger Card-Battler-POC, nicht abgeschlossene Integration |
-| **WORKING_DIRECTION** | [Projektentwicklung](PROJECT_EVOLUTION.md) | Warum Card Battler zuerst, dann Timeline, Social Network mit Chats, Storyline und VN-Content zuletzt; Academy/Schuljahr ist möglicher Storykontext |
-| **WORKING_VISION** | [Character-Chronicles-Zielbild](character-chronicles/vision/README.md) | **Kurze, klar lesbare Produktziele** ohne alte technische Festlegungen |
+| **WORKING_DIRECTION** | [Projektentwicklung](PROJECT_EVOLUTION.md) | Warum Card Battler technisch zuerst und VN-Content zuletzt kommt – unabhängig von der bestätigten Spielwelt |
+| **WORKING_VISION** | [Bestätigte Zielwelt](character-chronicles/vision/world.md), [Gesamtzielbild](character-chronicles/vision/README.md) | **Fachlich bestätigte Welt** und Spielebenen, aber keine übernommene historische Technik oder feste Releasephasen |
 | **DECIDED_FOR_SCOPE** | [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md) | Tatsächlich bestätigte Vorgaben mit konkretem Geltungsbereich; getrennt von Zielen, Präferenzen und unbeschlossenen Schutzvorschlägen |
 | **OPEN** | [Offene Entscheidungen](OPEN_DECISIONS.md) | Was noch nicht entschieden oder operativ verifiziert ist |
 | **CURRENT_TECH_REFERENCE** | [Architektur](ARCHITECTURE.md), [Datenarchitektur](DATA_ARCHITECTURE.md), [Frontend V2](FRONTEND_V2_DESIGN.md) | **ComfyReviews derzeitige Implementierungsverträge**, keine Architekturvorgabe für das spätere Spiel |
@@ -66,7 +72,8 @@ docs/
   pocs/
     card-battler.md                    Laufender POC, kein fertig spielbares Produkt
   character-chronicles/
-    vision/                            WORKING_VISION – kurze, aktuelle Zielbilder
+    vision/                            WORKING_VISION – bestätigte Zielwelt und weitere Bereiche
+      world.md                         bestätigte Weltprämisse, gesellschaftlicher/erzählerischer Rahmen
       card-battler.md, timeline.md, social-network.md,
       storyline.md, academy-and-world.md (Weltkontext),
       visual-novel.md
@@ -83,7 +90,10 @@ docs/
 
 - `CURRENT_CODE` bedeutet **an einem konkreten Commit nachgewiesenen ComfyReview-Code** (nicht automatisch eine spätere Laufzeit-/Release-Abnahme).
 - `IN_PROGRESS` bedeutet **Arbeit/POC läuft**, nicht freigegeben.
-- `WORKING_VISION` bedeutet **inhaltlich angestrebte Richtung**, keine beschlossene Detailarchitektur.
+- `WORKING_VISION` beschreibt die fachliche Produktvision. **Der
+  Weltkern von Character Chronicles ist ausdrücklich als Ziel bestätigt**;
+  technische Details und die Umsetzung sind keine beschlossene
+  Gesamtarchitektur.
 - `DECIDED_FOR_SCOPE` ist **nur für den benannten Bereich verbindlich**; Zielwerte und als `CANDIDATE` markierte Umsetzungsvorschläge sind das nicht.
 - `SOURCE_MATERIAL` und `HISTORICAL_*` enthalten absichtlich auch **alte, einander widersprechende „autoritative“ Aussagen**. Diese sind jetzt ausdrücklich **Originalquellen**, nicht aktiver Auftrag.
 

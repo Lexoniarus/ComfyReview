@@ -4,7 +4,15 @@
 
 ## Fachliche Absicht
 
-Bilder und daraus entwickelte Karten sollen einen **wirklich spielbaren Card Battler** tragen. Bevor Timeline, die breitere Social-/Chat-Plattform, Storyline oder VN-Content groß ausgebaut werden, soll ein funktionierender Spielkern existieren, an dem Regelmechaniken, Kartenentwicklung und Benutzerabläufe erprobt werden können.
+Bilder und daraus entwickelte Karten sollen einen **wirklich spielbaren
+Card Battler** tragen. In der [bestätigten Welt](world.md) ist der Battler
+eine seit Jahren bekannte **soziale und öffentliche Kultur**: Menschen
+spielen im Alltag, in Cafés, Clubs oder bei größeren Veranstaltungen.
+Ihre Karten und Darstellungen persönlicher Momente besitzen neben
+den Regelwerten eine soziale Bedeutung. **Als Entwicklungsschwerpunkt
+kommt der Battler zuerst**; im fertigen Character Chronicles ist er
+Teil der übergeordneten Figuren-, Story- und Beziehungserfahrung,
+nicht automatisch deren erzählerischer Endzweck.
 
 ## Was heute schon da ist
 
@@ -47,4 +55,7 @@ sind **diskutierte oder historische Varianten** – nicht automatisch gültige
 Anforderungen. Die [ausführlichen Kartenkonzepte](../sources/README.md)
 können hierfür als Ideenfundus dienen.
 
-**Abhängigkeit:** Der Card Battler soll zuerst funktional erprobt werden. Spätere Schwerpunkte sind **Timeline → Social Network mit Chats → Storyline → VN-Content zuletzt**. Academy/Schuljahr ist möglicher Weltkontext der Storyline, kein zusätzlich beschlossenes Release-Gate. Kleine übergreifende POCs sind zulässig, dürfen aber den Spielkern nicht durch eine vorgezogene Gesamtruntime ersetzen.
+**Entwicklungsorientierung:** Der Card Battler soll zuerst funktional
+erprobt werden. Danach folgen ungefähr **Timeline → Social Network
+mit Chats → Storyline → VN-Content zuletzt**. **Die Academy ist
+bereits bestätigter Weltkontext** und kein zusätzliches Release-Gate. Kleine übergreifende POCs sind zulässig, dürfen aber den Spielkern nicht durch eine vorgezogene Gesamtruntime ersetzen.

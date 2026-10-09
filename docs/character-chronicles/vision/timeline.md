@@ -4,8 +4,9 @@
 
 ## Fachliche Absicht
 
-Die **Timeline** soll Figuren, Beiträge, Ereignisse und Reaktionen zunächst
-über eine verständliche, zeitlich oder sozial geordnete Oberfläche erfahrbar
+Die **Timeline** soll Figuren, Beiträge, Ereignisse und Reaktionen der
+[bestätigten Kobe-/Academy-Welt](world.md) zunächst über eine
+verständliche, zeitlich oder sozial geordnete Oberfläche erfahrbar
 machen. Sie ist ein **eigener erprobbarer Entwicklungsschwerpunkt**, aber
 damit **weder schon eine separat beschlossene App noch automatisch eine
 vollständige Social-Network-Architektur**. Ob und welche Posts, Profile oder

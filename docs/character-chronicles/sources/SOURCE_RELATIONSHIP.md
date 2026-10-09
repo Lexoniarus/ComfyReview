@@ -4,7 +4,10 @@
 
 **Vergleichsstand:** 2026-10-09 · **aktuelle ComfyReview-Codebasis vor Dokumentenimport:** [`a5f4131`](https://github.com/Lexoniarus/ComfyReview/commit/a5f4131bb76c1ff655892d287d19fcd401917d32).
 
-Das ist **kein Character-Chronicles-Implementierungsplan**. Die 24 Dokumente kamen mit dem reinen Konzept-Import [`76d71f9`](https://github.com/Lexoniarus/ComfyReview/commit/76d71f9c7723701664785aeaf07e0d7375a4f36a) hinzu. Mehrere Texte beschreiben **einen früheren, verworfenen Chronicle-Implementierungsstand**,
+Das ist **kein Character-Chronicles-Implementierungsplan**. Die
+inhaltliche [Kobe-/Academy-/Social-Zielwelt](../vision/world.md)
+wurde inzwischen ausdrücklich bestätigt; technische Altverträge
+bleiben historische Prüffälle. Die 24 Dokumente kamen mit dem reinen Konzept-Import [`76d71f9`](https://github.com/Lexoniarus/ComfyReview/commit/76d71f9c7723701664785aeaf07e0d7375a4f36a) hinzu. Mehrere Texte beschreiben **einen früheren, verworfenen Chronicle-Implementierungsstand**,
 dessen Python-/TypeScript-Code, SQLite-Schemas, Tests, M4-/M6-/Foundation-
 Abnahmeunterlagen **in der bereitgestellten `CharacterChronicle.zip`**
 tatsächlich vorhanden sind. [Historisches Code- und Quellenaudit](../HISTORICAL_CODE_AUDIT.md).
@@ -36,7 +39,7 @@ oder automatisch gültigen künftigen Architektur.
 | [Story/Cast/Simulation](story-cast-and-simulation.md) | Story-/Charakter- und Simulationsideen | Keine automatische Bindung der alten Save-/Timeline-Architektur |
 | [Target Architecture](target-architecture.md) | Lücken, Abhängigkeiten und Optionen sichtbar | Alte Services, Prozessarchitektur, SQLite-Schemata, Gates/Worker nicht als verpflichtend übernehmen |
 | [Visual Assets/Quests](visual-assets-quests-and-gates.md) | Quests, VN-Assets und Pipeline-Hypothesen | Kein Beweis einer derzeit integrierten Matting- oder VN-Runtime |
-| [VN/Social/Card-Loop](vn-social-platform-and-card-loop-concept.md) | Welt, Spielgefühl, Social und langfristiger Kernloop | Umfang und technischer Weg offen |
+| [VN/Social/Card-Loop](vn-social-platform-and-card-loop-concept.md) | Welt, Spielgefühl, Academy, Plattformkultur, persönlicher Karten-/Storyzusammenhang sind inzwischen als [Zielwelt](../vision/world.md) bestätigt | Detaillierte Karten-, Generator-, Kalender-, UI- und technische Runtime-Verträge sowie konkrete POC-Schritte nicht pauschal übernommen |
 | [Year-End LoRA/NG+](year-end-lora-and-new-game-plus.md) | Inhaltliche Ergänzung zur Vision | Weder fertiges Training, NG+ noch beschlossene Implementierungsreihenfolge |
 
 ## Quellenlage und Versionsabweichungen

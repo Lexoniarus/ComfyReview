@@ -157,12 +157,22 @@ binding rules merely because a historical document says “approved”.
 For product-documentation changes, retain the **approximate** current
 priority as **Card Battler → Timeline → Social Network with character
 chat → Storyline → VN content last**. Timeline may be the first bounded
-social slice; Academy/school-year is a *possible story/world context*, **not
-an extra approved mandatory release phase**. Future implementation detail,
-phase boundaries and technical choices remain open until explicitly reviewed.
+social slice. The **confirmed final world vision** is Japan/Kobe from 2032,
+grounded anime near future, two postsecondary adult Academy years, a
+culturally established social/card-battler platform, a protagonist moving
+into Kobe and independent characters with personal histories, knowledge
+and relationships. The Academy is **not an optional story premise** but
+also **not a separate mandatory implementation phase**. The eventual
+VN/dating-sim story is the long-term narrative center even though its
+content is built last. Future implementation detail, phase boundaries
+and technical choices remain open until explicitly reviewed.
 Do not translate this orientation into a rigid schedule, POC ban or a
 revived historical Chronicle MVP. Source of truth:
-`docs/PROJECT_EVOLUTION.md` and `docs/character-chronicles/vision/README.md`.
+`docs/PROJECT_EVOLUTION.md`, `docs/character-chronicles/vision/world.md`
+and `docs/character-chronicles/vision/README.md`. Keep the confirmed
+story-world intent distinct from historical M6/schema/phase contracts.
+Proofs of concept may refine the path and individual details but do
+not silently revoke this confirmed world target.
 
 Historical `docs/character-chronicles/sources/` content must keep its
 original wording **and original relative links**. Do not retarget legacy

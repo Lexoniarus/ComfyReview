@@ -29,8 +29,16 @@ Ein bereits als „DECIDED“ oder „verbindlich“ markierter alter Entwurf bl
 ## Aktuell bestätigte Rahmenbedingungen
 
 Die [scopebezogenen bestätigten Vorgaben](CONFIRMED_CONSTRAINTS.md) stehen
-getrennt von offenen Entscheidungen und historischen Konzeptverträgen. Dort
-wird beispielsweise die **eine gemeinsame Monatsobergrenze von unter 10 €**
+getrennt von offenen Entscheidungen und historischen Konzeptverträgen.
+**Inzwischen ausdrücklich bestätigt ist auch die inhaltliche
+[Character-Chronicles-Zielwelt](character-chronicles/vision/world.md):**
+Kobe/Japan ab 2032, zwei Academy-Jahre für Erwachsene, eine etablierte
+globale Social-/Battler-Kultur, eigenständige Figuren und die langfristig
+story- und beziehungsorientierte Gesamtspielabsicht. **Eine inhaltlich
+bestätigte Welt ist nicht gleichbedeutend mit der Annahme historischer
+M4-/M6-, UI-, Datenbank- oder Regelverträge.** Der Weg bleibt iterativ,
+Weltänderungen brauchen eine neue ausdrückliche fachliche Entscheidung.
+Daneben steht beispielsweise die **eine gemeinsame Monatsobergrenze von unter 10 €**
 für externe KI-API-Aufrufe im ComfyReview-/Character-Chronicles-Vorhaben
 festgehalten, einschließlich Entwicklungsexperimenten und späterer Nutzung.
 Ein vorgeschlagener App-seitiger Stopp bei ungefähr 8 € ist dagegen eine

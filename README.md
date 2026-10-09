@@ -79,9 +79,24 @@ Code-Änderungen müssen die [Engineering-Regeln](AGENTS.md) beachten. Exports u
 
 ## Langfristige Entwicklung
 
-**ComfyReview soll sich zu Character Chronicles entwickeln** – POC- und erfahrungsgetrieben, nicht als starrer Komplettbauplan. Die derzeitige **ungefähre Entwicklungsorientierung** lautet **Card Battler → Timeline → Social Network mit Charakter-Chats → Storyline → Visual-Novel-Content zuletzt**. Die Timeline kann zunächst als eigenständig erprobbarer Einstieg in die spätere Social-Plattform entstehen; das legt keine getrennten Releases fest. **Academy/Schuljahr ist ein möglicher Welt- und Fortschrittsrahmen der Storyline, keine zusätzlich beschlossene Pflichtphase.** Für spätere VN-Inhalte sind Figurenfreistellung, Matting und konsistente Szenenkomposition besondere technische Herausforderungen; begrenzte frühe Machbarkeits-POCs sind möglich.
+**Character Chronicles hat eine bestätigte fachliche Zielwelt:**
+Japan/Kobe ab 2032, eine plausible animeorientierte Near Future,
+zwei postsekundäre Academy-Jahre für junge Erwachsene, eine bereits
+etablierte globale Social- und Battler-Kultur, ein neu nach Kobe
+ziehender Protagonist und Menschen mit eigenen Geschichten,
+Wohnorten, Beziehungen und Zielen. Das spätere Spiel ist
+**story-/figurengetrieben**, mit Karten und Social Network als Teil
+dieser Lebenswelt. [Weltbeschreibung](docs/character-chronicles/vision/world.md).
 
-[Einfaches Zielbild](docs/character-chronicles/vision/README.md) · [Entwicklungslogik](docs/PROJECT_EVOLUTION.md) · [Ausführliche, aber **nicht verbindliche** Quelltexte](docs/character-chronicles/sources/README.md) · [Alte verworfene Chronicle-Technik](docs/character-chronicles/HISTORICAL_CODE_AUDIT.md).
+**Der Weg dahin ist POC-getrieben und veränderbar**, nicht die
+Grundidee der Welt. Die **ungefähre technische Entwicklungsorientierung**
+lautet **Card Battler → Timeline → Social Network mit Charakter-Chats →
+Storyline → VN-Content zuletzt**. Die zwei Academy-Jahre gehören zum
+Spielziel, sind aber **keine zusätzliche separat vorgeschriebene
+Implementierungsphase**. Spätere VN-Assets erfordern eigene
+Machbarkeitsprüfungen; kleine frühere POCs bleiben möglich.
+
+[Bestätigte Welt](docs/character-chronicles/vision/world.md) · [Gesamtzielbild](docs/character-chronicles/vision/README.md) · [Entwicklungslogik](docs/PROJECT_EVOLUTION.md) · [Ausführliche, aber **nicht verbindliche** Quelltexte](docs/character-chronicles/sources/README.md) · [Alte verworfene Chronicle-Technik](docs/character-chronicles/HISTORICAL_CODE_AUDIT.md).
 
 **Keines der älteren „DECIDED“-/M6-/Schema-v58-Dokumente ist dadurch eine heutige Bauvorgabe.** Welche Ideen und technischen Ansätze tatsächlich bleiben, wird explizit anhand der POCs entschieden.
 

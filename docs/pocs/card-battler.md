@@ -167,18 +167,21 @@ keine persönliche Abnahme.
 
 ## Warum der Card Battler gerade zuerst kommt
 
-Die konkrete Academy-/Worldbuilding-/Character-Chronicles-Vision entstand
-erst nach früheren Implementierungsversuchen. Statt gleich wieder mit
-kompletter VN-, Guardian- oder Schuljahres-Laufzeit zu beginnen, soll
+Die [bestätigte Zielwelt von Character Chronicles](../character-chronicles/vision/world.md)
+spielt ab 2032 in Kobe, umfasst zwei erwachsene Academy-Jahre und eine
+seit Jahren etablierte globale Social-/Battler-Kultur. Ihre Figuren,
+Beziehungen und langfristige VN-Geschichte sind als Spielerlebnis gesetzt.
+Statt aber die alte VN-, Guardian- oder Schuljahres-Runtime zu übernehmen,
+soll
 der Card Battler zunächst als **spielerischer Kern in ComfyReview**
 tatsächlich funktionieren und in der Praxis erprobt werden.
 
 Danach ist die ungefähre Entwicklungsorientierung **Timeline →
 Social Network mit Charakter-Chats → Storyline → VN-Content zuletzt**.
 Die Timeline kann zuerst als kleiner Social-Slice erprobt werden, ohne
-sofort die vollständige Plattform zu bauen. **Academy/Schuljahr** ist
-ein möglicher Story-/Weltkontext, aber keine zusätzlich beschlossene
-Pflichtphase. Figurenfreistellung und Szenenkomposition sind erheblich
+sofort die vollständige Plattform zu bauen. **Academy/Schuljahr**
+ist bereits **bestätigter Welt- und Storykontext**, aber keine
+zusätzlich beschlossene technische Pflichtphase. Figurenfreistellung und Szenenkomposition sind erheblich
 komplexere Bild-/Asset-Aufgaben und **keine Voraussetzung für diesen POC**.
 [Entwicklungsorientierung](../PROJECT_EVOLUTION.md#gewonnene-reihenfolge-aus-den-bisherigen-versuchen).
 

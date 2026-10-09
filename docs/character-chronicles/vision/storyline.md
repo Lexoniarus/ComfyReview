@@ -19,14 +19,21 @@ aussieht, verändert nicht ohne ein dafür vorgesehenes
 Storyereignis automatisch die Figur oder ihre Vergangenheit.
 Wie dieser Schutz umgesetzt wird, bleibt offen.
 
-## Academy und Schuljahr sind möglicher Inhalt, keine zusätzliche Pflichtphase
+## Zwei Academy-Jahre sind Weltziel, keine zusätzliche Technikphase
 
-[Academy, Schuljahr und Worldbuilding](academy-and-world.md) beschreiben
-den angestrebten Welt-/Zeit-/Progressionskontext für die spätere Storyline.
-Daraus folgt **weder ein bereits entschiedener zweijähriger Kalender
-noch ein eigener zusätzlicher verpflichtender Implementierungsmeilenstein**.
-Genauer Ablauf, Figurenumfang, Weltregeln und Relationship-/Quest-Systeme
-werden anhand der POCs erneut bewertet.
+[Academy, Schuljahr und Worldbuilding](academy-and-world.md) sind
+**fester Teil der bestätigten Zielwelt**: Der Protagonist erlebt
+ab 2032 zwei postsekundäre Academy-Jahre in Kobe, mit Beziehungen,
+Freundschaften, Entscheidungen, Alltag und Zukunftsperspektiven.
+Die **Visual Novel mit Dating-Sim-Elementen** ist der langfristige
+emotionale Kern des Gesamtspiels. Dass wir den Card Battler zuerst
+und den eigentlichen VN-Content zuletzt entwickeln, ändert daran nichts.
+
+Daraus folgt **keine** zusätzliche technische Academy-Pflichtphase.
+Die alten exakten DayInstance-, Character-State-, Relationship-,
+Quest-, Guardian- und Schema-Verträge sind nicht übernommen;
+ihre passende Ausgestaltung wird über POCs erneut geprüft.
+[Bestätigte Weltbeschreibung](world.md).
 
 ## Deutliche Abgrenzung zur Visual Novel
 

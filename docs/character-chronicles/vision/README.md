@@ -4,7 +4,17 @@
 
 ## Was als Richtung feststeht
 
-ComfyReview ist die **aktuelle, noch in Entwicklung befindliche Anwendung**. Die gewachsene Vision heißt **Character Chronicles**: Bildgenerierung und -bewertung sollen sich langfristig zu einem Spielerlebnis mit Karten, Charakteren, einer sozialen Welt, einem Academy-/Schuljahreskontext und schließlich visuellen Szenen entwickeln. Wie genau das gebaut wird, entscheiden **POCs und tatsächliche Erfahrungen**, nicht ältere technische Konzepte.
+ComfyReview ist die **aktuelle, noch in Entwicklung befindliche Anwendung**.
+**Character Chronicles besitzt bereits eine fachlich bestätigte Zielwelt:**
+Japan/Kobe ab 2032, eine bodenständige Anime-Near-Future, zwei
+Academy-Jahre für junge Erwachsene, eine seit Jahren etablierte globale
+Social-/Card-Battler-Kultur sowie Figuren mit eigenem Leben, Wissen und
+Beziehungen. Eine storygetriebene Visual Novel mit Dating-Sim-Elementen
+ist der langfristige emotionale Kern; die spielbaren Karten- und
+Social-Systeme sind Teil derselben Welt. **Diese Welt ist nicht nur
+möglicher Kontext**, sondern das angestrebte Spielerlebnis. Wie wir es
+konkret bauen, klären **POCs und praktische Erfahrungen**.
+[Bestätigte Weltbeschreibung](world.md).
 
 Die derzeitige **ungefähre Entwicklungsorientierung** (keine starren
 Release-Gates und keine bereits beschlossene Gesamtarchitektur):
@@ -12,18 +22,31 @@ Release-Gates und keine bereits beschlossene Gesamtarchitektur):
 1. **[Card Battler](card-battler.md)** – zuerst ein tatsächlich funktionierender Spielkern; aktuell der konkrete POC.
 2. **[Timeline](timeline.md)** – als nächster begrenzter, sozialer Interaktions- und Darstellungsslice; Details und Datenmodell noch offen.
 3. **[Social Network mit Charakter-Chats](social-network.md)** – die breitere soziale Plattform aufbauend auf beziehungsweise verzahnt mit der Timeline.
-4. **[Storyline](storyline.md)** – Ereignisse, Figurenentwicklung, Beziehungen und Progression in einen erzählerischen Zusammenhang bringen. **[Academy/Schuljahr](academy-and-world.md)** ist dabei ein mögliches Worldbuilding-/Zeitgerüst, keine gesondert beschlossene Pflichtphase.
+4. **[Storyline](storyline.md)** – das bestätigte zweijährige [Academy-Leben](academy-and-world.md), Figurenentwicklung, Beziehungen und Ereignisse erzählerisch miteinander verbinden; **die Academy ist Weltkern, keine zusätzliche technische Pflichtphase**.
 5. **[Visual-Novel-Content](visual-novel.md)** – zuletzt die aufwendigen szenischen Inhalte und Präsentationen. Frühere kleine Technik-POCs zu Freistellung, Matting und Bildkomposition bleiben möglich.
 
 **Timeline → Social/Chat** unterscheidet Entwicklungsschwerpunkte, nicht
 zwangsläufig zwei unabhängig veröffentlichte Produkte. **Storyline** umfasst
-das später zu definierende Erzählsystem; die alte Academy-Kalender- und
-Zwei-Jahres-Spezifikation ist nicht automatisch beschlossen.
+das später zu definierende Erzählsystem. **Die zwei Academy-Jahre gehören
+zur bestätigten Spielwelt**; die alten genauen Tages-/Kalender-, M6-
+und Datenbankverträge sind nicht dadurch genehmigt.
 
 Diese Übersicht beschreibt **was und ungefähr in welcher Reihenfolge**, nicht
 **wie genau**: Kein beschlossener Gesamt-MVP, keine verpflichtenden
 historischen Schemas oder M6-Gates, keine fixierten Termine.
 [Entwicklungsbegründung](../../PROJECT_EVOLUTION.md).
+
+## Die bestätigte Spielwelt – nicht die technische Roadmap
+
+Die aktuelle [Weltvision](world.md) beschreibt Kobe 2032, Academy-Alltag,
+Protagonist und Cast, die gesellschaftliche Social- und Kartenkultur sowie
+wie Posts, persönliche Bilder, Duelle und Beziehungen zusammenwirken.
+Sie übernimmt den inhaltlichen Kern der ausführlichen Quelltexte als
+**Zielbild**, ohne deren konkrete Implementierungsverträge pauschal
+wiederherzustellen. **VN-/Story-Content zuletzt entwickeln** beschreibt
+nur die Ausbaureihenfolge, nicht die erzählerische Gewichtung im fertigen
+Spiel. Fachliche Änderungen an der Welt bleiben nach ausdrücklicher
+Neubewertung möglich, nicht als stiller Nebeneffekt technischer POCs.
 
 ## Ein zusammenhängendes Spielerlebnis, keine drei isolierten Spiele
 
@@ -91,4 +114,4 @@ Der tatsächlich vorhandene gegenwärtige Code wird in [ComfyReview Active Work]
 
 ## Nicht automatisch entschieden
 
-Spielfeld-/Deckgrößen, Gameplay-Detailregeln, ein Social-Datenmodell, die endgültige Academy-/Storysimulation, UI-Technologien, LLM-/Retrieval-Architektur, Schema-Migrationen, visuelle Asset-Pipeline, Zeitplan und Meilensteine stehen **nicht** allein durch dieses Zielbild fest. [Offene Entscheidungen](../../OPEN_DECISIONS.md) und [Entscheidungsregeln](../../DECISION_POLICY.md).
+Spielfeld-/Deckgrößen, Gameplay-Detailregeln, ein Social-Datenmodell, konkrete Academy-/Story-Simulationsverfahren, UI-Technologien, LLM-/Retrieval-Architektur, Schema-Migrationen, visuelle Asset-Pipeline, Zeitplan und Meilensteine stehen **nicht** allein durch dieses Zielbild fest. **Die Weltprämisse selbst steht dagegen als Zielvision fest.** [Offene Entscheidungen](../../OPEN_DECISIONS.md) und [Entscheidungsregeln](../../DECISION_POLICY.md).

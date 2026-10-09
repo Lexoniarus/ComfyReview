@@ -19,7 +19,12 @@ Die **[bereinigte Vision](vision/README.md)** ist der richtige Einstieg. Sie erk
 
 [24 importierte Quelltexte](sources/README.md) sind in `sources/` zugänglich. Einige Texte enthalten **später ergänzte inhaltliche Zielideen**, andere **frühere Card-Battler-/M6-/UI-/Schema-Verträge**. Ihre früheren Aussagen über „verbindlich“, „DECIDED“, „abgeschlossen“ und „implementiert“ gelten **nur innerhalb der überlieferten Quelle**.
 
-Die [Herkunfts- und Themenmatrix](sources/SOURCE_RELATIONSHIP.md) hilft, die 24 Texte zur Gegenwart und zum früheren Code einzuordnen. Wenn etwas davon künftig bestätigt wird, muss das **ausdrücklich** in einem aktiven Vision-/POC-/Entscheidungsdokument erfolgen.
+Die [Herkunfts- und Themenmatrix](sources/SOURCE_RELATIONSHIP.md) hilft, die 24 Texte zur Gegenwart und zum früheren Code einzuordnen. **Der inhaltliche
+Weltkern wurde bereits ausdrücklich bestätigt** und ist deshalb in der
+[aktuellen Weltvision](vision/world.md) festgehalten. Für weitere
+technische oder spielmechanische Festlegungen braucht es weiterhin
+POC-Evidenz und konkrete Entscheidungen; die Quellen bleiben
+unverändert.
 
 ## 3. Wirklich früher implementierter, dann verworfener Ansatz
 

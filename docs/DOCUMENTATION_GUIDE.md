@@ -17,7 +17,7 @@ Verbindlichkeitsstufe**.
 | **CURRENT_STATUS** | [Projektstatus](project_status.md); [Refactor-Abnahme](REFACTOR_PLAN.md) nur im Teilbereich | Aktueller Status und offene Abnahmen, **nicht** alte Slice-Chronik |
 | **IN_PROGRESS** | [Aktive Arbeit](ACTIVE_WORK.md), [POCs](pocs/README.md) | Laufende Entwicklung und Experimente, kein fertiges Product Outcome |
 | **WORKING_DIRECTION** | [Projektentwicklung](PROJECT_EVOLUTION.md) | Prioritätsrichtung, keine starren Milestones |
-| **WORKING_VISION** | [Chronicles-Zielbild](character-chronicles/vision/README.md) | Fachliche Absicht, keine endgültige Technikentscheidung |
+| **WORKING_VISION** | [Bestätigte Zielwelt](character-chronicles/vision/world.md), [Gesamtvision](character-chronicles/vision/README.md) | Der Weltkern ist fachlich `DECIDED_FOR_SCOPE`; exakte technische Umsetzung ist noch offen |
 | **DECIDED_FOR_SCOPE** | [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md) | Bestätigte Vorgaben **nur im erklärten Geltungsbereich**; dort separat markierte Kandidaten bleiben offen |
 | **OPEN** | [Offene Entscheidungen](OPEN_DECISIONS.md) | Nur ungelöste Entscheidungen, nicht zweiter Projektstatus |
 | **CURRENT_TECH_REFERENCE** | [Architektur](ARCHITECTURE.md), [Datenarchitektur](DATA_ARCHITECTURE.md), [Frontend V2](FRONTEND_V2_DESIGN.md) | Technische Verträge für den **gegenwärtigen ComfyReview-Code**, nicht für jede spätere Chronicles-Version |
@@ -76,7 +76,9 @@ Eine neue, bindende Entscheidung braucht einen konkreten Scope, Alternativen, Be
 - `docs/REFACTOR_PLAN.md`: knapper Refactor-/Abnahmestand; kompletter Slice-Verlauf nur im Archiv.
 - `docs/OPERATIONS.md`: CLI/Import/DB-Upgrade-Prozeduren; **nicht** als angeblich ausgeführte Migration lesen.
 - `docs/ACTIVE_WORK.md`: laufende Entwicklung von Generator, Datenbank/Katalog und POCs.
-- `docs/character-chronicles/vision/`: **kurze aktuelle fachliche Arbeitsvision** ohne alte technische Pflichtvertrags-Formulierungen.
+- `docs/character-chronicles/vision/`: **bestätigte fachliche Zielwelt**
+  in `world.md` und aktuelle Arbeitsvision für die Spielbereiche.
+  Keine automatische Wiederaufnahme alter technischer Pflichtverträge.
 - `docs/character-chronicles/sources/`: **importierte ausführliche Quelltexte** und Herkunftsindex; alte Autoritätsmetadaten und Verbindlichkeitsbehauptungen gelten nur im damaligen Quellkontext.
 - `docs/archive/`: alte Status-, Refactor- und README-Protokolle, ausdrücklich historisch.
 
@@ -155,7 +157,13 @@ Geprüft auf dem Dokumentationsbranch `docs/structure-and-status-2026-10-09`:
   Die aktive Architektur verweist auf den archivierten Projection Audit,
   die aktuelle Datenarchitektur auf Blueprint v4.
 - Die **24 ausführlichen Konzepttexte** liegen ausschließlich unter `character-chronicles/sources/` als `SOURCE_MATERIAL`. Frühere „verbindlich“-Behauptungen werden jeweils ausdrücklich als **übernommene Quellenfassung** markiert, nicht als aktuelle Festlegung.
-- Das aktuelle Zielbild liegt **getrennt** unter `character-chronicles/vision/`: **Card Battler → Timeline → Social Network mit Chat → Storyline → VN-Content zuletzt**. Academy/Schuljahr ist dabei möglicher Worldbuilding-/Storykontext, **keine zusätzlich beschlossene Pflichtphase**. Die Orientierung ist POC-getrieben und nicht starr.
+- Die bestätigte **Character-Chronicles-Zielwelt** (Kobe ab 2032,
+  zwei erwachsene Academy-Jahre, globale Social-/Battler-Kultur und
+  VN als langfristiger erzählerischer Kern) steht unter
+  `character-chronicles/vision/world.md`. Die ungefähre
+  **Implementierungsorientierung** bleibt Card Battler → Timeline →
+  Social/Chat → Storyline → VN-Content zuletzt. Die Academy ist
+  keine zusätzlich beschlossene **technische** Pflichtphase. Die Orientierung ist POC-getrieben und nicht starr.
 - Aktuelle Implementierung/POC/Status/Datenbankbetrieb und lange historische Operator-/Refactor-/README-Protokolle haben **getrennte Dokumente und klare Zuständigkeiten**.
 - Der Stand von ComfyReview ist ausdrücklich **nicht fertig**. Codeunterstützung für Schema v18 ist kein Beleg für private Live-DB-Cutover-Abnahme. Der frühere, verworfene Chronicle-Code ist als historische Quelle dokumentiert, nicht als aktuelle Architektur.
 

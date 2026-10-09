@@ -25,6 +25,16 @@ ComfyReview — realer, laufend veränderter Code
 
 Das ist eine **Arbeitslogik**, keine Roadmap mit Releasegates. Ein POC darf sich als Sackgasse erweisen und sein Modell darf bei der nächsten Iteration ersetzt werden.
 
+**Anders als der technische Weg ist die Zielwelt nun bestätigt:**
+Kobe/Japan ab 2032, bodenständige Near Future, zwei Academy-Jahre
+für junge Erwachsene, eine global etablierte Social- und Battler-Kultur,
+der neu ankommende Protagonist und eigenständige Figuren mit
+Beziehungen und Biografien. Die **VN mit Dating-Sim-Elementen** ist
+langfristig der erzählerische Mittelpunkt. [Bestätigte Welt](character-chronicles/vision/world.md).
+Das Weltbild darf durch **ausdrückliche** Entscheidungen verfeinert
+werden; neue POC-Ergebnisse bedeuten nicht automatisch, dass
+Schauplatz, Academy oder kulturelle Grundsituation wieder offen sind.
+
 ## Gewonnene Reihenfolge aus den bisherigen Versuchen
 
 **Stand 2026-10-09 – bewusst ungefähr, keine starre Roadmap:**
@@ -40,15 +50,17 @@ nicht die Wiederherstellung des früheren Projekts.
 | **1. Card Battler – zuerst** | Den aktiven [Card-Battler-POC](pocs/card-battler.md) vom getesteten Bibliothekscode zu einem tatsächlich funktionierenden, spielerisch prüfbaren Kartenloop weiterentwickeln | Kein alter Sieben-Phasen-Plan, kein fertig spielbares PvE, keine unveränderliche 40-Karten-Regel |
 | **2. Timeline – anschließend** | Eine verständliche zeitliche/soziale Oberfläche und Interaktionen zunächst als begrenzten Slice erproben; Grundlage für die spätere Plattform | Noch kein beschlossenes Datenmodell, keine vollständige Social-Network-Runtime und keine feste Academy-Kalendermechanik |
 | **3. Social Network mit Chat-Interaktion** | Timeline/soziale Präsenz zu einer Plattform mit Charakter-Chats und weiteren Interaktionen ausbauen | Kein schon beschlossener LLM-, RAG-, Feed-, Relationship- oder Provider-Vertrag |
-| **4. Storyline** | Figuren, Ereignisse, Beziehungen und Progression in einen erzählerischen Zusammenhang stellen; **Academy/Schuljahr** ist dafür ein mögliches Worldbuilding-/Zeitgerüst | Keine obligatorische gesonderte „Academy-Phase“, keine zwei Jahre, 336 Tage oder alter Story-Reducer als bindende Vorgabe |
+| **4. Storyline** | Figuren, Beziehungen und Ereignisse über die **zwei bestätigten Academy-Jahre in Kobe** erzählerisch entwickeln | Keine separate verpflichtende Academy-Technikphase; genaue Kalendertage, Story-Reducer und alte Datenverträge sind nicht gesetzt |
 | **5. Visual-Novel-Content – zuletzt** | Die zuvor entwickelten Spiel-/Interaktions-/Storysysteme erst am Ende durch eigentliche szenische VN-Inhalte und konsistente visuelle Präsentation ergänzen | Keine vorgezogene große Sprite-/Szenenproduktionsphase. Kleine frühere Feasibility-POCs für Freistellung, Segmentierung/Matting und Szenenkomposition bleiben sinnvoll |
 
 **Timeline und Social Network sind fachlich eng verwandt, werden aber für die
 Entwicklungsorientierung als aufeinander aufbauende Schwerpunkte bezeichnet:**
 erst den Timeline-Slice erproben, danach die breitere Plattform samt Chat.
-Ebenso ist **Storyline** der spätere Entwicklungsbereich; Academy/Schuljahr
-beschreibt eine mögliche Welt und Zeitstruktur darin, keinen zusätzlichen
-zwingenden Milestone. Die eigentliche **VN-Content-Entwicklung ist zuletzt**.
+Ebenso ist **Storyline** der spätere Entwicklungsbereich; die **zwei
+Academy-Jahre sind bereits ein bestätigter Welt- und Zeitrahmen**, aber
+kein zusätzlicher zwingender Implementierungsmeilenstein.
+Die eigentliche **VN-Content-Entwicklung ist zuletzt**, ohne ihren
+langfristigen erzählerischen Stellenwert zu schmälern.
 
 Diese fünf Punkte sind eine **veränderbare Richtung**, kein festgelegter MVP,
 kein formaler Release-Gate-Plan und keine Übernahme früherer M4-/M6-/Schema-
