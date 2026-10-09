@@ -149,6 +149,13 @@ path toward Character Chronicles. This evolution uses POCs; **do not**
 turn imported concepts, old M6/schema claims or discarded architecture into
 binding rules merely because a historical document says “approved”.
 
+Historical `docs/character-chronicles/sources/` content must keep its
+original wording **and original relative links**. Do not retarget legacy
+Foundation/M4/M6 references to present-day `vision/` or `README.md` pages.
+Explain unavailable old targets in the source index or a separate provenance
+note instead; report historical missing links distinctly from broken current
+documentation navigation.
+
 The [documentation map](docs/README.md) assigns a single current owner
 for each category: general status, active POCs, refactor acceptance, open
 decisions, operations, working vision and historical evidence. Keep those
