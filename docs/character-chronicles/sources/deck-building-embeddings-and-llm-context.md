@@ -25,7 +25,7 @@ Pre-Review-Image-Embedding-Prüfung bleiben **CALIBRATE** beziehungsweise
 **DEFERRED**.
 
 Der getrennte Vertrag für bereits bewerteten Entwicklungsbestand steht in
-[`../README.md#fehlende-vorgängerquellen`](../README.md#fehlende-vorgängerquellen).
+[`historical-reference-bootstrap-and-evaluation.md`](historical-reference-bootstrap-and-evaluation.md).
 Ein vorhandenes Bild oder Review erzeugt allein keine Analysearbeit: VLM-,
 Text- und Image-Arbeit entsteht ausschließlich aus einem expliziten
 `image_analysis_enrollment`. Der 30-Sekunden-Sweep reconciliiert offene
