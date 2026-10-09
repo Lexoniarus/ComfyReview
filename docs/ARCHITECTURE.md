@@ -434,9 +434,9 @@ submission.
 ## 9. Schema lifecycle
 
 Runtime startup validates only the supported canonical schema; it never
-upgrades an unsupported database silently. Canonical v3 through v14
-changes are available only through `python -m comfyreview canonical-db
-upgrade --output PATH` and are backed up. The v3-to-v4 step migrates writable legacy review
+upgrades an unsupported database silently. Canonical schema upgrades
+through v18 are explicit, backed-up operations through
+`python -m comfyreview canonical-db upgrade --output PATH`. The v3-to-v4 step migrates writable legacy review
 state into events, projects delete tombstones and replaces old tables with
 read-only views; v5 adds the prompt catalog and v6 stores native output role
 and content-hash provenance. Schema v7 adds normalized revision atom usages;
@@ -586,10 +586,13 @@ The canonical cutover is intentionally not the end of the wider refactor.
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or
   wrap-around listeners; each card retains its independent evidence carousel.
-- Live canonical data completion is validated. ImageContext and scope queries
-  can now use exact composition memberships for 363 generations; the sixteen
-  unresolved cases remain explicit diagnostics rather than guessed relations.
-  Application ImageContext will remain free of HTTP URLs; a response mapper
+- Canonical ImageContext and scope queries use exact composition memberships
+  where proven; incomplete or ambiguous historical attribution remains
+  explicit diagnostics rather than guessed relations. The earlier
+  **363-linked / 16-unresolved** inventory is a dated
+  [archived operator observation](archive/canonical-data-operator-evidence-2026-10-01-to-07.md),
+  **not** a current database count or runtime invariant.
+  Application ImageContext remains free of HTTP URLs; a response mapper
   combines it with `OutputFileUrlMapper` at the presentation boundary.
 
 Existing projection workers are not migration targets by default. Each derived
@@ -597,11 +600,13 @@ dataset is first evaluated for replacement by a direct query or canonical SQL
 view. A new idempotent worker is introduced only for a projection whose
 materialization is demonstrably necessary.
 
-The completed audit is recorded in `docs/PROJECTION_AUDIT.md`. It found no
-current projection requiring replacement materialization: canonical repository
-queries are the chosen cutover for rankings, prompt statistics, observed
-composition statistics, recommendations and best-image lookup. The legacy
-worker/jobs/cursors and their runtime have been removed.
+The earlier completed audit is archived as
+[Projection Audit](archive/projection-audit.md). It found no projection
+requiring replacement materialization **for its historical scope**. Current
+architecture uses canonical repository queries for rankings, prompt statistics,
+observed composition statistics, recommendations and best-image lookup;
+the removed legacy worker/jobs/cursors are not a current runtime dependency.
+Any new projection must still be evaluated against current code and data.
 
 Legacy sources may be read by explicit migration tools. They must not become a
 second writable truth for an already cut-over feature.
@@ -652,7 +657,7 @@ Catalog revisions include weights because each revision is the exact standard
 recipe that was valid at that point in catalog history. The active standard is
 selected by the newest append-only promotion rather than revision number.
 
-`PromptVariantGuidanceService` parallels render guidance while keeping three
+`PromptVariantGuidanceService` parallels render guidance while keeping four
 independent results for every loaded prompt component:
 
 1. the stable observed variant is the revision selected by the newest promotion
