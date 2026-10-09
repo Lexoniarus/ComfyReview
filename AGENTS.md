@@ -165,6 +165,10 @@ Foundation/M4/M6 references to present-day `vision/` or `README.md` pages.
 Explain unavailable old targets in the source index or a separate provenance
 note instead; report historical missing links distinctly from broken current
 documentation navigation.
+Run `python scripts/check_documentation.py` and
+`python -m pytest tests/test_documentation_links.py` after editing current
+navigation or historical source boundaries. These tests deliberately skip
+**old source bodies**, not their current explanatory headers.
 
 The [documentation map](docs/README.md) assigns a single current owner
 for each category: general status, active POCs, refactor acceptance, open
