@@ -111,7 +111,7 @@ Differenzen neue KI-Arbeit ableiten. `approve` verlangt bestandene Capability-
 Reports, `start` verlangt Guardian-Enforce für `TextEmbedding`,
 `ImageObservation` und `ImageEmbedding`. Generation bleibt unberührt und ein
 Bestandslauf erzeugt keine ComfyUI-Aufträge. Details stehen im
-[`Bestandsreferenzvertrag`](../README.md#fehlende-vorgängerquellen).
+[`Bestandsreferenzvertrag`](historical-reference-bootstrap-and-evaluation.md).
 
 ## Keine konkurrierende Autorität
 
