@@ -156,6 +156,8 @@ documents **for the current code**:
   implementation claims, with exact commit/CI evidence
 - `docs/ACTIVE_WORK.md` and `docs/pocs/` for in-progress experiments
 - `docs/OPEN_DECISIONS.md` for genuinely unresolved decisions
+- `docs/CONFIRMED_CONSTRAINTS.md` for confirmed scoped project constraints,
+  clearly separated from preferences and technical candidates
 
 The code baseline **before** the 2026-10-09 documentation import is
 `a5f4131`; `76d71f9` only added/moved documentation. Do not mistake
@@ -164,6 +166,13 @@ the imported Chronicle concepts for code in that baseline.
 [Decision Policy](docs/DECISION_POLICY.md) define how old concepts are
 reviewed: a past, discarded Chronicle implementation or an old Card Battler
 plan may provide useful ideas, but does **not** fix the new architecture.
+
+The shared monthly budget for **all billable external AI API calls** in this
+ComfyReview-to-Character-Chronicles project is **below EUR 10**, including
+paid development experiments, tests and later application requests.
+Read [confirmed scoped constraints](docs/CONFIRMED_CONSTRAINTS.md) before
+adding billable AI interactions; the proposed ~EUR 8 app cutoff is **not**
+a verified existing control or a finalized technical design.
 
 The Card Battler is **active POC work** in ComfyReview; isolated deterministic
 tests do not prove an integrated playable game. The Generator was recently
