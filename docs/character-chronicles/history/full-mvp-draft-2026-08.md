@@ -1,6 +1,6 @@
 # ComfyReview – vollständiger MVP-Zielentwurf: Chronicle, Chat und Prompt Recovery
 
-**Dokumentklasse:** `HISTORICAL_SOURCE` – älterer Gesamtentwurf, kein aktueller MVP-Vertrag.
+**Dokumentklasse:** `HISTORICAL_EVIDENCE` · **Rolle:** historischer Gesamtentwurf, kein aktueller MVP-Vertrag.
 
 > **Historische Konzeptquelle (neu eingeordnet 2026-10-09):** Dieses August-2026-Langdokument enthält Ideen und technische Annahmen aus früheren ComfyReview-/Chronicle-Überlegungen, einschließlich einer **inzwischen verworfenen Character-Chronicles-Entwicklungsrichtung**. **ComfyReview wird aktuell weiterentwickelt und soll langfristig zu Character Chronicles werden**, aber nicht durch verpflichtende Übernahme dieses alten MVP-Plans. Der damalige „autoritative“ Wortlaut ist historische Quelle, **kein** bestätigter heutiger Ablauf, keine bindende Schema-/UI-/Workerarchitektur und kein implementierter aktueller Produktstand. [Projektentwicklung](../../PROJECT_EVOLUTION.md) · [Ideensammlung](../README.md) · [Entscheidungsregeln](../../DECISION_POLICY.md).
 
