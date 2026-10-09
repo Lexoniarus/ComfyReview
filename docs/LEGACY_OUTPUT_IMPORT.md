@@ -1,8 +1,15 @@
 # Legacy Output Import
 
-**Dokumentklasse:** `CURRENT_OPERATIONS` – alter Datenimport über explizite, prüfbare Offline-Kommandos.
+**Dokumentklasse:** `CURRENT_OPERATIONS` · **Teilbereich:** explizite Offline-Importe historischer PNG-/JSON-Sidecar-Daten. **Kein** verpflichtender Sidecar-Vertrag für neue native Generierungen.
 
 Status: Slice 3A audit and Slice 3B explicit import implemented.
+
+**Zuständigkeit:** Dieses Dokument beschreibt **nur** den aktuellen
+Legacy-Output-Audit-/Importpfad für historische Quelldaten. Die führende
+Betriebsübersicht mit Migrations- und Sicherheitsregeln steht in
+[OPERATIONS.md](OPERATIONS.md); die native Generierung ist im
+[Code-Ist-Audit](IMPLEMENTATION_AUDIT.md) beschrieben. Der Importpfad ist
+kein Beleg für eine neue Custom-Node- oder Sidecar-Pflicht.
 
 ## Purpose
 
