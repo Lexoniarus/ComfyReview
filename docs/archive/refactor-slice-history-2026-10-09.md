@@ -1,6 +1,6 @@
 # Historisches Refactor-Umsetzungsprotokoll
 
-**Dokumentklasse:** `HISTORICAL_IMPLEMENTATION_LOG` · **Archiviert:** 2026-10-09.  
+**Dokumentklasse:** `HISTORICAL_LOG` · **Rolle:** historischer Implementierungs-/Slice-Verlauf · **Archiviert:** 2026-10-09.  
 **Wichtig:** Der folgende frühere `docs/REFACTOR_PLAN.md`-Inhalt enthält zahlreiche technische Umsetzungsslices, damalige Datensatz-Zahlen, lokale Abnahmemeldungen, „abgeschlossen“- und „live“-Formulierungen. Sie gelten **nur für den jeweils angegebenen damaligen Entwicklungs-/Betriebsstand**. Dieser Text ist **kein** neuer Milestone-Plan für Character Chronicles und **kein** aktueller Ersatz für operative DB-Abnahme.
 
 **Aktuell maßgeblich:** [Refactor-Grenzen und Abnahme](../REFACTOR_PLAN.md), [ComfyReview-Projektstatus](../project_status.md), [laufende Arbeit](../ACTIVE_WORK.md), [Codebelege](../IMPLEMENTATION_AUDIT.md). Alte Card-Battler-Phasen bleiben [historische Planung](card-battler-target-2026-10-02.md).
