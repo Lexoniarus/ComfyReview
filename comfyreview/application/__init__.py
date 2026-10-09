@@ -342,6 +342,13 @@ from comfyreview.application.lifecycle import (
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
+from comfyreview.application.local_model_inference import (
+    LocalInferenceProvider,
+    LocalInferenceRequest,
+    LocalInferenceResult,
+    LocalInferenceUsage,
+    LocalModelInferenceError,
+)
 from comfyreview.application.local_model_runtime import (
     LocalModelLease,
     LocalModelRuntime,
@@ -809,9 +816,14 @@ __all__ = [
     "LegacySchemaIssue",
     "LegacySchemaReport",
     "LegacySchemaValidationError",
+    "LocalInferenceProvider",
+    "LocalInferenceRequest",
+    "LocalInferenceResult",
+    "LocalInferenceUsage",
     "LocalModelConnectionError",
     "LocalModelDescriptor",
     "LocalModelError",
+    "LocalModelInferenceError",
     "LocalModelInstance",
     "LocalModelLease",
     "LocalModelLifecycleError",
