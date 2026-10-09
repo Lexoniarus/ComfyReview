@@ -110,7 +110,7 @@ freigegebener Ort darf zum `location_hub` werden; die erste `vn_scene` benötigt
 zusätzlich ihr vollständiges Scene Presentation Manifest.
 
 Das freigegebene M4-Konzeptpaket liegt unter
-dem [M4-Konzeptpaket](../README.md#fehlende-vorgängerquellen). Es konkretisiert diese Architektur für
+dem [M4-Konzeptpaket](../acceptance/m4/README.md). Es konkretisiert diese Architektur für
 4K, 1280×720, Mobile und geringe Landscape-Höhe. Variante A „Context Rail“ ist
 produktiv; Variante B bleibt historische Alternative. Konzeptrevision v2
 verwendet die helle Anime-VN-/JRPG-Art-Direction und lokal gebündelte
@@ -360,7 +360,7 @@ nur eine serverseitige Instanz und eine Trial-Runtime besitzen.
 ## Zielabläufe der vorgelagerten Bildspiele
 
 Der produktseitige Modusvertrag steht vollständig in
-[`game-modes-and-guided-evidence.md`](game-modes-and-guided-evidence.md).
+[`game-modes-and-guided-evidence.md`](game-modes-and-guided-evidence.md#spielmodi).
 Für das Frontend gilt als harte Grenze: Disposition und Reasons eines Bildes
 verwenden denselben Fokus und denselben Bildknoten. Relative Stufen sind davon
 getrennt: Das Viererset ist nur beim Sortieren, das Arenapaar nur bei der
