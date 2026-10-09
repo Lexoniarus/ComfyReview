@@ -75,8 +75,15 @@ extend an existing violation merely because it already exists.
   is not equivalent to a failed generation.
 - Generated image identity and generation metadata must remain reproducible
   even if output files are moved later.
-- The repository-specific ComfyUI metadata export node remains a technical
-  integration boundary; its payload must be mapped into canonical domain data.
+- Native ComfyUI generation uses the provider API for prompt status/history
+  and output descriptors. The existing output collection and persistence
+  boundaries normalize generation metadata and provenance. New canonical
+  generations must not depend on a repository-specific metadata export custom
+  node or an accompanying JSON sidecar.
+- Historical custom-node JSON sidecars are legacy import evidence only, handled
+  by explicit audited `legacy-output` import adapters. Preserve available raw
+  metadata as provenance, but do not reintroduce sidecars or custom-node export
+  as requirements for the native generation runtime.
 
 ## Tests and quality
 
