@@ -57,4 +57,16 @@ Diese Texte bewahren **inhaltliche Ideen**. Die aktuelle Priorität bleibt trotz
 
 Jede Quelldatei erhält eine standardisierte Einordnung, danach folgt **der übernommene Originaltext**, dessen alte Autoren- und Verbindlichkeitsaussagen ausschließlich **historisch** gelten. Wenn eine Idee aktuell übernommen werden soll, wird sie nach Prüfung in das [Arbeits-Zielbild](../vision/README.md), in einen [POC](../../pocs/README.md) oder eine [klar begrenzte Entscheidung](../../DECISION_POLICY.md) übertragen – **nicht** durch stilles Umetikettieren eines alten Vertragstextes.
 
+**Originalverweise bleiben Originalverweise:** Die 24 Quellen stammen aus einer
+früheren Dokumentstruktur (unter anderem `docs/mvp/product/`). Ihre alten
+relativen Links auf Foundation-, M4-/M6- und Bestandsreferenztexte bleiben
+**wortgetreu erhalten**, auch wenn die damaligen Ziele **im heutigen
+ComfyReview-Repository fehlen**. Sie sind über das frühere
+`CharacterChronicle.zip` und den oben verlinkten historischen Code-Audit
+nachvollziehbar. Ein Link auf eine heute fehlende historische Quelle ist
+**keine Aufforderung**, stattdessen auf die aktuelle `vision/` oder
+`README.md` umzuleiten. Solche historischen Linkziele werden beim Prüfen
+**getrennt** von der aktiven Navigation ausgewiesen. Auch historische
+Kapitelanker werden nicht stillschweigend umgeschrieben.
+
 [Historischer August-Entwurf](../history/full-mvp-draft-2026-08.md) bleibt separat; [älterer Card-Battler-Plan](../../archive/card-battler-target-2026-10-02.md) ebenfalls.
