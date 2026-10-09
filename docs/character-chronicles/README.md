@@ -1,6 +1,6 @@
 # Character Chronicles – Übersicht
 
-**Dokumentklasse:** `WORKING_VISION_INDEX` · **Stand:** 2026-10-09  
+**Dokumentklasse:** `WORKING_VISION` · **Rolle:** Zielbild-Index · **Stand:** 2026-10-09  
 **Verhältnis:** ComfyReview ist die **laufende technische Basis**; Character Chronicles ist die **langfristige Produktrichtung**. Das ist kein zweites heute fertig implementiertes Produkt und keine automatische Wiederaufnahme der verworfenen Chronicle-Codearchitektur.
 
 ## 1. Aktuelles fachliches Zielbild
