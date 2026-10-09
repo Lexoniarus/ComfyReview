@@ -1,7 +1,7 @@
 # ComfyReview-Refactor: Code und offene Abnahmen
 
-**Dokumentklasse:** `CURRENT_REFACTOR_STATUS` · **Referenz-Code:** [`a5f4131`](https://github.com/Lexoniarus/ComfyReview/commit/a5f4131bb76c1ff655892d287d19fcd401917d32) (2026-10-08).  
-**Kein allgemeiner Entwicklungs- oder Character-Chronicles-Milestoneplan.** Die detaillierte Chronik ist im [archivierten Refactor-Slice-Verlauf](archive/refactor-slice-history-2026-10-09.md) vollständig erhalten.
+**Dokumentklasse:** `CURRENT_STATUS` · **Teilbereich:** aktueller Refactor-/Abnahmestand · **Referenz-Code:** [`a5f4131`](https://github.com/Lexoniarus/ComfyReview/commit/a5f4131bb76c1ff655892d287d19fcd401917d32) (2026-10-08).  
+**Der Dateiname `REFACTOR_PLAN.md` bleibt für vorhandene Verweise erhalten, ist aber kein aktiver Milestone-Plan.** Dieses Dokument ist die **führende aktuelle Übersicht nur für Refactor-Grenzen und noch offene Abnahmen**. Den allgemeinen Ist-Status führt [project_status.md](project_status.md), laufende POCs führt [ACTIVE_WORK.md](ACTIVE_WORK.md). Die **historische Chronik** liegt ausschließlich im [archivierten Refactor-Slice-Verlauf](archive/refactor-slice-history-2026-10-09.md).
 
 ## Technischer Ist-Stand
 
