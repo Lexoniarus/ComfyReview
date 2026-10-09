@@ -27,29 +27,47 @@ keine Voraussetzung.
 1. **Ein Quellbild wählen.** Pro Durchlauf wird **genau ein** bereits
    vorhandenes Bild aus ComfyReview als Ausgangspunkt gewählt. Es werden nicht
    automatisch alle Bilder zu Karten verarbeitet.
-2. **Karteninhalt entwerfen.** Für dieses eine Motiv werden stimmige
-   Karteninformationen erstellt: insbesondere **Stats, Fähigkeiten/Mechaniken
-   und lesbarer Kartentext**. Text, Werte und Motiv sollen inhaltlich
-   zusammenpassen; die technische Methode der Erstellung ist noch offen.
-3. **Vier passende Bildalternativen erzeugen.** Das ausgewählte Quellbild
+2. **Stufe 1 – Bildinhalt verstehen.** Zunächst werden beobachtbare Motive,
+   Merkmale und visuelle Zusammenhänge des Quellbilds in einem
+   **spielmechanikfreien semantischen Bildprofil** erfasst. Sichtbare Fakten,
+   Interpretationen und Unsicherheiten müssen unterscheidbar bleiben:
+   Bildverständnis vergibt **noch keine** Kartenwerte oder Fähigkeiten.
+3. **Stufe 2 – regelkonforme Karte ableiten.** Erst das semantische Profil
+   wird anhand des versionierten Card-Battler-Regelwerks in ein
+   `CardImprint` und passende **Stats, zulässige Mechaniken und lesbaren
+   Kartentext** überführt. Text, Werte und Motiv sollen inhaltlich
+   zusammenpassen, ohne dass eine freie KI-Antwort neue Regeln erfindet.
+4. **Vier passende Bildalternativen erzeugen.** Das ausgewählte Quellbild
    dient als visuelle Grundlage für **vier** neue Kandidaten, die zum
    Karteninhalt passen. Das sind **vier Bildoptionen für dieselbe Karte**,
    nicht vier automatisch fertiggestellte Karten.
-4. **Eine Bildoption auswählen.** Der Spieler wählt **eine der vier**
+5. **Eine Bildoption auswählen.** Der Spieler wählt **eine der vier**
    Varianten. Diese wird gemeinsam mit dem Karteninhalt zur konkreten Karte
    zusammengesetzt und angezeigt.
-5. **Karte übernehmen.** Die bestätigte Karte soll in einer einfachen
+6. **Karte übernehmen.** Die bestätigte Karte soll in einer einfachen
    Sammlung wiedergefunden und später als Ausgangspunkt einer Entwicklung
    genutzt werden können.
-6. **Karte weiterentwickeln.** Von der bestehenden Karte aus wird der
+7. **Karte weiterentwickeln.** Von der bestehenden Karte aus wird der
    inhaltliche Entwicklungsstand (z. B. Stats, Mechaniken und Text) fortgeführt;
    anschließend folgt erneut ein Durchlauf mit **vier passenden
    Bildalternativen** und **einer bewussten Auswahl**. Ob und wie ältere
    Stände erhalten bleiben, ist noch zu erproben.
-7. **Schrittweise ein erstes Deck aufbauen.** Der anfängliche
+8. **Schrittweise ein erstes Deck aufbauen.** Der anfängliche
    **Versuchsumfang beträgt 40 einzeln erzeugte Karten für ein Testdeck**.
    Das ist ein konkretes Arbeitsziel für den POC, **keine dauerhaft
    beschlossene Deckgrößen- oder Spielregel**.
+
+Die **fachliche Trennung der Stufen 1 und 2** ist Teil des aktuellen
+POC-Ziels: erst beschreiben, was das Bild zeigt, dann daraus eine Karte
+**innerhalb des Regelwerks** erzeugen. Im Code gibt es dafür bereits den
+typisierten [`SemanticImageProfile` und den deterministischen
+`CardImprintMapper`](../../comfyreview/application/card_battler_mapping.py)
+sowie die getrennte
+[Regel-/Wertematerialisierung](../../comfyreview/application/card_battler_common.py).
+**Nicht** als fertiger End-to-End-Ablauf nachgewiesen ist dagegen die
+automatische Erstellung des semantischen Profils aus einem realen Bild samt
+Spielerfreigabe und vollständiger Kartenübernahme. Bildanalysemodell,
+Provider, Prüf-UI und Persistenzvertrag bleiben offen.
 
 Dieser Ablauf beschreibt das gewünschte **Spielerlebnis des ersten Versuchs**.
 Er schreibt weder das Datenbankschema noch einen bestimmten LLM-Provider,
