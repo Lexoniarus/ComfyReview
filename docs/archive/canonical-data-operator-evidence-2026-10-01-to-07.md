@@ -6,8 +6,9 @@ aktuellen Laufzeit-Invarianten oder Freigabe für Datenbankaktionen.
 
 Die folgenden Passagen stammen aus der früheren Fassung von
 [`docs/DATA_ARCHITECTURE.md`](../DATA_ARCHITECTURE.md) und
-[`docs/ARCHITECTURE.md`](../ARCHITECTURE.md), dokumentiert vor der
-Bereinigung von PR #8 am 9. Oktober 2026 (vor Commit `98d8bcf`).
+[`docs/ARCHITECTURE.md`](../ARCHITECTURE.md), im Dokumentationsstand von PR #8 bei Commit `98d8bcf` enthalten
+und in den anschließenden Korrekturen am 9. Oktober 2026 aus den
+aktiven Architekturtexten ins Archiv übertragen.
 Die Absätze werden hier als historische Angaben **unverändert**
 bewahrt. Sie belegen allein die damaligen Aussagen und beziehen sich
 auf frühere lokale Datenbanken, die im Repository nicht mitgeliefert werden.
