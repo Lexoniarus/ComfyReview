@@ -23,7 +23,7 @@ Stand: 1. September 2026
 Dieses Dokument beschreibt den erreichten bildzentrierten Ausgangspunkt und die
 laufende Foundation-Arbeit. Die Chronicle-Erweiterung ist der zweite Abschnitt
 desselben vollständigen MVP. `post-mvp` ist nur noch der stabile historische
-Pfadname; die verbindlichen Begriffe stehen im [Ordnerindex](../vision/README.md).
+Pfadname; die verbindlichen Begriffe stehen im [Ordnerindex](../README.md#verbindliche-terminologie).
 
 ## Beobachteter Bestand
 
@@ -52,7 +52,7 @@ verständliche Advanced-Einordnung. Die genannten Bestandsrouten dürfen nicht a
 aktuelle Modi oder Zielseiten gelesen werden.
 
 Die genaue Implementierungs- und Abnahmelage bleibt in
-den [Foundation-Verträgen](../README.md#fehlende-vorgängerquellen) autoritativ. Die dort dokumentierten
+den [Foundation-Verträgen](../foundation/README.md) autoritativ. Die dort dokumentierten
 Testergebnisse sind ein Snapshot und keine automatische Freigabe nach späteren
 Änderungen.
 
