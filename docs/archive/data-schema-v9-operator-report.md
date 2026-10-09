@@ -1,6 +1,6 @@
 # Frühere Schema-v9-Liveprüfung – historischer Operatorbericht
 
-**Dokumentklasse:** `HISTORICAL_OPERATOR_LOG` · **keine aktuelle Datenbankinventur.**
+**Dokumentklasse:** `HISTORICAL_LOG` · **Rolle:** früherer Operatorbericht, **keine aktuelle Datenbankinventur.**
 
 Die folgende Passage stammt aus einer älteren Fassung der ComfyReview-Datenarchitektur. Sie berichtet über Datensätze und Backups zu früheren Schema-v4-bis-v9-Migrationen und lokale Rehearsals. **Die aktuell im Code unterstützte Version v18** und der gegenwärtige private Cutover müssen gesondert überprüft werden. Die historischen Datenbanken und Backup-Dateien sind nicht Teil des Repositories.
 
