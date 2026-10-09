@@ -30,9 +30,9 @@ from comfyreview.providers import (
 
 class _Transport:
     def __init__(self) -> None:
-        self.responses: dict[
-            tuple[str, str], list[LmStudioJsonResponse]
-        ] = defaultdict(list)
+        self.responses: dict[tuple[str, str], list[LmStudioJsonResponse]] = (
+            defaultdict(list)
+        )
         self.calls: list[tuple[str, str, object | None, float]] = []
 
     def add(
