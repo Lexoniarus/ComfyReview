@@ -126,3 +126,79 @@ def test_archived_original_body_links_are_not_current(tmp_path: Path) -> None:
         "[Old source](../../previous-system/does-not-exist.md)\n",
     )
     assert find_documentation_issues(tmp_path) == []
+
+
+def test_same_page_heading_links_are_checked(tmp_path: Path) -> None:
+    """Local fragments must resolve against the current Markdown file."""
+    _minimal_repo(tmp_path)
+    _write(
+        tmp_path,
+        "docs/README.md",
+        "# Beispielüberschrift\n\n[Correct](#beispielüberschrift)\n",
+    )
+    assert find_documentation_issues(tmp_path) == []
+
+    _write(
+        tmp_path,
+        "docs/README.md",
+        "# Beispielüberschrift\n\n[Wrong](#nicht-vorhanden)\n",
+    )
+    assert any(
+        "missing heading: #nicht-vorhanden" in issue
+        for issue in find_documentation_issues(tmp_path)
+    )
+
+
+def test_historical_august_mvp_original_links_are_ignored(
+    tmp_path: Path,
+) -> None:
+    """Only the current preface of the old August MVP is active navigation."""
+    _minimal_repo(tmp_path)
+    _write(
+        tmp_path,
+        "docs/character-chronicles/history/full-mvp-draft-2026-08.md",
+        "# Earlier MVP\n\n"
+        "**Dokumentklasse:** `HISTORICAL_EVIDENCE`\n\n"
+        "[Current navigation](../../README.md)\n\n"
+        "Status: Konzeptentwurf\n"
+        "[Old missing target](../../historic/missing.md)\n",
+    )
+    assert find_documentation_issues(tmp_path) == []
+
+
+def test_historical_august_mvp_current_preface_links_are_checked(
+    tmp_path: Path,
+) -> None:
+    """The exclusion must not conceal broken links in the modern preface."""
+    _minimal_repo(tmp_path)
+    _write(
+        tmp_path,
+        "docs/character-chronicles/history/full-mvp-draft-2026-08.md",
+        "# Earlier MVP\n\n"
+        "**Dokumentklasse:** `HISTORICAL_EVIDENCE`\n\n"
+        "[Broken current link](../../missing-current.md)\n\n"
+        "Status: Konzeptentwurf\n"
+        "[Old missing target](../../historic/missing.md)\n",
+    )
+    assert any(
+        "missing link target: ../../missing-current.md" in issue
+        for issue in find_documentation_issues(tmp_path)
+    )
+
+
+def test_historical_august_mvp_original_boundary_must_exist(
+    tmp_path: Path,
+) -> None:
+    """Fail explicitly if the known historical body boundary is lost."""
+    _minimal_repo(tmp_path)
+    _write(
+        tmp_path,
+        "docs/character-chronicles/history/full-mvp-draft-2026-08.md",
+        "# Earlier MVP\n\n"
+        "**Dokumentklasse:** `HISTORICAL_EVIDENCE`\n\n"
+        "[Old link](../../historic/missing.md)\n",
+    )
+    assert any(
+        "missing historical MVP preface or original boundary" in issue
+        for issue in find_documentation_issues(tmp_path)
+    )
