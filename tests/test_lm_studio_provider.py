@@ -7,7 +7,7 @@ import json
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from http.client import HTTPMessage
+from email.message import Message
 
 import pytest
 
@@ -410,16 +410,14 @@ def test_urllib_transport_returns_http_error_status(
         "http://localhost/api/v1/models/load",
         404,
         "not found",
-        HTTPMessage(),
+        Message(),
         io.BytesIO(b'{"error": "missing model"}'),
     )
 
-    def fake_urlopen(
-        request: urllib.request.Request, timeout: float
-    ) -> _Response:
-        raise error
-
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda request, timeout: (_ for _ in ()).throw(error),
+    )
     transport = UrlLibLmStudioJsonTransport("http://localhost:1234")
 
     assert transport.request(
@@ -438,7 +436,10 @@ def test_urllib_transport_accepts_empty_json_body(
         lambda request, timeout: _Response(b""),
     )
 
-    response = UrlLibLmStudioJsonTransport("http://localhost:1234").request(
-        "GET", "/api/v1/models", timeout_seconds=1
+    transport = UrlLibLmStudioJsonTransport("http://localhost:1234")
+    response = transport.request(
+        "GET",
+        "/api/v1/models",
+        timeout_seconds=1,
     )
     assert response == LmStudioJsonResponse(200, {})
