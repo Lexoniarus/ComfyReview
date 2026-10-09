@@ -627,11 +627,14 @@ Content levels are a non-empty, canonically ordered selection from five
 available levels. `standard` is the default, but may be disabled. Visibility
 uses exact membership of the effective image level (stored generation level
 or explicit image override), not an implicit cumulative range.
-`PromptContentLevelPolicy` maps exactly one canonical
-`content_level_*` metadata marker to the typed `ContentLevel` on every catalog
-component. `nsfw_level_*` and the older authored aliases remain import
-fallbacks only; a canonical marker always wins. Descriptive tags no longer
-carry content-policy meaning. New generation snapshots derive their level from
+`PromptContentLevelPolicy` writes exactly one canonical `content_level_*`
+marker for new or edited catalog metadata. Reads prefer a canonical marker,
+fall back to recognized historical `nsfw_level_*` or authored aliases, and
+default to `standard` when none is present. Conflicting canonical markers
+(or conflicting legacy levels without a canonical marker) are rejected.
+Historical catalog rows may lack a canonical marker until edited; generic
+descriptive tags do not override an explicit canonical classification.
+New generation snapshots derive their level from
 typed component levels and LoRA snapshots, while all historical image readers
 use only the stored generation level or a manual image override.
 The Generator owns direct sampler and LoRA choices plus semantic format and

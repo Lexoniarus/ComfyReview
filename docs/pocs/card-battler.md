@@ -41,17 +41,21 @@ keine Voraussetzung.
    dient als visuelle Grundlage für **vier** neue Kandidaten, die zum
    Karteninhalt passen. Das sind **vier Bildoptionen für dieselbe Karte**,
    nicht vier automatisch fertiggestellte Karten.
-5. **Eine Bildoption auswählen.** Der Spieler wählt **eine der vier**
-   Varianten. Diese wird gemeinsam mit dem Karteninhalt zur konkreten Karte
-   zusammengesetzt und angezeigt.
+5. **Eine Bildoption auswählen oder alle verwerfen.** Der Spieler kann
+   **eine der vier** Varianten auswählen oder **alle vier ablehnen**.
+   In diesem Fall kann er vier neue Kandidaten erzeugen lassen, ohne eine
+   Karte zu bestätigen. Erst die bewusst gewählte Variante wird gemeinsam
+   mit dem Karteninhalt zur konkreten Karte zusammengesetzt und angezeigt.
 6. **Karte übernehmen.** Die bestätigte Karte soll in einer einfachen
    Sammlung wiedergefunden und später als Ausgangspunkt einer Entwicklung
    genutzt werden können.
 7. **Karte weiterentwickeln.** Von der bestehenden Karte aus wird der
    inhaltliche Entwicklungsstand (z. B. Stats, Mechaniken und Text) fortgeführt;
    anschließend folgt erneut ein Durchlauf mit **vier passenden
-   Bildalternativen** und **einer bewussten Auswahl**. Ob und wie ältere
-   Stände erhalten bleiben, ist noch zu erproben.
+   Bildalternativen** und **einer bewussten Auswahl**. Werden alle Varianten
+   verworfen, bleibt die zuvor bestätigte Karte unverändert; ein neuer
+   Vierer-Durchlauf ist möglich. Ob und wie ältere *bestätigte* Stände
+   erhalten bleiben, ist noch zu erproben.
 8. **Schrittweise ein erstes Deck aufbauen.** Der anfängliche
    **Versuchsumfang beträgt 40 einzeln erzeugte Karten für ein Testdeck**.
    Das ist ein konkretes Arbeitsziel für den POC, **keine dauerhaft
@@ -98,7 +102,8 @@ hierdurch vorab festgelegt.
 
 Der POC benötigt einen nachvollziehbaren Weg, **ein Quellbild auszuwählen**,
 den **Kartenentwurf mit Stats und Text zu prüfen**, **vier Bilder zu
-vergleichen**, **eines zu übernehmen** und die **Karte in einer kleinen
+vergleichen**, **eines zu übernehmen oder alle abzulehnen und vier neue
+Varianten anzufordern**, sowie die **bestätigte Karte in einer kleinen
 Sammlung erneut aufzurufen und weiterzuentwickeln**.
 
 Dafür waren **eine oder zwei schlanke Frontend-Seiten** als erste Lösung
@@ -125,16 +130,18 @@ und keine dauerhaft unveränderlichen Spielregeln:
    entstehen vier unterscheidbare, zum Quellmotiv und Karteninhalt
    passende Bildkandidaten. Fehlschläge oder unpassende Ergebnisse
    werden sichtbar; sie zählen nicht als erfolgreich erstellte Karte.
-4. **Eine bestätigte Karte:** Der Spieler wählt bewusst genau
-   einen Kandidaten. Bild, Kartenwerte, Text und Herkunft werden
-   zusammen angezeigt und sind nach einem App-Neustart in der
-   Sammlung wieder auffindbar; vier Vorschläge erzeugen **nicht**
-   automatisch vier Karten.
+4. **Auswahl ohne Zwang:** Der Spieler kann genau einen Kandidaten
+   bestätigen oder den gesamten Vierer-Durchlauf verwerfen und vier
+   neue Varianten anfordern. Eine Ablehnung erzeugt **keine bestätigte
+   Karte**; vier Vorschläge erzeugen ebenfalls nicht automatisch vier
+   Karten. Nach Bestätigung werden Bild, Kartenwerte, Text und Herkunft
+   zusammen angezeigt und sind nach einem App-Neustart auffindbar.
 5. **Entwicklung statt Duplikat:** Von dieser Karte aus kann erneut
    entwickelt und zwischen vier neuen Alternativen gewählt werden.
    Die Weiterentwicklung bleibt nachvollziehbar derselben Kartenidentität
-   zugeordnet; wie ältere Versionen dauerhaft dargestellt und
-   gespeichert werden, muss im POC erprobt werden.
+   zugeordnet. Werden alle Varianten abgelehnt, bleibt der vorherige
+   bestätigte Kartenzustand erhalten; wie ältere bestätigte Versionen
+   dargestellt und gespeichert werden, muss im POC erprobt werden.
 6. **Versuchsumfang und Evidenz:** Die angestrebten 40 einzeln
    bestätigten Karten bilden ein **Testdeck-Ziel**, keine globale
    Deckgrößenregel. UI-Ablauf, Persistenz und relevante Fehlerfälle
