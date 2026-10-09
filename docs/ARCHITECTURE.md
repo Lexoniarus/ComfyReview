@@ -436,8 +436,9 @@ submission.
 Runtime startup validates only the supported canonical schema; it never
 upgrades an unsupported database silently. Canonical schema upgrades
 through v18 are explicit, backed-up operations through
-`python -m comfyreview canonical-db upgrade --output PATH`. The v3-to-v4 step migrates writable legacy review
-state into events, projects delete tombstones and replaces old tables with
+`python -m comfyreview canonical-db upgrade --output PATH`.
+
+The v3-to-v4 step migrates writable legacy review state into events, projects delete tombstones and replaces old tables with
 read-only views; v5 adds the prompt catalog and v6 stores native output role
 and content-hash provenance. Schema v7 adds normalized revision atom usages;
 the v6-to-v7 upgrade parses only the supported grammar and validates the
