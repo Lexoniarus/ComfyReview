@@ -1,5 +1,7 @@
 # ComfyReview – Repository Engineering Rules
 
+**Dokumentklasse:** `ENGINEERING_RULES` – für geänderten ComfyReview-Code, keine feste Character-Chronicles-Architektur.
+
 Status: binding engineering baseline as of 2026-09-28.
 
 These rules apply to all new and changed code immediately. Existing code that
@@ -130,18 +132,41 @@ extend an existing violation merely because it already exists.
 
 ## Documentation
 
-When behavior or architecture changes, update the relevant documents in the
-same change:
+ComfyReview is the **current, actively developed codebase** on a long-term
+path toward Character Chronicles. This evolution uses POCs; **do not**
+turn imported concepts, old M6/schema claims or discarded architecture into
+binding rules merely because a historical document says “approved”.
 
-- `README.md` for user-facing setup or behavior
-- `docs/ARCHITECTURE.md` for boundaries and runtime topology
-- `docs/CODING_STANDARDS.md` for engineering rules
-- `docs/DATA_ARCHITECTURE.md` for persistence and migration semantics
-- `docs/REFACTOR_PLAN.md` for migration phase status
-- product/status documentation when product scope changes
+When ComfyReview behavior or architecture changes, update the relevant
+documents **for the current code**:
 
-Documentation describes the actual state. A target architecture must be marked
-as a target until it is implemented.
+- `README.md` for user-facing setup and current behavior
+- `docs/ARCHITECTURE.md` for the current runtime
+- `docs/DATA_ARCHITECTURE.md` for present persistence/migration semantics
+- `docs/CODING_STANDARDS.md` for current engineering baseline
+- `docs/REFACTOR_PLAN.md` for ongoing refactor work and its history
+- `docs/project_status.md`, `docs/IMPLEMENTATION_AUDIT.md` for
+  implementation claims, with exact commit/CI evidence
+- `docs/ACTIVE_WORK.md` and `docs/pocs/` for in-progress experiments
+- `docs/OPEN_DECISIONS.md` for genuinely unresolved decisions
+
+The code baseline **before** the 2026-10-09 documentation import is
+`a5f4131`; `76d71f9` only added/moved documentation. Do not mistake
+the imported Chronicle concepts for code in that baseline.
+[Project Evolution](docs/PROJECT_EVOLUTION.md) and
+[Decision Policy](docs/DECISION_POLICY.md) define how old concepts are
+reviewed: a past, discarded Chronicle implementation or an old Card Battler
+plan may provide useful ideas, but does **not** fix the new architecture.
+
+The Card Battler is **active POC work** in ComfyReview; isolated deterministic
+tests do not prove an integrated playable game. The Generator was recently
+reworked and catalogue/database optimization and real operator cutover remain
+open; do not call those complete solely because schema/migration code exists.
+
+Do not claim migration, private data metrics, hardware smoke or quality gates
+passed without concrete evidence. Keep the eventual Character Chronicles
+architecture revisable rather than inheriting all present ComfyReview
+design constraints as permanent.
 
 ## Git and change discipline
 

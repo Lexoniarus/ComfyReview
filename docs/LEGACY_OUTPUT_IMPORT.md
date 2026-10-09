@@ -1,5 +1,7 @@
 # Legacy Output Import
 
+**Dokumentklasse:** `CURRENT_OPERATIONS` – alter Datenimport über explizite, prüfbare Offline-Kommandos.
+
 Status: Slice 3A audit and Slice 3B explicit import implemented.
 
 ## Purpose

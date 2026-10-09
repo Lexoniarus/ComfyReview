@@ -1,7 +1,18 @@
 # ComfyReview Coding Standards
 
-Status: binding target for all new and changed code from 2026-09-28; canonical
-schema-v4 feature cutover implemented 2026-09-30.
+**Dokumentklasse:** `ENGINEERING_RULES` – für die aktuelle ComfyReview-Codebasis.
+
+Status: binding engineering baseline for new/changed code since
+2026-09-28. The earlier canonical schema-v4 cutover occurred 2026-09-30;
+the current code declares **canonical schema v18** (source reviewed
+2026-10-09). See [Implementation Audit](IMPLEMENTATION_AUDIT.md).
+
+These standards bind **new and changed ComfyReview code in the current
+refactor**, not every conceivable later Character Chronicles implementation.
+The product is still evolving through POCs, and technical architecture from
+an earlier abandoned Chronicle attempt is **not** authoritative. See
+[Project Evolution](PROJECT_EVOLUTION.md), [active work](ACTIVE_WORK.md)
+and [Decision Policy](DECISION_POLICY.md).
 
 The current repository predates this baseline and is not yet fully compliant.
 Existing violations are migration work, not precedent for new code.

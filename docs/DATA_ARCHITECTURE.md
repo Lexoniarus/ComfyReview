@@ -1,12 +1,21 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v18 and the catalog-normalization workflow are
-implemented on `fix/playground-combination-diversity`, 2026-10-08. Images,
-reviews, Arena, Curation,
-revisioned prompts, prompt-variant evidence and native generation outputs use
-the canonical database. Catalog authoring and Playground drafts use structured
-prompt atoms; workspace preferences, content levels and LoRA usage are
-canonical; profile tables are dormant migration compatibility only.
+**Dokumentklasse:** `CURRENT_TECH_REFERENCE` – heutiger Canonical-v18-Codevertrag; privater DB-Cutover und historische Operatorzahlen getrennt.
+
+Status: source-verified canonical SQLite schema **v18** at ComfyReview
+`refactor/review-boundary`, pre-import code commit `a5f4131` (2026-10-09).
+See [schema implementation](../comfyreview/repositories/sqlite/canonical_schema.py)
+and [code/CI audit](IMPLEMENTATION_AUDIT.md). Runtime migration commands
+exist, but user-specific DB upgrades, cutovers, historical counts and private
+reports cannot be independently verified from this repository.
+Generation-profile tables are retained as **dormant migration compatibility**.
+
+> **In-progress boundary:** Schema v18 is the **implemented code contract**,
+> not proof that a private runtime database has already undergone the
+> normalized catalog cutover. Operator review/acceptance and database
+> optimization are still underway. The current design is a maintainable
+> ComfyReview snapshot, **not** a fixed future Character Chronicles schema.
+> [Active Work](ACTIVE_WORK.md).
 
 ## 1. Source-of-truth rule
 
@@ -653,65 +662,13 @@ Normal runtime startup neither opens nor initializes these files. Known
 additive changes require the explicit `python -m comfyreview legacy-db upgrade`
 command.
 
-## 10. Live schema verification
+## 10. Canonical analytics queries
 
-The live schema-v9 database contains 379 generations, 379 images, 379
-sampler stages, 729 prompt components, 729 immutable first revisions, 275
-recovered compositions and 1,280 ordered composition memberships. All 379
-images have output role, output index and a verified content hash. The existing
-5,534 review events, 1,257 Arena matches and three Curation assignments remain
-canonical facts.
+Die früher hier eingebetteten **Schema-v9-Live-Zahlen, Upgrade- und
+Rehearsalberichte** stehen ausschließlich im
+[historischen Operatorprotokoll](archive/data-schema-v9-operator-report.md).
+Sie sind **keine** aktuelle Statistik der privaten ComfyReview-Datenbank.
 
-The explicit v6-to-v7 migration was rehearsed on a byte-identical copy, then
-run against the stopped live application. Both upgrades created their own
-SQLite backup. The live migration preserved every component, revision,
-composition, generation and rendered prompt snapshot while creating 4,061
-ordered revision atom usages. The later explicit v7-to-v8 upgrade was
-rehearsed on a database copy, backed up and applied with the application
-stopped. It added workspace preferences, generation profiles and normalized
-profile/generation LoRA relations without changing stable image, generation,
-component, revision or composition IDs. The explicit v8-to-v9 upgrade was
-rehearsed on a read-safe SQLite copy, backed up and applied with ComfyReview
-stopped on 2026-10-03. It preserved all 379 generation/image identities and
-added content/canvas settings. That verified live database's `user_version` is 9,
-`integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
-pre-v7 backup remains schema v6 with all 729 revisions.
-
-The application requires schema v18. No older database is silently changed at
-startup. `canonical-db upgrade` first migrates and validates a new database
-file and preserves the source; installation of the validated output is a
-separate controlled step.
-The v10-to-v11 migration creates no image classifications by itself; the
-operator runs `canonical-db rebuild-image-geometry` explicitly after upgrade.
-
-Historical completion was rehearsed from a verified v4 backup through the full
-v4-to-v6 upgrade and all four fresh audit/import stages. The same ordered
-sequence then ran against the already-upgraded live v6 database. Each live
-import created its
-own validated backup before writing. Final `integrity_check`, foreign-key,
-schema, identity, protected-field, provenance, read-only-reader and
-canonical-only startup checks passed. Repeated rehearsal imports created no
-additional facts.
-
-Normal startup never performs this sequence and never opens a legacy database.
-The ignored detailed reports and backups remain the operational evidence; this
-document records only non-sensitive aggregate results.
-
-The design must not duplicate prompt atoms per review or materialize the full
-Cartesian product of possible prompt combinations. Persist combinations when
-they are explicitly authored, generated, curated or uniquely reconstructed. An
-unused authored template or revision remains canonical catalog data.
-
-Frontend V2 uses this completed data. Exact memberships are authoritative for
-the 363 linked generations. Any scope fallback for the sixteen unresolved
-generations must be the smallest read-only policy justified by their explicit
-diagnostics; it must not read legacy databases, paths, directory names or
-sidecars as runtime truth.
-
-Before migrating a derived projection, prefer a direct canonical query, then a
-SQL view. Only measured needs justify a materialized projection and worker.
-
-### Canonical analytics queries
 
 Render guidance reads canonical generations, ordered sampler stages, images
 and append-only `review_events`. It aggregates all rating/delete evidence once
@@ -730,7 +687,15 @@ Prompt combinations are identified by canonical `prompt_composition_id` and
 remain distinct from render discovery. No runtime path reparses legacy
 `combo_key` values or materializes possible prompt/render cross-products.
 
-The approved [Card Battler target](CARD_BATTLER_TARGET.md) may later reuse this
-identity, migration and provider foundation through its own domain boundaries.
-Character Chronicles descriptions, embeddings, RAG and wider gameplay state
-remain separate concerns.
+The Card Battler is being developed **now as a ComfyReview POC**.
+An [earlier target plan](archive/card-battler-target-2026-10-02.md) is
+historical and does not prescribe future card persistence.
+[Card POC](pocs/card-battler.md).
+
+**ComfyReview is still evolving toward Character Chronicles**, but this
+current canonical SQLite v18 design is not a compulsory permanent schema
+for the eventual game. The imported Chronicle concepts include some
+**abandoned earlier schema 47–58/Guardian architecture**; their tables,
+migrations and persistence authority are **not** part of the current
+ComfyReview database and must be independently re-evaluated.
+[Decision Policy](DECISION_POLICY.md).

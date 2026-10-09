@@ -1,26 +1,38 @@
 # ComfyReview Architecture
 
-Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, schema-v18 application support and Frontend V2
-including Settings are implemented and integrated on
-`fix/playground-combination-diversity`, 2026-10-08. The private editorial
-mapping and production catalog cutover remain open.
+**Dokumentklasse:** `CURRENT_TECH_REFERENCE` – geltende ComfyReview-Codegrenzen, **nicht** dauerhaftes Character-Chronicles-Ziel.
 
-## 1. Product boundary
+Status: source-verified on `refactor/review-boundary` at pre-import code commit `a5f4131`
+(2026-10-09). Review, Ranking, Arena, Curation, Prompt Catalog, Analytics,
+native Generation, canonical schema v18 and Frontend V2/Settings are
+runtime-wired. Private editorial mapping and real database cutover remain
+distinct operator work. See [Implementation Audit](IMPLEMENTATION_AUDIT.md).
 
-ComfyReview is a local-first application for discovering ComfyUI outputs,
-reviewing and comparing images, assigning curated sets, analysing review data
-and handing reproducible settings back to ComfyUI. Character Chronicles
-campaign, Champion, VN, social, embeddings and RAG systems are outside this
-refactor.
+## 1. Product boundary — current architecture, not future mandate
 
-A functional Card Battler prototype is an approved post-refactor ComfyReview
-product target, not current runtime behaviour or a refactor acceptance
-requirement. Its manual card-development, deterministic-rules, deck,
-server-authoritative PvE and battle-driven evolution boundaries are defined in
-the [Card Battler target](CARD_BATTLER_TARGET.md). Character Chronicles may
-later reuse that bounded implementation without becoming a runtime dependency
-of ComfyReview.
+ComfyReview is the **current, still-developed** application for discovering,
+reviewing, comparing, curating and analysing ComfyUI output and reproducing
+image generations. It is intended to **evolve toward Character Chronicles**,
+but the later game is **not** obtained by treating every current or previously
+drafted engineering boundary as permanent.
+
+**Current Card Battler POC:** tested read-only model adapters,
+CardImprint mapping, stat/mechanic/trait materialization and visual prompt
+projection exist in ComfyReview. They are **being developed**, not a finished
+card collection, deck engine or PvE game. [POC status](pocs/card-battler.md).
+
+**Current Generator/Database work:** the native Generator was recently
+overhauled and is wired into the application; the catalogue/database
+normalization and real cutover remain a separate ongoing activity.
+[Active Work](ACTIVE_WORK.md).
+
+**Character Chronicles is the long-term vision**. The [imported
+ideas](character-chronicles/README.md) partly describe an **abandoned earlier
+Chronicle architecture**; their old Vite/TypeScript, Schema 47–58, M6
+and orchestration decisions are not part of this current technical contract
+and are **not automatically binding** for future implementation. See
+[Project Evolution](PROJECT_EVOLUTION.md) and
+[Decision Policy](DECISION_POLICY.md).
 
 ## 2. Layering and composition
 
@@ -62,7 +74,13 @@ generation-referenced old rows as hidden provenance and prevents authored
 composition fallback from resolving any composition containing that
 provenance. Character rows, promotions and manual variants remain exact.
 
-### 2.1 Card Battler model resource
+### 2.1 Card Battler model resource (pre-persistence prototype)
+
+**Status:** the read-only external model adapter is registered, with **lazy
+first-use validation**. The default file `data/card_battler.sqlite3`
+is **not shipped** with the repository and its actual authored contents
+cannot be verified here. This is a separate model/design resource, not
+ComfyReview's writable canonical schema v18 and not a gameplay endpoint.
 
 The pre-persistence Card Battler implementation reads design and rules facts
 from the external `card_battler.sqlite3` model database. The composition root
