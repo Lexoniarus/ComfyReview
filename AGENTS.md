@@ -130,29 +130,6 @@ extend an existing violation merely because it already exists.
 
 ## Documentation
 
-Repository documentation authority and product scope are indexed in
-`docs/README.md`:
-
-- `docs/project_status.md` and code/tests describe the implemented state.
-- `docs/ROADMAP.md` specifies the sequential evolution of the existing
-  ComfyReview codebase toward Character Chronicles (Card Battler, Timeline,
-  Social Network with chat, Storyline, and **VN content last**).
-- `docs/DECISIONS.md` records explicitly adopted product decisions.
-  `docs/POC_REGISTER.md` records experiments, never implicit approval.
-- All files under `docs/archive/` (especially the abandoned
-  Character Chronicles attempt) are **historical, non-normative evidence**,
-  regardless of historical labels such as DECIDED, implemented, MVP,
-  authoritative, or baseline complete. Do not import their architecture,
-  deadlines, schemas, mechanics or scope without a new active decision.
-- `docs/CARD_BATTLER_TARGET.md` is the bounded current future-target contract;
-  old Character Chronicles deck/board rules are not authoritative for phase 1.
-  Existing Card Battler model/code is not evidence of a complete playable game.
-- Treat architecture target, active runtime, open POC and archive as four
-  different things. Never promote one into another by wording alone.
-- When documentation links or paths change, run
-  `python scripts/check_documentation.py`. Keep current links resolvable;
-  historical missing links in archival source text stay clearly non-operative.
-
 When behavior or architecture changes, update the relevant documents in the
 same change:
 

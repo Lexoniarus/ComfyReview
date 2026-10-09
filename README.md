@@ -30,26 +30,11 @@ The current repository demonstrates a usable local review system with audited im
 
 It should not be treated as a polished packaged desktop application. The project is best understood as a practical tool and portfolio project that documents a real local AI workflow.
 
-A functional Card Battler remains an approved **post-refactor target**, not a
-current user-facing feature or an acceptance requirement of the present refactor.
+A functional Card Battler is an approved future product target after the
+current refactor; it is not implemented or part of the current feature list.
 Its manual card-development, deterministic rules, deck, local PvE and
 battle-driven card-evolution boundaries are documented in the
 [Card Battler target](docs/CARD_BATTLER_TARGET.md).
-
-For the **current documentation authority and development direction**, start with
-[Documentation index](docs/README.md), [Roadmap](docs/ROADMAP.md),
-[Decision register](docs/DECISIONS.md) and [POC register](docs/POC_REGISTER.md).
-The current codebase is intended to **evolve step by step into Character Chronicles**:
-**Card Battler → Timeline → Social Network with chat interaction → Storyline →
-Visual-Novel content (last)**. The earlier Character Chronicles development
-attempt was discarded; its preserved documents are [historical only](docs/archive/character-chronicles-v1/README.md)
-and do not define the present MVP or current feature requirements.
-
-The Card Battler target describes a **bounded first product phase**, not the
-former Character Chronicles 40-card game. Some model/design and development
-components already exist in this branch; **a complete playable PvE Card Battler
-is not implemented**. Specific parameters and later-stage designs require
-new decisions and proofs. The current review/refactor acceptance remains separate.
 
 For a more detailed scope overview, see:
 
@@ -725,27 +710,19 @@ audited import input for local testing.
 - Frontend V2 uses Jinja shells and native ES modules; Playground previews and
   submission use immutable canonical prompt revisions and the native
   GenerationService
-- Archived documents can describe obsolete behavior; use the current
-  [documentation index](docs/README.md) and [project status](docs/project_status.md)
-  for the active contract
+- Public documentation may lag behind internal workflow experiments
 
 ---
 
-## Not part of the current ComfyReview refactor
+## Not the goal of this version
 
-The following are **not part of the current refactor**; this does **not**
-mean they are rejected from the long-term product:
+- Fully redesigned data identity model
+- Full separation of curation truth from physical folder layout
+- Final export or packaging architecture for future LoRA dataset builds
+- Multi-user hosting
+- Cloud deployment
+- Public SaaS operation
 
-- A complete playable PvE Card Battler (the next approved bounded phase;
-  preparatory model and development code already exists)
-- Timeline, Social Network with chat interaction, Storyline, or VN content
-  (planned later in that approximate order, with VN **content last**)
-- A packaged desktop installer, multi-user hosting, cloud deployment or SaaS
-- Production-grade final LoRA dataset-export and packaging workflows
-
-See the [roadmap](docs/ROADMAP.md) for the intended evolution of the same
-ComfyReview codebase into Character Chronicles, and the
-[decision register](docs/DECISIONS.md) for active and open decisions.
 ---
 
 ## Contributing
@@ -754,8 +731,7 @@ This is primarily a personal local workflow tool, but the public repository docu
 
 If you change behavior in this project, avoid silently breaking the workflow assumptions that make the app useful in practice:
 
-- matching PNG and JSON evidence for **historical sidecar imports only**;
-  native generation and already-canonical images do not require a sidecar
+- required PNG and JSON pairing
 - character/set filtering semantics
 - generator state persistence
 - lazy loading behavior in generator-related views

@@ -13,13 +13,6 @@ The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
 remain compatible unless a change is explicitly approved.
 
-**Reading guide:** This document also preserves the chronology of completed
-refactor slices and decisions made at earlier schema versions. Its historical
-work items are **not** a second active product roadmap or evidence that an
-older schema remains current. For the present implemented/open state consult
-[Project Status](project_status.md); for the intended evolution into Character
-Chronicles consult [Roadmap](ROADMAP.md) and [Decisions](DECISIONS.md).
-
 ## Completed foundations
 
 ### Safety bridge
@@ -653,31 +646,22 @@ actions.
 
 ## Approved post-refactor product target: Card Battler
 
-Status: **approved bounded future game target**; current branch contains
-pre-persistence Card Battler model, design and development support, **not** a
-fully playable local PvE Battler. A finished game is **not** refactor acceptance.
+Status: approved future product and architecture target; not implemented and
+not part of refactor acceptance.
 
-Once the refactor is accepted, ComfyReview advances toward
-**Character Chronicles in the same evolving codebase**, starting with the
-bounded functional Card Battler. The later order is **Timeline → Social
-Network with chat interaction → Storyline → VN content last**. See the
-[roadmap](ROADMAP.md), [restart decisions](DECISIONS.md) and
-[POC register](POC_REGISTER.md).
+After the refactor is accepted, ComfyReview is intended to become the proving
+ground for a bounded functional Card Battler. The binding scope, deterministic
+mechanics, content eligibility, stable identity and seven-phase delivery order
+are defined in the [Card Battler target](CARD_BATTLER_TARGET.md). The sequence
+starts with explicit manual image-to-card development and collection, then adds
+deterministic card functions, revisioned decks, local server-authoritative PvE,
+battle-driven development and visual evolution, the interactive interface and
+only finally Character Chronicles reuse.
 
-The [Card Battler target](CARD_BATTLER_TARGET.md) controls only the first
-game-development phase: explicit image-to-card development, deterministic
-rules, deck formation, local PvE, battle-driven development and interactive
-presentation. Specific prototype parameters called out as deferred in that
-document remain open and require bounded POCs/decisions; the old
-Character Chronicles 40-card, Champion, Academy, social and VN assumptions
-are not implicitly accepted.
-
-The discarded former Character Chronicles implementation/roadmap is
-[historical only](archive/character-chronicles-v1/README.md). No archived
-schema, milestone or product authority can override current code, the
-refactor acceptance criteria or explicitly active product decisions.
-Preparation for later phases means retaining modular boundaries, not an
-automatic export/handoff into a different Character Chronicles repository.
+This target does not reopen completed refactor decisions. Card Battler state
+will use explicit versioned migrations and its own domain boundaries; it will
+not import Character Chronicles campaign, Champion, VN or social progression
+systems into ComfyReview.
 
 Each intermediate commit runs focused tests and static checks for changed
 files. The targeted command is feedback only. Every completed slice and the

@@ -1,41 +1,32 @@
 # ComfyReview Card Battler Target
 
-Document role: approved, bounded first product-stage target for a functional
-Card Battler built inside the existing ComfyReview codebase as it evolves
-gradually into Character Chronicles. See [roadmap](ROADMAP.md) and
-[decisions](DECISIONS.md).
+Document role: approved post-refactor product and architecture target for a
+functional Card Battler prototype implemented in ComfyReview before later reuse
+in Character Chronicles.
 
-Status: APPROVED_TARGET (bounded scope originally approved 2026-10-02);
-reviewed against the 2026-10-09 product restart. A **complete playable PvE
-Battler is not implemented**. Pre-persistence Card Battler model, design and
-development code does exist (see [Architecture §2.1](ARCHITECTURE.md#21-card-battler-model-resource)).
-Nothing in this target claims a live Match runtime or makes the future game an
-acceptance requirement of the active ComfyReview refactor.
+Status: target contract approved on 2026-10-02; not implemented. Nothing in
+this document describes current runtime behaviour, a current schema, a current
+API or an acceptance requirement of the active ComfyReview refactor.
 
 ## 1. Purpose and delivery boundary
 
 ComfyReview will become the first implementation and proving ground for the
 Card Battler. Existing reviewed images provide the source material, but card
 crafting, card presentation, deck construction and match simulation form their
-own bounded product area. Later Timeline, social/chat, storyline and VN-content phases may extend the
-proven boundaries **in the same evolving codebase**, without prematurely
-coupling the Battler to those later product areas.
+own bounded product area. Character Chronicles may later reuse that proven
+boundary and add its own narrative, Champion and social progression systems
+around it.
 
-This target deliberately does not make a **playable Card Battler** part
-of refactor acceptance. The next **game-product delivery and acceptance
-slices**, including live match persistence and UI, are planned after the
-current refactor reaches its required acceptance state, unless a later
-explicit planning decision changes that order. Preparatory model readers,
-domain logic and development services already present in this branch do
-**not** represent an accepted player-facing game. The existing
-content-policy, identity, generation and output-quality boundaries are its
-ComfyReview foundations.
+This target deliberately does not make the Card Battler part of refactor
+acceptance. Work begins only after the current refactor has reached its required
+acceptance state, unless a later explicit planning decision changes that order.
+The implemented content-policy, canonical identity, generation and
+output-quality boundaries are foundations for that later work, not Card Battler
+implementation.
 
-The former Character Chronicles design documents are **archived historical
-sources**, not implementation instructions or a runtime dependency. This
-current ComfyReview contract explicitly restates a limited subset suitable
-for a first prototype. Anything not expressly adopted here remains
-non-binding; future changes require a new decision/POC.
+The Character Chronicles design documents are the design source for this
+target, not a runtime dependency. This document restates the subset that
+belongs in ComfyReview and removes Character Chronicles-specific assumptions.
 
 The reviewed source set covers its card-crafting and Playground-combination
 lifecycle, image-card collection and deck distinction, card-art composition,
@@ -54,8 +45,8 @@ The initial ComfyReview target includes:
 - revisioned deck construction and readiness validation;
 - a deterministic, server-authoritative PvE Card Battler vertical slice;
 - a browser game surface that renders server-confirmed state;
-- a modular card domain suitable for later phases of the same evolving
-  application, without importing ComfyReview review routes into card rules.
+- architecture that can later be reused by Character Chronicles without
+  importing ComfyReview review routes or persistence details.
 
 The initial target excludes:
 
@@ -331,17 +322,16 @@ evolution trial. Only eligible collected outputs may be shown for selection.
 
 ### Legendary boundary in the ComfyReview prototype
 
-The abandoned Character Chronicles concept associated `Legendary` with
-both long-term anti-farm Battle Lineage and a separate visual competition.
-Those historical Champion/booster/cup rules are **not adopted** for the bounded
-first phase. The prototype contract deliberately develops and tests the
-sequential ladder through `Ultra Level 3`, while keeping the Legendary
-transition locked. Battle experience alone cannot grant it.
+Character Chronicles requires both a long anti-farm Battle Lineage and a
+separate visual competition history for `Legendary`. That champion/booster/cup
+system is intentionally outside ComfyReview. The prototype therefore develops
+and tests the sequential ladder through `Ultra Level 3`, but keeps the
+Legendary transition locked. Battle experience alone cannot grant it.
 
-Unlocking Legendary requires a new explicit product contract for an
-independent first-phase proof or a decision to defer it to a later development
-phase. Testing may exercise the locked gate with deterministic fixtures;
-production code must not bypass it.
+Unlocking Legendary in ComfyReview requires a later explicit product contract
+for an equivalent independent proof or a decision to keep final Legendary
+materialization exclusive to Character Chronicles. Testing may exercise the
+locked gate with deterministic fixtures; production code must not bypass it.
 
 ## 7. Collection, playable pool and decks
 
@@ -486,18 +476,10 @@ compositions, deck revisions or match transitions.
 
 ## 12. Binding implementation order
 
-**Naming clarification:** CB-1 through CB-7 are **Card Battler internal
-delivery slices**, all within **global product phase 1 (Card Battler)** of the
-[overall roadmap](ROADMAP.md). **CB-2 is not Timeline; CB-3 is not Social/Chat.**
-Later product phases require separate decisions and are not implicitly
-approved by completing CB-7.
+The following order captures the approved product progression. It is separate
+from, and begins after, the active refactor sequence.
 
-The following order describes **future product delivery/acceptance slices**,
-separate from the active refactor acceptance. Preparatory implementations may
-already cover some model or rules work across slices; a slice is not
-delivered until its full listed product behavior and acceptance criteria pass.
-
-### CB-1: manual card development and collection
+### Phase 1: manual card development and collection
 
 - add explicit `Develop as Card` eligibility and command behaviour;
 - create one stable CardIdentity per eligible source image idempotently;
@@ -507,7 +489,7 @@ delivered until its full listed product behavior and acceptance criteria pass.
 - define deletion, restoration, pending-art and unavailable-card behaviour;
 - do not add combat or pretend the collection is already a deck.
 
-### CB-2: deterministic card functions
+### Phase 2: deterministic card functions
 
 - introduce the small versioned ruleset, archetypes and opcode registry;
 - assign and persist rules from an explicit craft seed and policy revisions;
@@ -516,14 +498,14 @@ delivered until its full listed product behavior and acceptance criteria pass.
 - expose human-readable deterministic card functions in collection views;
 - keep LLMs outside mechanics and verify replayable materialization.
 
-### CB-3: deck construction
+### Phase 3: deck construction
 
 - add named, revisioned decks over existing CardIdentities;
 - add server-side playable-pool and deck-readiness validation;
 - select and document the prototype deck size and duplicate policy;
 - do not copy cards into decks or encode readiness only in the UI.
 
-### CB-4: functional PvE Battler
+### Phase 4: functional PvE Battler
 
 - implement the deterministic server-side match aggregate and reducer;
 - freeze deck, rule, card and presentation revisions at match start;
@@ -532,7 +514,7 @@ delivered until its full listed product behavior and acceptance criteria pass.
 - test success, illegal commands, stale revisions, step budgets, recovery and
   completed-match immutability.
 
-### CB-5: battle-driven card development and evolution
+### Phase 5: battle-driven card development and evolution
 
 - emit deduplicated post-match usage facts without mutating match snapshots;
 - implement versioned experience and anti-farm policies plus rebuildable
@@ -544,7 +526,7 @@ delivered until its full listed product behavior and acceptance criteria pass.
 - exercise the full Common-to-Ultra path and enforce the locked Legendary gate;
 - verify that all changes affect only future matches.
 
-### CB-6: game and development interface
+### Phase 6: game and development interface
 
 - add the interactive board, hand, action prompts and result presentation;
 - show current Rarity, Level, Trait lineage, experience progress, pending
@@ -556,15 +538,15 @@ delivered until its full listed product behavior and acceptance criteria pass.
 - render only confirmed server projections and map input to semantic commands;
 - complete keyboard, pointer, touch, small-viewport and reduced-motion paths.
 
-### CB-7: hardening and preparation for subsequent phases
+### Phase 7: hardening and Character Chronicles reuse
 
 - run the complete quality, architecture, determinism and browser gates;
 - document the stable reusable domain and application ports;
 - remove accidental dependencies on ComfyReview presentation or review
   orchestration;
-- expose the proven Card Battler boundary for the subsequent Timeline,
-  social/chat, storyline and VN-content phases **within the evolving
-  ComfyReview codebase**, without making them dependencies of card rules.
+- only then reuse the proven Card Battler boundary in Character Chronicles,
+  where narrative, Champion and non-card progression systems remain separate
+  adapters and extensions.
 
 Each phase is a separately accepted vertical slice. No phase is complete until
 its behaviour tests, failure and rollback tests, callable manifest, formatting,
@@ -617,8 +599,8 @@ The target architecture does not yet fix:
   selected normalized, non-sensitive generation facts;
 - whether enabled non-`standard` content remains permanently excluded from
   Card Battler eligibility, as it is in the Character Chronicles design;
-- whether Legendary remains deferred to a later product phase or receives
-  an independent first-phase proof contract;
+- whether Legendary remains exclusive to Character Chronicles or receives an
+  independent ComfyReview proof contract;
 - the visual engine used for the later board.
 
 These decisions must be made and versioned before their implementation phase.
