@@ -1,6 +1,6 @@
 # Academy, Schuljahr und Worldbuilding
 
-**Dokumenttyp:** `WORKING_VISION` · **Entwicklungsorientierung:** nach beziehungsweise zusammen mit der sozialen Ebene; vor dem Vollausbau der visuellen VN · **Status im aktuellen ComfyReview:** langfristige Idee, keine abgenommene Kampagnenruntime.
+**Dokumentklasse:** `WORKING_VISION` · **Entwicklungsorientierung:** nach beziehungsweise zusammen mit der sozialen Ebene; vor dem Vollausbau der visuellen VN · **Status im aktuellen ComfyReview:** langfristige Idee, keine abgenommene Kampagnenruntime.
 
 ## Fachliche Absicht
 
