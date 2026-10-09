@@ -167,7 +167,8 @@ class NativeLmStudioProvider:
                         for raw_instance in raw_instances
                     ),
                     key=lambda item: (
-                        item.instance_id.casefold(), item.instance_id
+                        item.instance_id.casefold(),
+                        item.instance_id,
                     ),
                 )
             )

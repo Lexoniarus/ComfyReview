@@ -7,7 +7,7 @@ import json
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from email.message import Message
+from http.client import HTTPMessage
 from typing import Any
 
 import pytest
@@ -167,7 +167,9 @@ def test_list_models_rejects_non_success_http() -> None:
 def test_load_model_posts_only_id_and_uses_lifecycle_timeout() -> None:
     transport = _Transport()
     transport.add(
-        "POST", "/api/v1/models/load", 200,
+        "POST",
+        "/api/v1/models/load",
+        200,
         {"instance_id": "instance-4", "status": "loaded"},
     )
 
@@ -228,18 +230,22 @@ def test_load_model_normalizes_rejected_status(
 def test_unload_model_targets_exact_instance() -> None:
     transport = _Transport()
     transport.add(
-        "POST", "/api/v1/models/unload", 200,
+        "POST",
+        "/api/v1/models/unload",
+        200,
         {"instance_id": "instance-b"},
     )
     instance = LocalModelInstance("qwen/model", "instance-b")
 
-    assert NativeLmStudioProvider(
+    NativeLmStudioProvider(
         transport, lifecycle_timeout_seconds=45
-    ).unload_model(instance) is None
+    ).unload_model(instance)
     assert transport.calls == [
         (
-            "POST", "/api/v1/models/unload",
-            {"instance_id": "instance-b"}, 45.0,
+            "POST",
+            "/api/v1/models/unload",
+            {"instance_id": "instance-b"},
+            45.0,
         )
     ]
 
@@ -320,16 +326,20 @@ def test_urllib_transport_normalizes_base_url_and_payload(
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     transport = UrlLibLmStudioJsonTransport(" http://localhost:1234/// ")
     result = transport.request(
-        "POST", "/api/v1/models/load",
-        payload={"model": "qwen/model"}, timeout_seconds=12,
+        "POST",
+        "/api/v1/models/load",
+        payload={"model": "qwen/model"},
+        timeout_seconds=12,
     )
 
     assert result == LmStudioJsonResponse(200, {"ok": True})
     assert recorded == [
         (
-            "POST", "http://localhost:1234/api/v1/models/load",
+            "POST",
+            "http://localhost:1234/api/v1/models/load",
             json.dumps({"model": "qwen/model"}).encode("utf-8"),
-            12.0, "application/json",
+            12.0,
+            "application/json",
         )
     ]
 
@@ -386,7 +396,7 @@ def test_urllib_transport_returns_http_error_status(
         "http://localhost/api/v1/models/load",
         404,
         "not found",
-        Message(),
+        HTTPMessage(),
         io.BytesIO(b'{"error": "missing model"}'),
     )
 
@@ -399,8 +409,10 @@ def test_urllib_transport_returns_http_error_status(
     transport = UrlLibLmStudioJsonTransport("http://localhost:1234")
 
     assert transport.request(
-        "POST", "/api/v1/models/load",
-        payload={"model": "absent"}, timeout_seconds=9,
+        "POST",
+        "/api/v1/models/load",
+        payload={"model": "absent"},
+        timeout_seconds=9,
     ) == LmStudioJsonResponse(404, {"error": "missing model"})
 
 
