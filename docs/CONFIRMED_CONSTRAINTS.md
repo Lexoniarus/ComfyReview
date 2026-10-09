@@ -24,6 +24,34 @@ jeweils anhand von POCs und konkreten Entscheidungen zu prüfen.
 [Projektentwicklung](PROJECT_EVOLUTION.md) und
 [historischer Entscheidungsabgleich](DECISION_POC_RECONCILIATION.md).
 
+### Späterer fachlicher Meilenstein: Spielwelt und technische Bildproduktion
+
+**Geltungsbereich:** Das langfristige Character-Chronicles-Spielerlebnis.
+Dieser Meilenstein ist **für später vorgesehen**, nicht Teil der
+Abnahme des aktuellen Card-Battler-Erstversuchs.
+
+- **Bestätigtes fachliches Ziel:** Was in der fiktiven Welt wirklich
+  passiert, was Figuren erleben und wie sie sich entwickeln, ist von
+  der technischen Erzeugung, Bewertung und Verbesserung der
+  dargestellten Bilder unterscheidbar.
+- Eine Änderung an Prompt, Modell, LoRA, Workflow, Renderqualität
+  oder visueller Projektion ist **für sich genommen kein Storyereignis**.
+  Sie verändert nicht automatisch das kanonische Aussehen, die
+  Erinnerungen, Beziehungen oder Vergangenheit einer Figur.
+  Inhaltlich gewollte Veränderungen bleiben durch ausdrücklich
+  vorgesehene Spiel-/Storyentscheidungen möglich.
+- Die Bewertungen des **realen Spielers** dürfen die Bildproduktion
+  verbessern, ohne dass der **Protagonist oder die Figuren in der
+  Spielwelt** dadurch automatisch Wissen über die Technik erlangen.
+  Auch eine spielerische Rückwirkung muss fachlich autorisiert sein.
+
+**Verbindlich ist das spätere fachliche Abnahmeziel, nicht seine
+technische Realisierung.** Weder ein konkretes World-State-Schema,
+ein Modell-/Providervertrag, historische M6-Prozesse, eine zusätzliche
+Pflichtphase noch eine Terminplanung werden dadurch festgelegt.
+[Langfristiges Zielbild](character-chronicles/vision/README.md#späterer-fachlicher-meilenstein-spielwelt-und-bildproduktion)
+und [offene Umsetzung](OPEN_DECISIONS.md).
+
 ### KI-API-Kosten: eine gemeinsame Monatsobergrenze
 
 - **Geltungsbereich:** Sämtliche **kostenpflichtigen externen KI-API-Aufrufe**

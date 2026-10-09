@@ -52,6 +52,37 @@ Spieler- und Technik-POCs. Die aktuelle ComfyReview-Entwicklungsoberfläche
 ist dadurch weder automatisch das Game-Frontend noch zur Ablösung
 freigegeben.
 
+## Späterer fachlicher Meilenstein: Spielwelt und Bildproduktion
+
+Im späteren Character-Chronicles-Spiel müssen die **fiktionale
+Weltwahrheit** und die **technische Darstellung/Lernpipeline**
+nachvollziehbar getrennt sein. Das ist ein **gewollter späterer
+fachlicher Meilenstein**, nicht bereits eine fertige Spielmechanik
+und nicht Voraussetzung für den ersten Card-Battler-POC.
+
+Für den **realen Spieler** können Bildauswahl, Bewertungen und
+wiederholte Generationen die technische Bildqualität verbessern.
+Innerhalb der **Spielwelt** handelt der Protagonist dagegen in
+seinem erzählerischen Zusammenhang; Figuren besitzen eigenes Wissen,
+Erinnerungen und Beziehungen. Ein besser gerendertes Bild ist
+deshalb **nicht automatisch** ein körperlicher Wandel, eine neue
+Erinnerung oder ein Ereignis im World Canon.
+
+Anders ist es, wenn eine **explizite, gültige Spiel- oder
+Storyentscheidung** eine solche Veränderung bewirkt. Die spätere
+Umsetzung muss diese Fälle unterscheiden und spielerseitig
+verständlich machen. Der Abnahmepunkt soll also die
+**Kontinuität der fiktiven Welt trotz technischer Bildverbesserung**
+belegen, ohne die positiven Rückwirkungen der Bilderfahrung auf
+das Gesamtspiel zu verlieren.
+
+Dieser Meilenstein steht als [bestätigtes fachliches Ziel](../../CONFIRMED_CONSTRAINTS.md#späterer-fachlicher-meilenstein-spielwelt-und-technische-bildproduktion)
+fest. Zeitpunkt, konkreter POC, Benutzeroberfläche, Datenmodell,
+KI-Provider und technische Trennmechanismen bleiben offen.
+Er ist **keine zusätzliche verbindliche Releasephase** zwischen
+Timeline, Social Network, Storyline und VN; die historische
+M6-/Guardian-Architektur wird dadurch nicht übernommen.
+
 ## Wo die Details herkommen
 
 Die [24 ausführlichen importierten Quellfassungen](../sources/README.md) dokumentieren viele Spielideen, konkrete Regelvarianten und technische Überlegungen. Sie mischen frühere ComfyReview-Vorarbeiten, einen verworfenen Character-Chronicle-Codeansatz und neuere inhaltliche Ergänzungen. **Sie sind Quellen**, keine automatisch angenommenen Bauverträge.

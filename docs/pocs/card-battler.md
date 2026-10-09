@@ -75,6 +75,25 @@ Bildgenerierungsweg, Renderer oder feste Regel-/Balancing-Versionen vor.
 Die bestehenden Algorithmen und der Generator können dafür verwendet
 und geprüft werden, ersetzen aber nicht die noch fehlende Integration.
 
+### Technische Lücken, die der Erstversuch tatsächlich prüfen muss
+
+Der aktuelle [ComfyUI-Blueprint v4](../../data/workflows/default-character/v4.json)
+verwendet `EmptySD3LatentImage` und besitzt keinen direkt gebundenen
+Quellbild-Eingang. Die bestehende Text-zu-Bild-Generierung kann zwar neue
+Ergebnisse produzieren, garantiert aber **keine visuelle Kontinuität**
+zum ausgewählten Quellbild. Ob passende Varianten durch andere
+Konditionierung, einen separaten Workflow oder einen weiteren Ansatz
+erzeugt werden, ist **offen** und muss praktisch erprobt werden.
+Vier technisch fertige PNGs allein erfüllen diesen POC daher nicht.
+
+Auch das bisherige `SemanticImageProfile` speichert typisierte
+Konzeptsignale mit Stärken, aber **noch keine eigenständige Zuordnung**
+von sichtbaren Beobachtungen, Interpretationen und Unsicherheiten.
+Die fachliche Trennung in Stufe 1 ist somit ein **Abnahmeziel**,
+nicht schon als implementiertes Bildverständnis nachgewiesen.
+Weder eine bestimmte VLM-/LLM-Lösung noch eine neue API wird
+hierdurch vorab festgelegt.
+
 ## Minimale Oberfläche für den Versuch
 
 Der POC benötigt einen nachvollziehbaren Weg, **ein Quellbild auszuwählen**,
@@ -87,6 +106,45 @@ angedacht, nicht die vollständige spätere Card-Battler-/Social-/VN-UI.
 Die konkrete Aufteilung und technische Umsetzung werden am POC erprobt.
 Eine Sammlung von 40 Karten belegt noch **keinen** spielbaren Kampf- oder
 Deckbauablauf; diese Integration muss separat nachgewiesen werden.
+
+## Prüfkriterien für die erste spielerseitige POC-Abnahme
+
+Diese Kriterien beschreiben **nachweisbare Spielerergebnisse**,
+keine bereits bestehende Funktion, keinen Datenbankvertrag
+und keine dauerhaft unveränderlichen Spielregeln:
+
+1. **Bewusste Quelle:** Ein bestimmtes vorhandenes ComfyReview-Bild
+   wird vom Spieler ausgewählt; Herkunft und stabile Bildidentität
+   bleiben bis zur bestätigten Karte nachvollziehbar.
+2. **Bildverständnis und Regelgrenze:** Sichtbare Beobachtungen,
+   Interpretationen und Unsicherheiten können geprüft werden;
+   Kartenwerte, Fähigkeiten und Text werden erst danach aus einem
+   versionierten Regelkontext abgeleitet. Freie Modellantworten dürfen
+   nicht eigenmächtig gültige Karteneffekte festlegen.
+3. **Tatsächlich passende Auswahl:** Für **dieselbe** Kartenidee
+   entstehen vier unterscheidbare, zum Quellmotiv und Karteninhalt
+   passende Bildkandidaten. Fehlschläge oder unpassende Ergebnisse
+   werden sichtbar; sie zählen nicht als erfolgreich erstellte Karte.
+4. **Eine bestätigte Karte:** Der Spieler wählt bewusst genau
+   einen Kandidaten. Bild, Kartenwerte, Text und Herkunft werden
+   zusammen angezeigt und sind nach einem App-Neustart in der
+   Sammlung wieder auffindbar; vier Vorschläge erzeugen **nicht**
+   automatisch vier Karten.
+5. **Entwicklung statt Duplikat:** Von dieser Karte aus kann erneut
+   entwickelt und zwischen vier neuen Alternativen gewählt werden.
+   Die Weiterentwicklung bleibt nachvollziehbar derselben Kartenidentität
+   zugeordnet; wie ältere Versionen dauerhaft dargestellt und
+   gespeichert werden, muss im POC erprobt werden.
+6. **Versuchsumfang und Evidenz:** Die angestrebten 40 einzeln
+   bestätigten Karten bilden ein **Testdeck-Ziel**, keine globale
+   Deckgrößenregel. UI-Ablauf, Persistenz und relevante Fehlerfälle
+   werden mit Tests und wenigstens einer realen Bedien-/Providerprobe
+   geprüft. Eine Match-Engine ist **keine Voraussetzung** für diesen
+   ersten Karten-Erzeugungsloop.
+
+Die Abnahme dieser Kriterien muss mit konkreter Laufzeit- und
+Bedienevidenz belegt werden. Isolierte grüne Algorithmentests
+oder vier generierte Dateien reichen dafür nicht aus.
 
 ## Warum der Card Battler gerade zuerst kommt
 

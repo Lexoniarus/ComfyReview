@@ -57,6 +57,16 @@ Gründen vorgezogen werden, ohne dass damit späterer Produktumfang als fertig
 oder beschlossen gilt. [Einfaches Zielbild](character-chronicles/vision/README.md)
 und [offene Entscheidungen](OPEN_DECISIONS.md).
 
+Als **späterer fachlicher Meilenstein** ist außerdem die
+Unterscheidung zwischen der in der Spielwelt gültigen
+Figuren-/Ereigniswahrheit und der technischen Bildproduktion
+bestätigt. Ein Qualitätsgewinn beim Rendering ist nicht
+automatisch ein Ereignis oder eine Veränderung der Figur
+innerhalb der Geschichte. Die genaue Realisierung wird später
+geprüft; daraus entsteht **keine sechste verpflichtende
+Entwicklungsphase und kein heutiges Release-Gate**.
+[Bestätigter Scope](CONFIRMED_CONSTRAINTS.md#späterer-fachlicher-meilenstein-spielwelt-und-technische-bildproduktion).
+
 ## Was heute tatsächlich vorhanden ist
 
 [ComfyReview-Ist-Analyse](IMPLEMENTATION_AUDIT.md) verwendet den Anwendungscode des Commits [`a5f4131`](https://github.com/Lexoniarus/ComfyReview/commit/a5f4131bb76c1ff655892d287d19fcd401917d32), also den Code **vor** dem reinen Dokumenten-Import [`76d71f9`](https://github.com/Lexoniarus/ComfyReview/commit/76d71f9c7723701664785aeaf07e0d7375a4f36a).

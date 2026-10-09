@@ -109,9 +109,10 @@ browser never writes `.env`.
 
 Generation profiles are not an active UI or runtime concept. The Generator
 owns checkpoint, sampler, scheduler, Steps, CFG, Denoise, Batch, classified
-LoRAs, format and resolution class directly. Content levels begin with
-mandatory Standard and are enforced server-side across all image collections;
-the browser only edits the canonical preference. Review and Curation settings
+LoRAs, format and resolution class directly. Content levels are a non-empty,
+canonically ordered workspace selection; Standard is the default, not
+mandatory. The server enforces visibility using the effective image level,
+and the browser only edits the canonical preference. Review and Curation settings
 are UI/session defaults only and do not change review-event or assignment
 semantics.
 

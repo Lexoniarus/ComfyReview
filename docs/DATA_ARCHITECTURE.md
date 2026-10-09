@@ -54,7 +54,8 @@ classification facts together with the v11-to-v18 additions listed below:
 - `prompt_compositions` and their concrete revision membership;
 - singleton `workspace_preferences` and ordered
   `workspace_curation_set_order`;
-- ordered `workspace_content_levels`, beginning with mandatory `standard`;
+- ordered, non-empty `workspace_content_levels` (default `standard`, but
+  selectable without it; visibility matches the effective image level);
 - stable-UID `generation_profiles` and ordered
   `generation_profile_loras`;
 - explicit width/height on generation profiles and concrete generations;
@@ -214,9 +215,8 @@ comparison:
   separate Generator choice.
 
 The Generator offers `Stable`, `Catalog test`, `Calculated` and `Next test`
-independently for the eleven normalized prompt groups
-group. Each selection replaces only that group's atoms in the ordinary editable
-Generator state. A calculated candidate remains derived guidance until
+independently for the eleven normalized prompt groups. Each selection
+replaces only that group's atoms in the ordinary editable Generator state. A calculated candidate remains derived guidance until
 explicitly materialized and then generated. Promotion is initiated
 automatically after a successful Review, Delete or Arena transaction, but
 remains explicit as an append-only fact recording the previous revision,

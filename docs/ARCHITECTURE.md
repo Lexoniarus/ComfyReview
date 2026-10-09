@@ -427,8 +427,8 @@ Blueprint v4 maps `output_width` and `output_height` roles into a fixed
 AnimeSharp path: `VAEDecode -> 4x-AnimeSharp -> ImageSharpen -> Lanczos
 ImageScale -> SaveImage`. `GenerationGeometryPolicy` derives 720p and 1080p
 targets or retains the complete 4x AnimeSharp dimensions for the highest
-quality class without cropping. Required nodes and `example-upscaler.pth` are
-discovered at the provider boundary and are validated before persistence or
+quality class without cropping. Required nodes and the blueprint-declared `4x-AnimeSharp.pth` model are
+discovered at the provider boundary and validated before persistence or
 submission.
 
 ## 9. Schema lifecycle
@@ -623,8 +623,11 @@ write `.env`, open SQLite or call ComfyUI directly. Connection checks are
 explicit provider calls; ordinary Settings reads return cached capability state
 without blocking on the external service.
 
-Content levels are cumulative user choices beginning with mandatory
-`standard`. `PromptContentLevelPolicy` maps exactly one canonical
+Content levels are a non-empty, canonically ordered selection from five
+available levels. `standard` is the default, but may be disabled. Visibility
+uses exact membership of the effective image level (stored generation level
+or explicit image override), not an implicit cumulative range.
+`PromptContentLevelPolicy` maps exactly one canonical
 `content_level_*` metadata marker to the typed `ContentLevel` on every catalog
 component. `nsfw_level_*` and the older authored aliases remain import
 fallbacks only; a canonical marker always wins. Descriptive tags no longer

@@ -12,6 +12,13 @@ formen. Dafür können später sowohl der
 Anknüpfungspunkte liefern. **Diese Zusammenhänge sind Zielideen,
 noch keine technisch entschiedenen Domain- oder Eventverträge.**
 
+Ein **späterer fachlicher Meilenstein** schützt dabei die
+[Konsistenz der Spielwelt gegenüber der technischen Bildproduktion](README.md#späterer-fachlicher-meilenstein-spielwelt-und-bildproduktion):
+Ein Bild, das durch neue Prompts oder besseres Rendering anders
+aussieht, verändert nicht ohne ein dafür vorgesehenes
+Storyereignis automatisch die Figur oder ihre Vergangenheit.
+Wie dieser Schutz umgesetzt wird, bleibt offen.
+
 ## Academy und Schuljahr sind möglicher Inhalt, keine zusätzliche Pflichtphase
 
 [Academy, Schuljahr und Worldbuilding](academy-and-world.md) beschreiben
