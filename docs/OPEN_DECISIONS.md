@@ -1,4 +1,4 @@
-# Aktueller Status und offene Entscheidungen
+# Offene Entscheidungen – ComfyReview → Character Chronicles
 
 **Dokumentklasse:** `OPEN` – noch ungeklärte Entscheidungen, keine zugewiesenen Meilensteine.
 
@@ -11,54 +11,34 @@ das gemeinsame externe KI-API-Monatsbudget von **unter 10 €** bestätigt;
 dessen technische Durchsetzung einschließlich eines möglichen App-Stopps
 bei ungefähr 8 € **noch nicht** beschlossen oder als eingebaut belegt.
 
-## Bestehende ComfyReview-Entwicklung
+## Zuständigkeit und Kontext (keine zweite Statusübersicht)
 
-**ComfyReview wird aktiv weiterentwickelt.** Der Code vor dem Dokumentenimport ([`a5f4131`](https://github.com/Lexoniarus/ComfyReview/commit/a5f4131bb76c1ff655892d287d19fcd401917d32)) enthält FastAPI, SQLite Schema v18 **als Codevertrag**, Frontend V2, Review/Ranking/Arena/Curation, Playground, Prompt-/LoRA-Katalog, Analytics und ComfyUI-Generator. [Codebelege](IMPLEMENTATION_AUDIT.md).
+Dieses Dokument enthält **nur noch offene Entscheidungen und offene technische
+Umsetzungen**. Es ist weder Implementierungs-Audit noch Arbeitsstatus,
+verbindlicher Produktvertrag, Betriebsanleitung oder historisches Protokoll:
 
-**Gegenwärtige Arbeitsbereiche** (Nutzerstand, 2026-10-09):
+- **Nachgewiesener Code und aktuelle Abnahmen:** [Projektstatus](project_status.md)
+  und [Implementation Audit](IMPLEMENTATION_AUDIT.md).
+- **Gerade laufende Arbeit:** [Active Work](ACTIVE_WORK.md) und
+  [Card-Battler-POC](pocs/card-battler.md). Dort ist der konkrete erste
+  Kartenablauf einschließlich 40-Karten-Testziel dokumentiert, ohne
+  abgeschlossene Spielfunktion zu behaupten.
+- **Entwicklungspriorität und langfristige Vision:**
+  [Project Evolution](PROJECT_EVOLUTION.md) und
+  [Character Chronicles](character-chronicles/vision/README.md). Die grobe
+  Orientierung **Card Battler → Social/Chats → Academy/Schuljahr → visuelle VN
+  zuletzt** ist geklärt; Detailmeilensteine und Technik sind nicht festgelegt.
+- **Bestätigte Vorgaben:** [Confirmed Constraints](CONFIRMED_CONSTRAINTS.md).
+  Das **gemeinsame KI-API-Monatsbudget unter 10 €** ist bestätigt;
+  konkrete Messung und etwaige ~8-€-Sperre sind weiter offen.
+- **Verworfener früherer Chronicle-Code:**
+  [historischer Code-Audit](character-chronicles/HISTORICAL_CODE_AUDIT.md).
+  Seine Architektur ist kein neuer Implementierungsauftrag.
 
-- **Card Battler wird aktiv als POC entwickelt.** Technische Materialisierungs-/Entwicklungsbausteine und Tests liegen bereits im Repository, aber keine fertige spielbare Match-/Deck-UI. [POC-Status](pocs/card-battler.md).
-- **Generator wurde jüngst überarbeitet.** Blueprint v4, Compiler, Lifecycle und API sind im Code vorhanden; zusätzliche Funktionserprobung und Verbesserungen bleiben möglich.
-- **Datenbank/Katalog werden noch optimiert.** Schema v18, Audit- und Rebuild-Kommandos existieren; reale Katalogbereinigung, Rehearsal, Datenbank-Cutover und operative Akzeptanz dürfen ohne persönliche Artefakte nicht als abgeschlossen gemeldet werden.
-
-Die [CI für die Codebaseline](https://github.com/Lexoniarus/ComfyReview/actions/runs/37769483557) war erfolgreich. CI-Belege ersetzen nicht die laufende Entwicklung oder reale Bedien-/Datenabnahme.
-
-## Langfristige Richtung
-
-ComfyReview **soll sich langfristig zu Character Chronicles entwickeln**. Die [Concept-Dokumente](character-chronicles/README.md) geben dafür inhaltliche Ideen: Welt, Story, Characters, Trials, Karten, visuelle Produktion, Sozialsysteme, Academy und New Game Plus. **Ob** und **wie** die vorgeschlagenen technischen Architekturen und Abläufe umgesetzt werden, muss sich erst in POCs und Entscheidungen zeigen.
-
-Ein **früherer Character-Chronicles-Entwicklungsstand wurde wegen einer
-unpassenden Richtung verworfen**. Der zugehörige Code liegt inzwischen
-**als `CharacterChronicle.zip` vor und wurde statisch untersucht**:
-alte Campaign-, Trial-, M6- und Worker-Implementierungen, Vite-/TypeScript-
-Frontend und SQLite v58 waren tatsächlich im damaligen Arbeitsordner.
-Die alten Acceptance-Texte kennzeichnen aber Live-/Zwei-Zyklen-Nachweise
-weiterhin als **offen**.
-[Historischer Code-Audit](character-chronicles/HISTORICAL_CODE_AUDIT.md).
-
-Der alte Ansatz ist **Beweismaterial für getroffene und verworfene Entscheidungen**,
-kein technischer Neubauauftrag. Dass etwas früher implementiert wurde,
-macht es nicht automatisch zur passenden künftigen Architektur.
-
-## Entwicklungspriorität – vom Projektinhaber klargestellt
-
-Die über die POCs gewonnene **grobe Reihenfolge** ist nicht mehr
-beliebig: **Card Battler → Social Network mit Timeline/Charakter-Chats →
-Academy-/Schuljahresmechaniken → visuelle VN zuletzt**.
-Social Network und Schuljahr dürfen sich in der Umsetzung überlappen.
-
-**Begründung:** Der frühere Character-Chronicle-Code entstand, bevor
-Card Battler, Worldbuilding und Academy als zusammenhängende Spielidee
-konkret waren. Die visuelle VN bringt mit Figurenfreistellung und
-Szenenkomposition zusätzliche technische Unsicherheiten mit sich und
-soll deshalb **nicht** vor die tragfähige Gameplay-/Social-Basis gezogen
-werden. Ein isolierter früher Techniktest solcher Risiken ist damit
-nicht ausgeschlossen.
-
-Diese Orientierung beschreibt **priorisierte Produktabhängigkeiten**,
-nicht bereits beschlossene Arbeitspakete, Schemata, Termine,
-Meilenstein-Gates oder endgültige Spielregeln.
-[Begründung und Abgrenzung](PROJECT_EVOLUTION.md#gewonnene-reihenfolge-aus-den-bisherigen-versuchen).
+Eine bestätigte Vorgabe bleibt in ihrem benannten Scope verbindlich,
+selbst wenn **ihre technische Umsetzung** in der folgenden Tabelle offen ist.
+Alte `DECIDED`-Formulierungen in importierten Quellen sind dagegen
+**nicht** automatisch bestätigte Vorgaben.
 
 ## Entscheidungen, die bewusst offen bleiben
 
