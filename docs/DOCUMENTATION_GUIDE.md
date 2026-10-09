@@ -82,15 +82,26 @@ Relative Markdown-Links vom Quellpfad aus prüfen; Archivtexte bei Anpassungen m
 Geprüft auf dem Dokumentationsbranch `docs/structure-and-status-2026-10-09`:
 
 - **65 im PR geänderte Markdown-Dateien** plus eine archivierte TXT-Datei
-  wurden am PR-Head nach den technischen Korrekturen nochmals gelesen
-  (nicht mit einer vollständigen Repository-Dateibauminventur verwechseln).
-  Ein einfacher Markdown-Link-Scanner erkannte **704 Inline-Linkangaben**.
-  **Keine fehlenden relativen `.md`-/`.txt`-Dateiziele** unter den geprüften
-  PR-Dateien; externe URLs und beliebige Code-/Asset-Links sind damit **nicht**
-  automatisch verifiziert. Die **14 gefundenen internen Kapitelverweise**
-  führen zu bestehenden Überschriften in den drei referenzierten Dateien
-  (einschließlich Unicode-Anker `fehlende-vorgängerquellen`).
-- Die zuvor reparierten alten Kapitelanker bleiben erhalten. Die neue
+  wurden am PR-Head erneut geprüft (nicht mit einem vollständigen
+  Repository-Dateibaum-Audit verwechseln). Der einfache Markdown-Scanner
+  erfasste **704 Inline-Linkangaben**. Alle relativen `.md`-/`.txt`-Links
+  außerhalb der historischen Originaltexte zeigen auf vorhandene Ziele.
+  **10 historische Linkverweise in den importierten Originaltexten** zeigen
+  bewusst noch auf frühere Foundation-, M4-/M6- und Referenzdateien, die
+  **nicht** im aktuellen Repository vorliegen. Diese Verweise sind im
+  [Quellenindex](character-chronicles/sources/README.md) eingeordnet;
+  sie wurden **nicht** durch Links auf aktuelle Produktdokumente ersetzt.
+- Von **7 erfassten Kapitelanker-Links** führen die **4 aktuellen** zu
+  existierenden Überschriften. Die **3 historischen** bleiben
+  originalgetreu; zwei verweisen auf heute fehlende Überschriften und
+  einer auf eine nicht im Repository vorhandene historische Datei.
+  Externe URLs und beliebige Code-/Asset-Links sind damit **nicht**
+  vollständig geprüft.
+- Die zwölf früher vorgenommenen Umleitungen in **neun importierten
+  Quelltexten** wurden zurückgenommen. Ihre ursprünglichen Referenztexte
+  bleiben erhalten; die historischen Quelllinks dürfen **nicht** zur
+  heutigen Vision oder aktuellen Implementierung umgedeutet werden.
+  Die neue
   [Canonical-DB-Archivquelle](archive/canonical-data-operator-evidence-2026-10-01-to-07.md)
   bewahrt historische Live-Zahlen und source-spezifische Inventare, statt
   diese in `CURRENT_TECH_REFERENCE` als heutige Invarianten zu führen.
