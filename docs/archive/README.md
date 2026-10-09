@@ -1,5 +1,9 @@
 # Historical Documentation Archive
 
+**Dokumentklasse:** `HISTORICAL_EVIDENCE` · **Rolle:** Archiv-Index;
+verweist auf historische Quellen und zeitgebundene `HISTORICAL_LOG`-Protokolle.
+Der Index selbst ist **kein aktueller Betriebs-/Statusnachweis**.
+
 > These files are historical **evidence**, not current setup or behaviour. For implemented facts use [Project Status](../project_status.md), [Architecture](../ARCHITECTURE.md), [Data Architecture](../DATA_ARCHITECTURE.md) and the [root README](../../README.md).
 
 | Record | Archived because |
