@@ -2,7 +2,7 @@
 
 **Dokumentklasse:** `OPEN` – noch ungeklärte Entscheidungen, keine zugewiesenen Meilensteine.
 
-**Stand:** 2026-10-09. Diese Liste ist **kein Zeitplan** und kein von importierten Konzepten abgeleiteter Implementierungsauftrag.
+**Stand:** 2026-10-10. Diese Liste ist **kein Zeitplan** und kein von importierten Konzepten abgeleiteter Implementierungsauftrag.
 
 **Bereits bestätigte Vorgaben** stehen ausdrücklich in den
 [scopebezogenen Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md). Hier bleiben

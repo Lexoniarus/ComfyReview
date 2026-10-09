@@ -38,9 +38,9 @@ story- und beziehungsorientierte Gesamtspielabsicht. **Eine inhaltlich
 bestätigte Welt ist nicht gleichbedeutend mit der Annahme historischer
 M4-/M6-, UI-, Datenbank- oder Regelverträge.** Der Weg bleibt iterativ,
 Weltänderungen brauchen eine neue ausdrückliche fachliche Entscheidung.
-Daneben steht beispielsweise die **eine gemeinsame Monatsobergrenze von unter 10 €**
+Daneben ist die **eine gemeinsame Monatsobergrenze von unter 10 €**
 für externe KI-API-Aufrufe im ComfyReview-/Character-Chronicles-Vorhaben
-festgehalten, einschließlich Entwicklungsexperimenten und späterer Nutzung.
+festgehalten. Sie umfasst Entwicklungsexperimente und spätere Nutzung.
 Ein vorgeschlagener App-seitiger Stopp bei ungefähr 8 € ist dagegen eine
 **noch nicht bestätigte Schutzoption**, kein bereits bestehender Mechanismus.
 Präferenzen und aktuelle POC-Ziele werden ausdrücklich **nicht** zu festen

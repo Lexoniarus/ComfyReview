@@ -2,7 +2,7 @@
 
 **Dokumentklasse:** `DECIDED_FOR_SCOPE` · **Rolle:** Übersicht aktueller bestätigter Vorgaben, mit **separat gekennzeichneten unverbindlichen Präferenzen und CANDIDATE-Vorschlägen**. Enthält **scopebezogene** Entscheidungen und bewusste
 Abgrenzung zu Präferenzen, POC-Zielen und technischen Vorschlägen.  
-**Stand:** 2026-10-09 · **Produktentwicklung:** ComfyReview soll über POCs
+**Stand:** 2026-10-10 · **Produktentwicklung:** ComfyReview soll über POCs
 langfristig zu Character Chronicles werden. **Keine** Abnahme einer
 Implementierung und **kein** verbindlicher Gesamtarchitektur- oder Releaseplan.
 

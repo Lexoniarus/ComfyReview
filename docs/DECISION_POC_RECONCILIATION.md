@@ -2,7 +2,7 @@
 
 **Dokumentklasse:** `GOVERNANCE` · **Rolle:** Herkunfts- und
 Geltungsabgleich, **kein zweites aktives Entscheidungsregister**.  
-**Stand:** 2026-10-09 · **Code-/Produktbasis:** ComfyReview, aus dem
+**Ursprünglicher Registerabgleich:** 2026-10-09 · **Fachliche Einordnung aktualisiert:** 2026-10-10 · **Code-/Produktbasis:** ComfyReview, aus dem
 Character Chronicles POC-getrieben hervorgehen soll.
 
 ## Herkunft und Leseregel

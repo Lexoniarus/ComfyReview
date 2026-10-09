@@ -1,10 +1,10 @@
 # Historischer Character-Chronicle-Code: Quellen- und Implementierungsaudit
 
-**Dokumentklasse:** `HISTORICAL_EVIDENCE` – älterer, verworfener Chronicle-Arbeitsstand, keine neue Runtime.
+**Dokumentklasse:** `HISTORICAL_EVIDENCE` – früherer Chronicle-Code-/Umsetzungsstand mit verworfener technischer Architektur, keine heutige Runtime. Die fachliche [Zielwelt](vision/world.md) bleibt bestätigt.
 
 **Untersucht:** 2026-10-09 · **Quelle:** vom Projektinhaber bereitgestellte lokale Datei `CharacterChronicle.zip`, SHA-256 `e8e2a7411904c6beaa46037adc247bcaa071281bca87e9df10153ec0aa5a2615`.
 
-> **Nicht die heutige ComfyReview-Runtime und kein Vorschlag zur Wiederherstellung dieser Architektur.** Das ZIP ist ein **früherer, inzwischen verworfener Character-Chronicle-Arbeitsstand**. Er ermöglicht eine bisher fehlende Prüfung historischer Implementierungsbehauptungen. ComfyReview bleibt der **aktuelle, in Entwicklung befindliche Code**, aus dem langfristig durch POCs und Neubewertung Character Chronicles entstehen soll.
+> **Nicht die heutige ComfyReview-Runtime und kein Vorschlag zur Wiederherstellung dieser Architektur.** Das ZIP ist ein **früherer Character-Chronicle-Code- und Umsetzungsstand, dessen technischer Ansatz verworfen wurde**. Er ermöglicht eine bisher fehlende Prüfung historischer Implementierungsbehauptungen. ComfyReview bleibt der **aktuelle, in Entwicklung befindliche Code**, aus dem langfristig durch POCs und Neubewertung Character Chronicles entstehen soll.
 
 ## Art und Grenzen der Quelle
 
@@ -38,7 +38,7 @@ Eine Funktionsdefinition oder registrierte Route belegt Quellcode, aber **nicht*
 - `docs/mvp/known-issues/m6-schema55-v10-loop-recovery.md` (Stand: 2026-09-14) nennt technische Fehlerursachen für die alte M6-Pipeline und den Status **FIX_IMPLEMENTED / LIVE_VERIFICATION_PENDING**.
 - `docs/mvp/decisions/foundation-traceability-and-gaps.md` unterscheidet implementierte Grundfunktionen, offen gebliebene echte Live-Abnahmen und nachrangige Zielanforderungen.
 
-Diese Dokumente sind **historische Selbstberichte mit überprüfbarem zugehörigem Code**, keine nachträglich durchgeführten Hardware-/Spielertests. Als Grund für die technische Verwerfung ist die Nutzerentscheidung zur **falschen Gesamtrichtung** maßgeblich; die ZIP allein beweist **nicht**, dass jeder POC technisch gescheitert wäre.
+Diese Dokumente sind **historische Selbstberichte mit überprüfbarem zugehörigem Code**, keine nachträglich durchgeführten Hardware-/Spielertests. Die Nutzerentscheidung betraf die **damalige technische Umsetzung und Entwicklungsstrategie**, nicht die inhaltliche Weltprämisse. **Kobe, die zwei Academy-Jahre, die Social-/Battler-Kultur und der Figuren-/Storyfokus sind inzwischen als [fachliche Zielwelt](vision/world.md) bestätigt.** Das ZIP allein beweist **nicht**, dass jeder damalige POC technisch gescheitert wäre.
 
 ## Importierte Konzepte direkt mit dem Quellstand abgeglichen
 

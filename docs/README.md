@@ -1,6 +1,6 @@
 # ComfyReview – Dokumentationsstart
 
-**Stand:** 2026-10-09 · **Projekt:** ComfyReview wird aktiv weiterentwickelt und soll langfristig zu Character Chronicles werden. **Die Produktentwicklung ist nicht fertig und ihre technische Zukunft nicht festgeschrieben.**
+**Stand:** 2026-10-10 · **Projekt:** ComfyReview wird aktiv weiterentwickelt und soll langfristig zu Character Chronicles werden. **Die Produktentwicklung ist nicht fertig und ihre technische Zukunft nicht festgeschrieben.**
 
 ## Projektzustand in drei Sätzen
 

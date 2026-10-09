@@ -2,7 +2,7 @@
 
 **Dokumentklasse:** `WORKING_DIRECTION` – aus POCs abgeleitete Priorität, keine feste Roadmap oder Architektur.
 
-**Stand: 2026-10-09.** Dieses Dokument beschreibt eine **Richtung**, keine freigegebene Gesamtarchitektur und keinen verbindlichen Implementierungsplan.
+**Stand: 2026-10-10.** Dieses Dokument beschreibt den **veränderbaren Entwicklungsweg** zur bestätigten fachlichen Zielwelt, keine freigegebene Gesamtarchitektur und keinen verbindlichen Implementierungsplan.
 
 ## Ein Produkt in Entwicklung, eine langfristige Vision
 
@@ -37,7 +37,7 @@ Schauplatz, Academy oder kulturelle Grundsituation wieder offen sind.
 
 ## Gewonnene Reihenfolge aus den bisherigen Versuchen
 
-**Stand 2026-10-09 – bewusst ungefähr, keine starre Roadmap:**
+**Arbeitsorientierung, Stand 2026-10-10 – bewusst ungefähr, keine starre Roadmap:**
 Die Ideen für Card Battler, Worldbuilding und Character Chronicles haben
 erst im Laufe der Experimente zusammengefunden. Der frühere Chronicle-Ansatz
 ging mit umfassender Architektur und VN-/Academy-Planung voraus, bevor die
@@ -95,7 +95,7 @@ Weitere Versuche außerhalb dieser Codebasis können parallel stattfinden. Nicht
 
 ## Frühere Character-Chronicles-Implementierung
 
-Es gab bereits einen **früheren Character-Chronicles-Entwicklungsstand**, dessen Richtung verworfen wurde. Die importierten Konzepttexte enthalten Anklänge daran (z. B. Vite/TypeScript, Chronicle-Events, M6 und Schema 47–58). **Diesen verworfenen technischen Ansatz übernehmen wir nicht automatisch.** Der frühere Code ist **in der inzwischen bereitgestellten
+Es gab bereits einen **früheren Character-Chronicles-Implementierungsstand**, dessen **technischer Entwicklungsansatz** verworfen wurde. Die darin entworfene Spielwelt wurde **nicht** verworfen; ihr Kern ist inzwischen als [Character-Chronicles-Zielwelt](character-chronicles/vision/world.md) ausdrücklich bestätigt. Die importierten Konzepttexte enthalten Anklänge daran (z. B. Vite/TypeScript, Chronicle-Events, M6 und Schema 47–58). **Diesen verworfenen technischen Ansatz übernehmen wir nicht automatisch.** Der frühere Code ist **in der inzwischen bereitgestellten
 `CharacterChronicle.zip` tatsächlich vorhanden** und wurde unabhängig
 vom aktuellen ComfyReview-Code [statisch untersucht](character-chronicles/HISTORICAL_CODE_AUDIT.md).
 Darin gab es unter anderem eine Vite-/TypeScript-UI, Campaign-/Trial-

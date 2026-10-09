@@ -4,7 +4,9 @@
 
 **Quellkategorie:** `PRODUCT_AND_WORLD_VISION`  
 **Worum es geht:** Weltprämisse, Academy, Network, Social, Karten und VN als umfassendes Spielerlebnis.  
-**Aktueller Referenzpunkt:** [bereinigter Überblick](../vision/README.md) · [Quellenindex](README.md) · [Entscheidungsregeln](../../DECISION_POLICY.md).
+**Aktueller Referenzpunkt:** [fachlich bestätigte Zielwelt](../vision/world.md) · [Gesamtvision](../vision/README.md) · [Quellenindex](README.md) · [Entscheidungsregeln](../../DECISION_POLICY.md).
+
+**Fachlicher Geltungsabgleich (2026-10-10):** Die Weltprämisse mit Kobe ab 2032, den zwei Academy-Jahren, einer etablierten Social-/Battler-Kultur und eigenständigen Figuren ist heute als **Zielvision bestätigt**. Dieser Originaltext bleibt trotzdem eine historische Quelle: Frühere genaue Kalender-, UI-, M6-, Datenbank- und Kartenregelverträge werden nicht pauschal übernommen. Maßgeblich für den heutigen Beschluss ist die [aktuelle Weltbeschreibung](../vision/world.md).
 
 ## Übernommene Quellenfassung (historischer Entwurf, keine aktuellen Beschlüsse)
 
