@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | **CURRENT_CODE** | [Code-Ist-Audit](IMPLEMENTATION_AUDIT.md), [Architektur](ARCHITECTURE.md), [Datenarchitektur](DATA_ARCHITECTURE.md) | Funktion im ComfyReview-Branch mit Pfad/Commit nachweisbar |
 | **IN_PROGRESS / POC** | [Aktive Arbeit](ACTIVE_WORK.md), [POCs](pocs/README.md) | Erprobung, Refactoring oder Betrieb im Fluss, nicht automatisch fertig |
+| **DECIDED_FOR_SCOPE** | [Bestätigte Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md) | Ausdrücklich bestätigte Vorgaben **nur im genannten Geltungsbereich**; Zielwerte, Präferenzen und Schutzoptionen bleiben getrennt |
 | **VISION / CANDIDATE** | [Projektentwicklung](PROJECT_EVOLUTION.md), [Character Chronicles](character-chronicles/README.md) | Fachliche Ideen und prüfbare Möglichkeiten |
 | **HISTORICAL / REJECTED / SUPERSEDED** | [Archiv](archive/README.md), [alter Chronicle-Code-Audit](character-chronicles/HISTORICAL_CODE_AUDIT.md), [früherer Entwurf](character-chronicles/history/full-mvp-draft-2026-08.md) | Frühere tatsächlich gebaute oder behauptete Lösungen, **keine** automatische heutige Vorgabe |
 | **OPEN** | [Offene Entscheidungen](OPEN_DECISIONS.md) | Noch nicht geklärte Fragen, keine Milestone-Liste |
