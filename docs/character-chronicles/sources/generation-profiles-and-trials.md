@@ -59,7 +59,7 @@ vollständig und revisioniert gespeichert. Die verbindliche Trennung steht in
 
 Die persönlichen Prompt-, Combo- und Workflow-Erfahrungen folgen zusätzlich dem
 allgemeinen Evidenz- und Datenbankvertrag in
-[Foundation-Vertrag zum adaptiven Generationslernen](../README.md#fehlende-vorgängerquellen).
+[Foundation-Vertrag zum adaptiven Generationslernen](../foundation/adaptive-generation-learning.md).
 
 ## Heutiger Ausgangspunkt
 
