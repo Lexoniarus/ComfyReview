@@ -653,9 +653,11 @@ Normal runtime startup neither opens nor initializes these files. Known
 additive changes require the explicit `python -m comfyreview legacy-db upgrade`
 command.
 
-## 10. Live schema verification
+## 10. Live schema verification — historical migration snapshots
 
-The live schema-v9 database contains 379 generations, 379 images, 379
+**Scope note:** The v6/v9 figures in this section were local audit snapshots, not the current runtime schema or a live count of every installation. The code now requires v18; operational databases are not stored in Git. The last documented local migration/checkpoint is reported separately in [Project Status](project_status.md), which does not establish the current state of a particular user's database.
+
+At the historical local schema-v9 checkpoint, the database contained 379 generations, 379 images, 379
 sampler stages, 729 prompt components, 729 immutable first revisions, 275
 recovered compositions and 1,280 ordered composition memberships. All 379
 images have output role, output index and a verified content hash. The existing
@@ -673,7 +675,7 @@ profile/generation LoRA relations without changing stable image, generation,
 component, revision or composition IDs. The explicit v8-to-v9 upgrade was
 rehearsed on a read-safe SQLite copy, backed up and applied with ComfyReview
 stopped on 2026-10-03. It preserved all 379 generation/image identities and
-added content/canvas settings. That verified live database's `user_version` is 9,
+added content/canvas settings. At that checkpoint, that verified database's `user_version` was 9,
 `integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
 pre-v7 backup remains schema v6 with all 729 revisions.
 
@@ -702,11 +704,13 @@ Cartesian product of possible prompt combinations. Persist combinations when
 they are explicitly authored, generated, curated or uniquely reconstructed. An
 unused authored template or revision remains canonical catalog data.
 
-Frontend V2 uses this completed data. Exact memberships are authoritative for
-the 363 linked generations. Any scope fallback for the sixteen unresolved
-generations must be the smallest read-only policy justified by their explicit
-diagnostics; it must not read legacy databases, paths, directory names or
-sidecars as runtime truth.
+At the earlier provenance-import checkpoint, 363 generations had exact
+memberships and sixteen remained unresolved. **Those numbers and the
+then-proposed fallback describe historical migration evidence, not the
+current scope coverage or an active fallback implementation.** Later audited
+recovery and subsequent catalog revisions are described in
+[Project Status](project_status.md). At every stage, runtime queries must
+use canonical facts rather than legacy databases, folder names or sidecars.
 
 Before migrating a derived projection, prefer a direct canonical query, then a
 SQL view. Only measured needs justify a materialized projection and worker.

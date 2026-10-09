@@ -1,6 +1,6 @@
 # Entwicklungsroadmap: ComfyReview → Character Chronicles
 
-**Dokumentrolle:** übergeordneter Produktphasenplan · **Status:** APPROVED_TARGET (Reihenfolge, nicht Detailumfang)
+**Dokumentrolle:** übergeordneter Produktphasenplan · **Status:** APPROVED_TARGET (ungefähre Entwicklungsrichtung; Phasengrenzen und Reihenfolge bleiben bei neuen Erkenntnissen überprüfbar)
 **Geltungsbereich:** langfristige Evolution derselben ComfyReview-Codebasis · **Stand:** 2026-10-09
 **Entscheidungsgrundlage:** [CRCC-001 bis CRCC-005](DECISIONS.md). Technischer IST-Zustand: [Projektstatus](project_status.md).
 
@@ -19,7 +19,7 @@
 | 4 | **Storyline** | erzählerische Ereignisse, Fortschritts- und Verknüpfungslogik entwickeln | kein automatisches Zweijahres-/Cast-/Quest-Modell aus dem Archiv |
 | 5 | **Visual-Novel-Content** | eigentliche VN-Inhalte, Szenen und ihre Ausspielung als letzte Produktstufe entwickeln | **zum Schluss**; erforderliche technische Vorarbeiten können in früheren Phasen ausdrücklich begründet werden, ohne VN-Content vorwegzunehmen |
 
-Die Reihenfolge ist relativ; **keine Termine oder festgelegte Meilensteinnummerierung** werden aus dem früheren Chronicle-Versuch übernommen.
+Die Reihenfolge ist eine **grobe aktuelle Planungsannahme**, keine starre Phasen- oder Release-Sperre. POCs zu späteren Schnittstellen können begründet parallel stattfinden; ihre Ergebnisse sind keine vorgezogene Produktimplementierung. **Keine Termine oder Meilensteinnummerierung** werden aus dem früheren Chronicle-Versuch übernommen.
 
 ## Umsetzung pro Phase
 
@@ -27,7 +27,7 @@ Die Reihenfolge ist relativ; **keine Termine oder festgelegte Meilensteinnummeri
 2. **Offene Entscheidungen/POCs erfassen:** Hypothese, Mess-/Akzeptanzkriterium, Risiken, Ergebnis und bewusst offene Alternativen im [POC-Register](POC_REGISTER.md) festhalten.
 3. **Entscheidung dokumentieren:** erst eine aktive Entscheidung im [Register](DECISIONS.md) darf ein späteres Konzept als bindenden Teilvertrag übernehmen. Alte Dokumente bleiben trotzdem historisch.
 4. **Vertikaler Slice:** geeignete Architektur, Persistenz, Tests und bedienbare Oberfläche gemeinsam entwickeln; keine ungeprüfte Komplettarchitektur vorab als umgesetzt beschreiben.
-5. **Abnahme vor Folgephase:** Ist-Zustand nachweisen, offenen Umfang kennzeichnen, nächste Phase dann konkretisieren.
+5. **Abnahme vor größerem Folgeausbau:** Produktive Slices nachweisen und Restumfang offenhalten; die nächste Stufe danach konkretisieren. Explorative POCs anderer Phasen dürfen ausdrücklich vorgezogen werden, ohne den Phasenplan als umgesetzt zu markieren.
 
 **Kein Big-Bang-Umbau:** Die Einführung neuer Produktflächen darf aktuelle Review-/Generation-/Datenverträge nicht stillschweigend ersetzen. Erforderliche Migrations- und Produktentscheidungen werden einzeln versioniert.
 
@@ -35,6 +35,6 @@ Die Reihenfolge ist relativ; **keine Termine oder festgelegte Meilensteinnummeri
 
 Bereits vor Phase 5 darf eine **explizit beschlossene** generische Schnittstelle nötig sein, etwa um spätere Story-/VN-Integration nicht zu blockieren. Das ist **keine Freigabe**, schon VN-Szenen, Cast-Listen, Dialogkampagnen, Assets oder den vollständigen alten Academy-Run zu implementieren.
 
-**Offen:** konkrete Timeline-Semantik; Social-/Chat-Grenzen; Story-Modell; VN-Produktionspipeline; langfristiger Produktname, Packaging und eventuelle spätere Repo-/Modulaufteilung. Diese Entscheidungen werden nicht aus dem Archiv erraten.
+**Offen:** konkrete Timeline-Semantik; Social-/Chat-Grenzen; Story-Modell; VN-Produktionspipeline; Zeitpunkt/Form der Umbenennung bzw. Vermarktung unter Character Chronicles, Packaging und eine eventuelle spätere Repo-/Modulaufteilung. Diese Entscheidungen werden nicht aus dem Archiv erraten.
 
 Siehe [Dokumentationsindex](README.md), [offene POCs](POC_REGISTER.md), [spätere Bereiche](future/README.md).

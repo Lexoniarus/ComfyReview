@@ -725,19 +725,27 @@ audited import input for local testing.
 - Frontend V2 uses Jinja shells and native ES modules; Playground previews and
   submission use immutable canonical prompt revisions and the native
   GenerationService
-- Public documentation may lag behind internal workflow experiments
+- Archived documents can describe obsolete behavior; use the current
+  [documentation index](docs/README.md) and [project status](docs/project_status.md)
+  for the active contract
 
 ---
 
-## Not the goal of this version
+## Not part of the current ComfyReview refactor
 
-- Fully redesigned data identity model
-- Full separation of curation truth from physical folder layout
-- Final export or packaging architecture for future LoRA dataset builds
-- Multi-user hosting
-- Cloud deployment
-- Public SaaS operation
+The following are **not part of the current refactor**; this does **not**
+mean they are rejected from the long-term product:
 
+- A complete playable PvE Card Battler (the next approved bounded phase;
+  preparatory model and development code already exists)
+- Timeline, Social Network with chat interaction, Storyline, or VN content
+  (planned later in that approximate order, with VN **content last**)
+- A packaged desktop installer, multi-user hosting, cloud deployment or SaaS
+- Production-grade final LoRA dataset-export and packaging workflows
+
+See the [roadmap](docs/ROADMAP.md) for the intended evolution of the same
+ComfyReview codebase into Character Chronicles, and the
+[decision register](docs/DECISIONS.md) for active and open decisions.
 ---
 
 ## Contributing
@@ -746,7 +754,8 @@ This is primarily a personal local workflow tool, but the public repository docu
 
 If you change behavior in this project, avoid silently breaking the workflow assumptions that make the app useful in practice:
 
-- required PNG and JSON pairing
+- matching PNG and JSON evidence for **historical sidecar imports only**;
+  native generation and already-canonical images do not require a sidecar
 - character/set filtering semantics
 - generator state persistence
 - lazy loading behavior in generator-related views

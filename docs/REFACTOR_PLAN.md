@@ -13,6 +13,13 @@ The goal is a maintainable local application with one canonical writable
 database, stable identity and explicit providers. Behaviour and public routes
 remain compatible unless a change is explicitly approved.
 
+**Reading guide:** This document also preserves the chronology of completed
+refactor slices and decisions made at earlier schema versions. Its historical
+work items are **not** a second active product roadmap or evidence that an
+older schema remains current. For the present implemented/open state consult
+[Project Status](project_status.md); for the intended evolution into Character
+Chronicles consult [Roadmap](ROADMAP.md) and [Decisions](DECISIONS.md).
+
 ## Completed foundations
 
 ### Safety bridge

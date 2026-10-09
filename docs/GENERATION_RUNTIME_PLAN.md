@@ -4,6 +4,12 @@ Status: native generation, canonical output collection, explicit
 reconciliation, the owned lifecycle worker and AnimeSharp Blueprint v4 are
 implemented, 2026-10-06.
 
+**Document role:** implementation history and runtime design notes for the
+now-implemented native-generation boundary. Sections describing migration
+dependency order preserve their original planning context, **not open
+implementation work**. Current architecture and acceptance belong to
+[Architecture](ARCHITECTURE.md) and [Project Status](project_status.md).
+
 ## Implemented foundation
 
 The canonical database already provides:
@@ -20,7 +26,7 @@ The canonical database already provides:
 Historical sidecars remain immutable migration evidence. They are not the
 target generation runtime.
 
-## Target dependency order
+## Historical dependency order (implementation completed)
 
 ```text
 Playground preparation
@@ -34,9 +40,10 @@ GenerationService implements GenerationPort
     -> GenerationOutputCollector
 ```
 
-Playground selection and prompt rendering are migrated before native generation
-but are not wired through a temporary generation facade. Final Playground
-submission moves only after the real `GenerationService` exists.
+During the completed migration, Playground selection and prompt rendering
+moved before native generation; no temporary generation facade became runtime
+authority. Final Playground submission moved to the real `GenerationService`.
+This is historical implementation sequencing, not a to-do list.
 
 ## Workflow blueprint and compiler
 

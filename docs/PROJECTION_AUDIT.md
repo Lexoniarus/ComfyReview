@@ -1,15 +1,19 @@
 # Projection Audit
 
-Status: completed on `refactor/review-boundary`, 2026-09-30.
+Status: completed historical projection cutover audit on
+`refactor/review-boundary`, 2026-09-30. **Not a list of currently pending
+migration tasks.** The legacy mechanisms in the table existed at the
+documented audit stage; consult [Project Status](project_status.md) and
+[Architecture](ARCHITECTURE.md) for the currently integrated runtime.
 
 This audit applies the required order to every remaining derived dataset:
 direct canonical query first, canonical SQL view second, and materialization
-only after a measured need. No current projection has evidence that justifies
+only after a measured need. At that audit, no projection had evidence that justified
 a replacement background worker.
 
 ## Decisions
 
-| Dataset | Current legacy mechanism | Canonical decision | Cutover consequence |
+| Dataset | Legacy mechanism at audit date | Canonical decision | Cutover consequence |
 | --- | --- | --- | --- |
 | Image ranking | `images.sqlite3` worker projection plus rating tables | Direct repository query over `images`, `review_events`, lifecycle and Curation facts | Existing `RankingService` already follows this decision; remove the legacy image projection consumers |
 | Prompt performance | `prompt_tokens.sqlite3` plus `prompt_ratings.sqlite3` | Direct repository query over generation prompt snapshots and review events, with prompt atoms normalized at the repository boundary | Replace page/store reads; no prompt-rating materialization |

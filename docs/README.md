@@ -7,6 +7,18 @@
 
 **ComfyReview ist der aktuelle lokale Bildgenerierungs-, Review- und Curation-Bestand.** Diese Codebasis soll schrittweise **zu Character Chronicles weiterentwickelt** werden, nicht automatisch an ein getrenntes Spielprojekt übergeben werden. Die Reihenfolge lautet: **Card Battler → Timeline → Social Network mit Chat-Interaktion → Storyline → Visual-Novel-Content**. Die Reihenfolge ist die aktuelle Produktabsicht; Umfang und Umsetzung einzelner Stufen werden erst durch neue Entscheidungen, POCs und Abnahmen festgelegt. **Der frühere Character-Chronicles-Entwicklungsversuch wurde verworfen.** Seine Dokumente sind nur historisches Material und keine aktuell gültige Implementierungsspezifikation.
 
+## Drei strikt getrennte Ebenen
+
+| Ebene | Bedeutung heute | Maßgebliche Quelle |
+| --- | --- | --- |
+| **Aktuell / IST** | ComfyReview mit implementierter Bild- und Generierungsfunktionalität; Refactor-Code im Branch integriert, Benutzerabnahme, realer Daten-Cutover und `master`-Merge noch offen | [Aktueller Projektstatus](project_status.md) |
+| **Geplante Evolution** | **Grobe, veränderbare** Phasenfolge derselben Codebasis: Card Battler, Timeline, Social/Chat, Storyline, VN-Content **zuletzt**; erstes Card-Battler-Teilziel beschlossen, viele Regeln noch offen | [Roadmap](ROADMAP.md), [Entscheidungen](DECISIONS.md), [POCs](POC_REGISTER.md) |
+| **Verworfen / historisch** | Früherer Character-Chronicles-Entwicklungsversuch und alte ComfyReview-Technikstände; keine aktuelle Autorität | [Archiv](archive/README.md) |
+
+**Wichtig:** „Code unterstützt Schema v18“ heißt **nicht**, dass jede lokale
+Datenbank bereits migriert ist. „Card-Battler-Modellcode vorhanden“ heißt
+**nicht**, dass ein komplett spielbares Kartenspiel fertig ist.
+
 ## Hier anfangen
 
 | Frage | Maßgebliche Quelle |
@@ -49,8 +61,9 @@
 - [Architektur](ARCHITECTURE.md) und [Datenarchitektur](DATA_ARCHITECTURE.md) – aktueller Code-/Laufzeitvertrag
 - [Refactor-Plan](REFACTOR_PLAN.md) und [Projektstatus](project_status.md) – Fortschritt und ausstehende Abnahmen des aktuellen Bestands
 - [Frontend V2](FRONTEND_V2_DESIGN.md) – bestehende ComfyReview-Oberfläche, **nicht** die spätere Chronicle-UI
-- [Generation Runtime](GENERATION_RUNTIME_PLAN.md), [Canonical Review Storage](CANONICAL_REVIEW_STORAGE.md), [Projection Audit](PROJECTION_AUDIT.md), [Legacy Output Import](LEGACY_OUTPUT_IMPORT.md) – technische Teilverträge
-- [Structured Prompt Bundles Work Order](STRUCTURED_PROMPT_BUNDLES_WORK_ORDER.md) – historischer, als implementiert ausgewiesener Arbeitsauftrag; für den aktuellen Gesamtstatus Projektstatus/Code prüfen
+- [Generation Runtime](GENERATION_RUNTIME_PLAN.md) und [Legacy Output Import](LEGACY_OUTPUT_IMPORT.md) – aktuelle technische Grenzen und explizite historische Importbefehle
+- [Projection Audit](PROJECTION_AUDIT.md) – abgeschlossener technischer Entscheidungsnachweis vom 2026-09-30, kein neuer Arbeitsauftrag
+- [Altes Canonical Review Storage / Schema v3](archive/comfyreview-legacy/CANONICAL_REVIEW_STORAGE.md) und [alter Structured Prompt Bundles Work Order](archive/comfyreview-legacy/STRUCTURED_PROMPT_BUNDLES_WORK_ORDER.md) – **historische Technikdokumente**, keine aktuellen Implementierungsanleitungen
 
 ## Produktentwicklung und Archiv
 

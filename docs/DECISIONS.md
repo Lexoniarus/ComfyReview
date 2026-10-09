@@ -16,7 +16,7 @@
 | ID | Datum | Status | Entscheidung und Geltung |
 | --- | --- | --- | --- |
 | **CRCC-001** | 2026-10-09 | ACTIVE | ComfyReview ist die bestehende Implementierungsbasis und wird **schrittweise zu Character Chronicles weiterentwickelt**. Ein separates Übergabeprojekt, eine komplette Neuentwicklung oder ein Repository-Split werden damit **nicht** festgelegt. |
-| **CRCC-002** | 2026-10-09 | ACTIVE | Die beabsichtigte Phasenreihenfolge ist **Card Battler → Timeline → Social Network einschließlich Chat-Interaktion → Storyline → VN-Content**. Der laufende ComfyReview-Refactor ist die vorgelagerte technische Ausgangsbasis. Detaillierter Scope und Termine sind nicht beschlossen. |
+| **CRCC-002** | 2026-10-09 | ACTIVE | Die **ungefähre aktuelle Entwicklungsrichtung** ist **Card Battler → Timeline → Social Network einschließlich Chat-Interaktion → Storyline → VN-Content**. Diese Reihenfolge ist ein überprüfbarer Leitplan, **kein starrer Zeitplan oder Verbot begründeter paralleler POCs**. Der laufende ComfyReview-Refactor ist die vorgelagerte technische Ausgangsbasis. Detaillierter Scope und Termine sind nicht beschlossen. |
 | **CRCC-003** | 2026-10-09 | ACTIVE | Der frühere Character-Chronicles-Entwicklungsversuch ist **verworfen**. Alle zugehörigen Verträge werden im Archiv bewahrt, nicht als aktuelle Anforderungen ausgeführt. Jede Wiederverwendung benötigt eine neue, explizite Entscheidung, auch wenn der alte Text „DECIDED“, „MVP“, „Autorität“ oder „implementiert“ behauptet. |
 | **CRCC-004** | 2026-10-09 | ACTIVE | Auf dem Entwicklungsweg folgen weitere POCs und Entscheidungen. Ungeklärte Details bleiben ausdrücklich OPEN. Ein POC liefert Evidenz, aber genehmigt seine eigene Produktionsübernahme nicht. |
 | **CRCC-005** | 2026-10-09 | ACTIVE | Die **eigentliche VN-Content-Entwicklung steht am Ende**. Technische Vorbereitungen davor sind nur als ausdrücklich begründete Schnittstellen-/POC-Arbeit zulässig, nicht als vorgezogene VN-Content-Phase. |
@@ -33,7 +33,7 @@
 | **OPEN-003** | OPEN | Welche Social-Network- und Chat-Funktionen sind für Phase 3 notwendig und welche Persistenz-/Moderationsgrenzen gelten? | Scope- und Interaktionsprototyp |
 | **OPEN-004** | OPEN | Wie werden Storyline, Entscheidungen und Zustandsübergänge für Phase 4 modelliert? | gesonderter Story-State-Prototyp |
 | **OPEN-005** | OPEN | Welche VN-Assets, Content-Produktionswege, Ausspiel-/Lokalisierungsmechanismen sind für Phase 5 nötig? | erst phasengerecht entscheiden |
-| **OPEN-006** | OPEN | Produktname, Deployment, eventuelle zusätzliche Module oder spätere Abspaltung? | gesonderte Architekturentscheidung; kein automatischer „Reuse in other repository“-Schritt |
+| **OPEN-006** | OPEN | Zeitpunkt/Form der Umbenennung bzw. des Brandings als Character Chronicles, Deployment, zusätzliche Module oder eine eventuelle spätere Abspaltung? | gesonderte Architekturentscheidung; kein automatischer „Reuse in other repository“-Schritt |
 
 ## Entscheidungsprozess
 

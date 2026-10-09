@@ -70,6 +70,27 @@ def find_documentation_issues() -> list[str]:
     ):
         issues.append("missing old README archive marker")
 
+    for name in (
+        "CANONICAL_REVIEW_STORAGE.md",
+        "STRUCTURED_PROMPT_BUNDLES_WORK_ORDER.md",
+    ):
+        historical = ARCHIVE / "comfyreview-legacy" / name
+        redirect = DOCS / name
+        if not historical.is_file():
+            issues.append(f"missing archived technical document: {name}")
+        elif not historical.read_text(encoding="utf-8").startswith(
+            "> [!CAUTION]"
+        ):
+            issues.append(f"missing technical archive banner: {name}")
+        if not redirect.is_file():
+            issues.append(f"missing historical documentation redirect: {name}")
+        elif "**Status: ARCHIVED.**" not in redirect.read_text(
+            encoding="utf-8"
+        ):
+            issues.append(
+                f"historical redirect is not marked archived: {name}"
+            )
+
     active_files = set(ROOT.glob("*.md")) | set(DOCS.rglob("*.md"))
     for source in sorted(active_files):
         if is_archived_source(source):

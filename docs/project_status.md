@@ -7,6 +7,32 @@ curating, analysing and reproducibly regenerating ComfyUI outputs. The
 integrated refactor base uses one canonical writable SQLite database and a
 native ES-module Frontend V2.
 
+## Current-state snapshot (as documented 2026-10-09)
+
+**This is the implementation/refactor branch, not the completed Character
+Chronicles product and not an accepted release on `master`.** The table
+separates implemented code from outstanding operational work and future targets.
+
+| Area | State on `refactor/review-boundary` | Do not infer |
+| --- | --- | --- |
+| Local ComfyReview app | **IMPLEMENTED**: Review, Top/Worst, Arena, Playground, Catalog, Generation, Analytics, Settings and Frontend V2 | A packaged/released Character Chronicles game |
+| Canonical storage | **IMPLEMENTED IN CODE**: schema-v18 application support, revisioned prompts, output and review facts | That any particular local `data/comfyreview.sqlite3` has already been migrated to v18 |
+| Local data operations | **NOT YET ACCEPTED/CUT OVER**: private catalog-normalization editorial mapping, real-database rehearsal/rebuild/replacement still require explicit operator approval | That locally retained data and migrations are in this repository |
+| Refactor release | **INTEGRATED ON REFACTOR BRANCH**; final user-visible acceptance and integration into `master` remain open | Release/merge approval from passing unit tests |
+| Card Battler | **PARTIAL PREPARATION**: model/read adapters, domain and development code; **no complete playable local PvE game** | That the historical 40-card rules, Match runtime or UI are live |
+| Timeline → Social/Chat → Storyline → VN content | **FUTURE PLAN**, scopes/POCs/acceptance pending; actual VN content last | That earlier Chronicle/Academy/VN specifications have been re-adopted |
+| Earlier Character Chronicles attempt | **ARCHIVED AND REJECTED AS CURRENT BASELINE** | That “DECIDED” or “implemented” inside an archived document applies today |
+
+The latest documented local schema-v11 upgrade and geometry rebuild took place
+on 2026-10-05 (details below); later **schema-v18 implementation in code**
+does not prove that any operator's current local database has been upgraded.
+Runtime databases, backups and the private editorial mapping are not stored
+in Git. Check the real database before migration or acceptance.
+
+For exact scope and authority, see [documentation index](README.md),
+[roadmap](ROADMAP.md), [decisions](DECISIONS.md) and
+[the bounded Card Battler target](CARD_BATTLER_TARGET.md).
+
 ## Implemented state
 
 - canonical schema v18 with stable image/generation identity, rebuildable PNG
@@ -49,7 +75,7 @@ native ES-module Frontend V2.
 - shared Python/frontend quality gate with architecture tests, coverage and
   Playwright browser acceptance.
 
-## Approved future product direction
+## Intended future product direction (approximate sequence)
 
 **Current source of truth:** [documentation index](README.md),
 [phase roadmap](ROADMAP.md), [restart decisions](DECISIONS.md) and
@@ -232,9 +258,16 @@ both outputs canonically.
 ## Acceptance and integration state
 
 The catalog-normalization implementation slices are committed on
-`fix/playground-combination-diversity`. The latest full shared quality gate is
-green: 770 Python tests, 181 frontend tests and 14 Playwright acceptance tests
-pass, with 100% Python-Core and frontend statement, function and line coverage.
+`fix/playground-combination-diversity`. The baseline shared quality gate before the documentation reorganization
+reported 770 Python tests, 181 frontend tests and 14 Playwright acceptance
+tests passing, with 100% Python-Core and frontend statement, function and
+line coverage. The initial documentation-reorganization commit
+`b248ee5bdd37bc488f8d0680bb655f193e8c4ac6` subsequently
+[passed its three GitHub Quality jobs](https://github.com/Lexoniarus/ComfyReview/actions/runs/37924149239)
+(Python 3.11, Python 3.14 and Windows regression) on 2026-10-09.
+Both records apply **only to the tested revisions**: subsequent documentation
+corrections and eventual `master` integration require their own checks and
+explicit acceptance.
 The private editorial mapping and the explicit real-database `--replace`
 cutover remain separate operator work. A dedicated behavior test now rebuilds
 a fixture database and serves it through the real `python main.py` subprocess;

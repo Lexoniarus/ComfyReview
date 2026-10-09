@@ -21,12 +21,15 @@ own bounded product area. Later Timeline, social/chat, storyline and VN-content 
 proven boundaries **in the same evolving codebase**, without prematurely
 coupling the Battler to those later product areas.
 
-This target deliberately does not make the Card Battler part of refactor
-acceptance. Work begins only after the current refactor has reached its required
-acceptance state, unless a later explicit planning decision changes that order.
-The implemented content-policy, canonical identity, generation and
-output-quality boundaries are foundations for that later work, not Card Battler
-implementation.
+This target deliberately does not make a **playable Card Battler** part
+of refactor acceptance. The next **game-product delivery and acceptance
+slices**, including live match persistence and UI, are planned after the
+current refactor reaches its required acceptance state, unless a later
+explicit planning decision changes that order. Preparatory model readers,
+domain logic and development services already present in this branch do
+**not** represent an accepted player-facing game. The existing
+content-policy, identity, generation and output-quality boundaries are its
+ComfyReview foundations.
 
 The former Character Chronicles design documents are **archived historical
 sources**, not implementation instructions or a runtime dependency. This
@@ -483,10 +486,18 @@ compositions, deck revisions or match transitions.
 
 ## 12. Binding implementation order
 
-The following order captures the approved product progression. It is separate
-from, and begins after, the active refactor sequence.
+**Naming clarification:** CB-1 through CB-7 are **Card Battler internal
+delivery slices**, all within **global product phase 1 (Card Battler)** of the
+[overall roadmap](ROADMAP.md). **CB-2 is not Timeline; CB-3 is not Social/Chat.**
+Later product phases require separate decisions and are not implicitly
+approved by completing CB-7.
 
-### Phase 1: manual card development and collection
+The following order describes **future product delivery/acceptance slices**,
+separate from the active refactor acceptance. Preparatory implementations may
+already cover some model or rules work across slices; a slice is not
+delivered until its full listed product behavior and acceptance criteria pass.
+
+### CB-1: manual card development and collection
 
 - add explicit `Develop as Card` eligibility and command behaviour;
 - create one stable CardIdentity per eligible source image idempotently;
@@ -496,7 +507,7 @@ from, and begins after, the active refactor sequence.
 - define deletion, restoration, pending-art and unavailable-card behaviour;
 - do not add combat or pretend the collection is already a deck.
 
-### Phase 2: deterministic card functions
+### CB-2: deterministic card functions
 
 - introduce the small versioned ruleset, archetypes and opcode registry;
 - assign and persist rules from an explicit craft seed and policy revisions;
@@ -505,14 +516,14 @@ from, and begins after, the active refactor sequence.
 - expose human-readable deterministic card functions in collection views;
 - keep LLMs outside mechanics and verify replayable materialization.
 
-### Phase 3: deck construction
+### CB-3: deck construction
 
 - add named, revisioned decks over existing CardIdentities;
 - add server-side playable-pool and deck-readiness validation;
 - select and document the prototype deck size and duplicate policy;
 - do not copy cards into decks or encode readiness only in the UI.
 
-### Phase 4: functional PvE Battler
+### CB-4: functional PvE Battler
 
 - implement the deterministic server-side match aggregate and reducer;
 - freeze deck, rule, card and presentation revisions at match start;
@@ -521,7 +532,7 @@ from, and begins after, the active refactor sequence.
 - test success, illegal commands, stale revisions, step budgets, recovery and
   completed-match immutability.
 
-### Phase 5: battle-driven card development and evolution
+### CB-5: battle-driven card development and evolution
 
 - emit deduplicated post-match usage facts without mutating match snapshots;
 - implement versioned experience and anti-farm policies plus rebuildable
@@ -533,7 +544,7 @@ from, and begins after, the active refactor sequence.
 - exercise the full Common-to-Ultra path and enforce the locked Legendary gate;
 - verify that all changes affect only future matches.
 
-### Phase 6: game and development interface
+### CB-6: game and development interface
 
 - add the interactive board, hand, action prompts and result presentation;
 - show current Rarity, Level, Trait lineage, experience progress, pending
@@ -545,7 +556,7 @@ from, and begins after, the active refactor sequence.
 - render only confirmed server projections and map input to semantic commands;
 - complete keyboard, pointer, touch, small-viewport and reduced-motion paths.
 
-### Phase 7: hardening and preparation for subsequent phases
+### CB-7: hardening and preparation for subsequent phases
 
 - run the complete quality, architecture, determinism and browser gates;
 - document the stable reusable domain and application ports;
