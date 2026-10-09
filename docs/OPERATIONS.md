@@ -1,7 +1,7 @@
 # ComfyReview – Datenbank-, Import- und Wartungsbefehle
 
-**Dokumentklasse:** `CURRENT_OPERATIONS_GUIDE` · **Quellenstand:** `refactor/review-boundary` / Anwendungscode `a5f4131` (2026-10-08).  
-**Geltungsbereich:** **gegenwärtige ComfyReview-CLI**; kein neuer Character-Chronicles-Architektur-/Migrationsplan.
+**Dokumentklasse:** `CURRENT_OPERATIONS` · **Quellenstand:** `refactor/review-boundary` / Anwendungscode `a5f4131` (2026-10-08).  
+**Geltungsbereich:** **gegenwärtige ComfyReview-CLI**, insbesondere Datenbank-/Import-/Wartungsbefehle; kein neuer Character-Chronicles-Architektur-/Migrationsplan. Dies ist die **führende Betriebsübersicht**. Das [Legacy Output Import-Dokument](LEGACY_OUTPUT_IMPORT.md) erläutert ausschließlich einen einzelnen historischen Importpfad im Detail.
 
 > **Sicherheit:** Schema-v18-Unterstützung im Code ist **keine Bestätigung**, dass die reale private Datenbank bereits v18 verwendet oder redaktionell normalisiert ist. Rehearsal, Quellhash, validierte Ausgabe, echte Backups, Anwendung im gestoppten Zustand und ausdrückliche Operatorentscheidung sind entscheidend. Vor einem `--replace` den eigenen Datenbestand, den aktuellen CLI-Vertrag, Dateipfade und Sicherungen überprüfen. Die folgenden Beispiele stammen aus der bisherigen Repository-README; ihre realen Pfade sind **Beispiele**, nicht bereits vorhandene private Dateien.
 
