@@ -300,7 +300,7 @@ und Status. Eine vorgeschlagene Formulierung oder Gewichtung bleibt zunächst ei
 Try und wird erst über vollständige Generation Recipes, Bildspiele und
 strukturierte Review Evidence bewährt. Der vollständige Daten-, Rating- und
 ComfyUI-Vertrag steht in
-[Foundation-Vertrag zum adaptiven Generationslernen](../README.md#fehlende-vorgängerquellen).
+[Foundation-Vertrag zum adaptiven Generationslernen](../foundation/adaptive-generation-learning.md).
 
 Der kurze Child-Pfad ab Schema 55 verwendet für alle sieben Component-Rollen
 einen akzeptierten `TypedMutationCorridor`. Code autorisiert darin Rolle,
