@@ -71,9 +71,8 @@ Eine neue, bindende Entscheidung braucht einen konkreten Scope, Alternativen, Be
 - `docs/REFACTOR_PLAN.md`: knapper Refactor-/Abnahmestand; kompletter Slice-Verlauf nur im Archiv.
 - `docs/OPERATIONS.md`: CLI/Import/DB-Upgrade-Prozeduren; **nicht** als angeblich ausgeführte Migration lesen.
 - `docs/ACTIVE_WORK.md`: laufende Entwicklung von Generator, Datenbank/Katalog und POCs.
-- `docs/character-chronicles/sources/`: fachliche und technische **Quellen**, deren alte Autoritätsmetadaten nicht übernehmen.
 - `docs/character-chronicles/vision/`: **kurze aktuelle fachliche Arbeitsvision** ohne alte technische Pflichtvertrags-Formulierungen.
-- `docs/character-chronicles/sources/`: **importierte ausführliche Quelltexte**, Originalaussagen zur Verbindlichkeit gelten nur im damaligen Quellkontext.
+- `docs/character-chronicles/sources/`: **importierte ausführliche Quelltexte** und Herkunftsindex; alte Autoritätsmetadaten und Verbindlichkeitsbehauptungen gelten nur im damaligen Quellkontext.
 - `docs/archive/`: alte Status-, Refactor- und README-Protokolle, ausdrücklich historisch.
 
 Relative Markdown-Links vom Quellpfad aus prüfen; Archivtexte bei Anpassungen möglichst nicht semantisch überschreiben, sondern durch Kontext-Banner einordnen. CI-Ergebnisse nur mit Commit/Run zitieren; lokale Datenbank-/Hardware-Aussagen nicht aus Testcode extrapolieren. **Keine Meilensteine oder Design-Festlegungen erfinden**, solange das Experiment und die Entscheidung offen sind.
