@@ -1,6 +1,6 @@
 # Card Battler – erstes tragfähiges Gameplay
 
-**Dokumenttyp:** `WORKING_VISION` · **Priorität:** aktuell zuerst · **Status im Code:** `IN_PROGRESS / POC`, **nicht** fertiges Spiel.
+**Dokumentklasse:** `WORKING_VISION` · **Priorität:** aktuell zuerst · **Status im Code:** `IN_PROGRESS / POC`, **nicht** fertiges Spiel.
 
 ## Fachliche Absicht
 
