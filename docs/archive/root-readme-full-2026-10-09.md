@@ -1,6 +1,6 @@
 # Root README – ausführlicher Stand vor der Navigationstrennung
 
-**Dokumentklasse: HISTORICAL_REFERENCE_SNAPSHOT.** Der nachfolgende längere README-Stand wurde am 2026-10-09 als Nachweis gesichert, weil Setup, Datenbankwartung, Laufzeitdetails und Produktvision in einer einzigen Einstiegsdatei vermischt waren.
+**Dokumentklasse:** `HISTORICAL_EVIDENCE` · **Rolle:** archivierter README-Snapshot (nicht gültige heutige Anleitung). Der nachfolgende längere README-Stand wurde am 2026-10-09 als Nachweis gesichert, weil Setup, Datenbankwartung, Laufzeitdetails und Produktvision in einer einzigen Einstiegsdatei vermischt waren.
 
 Für **aktuelle** Informationen jetzt verwenden: [kurzes Root README](../../README.md), [Datenbank-/Wartungsanleitung](../OPERATIONS.md), [Status](../project_status.md), [Code-Architektur](../ARCHITECTURE.md), [Zielbild](../character-chronicles/vision/README.md). Details und Betriebsaussagen im überlieferten Text sind **kein neu geprüftes Releaseprotokoll**.
 
