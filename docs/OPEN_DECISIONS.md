@@ -4,6 +4,13 @@
 
 **Stand:** 2026-10-09. Diese Liste ist **kein Zeitplan** und kein von importierten Konzepten abgeleiteter Implementierungsauftrag.
 
+**Bereits bestätigte Vorgaben** stehen ausdrücklich in den
+[scopebezogenen Rahmenbedingungen](CONFIRMED_CONSTRAINTS.md). Hier bleiben
+**nur die noch offenen Entscheidungen und Implementierungsfragen**. So ist
+das gemeinsame externe KI-API-Monatsbudget von **unter 10 €** bestätigt;
+dessen technische Durchsetzung einschließlich eines möglichen App-Stopps
+bei ungefähr 8 € **noch nicht** beschlossen oder als eingebaut belegt.
+
 ## Bestehende ComfyReview-Entwicklung
 
 **ComfyReview wird aktiv weiterentwickelt.** Der Code vor dem Dokumentenimport ([`a5f4131`](https://github.com/Lexoniarus/ComfyReview/commit/a5f4131bb76c1ff655892d287d19fcd401917d32)) enthält FastAPI, SQLite Schema v18 **als Codevertrag**, Frontend V2, Review/Ranking/Arena/Curation, Playground, Prompt-/LoRA-Katalog, Analytics und ComfyUI-Generator. [Codebelege](IMPLEMENTATION_AUDIT.md).
@@ -59,6 +66,7 @@ Meilenstein-Gates oder endgültige Spielregeln.
 | --- | --- |
 | Welche bisherigen ComfyReview-Komponenten bleiben auf dem Weg zu Character Chronicles erhalten? | Nach Bedarf und POC-Ergebnis entscheiden, nicht automatisch alles migrieren |
 | Wie wird der Card Battler spielerseitig integriert? | **Aktiver POC**, keine voreilig festgeschriebene Architektursequenz |
+| Wie wird die bereits beschlossene gemeinsame KI-API-Budgetobergrenze technisch eingehalten? | Geltung **unter 10 € im Monat** für Entwicklungs- und App-Aufrufe bestätigt; Erfassung, mögliche ca. 8-€-Sperre, Providerlimits und Aufrufe außerhalb der App sind noch **technische/operative Kandidaten**, kein nachgewiesener Schutz |
 | Welche Teile der alten Card-Battler-Pläne passen noch? | Historische Ideen prüfen; alte „approved“-Markierungen übertragen keine aktuelle Autorität |
 | Wie wird der Generator/Katalog zur weiteren Produktentwicklung genutzt? | Aktuellen Code und reales Datenmodell nachziehen; Cutover/Optimierung getrennt validieren |
 | Welche früheren Character-Chronicles-Schemata/Orchestrierungen werden verworfen, ersetzt oder neu erprobt? | **Nicht** aus alten Texten importieren; POCs und aktuelles Zielbild maßgeblich |
