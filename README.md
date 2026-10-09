@@ -52,6 +52,7 @@ Entwicklungstests:
 ```bash
 pip install -r requirements-dev.txt
 python -m pytest
+python scripts/check_documentation.py
 python scripts/quality.py
 ```
 
