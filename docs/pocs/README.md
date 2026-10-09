@@ -1,6 +1,6 @@
 # Proofs of Concept — laufende Experimente
 
-**Dokumentklasse:** `IN_PROGRESS_INDEX` – experimentelle Teilbereiche, keine fertige Produktphase.
+**Dokumentklasse:** `IN_PROGRESS` · **Rolle:** POC-Index; experimentelle Teilbereiche, keine fertige Produktphase.
 
 POCs sind hier **bewusst ein legitimer Teil der fortlaufenden Produktentwicklung**. Sie testen einzelne Hypothesen technisch oder spielmechanisch, ohne damit eine spätere Architektur oder einen festen Implementierungsplan vorzugeben.
 
