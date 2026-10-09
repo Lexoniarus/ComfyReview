@@ -46,10 +46,11 @@ jeweils anhand von POCs und konkreten Entscheidungen zu prüfen.
 
 - **Kostenwunsch:** Möglichst **1–3 € pro Monat** statt Ausreizen der
   10-€-Obergrenze. Das ist ein **Optimierungsziel**, keine zweite harte Grenze.
-- **Arbeitsweise:** Bevorzugt lokale Python-/SQL-/ComfyUI-/LM-Studio-
-  Verarbeitung und künftig keine externen Coding-Agenten als regulärer
-  Entwicklungsweg. Das legt **keine** bestimmte spätere App-Architektur
-  oder obligatorische Modellwahl fest.
+- **Arbeitsweise:** Lokale Python-/SQL-/ComfyUI-/LM-Studio-
+  Verarbeitung bevorzugen, wo sie zur Aufgabe passt. Die Auswahl von
+  Entwicklungswerkzeugen bleibt offen und orientiert sich an Eignung,
+  Qualität und Kosten. Daraus folgt keine bestimmte spätere
+  App-Architektur oder obligatorische Modellwahl.
 - **Modell-/Request-Effizienz:** Qualität **und** Gesamtkosten je
   erfolgreicher Aufgabe betrachten; knappen zielgerichteten Kontext
   und strukturierte Antworten bevorzugen, Tokenumfang reduzieren und
