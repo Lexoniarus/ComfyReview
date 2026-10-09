@@ -74,7 +74,8 @@ def find_documentation_issues(root: Path = ROOT) -> list[str]:
             issues.append(f"missing current document: {name}")
 
     source_files = sorted(
-        path for path in source_dir.glob("*.md")
+        path
+        for path in source_dir.glob("*.md")
         if path.name not in SOURCE_INDEX_FILES
     )
     if len(source_files) != 24:
