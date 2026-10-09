@@ -38,7 +38,7 @@ aktuellen technischen oder fachlichen Pflichtverträge.
 | **CURRENT_TECH_REFERENCE** | [Architektur](ARCHITECTURE.md), [Datenarchitektur](DATA_ARCHITECTURE.md), [Frontend V2](FRONTEND_V2_DESIGN.md) | **ComfyReviews derzeitige Implementierungsverträge**, keine Architekturvorgabe für das spätere Spiel |
 | **CURRENT_OPERATIONS** | [Betriebsübersicht](OPERATIONS.md); [Legacy Output Import](LEGACY_OUTPUT_IMPORT.md) als Spezialanleitung | Aktuelle CLI, Import, Recovery, `--replace`; **historische Daten** bedeuten nicht **historisch ungültige Kommandos** |
 | **ENGINEERING_RULES** | [AGENTS](../AGENTS.md), [Coding Standards](CODING_STANDARDS.md) | Für Änderungen am gegenwärtigen ComfyReview-Code geltende Regeln |
-| **GOVERNANCE** | [Dokumentationsleitfaden](DOCUMENTATION_GUIDE.md), [Decision Policy](DECISION_POLICY.md) | Bedeutung der Dokumentklassen sowie Regeln für neue fachliche/technische Entscheidungen |
+| **GOVERNANCE** | [Dokumentationsleitfaden](DOCUMENTATION_GUIDE.md), [Decision Policy](DECISION_POLICY.md), [Abgleich alter CRCC-/POC-Einträge](DECISION_POC_RECONCILIATION.md) | Dokumentklassen, Entscheidungsregeln und nichtverbindliche Zuordnung der früher falsch platzierten Register |
 | **SOURCE_MATERIAL** | [24 importierte Quelltexte](character-chronicles/sources/README.md) | Ausführliche Spielideen und frühere „verbindliche“ Verträge **nur als Quellen**, nicht als heutige Vorgaben |
 | **HISTORICAL_EVIDENCE** | [Alter Chronicle-Code](character-chronicles/HISTORICAL_CODE_AUDIT.md), [historisches Archiv](archive/README.md) | Was früher vorhanden, geplant oder verworfen war – nicht was jetzt gebaut werden muss |
 | **HISTORICAL_LOG** | [Archivierter Refactor-Verlauf](archive/refactor-slice-history-2026-10-09.md), [alte Status-/Operatorberichte](archive/project-status-log-2026-10-09.md) | **Ausschließlich frühere** Slices, Zeitpunkte, operative Berichte; kein heutiger Status |
@@ -60,6 +60,7 @@ docs/
   OPEN_DECISIONS.md                   OPEN
   CONFIRMED_CONSTRAINTS.md           DECIDED_FOR_SCOPE / Präferenzen / Optionen
   DECISION_POLICY.md                  GOVERNANCE – Entscheidungsregeln
+  DECISION_POC_RECONCILIATION.md      GOVERNANCE – historischer ID-Abgleich (keine zweite Roadmap)
   DOCUMENTATION_GUIDE.md              GOVERNANCE – Dokumentklassen
   ARCHITECTURE.md, DATA_ARCHITECTURE.md, ...  CURRENT_TECH_REFERENCE
   pocs/
