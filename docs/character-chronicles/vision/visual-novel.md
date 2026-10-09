@@ -1,6 +1,6 @@
 # Visuelle Novel – bewusster letzter Ausbauschritt
 
-**Dokumenttyp:** `WORKING_VISION` · **Priorität:** letzter großer visueller Produktausbau · **Status im aktuellen ComfyReview:** nicht als VN-Gesamtsystem integriert.
+**Dokumentklasse:** `WORKING_VISION` · **Priorität:** letzter großer visueller Produktausbau · **Status im aktuellen ComfyReview:** nicht als VN-Gesamtsystem integriert.
 
 ## Fachliche Absicht
 
