@@ -62,7 +62,9 @@ class NativeLmStudioStructuredInferenceProvider:
             or not isfinite(request_timeout_seconds)
             or request_timeout_seconds <= 0
         ):
-            raise ValueError("request_timeout_seconds must be positive and finite")
+            raise ValueError(
+                "request_timeout_seconds must be positive and finite"
+            )
         self._transport = transport
         self._request_timeout_seconds = float(request_timeout_seconds)
 
@@ -112,9 +114,13 @@ class NativeLmStudioStructuredInferenceProvider:
         except LocalModelError:
             raise
         except TimeoutError as error:
-            raise LocalModelTimeoutError("LM Studio structured inference timed out") from error
+            raise LocalModelTimeoutError(
+                "LM Studio structured inference timed out"
+            ) from error
         except OSError as error:
-            raise LocalModelConnectionError("Could not connect to LM Studio for structured inference") from error
+            raise LocalModelConnectionError(
+                "Could not connect to LM Studio for structured inference"
+            ) from error
         return self._normalize_response(response, request)
 
     @staticmethod
@@ -123,12 +129,16 @@ class NativeLmStudioStructuredInferenceProvider:
         request: LocalStructuredInferenceRequest,
     ) -> LocalStructuredInferenceResult:
         if not isinstance(response, LmStudioJsonResponse):
-            raise LocalModelProtocolError("Invalid LM Studio structured transport response")
+            raise LocalModelProtocolError(
+                "Invalid LM Studio structured transport response"
+            )
         status = response.status_code
         if type(status) is not int or not 100 <= status <= 599:
             raise LocalModelProtocolError("Invalid LM Studio HTTP status")
         if status == 404:
-            raise LocalModelUnavailableError("LM Studio model is unavailable (HTTP 404)")
+            raise LocalModelUnavailableError(
+                "LM Studio model is unavailable (HTTP 404)"
+            )
         if 400 <= status < 500:
             raise LocalModelInferenceError(
                 f"LM Studio rejected structured inference (HTTP {status})"
@@ -141,7 +151,9 @@ class NativeLmStudioStructuredInferenceProvider:
             raise LocalModelProtocolError("Unexpected LM Studio HTTP status")
         body = response.payload
         if not isinstance(body, dict):
-            raise LocalModelProtocolError("LM Studio completion must be a JSON object")
+            raise LocalModelProtocolError(
+                "LM Studio completion must be a JSON object"
+            )
         data = cast(dict[str, object], body)
         raw_model = data.get("model")
         if raw_model is None:
@@ -156,25 +168,35 @@ class NativeLmStudioStructuredInferenceProvider:
             reported_model = raw_model
         choices = data.get("choices")
         if not isinstance(choices, list) or len(choices) != 1:
-            raise LocalModelProtocolError("LM Studio completion must contain one choice")
+            raise LocalModelProtocolError(
+                "LM Studio completion must contain one choice"
+            )
         choice = choices[0]
         if not isinstance(choice, dict):
             raise LocalModelProtocolError("Invalid LM Studio choice")
         item = cast(dict[str, object], choice)
         if item.get("finish_reason") != "stop":
-            raise LocalModelProtocolError("LM Studio completion did not finish normally")
+            raise LocalModelProtocolError(
+                "LM Studio completion did not finish normally"
+            )
         message = item.get("message")
         if not isinstance(message, dict):
-            raise LocalModelProtocolError("Invalid LM Studio assistant message")
+            raise LocalModelProtocolError(
+                "Invalid LM Studio assistant message"
+            )
         result_message = cast(dict[str, object], message)
         if result_message.get("role") != "assistant":
             raise LocalModelProtocolError("Invalid LM Studio assistant role")
         if result_message.get("refusal") is not None:
-            raise LocalModelProtocolError("LM Studio refused structured output")
+            raise LocalModelProtocolError(
+                "LM Studio refused structured output"
+            )
         if result_message.get("tool_calls") is not None or (
             result_message.get("function_call") is not None
         ):
-            raise LocalModelProtocolError("Unexpected tool call in structured inference")
+            raise LocalModelProtocolError(
+                "Unexpected tool call in structured inference"
+            )
         content = result_message.get("content")
         if not isinstance(content, str) or not content.strip():
             raise LocalModelProtocolError("Missing structured JSON content")
@@ -191,14 +213,20 @@ class NativeLmStudioStructuredInferenceProvider:
             )
             json.dumps(value, allow_nan=False)
         except (ValueError, TypeError) as error:
-            raise LocalModelProtocolError("LM Studio returned invalid structured JSON") from error
+            raise LocalModelProtocolError(
+                "LM Studio returned invalid structured JSON"
+            ) from error
         try:
             Draft202012Validator(request.schema_document()).validate(value)
         except ValidationError as error:
-            raise LocalModelStructuredOutputError("LM Studio JSON does not match the requested schema") from error
+            raise LocalModelStructuredOutputError(
+                "LM Studio JSON does not match the requested schema"
+            ) from error
         except Exception as error:
             # Invalid or cyclic references must not escape as raw errors.
-            raise LocalModelProtocolError("LM Studio JSON schema resolution failed") from error
+            raise LocalModelProtocolError(
+                "LM Studio JSON schema resolution failed"
+            ) from error
         return LocalStructuredInferenceResult(
             requested_model_id=request.inference.model_id,
             reported_model_id=reported_model,
@@ -226,10 +254,10 @@ class NativeLmStudioStructuredInferenceProvider:
         try:
             return LocalInferenceUsage(
                 input_tokens=cast(int, usage.get("prompt_tokens")),
-                total_output_tokens=cast(
-                    int, usage.get("completion_tokens")
-                ),
+                total_output_tokens=cast(int, usage.get("completion_tokens")),
                 reasoning_output_tokens=cast(int | None, reasoning),
             )
         except ValueError as error:
-            raise LocalModelProtocolError("Invalid LM Studio token counters") from error
+            raise LocalModelProtocolError(
+                "Invalid LM Studio token counters"
+            ) from error
