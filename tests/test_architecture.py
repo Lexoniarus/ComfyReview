@@ -27,7 +27,8 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
         (
             "import sqlite3\n"
             "from comfyreview.providers import LocalOutputImageCatalog\n"
-            "from comfyreview.repositories.sqlite import SqliteReviewRepository\n"
+            "from comfyreview.repositories.sqlite import "
+            "SqliteReviewRepository\n"
             'connection.execute("SELECT 1")\n'
         ),
     )
@@ -68,7 +69,6 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
         "stores/example.py|repositories.no_external_calls": 1,
         "stores/schema.py|schema.ddl_location": 1,
     }
-
 
 
 def test_character_prompt_core_rejects_concrete_adapter_imports(

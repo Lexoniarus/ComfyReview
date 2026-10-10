@@ -129,17 +129,19 @@ def _record_import_violations(
             counts[f"{relative_path}|core.no_technical_dependencies"] += 1
         if "prompt_core" in boundaries and (
             imported_root in {
-                "fastapi", "httpx", "pathlib", "requests", "sqlite3",
-                "urllib", "websocket",
+                "fastapi",
+                "httpx",
+                "pathlib",
+                "requests",
+                "sqlite3",
+                "urllib",
+                "websocket",
             }
-            or imported_module.startswith((
-                "comfyreview.providers",
-                "comfyreview.repositories",
-            ))
+            or imported_module.startswith("comfyreview.providers")
+            or imported_module.startswith("comfyreview.repositories")
         ):
-            counts[
-                f"{relative_path}|prompt_core.no_concrete_dependencies"
-            ] += 1
+            rule = f"{relative_path}|prompt_core.no_concrete_dependencies"
+            counts[rule] += 1
         if "routes" in boundaries or "services" in boundaries:
             if imported_module.startswith("comfyreview.providers"):
                 counts[f"{relative_path}|output.no_concrete_provider"] += 1

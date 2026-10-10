@@ -1,4 +1,4 @@
-"""Compose bounded, source-revisioned speaker instructions without chat data."""
+"""Compose revisioned speaker instructions without chat data."""
 
 from __future__ import annotations
 

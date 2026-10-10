@@ -31,26 +31,36 @@ ROOT = (
 )
 CAST = ("aiko", "hina", "kaori", "mitsuki", "natsumi", "saki")
 AUTHORED_SHA256 = {
-    "global_speaker.md":
-        "a8fefca1c204c239de07b8374be91a73137363c11a5115b9b04d25998d0bb8f8",
-    "variants/baseline.md":
-        "b54387945e4dc9d7def1a33dc125eb56f89fec9cba261ff8e1a9470e78c3baf4",
-    "variants/voice_candidate_p2.md":
-        "42cae6e8835793e6ea92b698566257f1535ede8ffc9d2a862c8a089ed218b261",
-    "variants/voice_precise.md":
-        "7ed2e2b53db1b91418d13e54da6225f00349f6c4d9849a1d3a20dbbe038a06d7",
-    "candidates/aiko.md":
-        "3ca53e9a8459ea431ea998c71d2cc3db4aa6632b79a3ab0fc5cb1e0b135530ab",
-    "candidates/hina.md":
-        "7ac407bbac73af6a4194dd51437e8d8208137e86139387b67713b1aa458145cd",
-    "candidates/kaori.md":
-        "e44f424420fc404024115995f8cc2fa7889fca139b5275cb1d219829c353f209",
-    "candidates/mitsuki.md":
-        "f3cb299dfed58a030b05bc52b0ef1855dbdf1a258be84345d17c19dbbf03c124",
-    "candidates/natsumi.md":
-        "715ce5b15c34e322435c695bd449ec5ab918914f2f899195ee7bcfbabd0cd25e",
-    "candidates/saki.md":
-        "8c2f7bb73b439a998eb1c65b074f6551f9e53e51a43f3042ba4d11ef85c2685a",
+    "global_speaker.md": (
+        "a8fefca1c204c239de07b8374be91a73137363c11a5115b9b04d25998d0bb8f8"
+    ),
+    "variants/baseline.md": (
+        "b54387945e4dc9d7def1a33dc125eb56f89fec9cba261ff8e1a9470e78c3baf4"
+    ),
+    "variants/voice_candidate_p2.md": (
+        "42cae6e8835793e6ea92b698566257f1535ede8ffc9d2a862c8a089ed218b261"
+    ),
+    "variants/voice_precise.md": (
+        "7ed2e2b53db1b91418d13e54da6225f00349f6c4d9849a1d3a20dbbe038a06d7"
+    ),
+    "candidates/aiko.md": (
+        "3ca53e9a8459ea431ea998c71d2cc3db4aa6632b79a3ab0fc5cb1e0b135530ab"
+    ),
+    "candidates/hina.md": (
+        "7ac407bbac73af6a4194dd51437e8d8208137e86139387b67713b1aa458145cd"
+    ),
+    "candidates/kaori.md": (
+        "e44f424420fc404024115995f8cc2fa7889fca139b5275cb1d219829c353f209"
+    ),
+    "candidates/mitsuki.md": (
+        "f3cb299dfed58a030b05bc52b0ef1855dbdf1a258be84345d17c19dbbf03c124"
+    ),
+    "candidates/natsumi.md": (
+        "715ce5b15c34e322435c695bd449ec5ab918914f2f899195ee7bcfbabd0cd25e"
+    ),
+    "candidates/saki.md": (
+        "8c2f7bb73b439a998eb1c65b074f6551f9e53e51a43f3042ba4d11ef85c2685a"
+    ),
 }
 
 
@@ -75,7 +85,8 @@ class _C1Voices:
     def get_revisions(self, character_id: str) -> CharacterRevisions:
         content = (ROOT / "characters" / f"{character_id}.md").read_bytes()
         return CharacterRevisions(
-            source="source", profile="profile",
+            source="source",
+            profile="profile",
             voice_prompt=hashlib.sha256(content).hexdigest()[:16],
         )
 
@@ -110,21 +121,18 @@ def test_original_v82_prompt_bytes_and_explicit_catalog_revisions() -> None:
     """All ten new prompt files match independent v8.2 SHA-256 evidence."""
     assert len(AUTHORED_SHA256) == 10
     catalog = FilePromptCatalog(ROOT, CAST)
-    resources = [
-        catalog.global_speaker(),
-        *(catalog.variant(key) for key in (
-            "baseline", "voice_candidate_p2", "voice_precise"
-        )),
-        *(catalog.candidate(actor) for actor in CAST),
-    ]
+    resources = [catalog.global_speaker()]
+    for variant in ("baseline", "voice_candidate_p2", "voice_precise"):
+        resources.append(catalog.variant(variant))
+    for actor in CAST:
+        resources.append(catalog.candidate(actor))
     assert {item.resource_id + ".md" for item in resources} == set(
         AUTHORED_SHA256
     )
     for resource in resources:
         relative = resource.resource_id + ".md"
-        assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == (
-            AUTHORED_SHA256[relative]
-        )
+        digest = hashlib.sha256((ROOT / relative).read_bytes())
+        assert digest.hexdigest() == AUTHORED_SHA256[relative]
         assert resource.revision == AUTHORED_SHA256[relative]
         assert resource.content == (ROOT / relative).read_text(
             encoding="utf-8"
@@ -134,7 +142,7 @@ def test_original_v82_prompt_bytes_and_explicit_catalog_revisions() -> None:
 
 
 def test_composer_is_stable_and_c1_voice_is_only_baseline_voice() -> None:
-    """Never repeat dossiers, create a second cast or use candidates by default."""
+    """Do not repeat dossiers or use candidates by default."""
     composer = _composer()
     for actor in CAST:
         baseline = composer.compose(actor)
@@ -146,31 +154,27 @@ def test_composer_is_stable_and_c1_voice_is_only_baseline_voice() -> None:
         assert baseline.variant_id == "baseline"
         assert original.strip() in baseline.system_instructions
         assert "# GLOBAL SPEAKER CONTRACT" in baseline.system_instructions
-        assert "# INDIVIDUAL CHARACTER IDENTITY AND VOICE" in (
-            baseline.system_instructions
+        assert (
+            "# INDIVIDUAL CHARACTER IDENTITY AND VOICE"
+            in baseline.system_instructions
         )
-        assert "# SELECTED PROMPT VARIANT" in (
-            baseline.system_instructions
-        )
-        assert "# EXPERIMENTAL VOICE CANDIDATE" not in (
-            baseline.system_instructions
+        assert "# SELECTED PROMPT VARIANT" in baseline.system_instructions
+        assert (
+            "# EXPERIMENTAL VOICE CANDIDATE"
+            not in baseline.system_instructions
         )
         assert all(
             item.role != "candidate_voice" for item in baseline.resources
         )
-        assert tuple(item.role for item in baseline.resources) == (
-            "global_speaker", "original_voice", "variant"
-        )
-        assert baseline.original_voice_revision == (
-            _C1Voices().get_revisions(actor).voice_prompt
-        )
+        roles = tuple(item.role for item in baseline.resources)
+        assert roles == ("global_speaker", "original_voice", "variant")
+        revision = _C1Voices().get_revisions(actor).voice_prompt
+        assert baseline.original_voice_revision == revision
         assert len(baseline.composition_revision) == 64
         assert "earlier_messages" not in baseline.system_instructions
-        assert "permitted_memory_excerpts" not in (
-            baseline.system_instructions
-        )
+        assert "permitted_memory_excerpts" not in baseline.system_instructions
         with pytest.raises(FrozenInstanceError):
-            setattr(baseline, "voice_selection", "candidate")
+            baseline.__setattr__("voice_selection", "candidate")
 
 
 def test_variants_are_selected_explicitly_and_compared_fairly() -> None:
@@ -190,21 +194,19 @@ def test_variants_are_selected_explicitly_and_compared_fairly() -> None:
         )
         assert candidate.resources[0] == baseline.resources[0]
         assert candidate.resources[1].role == "candidate_voice"
-        assert candidate.resources[1].revision == AUTHORED_SHA256[
-            f"candidates/{actor}.md"
-        ]
+        candidate_digest = AUTHORED_SHA256[f"candidates/{actor}.md"]
+        assert candidate.resources[1].revision == candidate_digest
         assert "(unbestätigt)" in candidate.system_instructions
         assert composer.compose(actor, "voice_candidate_p2") == candidate
         assert candidate.composition_revision != baseline.composition_revision
         assert precise.composition_revision != baseline.composition_revision
         assert candidate.system_instructions != baseline.system_instructions
-        assert _C1Voices().get_voice_prompt(actor).strip() not in (
-            candidate.system_instructions
-        )
+        original = _C1Voices().get_voice_prompt(actor)
+        assert original.strip() not in candidate.system_instructions
         assert "Name: " + actor.title() in candidate.system_instructions
-    assert composer.compose("aiko").composition_revision != (
-        composer.compose("hina").composition_revision
-    )
+    aiko = composer.compose("aiko")
+    hina = composer.compose("hina")
+    assert aiko.composition_revision != hina.composition_revision
 
 
 def test_no_unknown_character_or_variant_can_be_composed() -> None:
@@ -249,7 +251,9 @@ def test_personality_is_inert_until_explicitly_enabled() -> None:
     ],
 )
 def test_missing_resource_fails_closed(
-    tmp_path: Path, path: str, message: str
+    tmp_path: Path,
+    path: str,
+    message: str,
 ) -> None:
     root = _copy(tmp_path)
     (root / path).unlink()
@@ -288,7 +292,9 @@ def test_extra_or_linked_resource_and_invalid_character_ids_fail(
     ],
 )
 def test_malformed_resource_is_rejected(
-    tmp_path: Path, content: bytes, message: str
+    tmp_path: Path,
+    content: bytes,
+    message: str,
 ) -> None:
     root = _copy(tmp_path)
     (root / "global_speaker.md").write_bytes(content)
@@ -307,7 +313,8 @@ def test_invalid_candidate_is_never_silently_promoted(tmp_path: Path) -> None:
 
 
 def test_unreadable_resource_fails_with_typed_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = _copy(tmp_path)
     original = Path.read_bytes

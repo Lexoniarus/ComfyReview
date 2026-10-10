@@ -27,9 +27,7 @@ class FilePromptCatalog:
     """Load revisioned text once; never create, modify or promote it."""
 
     def __init__(self, root: Path, character_ids: tuple[str, ...]) -> None:
-        if not character_ids or len(set(character_ids)) != len(
-            character_ids
-        ):
+        if not character_ids or len(set(character_ids)) != len(character_ids):
             raise PromptCatalogDataError("Invalid C1 character set")
         expected = {
             "global_speaker.md",
