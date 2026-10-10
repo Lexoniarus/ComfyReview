@@ -116,3 +116,16 @@ Builds und Nutzerabnahme belegt.
 
 Die Branch markiert eine **isolierte Arbeitsfläche**. Die erste ausführbare
 Cocos-Szene entsteht regulär im Cocos Creator Editor.
+
+
+## Vorbereiteter Editor-/API-Smoke (noch kein Cocos-Projekt)
+
+- [Einrichtung, Cocos-Editor-Schritte und Abnahmestatus](SETUP.md)
+- `starter/assets/scripts/CanonicalImagePreview.ts`: Cocos-3.8-Komponente für ein zur Laufzeit geladenes kanonisches Bild
+- `starter/assets/scripts/runtime/ComfyReviewImageApi.ts`: getestete, Cocos-unabhängige HTTP-/Bildreferenz-Grenze
+- `scripts/install_starter.py`: kopiert TypeScript erst **nach** der Cocos-Dashboard-Projekterstellung; keine handgemachten `.scene`/`.prefab`/`.meta`
+- `scripts/dev_proxy.py`: nur lokaler Same-Origin-Web-Smoke ohne FastAPI-CORS-Änderung
+- `tests/`: Tests für API-Validierung, Skriptinstallation und Proxy
+
+**Nachgewiesen:** lokale TypeScript-Typprüfung, 8 Node-Tests und 5 Python-Tests bestanden.  
+**Noch offen:** echte Cocos-Editor-Import-/Build-Abnahme, FairyGUI-Kompatibilität und Native-Smoke; der Editor ist in der Ausführungsumgebung nicht installiert.
