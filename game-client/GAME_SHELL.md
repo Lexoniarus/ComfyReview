@@ -1,104 +1,91 @@
-# Game Shell v0 – room, smartphone, dynamic avatar
+# CC-GAME-02 – spielbare Raum- und Smartphone-Shell (POC)
 
-**Status:** Cocos scripts and headless navigation tests prepared; no genuine
-Cocos Creator or FairyGUI integration has yet run. This is a _presentation
-smoke_, not a new game mechanic or a Character Chronicles world-state model.
+**Stand:** Code erstellt, headless überprüfbar, echter Cocos-Editor-Test und
+Abnahme durch den Projektbesitzer stehen aus. Kein fertiges Spielsystem.
 
-## Goal
+## Was beim Szenenstart passiert
 
-Use Cocos Creator 3.8's **visual editor** to assemble a fixed personal room
-and a phone overlay. The screen layout, positions, fonts, art, animation clips
-and hit areas belong in the editor; TypeScript only handles UI navigation and
-reuses the existing canonical image-preview component for a live avatar.
+Die **bereits im Cocos Creator 3.8.8-Editor gespeicherte** Szene
+`game-client/cocos/assets/GameShellController.scene` wird geöffnet. Sie
+enthält die originalen Nodes `Canvas`, `GameShell`, `RoomRoot`,
+`OpenPhoneButton` und `PhoneOverlay`. `GameShellController.onLoad()` nutzt
+die vorhandenen Inspector-Verweise und ruft den neuen `GameShellViewBuilder`
+auf. Dieser erzeugt mit Cocos `UITransform`, `Graphics`, `Label` und `Button`
+vorläufige sichtbare Elemente **im laufenden Spiel**, keine neue Scene-Datei.
 
-This avoids creating an unverified, hand-authored Cocos scene/prefab/meta file.
-It deliberately **does not depend on FairyGUI** until Community integration has
-passed a separate compatibility smoke. Creating the phone with Cocos UI first
-is a reversible test, not a permanent decision against FairyGUI.
+Der Raum zeigt eine schematische Wand/Bodenfläche, ein Fenster, Schreibtisch,
+Regal und den bereits editorseitig vorhandenen Button **Smartphone öffnen**.
+`RoomRoot` bleibt hinter dem Telefon sichtbar. Die Darstellung ist reiner
+Platzhalter, ohne finale Academy-Assets oder fremde Bilddateien.
 
-## Prerequisites
+## Smartphone-Navigation
 
-- A **genuine editor-created Cocos Creator 3.8.x Empty (2D) project** in
-  `game-client/cocos` (see [SETUP.md](SETUP.md)).
-- A local ComfyReview FastAPI instance only for the live avatar test.
-- A real canonical `image_uid` from Studio. No player/contact API exists yet.
-- No paid assets. Use temporary shapes, built-in UI, or approved artwork.
+| Aktion | UI-Verhalten | Spiel-/Backendwirkung |
+| --- | --- | --- |
+| Smartphone öffnen | Telefon über dem Raum; zunächst Timeline | Keine |
+| Timeline | Demo-Posts sichtbar; andere Tabs verborgen | Keine |
+| Nachrichten | Demo-Nachrichten sichtbar; andere Tabs verborgen | Keine |
+| Karten | Drei Demo-Karten sichtbar; andere Tabs verborgen | Keine |
+| X / Schließen | Telefon verborgen; Raum bleibt erhalten | Keine |
+| Erneut öffnen | Zuletzt besuchter Tab sichtbar | Keine |
 
-After Cocos creates the project, run `python game-client/scripts/install_starter.py`
-from the repository root to install the TypeScript sources. Let the editor
-import/generate `.meta` files.
+Der bestehende `OpenPhoneButton` behält sein **im Editor gespeichertes**
+Click Event `GameShellController.openPhone`. Schließen und die drei Tabs
+werden durch den Builder erzeugt und mit `Button.EventType.CLICK`
+verbunden. Der gesamte Telefonbereich blockiert Eingaben an darunter
+liegenden Room-Nodes.
 
-## Build the scene using the Cocos visual editor
+Die Logik `GameShellState.ts` hält nur `screen` und `phoneTab`; es gibt
+weder Persistenz noch API-Aufrufe. Jede Beispielansicht ist mit **DEMO**
+markiert. Beim Tabwechsel gibt es keine fachlichen Mutationen. Der separate,
+optionale vorhandene kanonische Bild-Preview wird **nur** angesprochen,
+wenn ein echtes `image_uid` **und** eine Preview-Komponente im Inspector
+vorhanden sind. Diese UI benötigt beides nicht.
 
-Create a **2D scene** named `GameShellSmoke`. Suggested hierarchy (names are
-recommendations, not serialized contracts):
+## Entwicklungsaufteilung
 
-```text
-Canvas
-  RoomRoot                         [static placeholder room or approved art]
-    PhoneHotspot                    [Button with click event]
-  PhoneOverlay                      [Node, initially inactive]
-    PhoneBackground                 [UI Sprite / 9-slice]
-    CloseButton                     [Button]
-    TabBar
-      TimelineButton                 [Button]
-      MessagesButton                 [Button]
-      CardsButton                    [Button]
-    TimelinePanel                   [Node]
-    MessagesPanel                   [Node]
-      DemoAvatar                    [Sprite + CanonicalImagePreview]
-      DemoMessage                   [Label with SAMPLE TEXT, no LLM]
-    CardsPanel                      [Node]
-  GameShell                         [Node + GameShellController]
-```
+- `cocos/assets/scripts/GameShellController.ts` – Editor-Szene verbinden,
+  Navigation rendern, optionalen Bild-Preview steuern.
+- `cocos/assets/scripts/GameShellView.ts` – sichtbare provisorische
+  UI-Flächen und Buttons aufbauen; hier später den Platzhalter ersetzen.
+- `cocos/assets/scripts/runtime/GameShellState.ts` – pure Navigation
+  (wiederholtes Öffnen/Schließen, genau ein aktiver Tab).
+- `starter/assets/scripts/` – unverändertes API-Modul und synchroner Spiegel
+  der hier geänderten TypeScript-Quellen.
+- `.scene`/`.meta` – vom Cocos Editor verwaltet. CC-GAME-02 ändert sie nicht;
+  die `.meta` für die neue TS-Datei wird beim nächsten Editor-Import erzeugt.
 
-Both the room and phone elements can use editor-authored layouts and
-animations. The root Canvas should remain responsible for UI resolution and
-camera. Avoid reparenting dynamic assets at runtime solely for this smoke.
+## Schnelle manuelle Abnahme in Cocos Creator 3.8.8
 
-### Inspector connections
+1. Repository-Branch aktualisieren und das **bestehende** Projekt
+   `game-client/cocos` öffnen.
+2. `assets/GameShellController.scene` öffnen, Skriptimport abschließen und
+   Preview starten (für Web-Builds die Szene als Startszene auswählen).
+3. Raum sichtbar? Button **Smartphone öffnen** anklicken: Telefon sichtbar?
+4. Timeline / Nachrichten / Karten nacheinander anklicken: genau ein
+   Demo-Panel sichtbar? Visueller Tabwechsel und Beschriftungen korrekt?
+5. **X** klicken: Telefon weg, Raum sichtbar? Telefon mehrfach öffnen und
+   schließen; zuletzt gewählter Tab bleibt erhalten?
+6. Konsolenausgabe auf Engine-/Skriptfehler prüfen. Für Cocos-Import- oder
+   Darstellungsprobleme die genaue Meldung/Screenshot für die Abnahme sichern.
 
-1. On `GameShellController` assign `RoomRoot`, `PhoneOverlay`, the three panel
-   nodes, and optionally a small `viewStatusLabel`.
-2. Assign `DemoAvatar` to `avatarPreviewNode` (the node with the
-   `CanonicalImagePreview` component).
-3. On the image-preview component assign its `targetSprite` and an optional
-   status label. Leave its `imageUid` blank: the shell controller provides the
-   UID **only when the messages tab is visible**.
-4. Set the controller's `demoAvatarImageUid` to a real UID from ComfyReview.
-5. Connect the `PhoneHotspot` Button Click Event to `GameShellController.openPhone`.
-6. Connect `CloseButton` to `closePhone`, and the three tab buttons to
-   `showTimeline`, `showMessages`, and `showCards`.
-7. Save the scene and use the Web Desktop build plus the local proxy described
-   in [SETUP.md](SETUP.md) for an actual API/texture smoke.
+Es müssen **keine neuen UI-Nodes oder Click Events** im Inspector angelegt
+werden. Nur die zwei bereits gespeicherten `RoomRoot`-/`PhoneOverlay`-
+Referenzen müssen weiterhin vorhanden sein.
 
-When the player closes the phone or changes away from Messages, the
-preview component clears its owned image frame. Returning to Messages
-loads it again. **This is demonstration behavior, not an image cache policy.**
+## Nachweis und ausdrücklich offene Punkte
 
-## What the demo proves – and does not
+Headless-Tests testen die Navigation einschließlich Tab-Exklusivität,
+Wiederholungszyklen und die Übereinstimmung von Editor- und Starterquellen.
+`tsc -p game-client/tsconfig.contract.json` prüft die reinen Runtime-Module.
+Tests **ohne** echtes Cocos SDK können nicht beweisen, dass importierte
+Skripte, Klickflächen und Layout im Editor oder Web-Build funktionieren.
 
-It can prove, **after running inside Cocos**:
+Ausstehend: realer Cocos Editor/Preview/Build, verschiedene Auflösungen,
+Responsive-Layout, Bedienung per Touch/Tastatur, optionales Bildladen und
+Texturlifecycle, Animationen, FairyGUI, persistierte Spielzustände und echte
+Social-/Chat-/Card-Battler-Daten. Keine dieser Funktionen wird in CC-GAME-02
+als bereits integriert bezeichnet. **Die finale manuelle Freigabe erfolgt
+ausschließlich durch den Projektbesitzer.**
 
-- The room is a persistent static scene while the phone opens on top.
-- Buttons and tabs can switch game UI without webpage navigation.
-- A runtime image URL from ComfyReview fills an editor-created UI Sprite.
-- Closing the phone does not delete or modify any backend data.
-
-It cannot prove a complete world hub, actual character/social identity,
-conversation persistence, an LLM stream, card collection, game-save authority,
-FairyGUI compatibility, or a shippable native build. Those interfaces have no
-verified production APIs in the current ComfyReview code.
-
-## Success criteria and owner acceptance
-
-- [ ] Real Cocos Creator 3.8 editor has opened this project.
-- [ ] Scene and generated metadata are saved by the Cocos editor.
-- [ ] Room, phone open/close and three tabs work with mouse input.
-- [ ] Current canonical image loads as a demo avatar (or shows clear error).
-- [ ] Back/close hides the phone while the room stays visible.
-- [ ] Repeat open/close and avatar reload do not crash or leak resources.
-- [ ] Owner approves appearance and interaction in a running build.
-
-Unit tests under `game-client/tests/game-shell-state.test.mjs` validate only
-the presentation state transitions **without** claiming engine acceptance.
+CC-GAME-03 wird erst nach gemeinsamer Sichtung dieses Commits beauftragt.

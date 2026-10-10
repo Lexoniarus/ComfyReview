@@ -1,15 +1,11 @@
 /**
- * Cocos Creator 3.8 shell controller for a user-authored 2D scene.
- *
- * The room and phone layout are created in the Cocos editor. This script only
- * switches visibility and optionally loads ONE existing canonical image as a
- * demo avatar. FairyGUI is intentionally not required for the first smoke.
- *
- * Bind public methods via Button Click Events in the Inspector. No
- * application-specific backend actions are invented here.
+ * CC-GAME-02 scene controller. The checked-in Cocos scene supplies Canvas,
+ * RoomRoot, PhoneOverlay and the original OpenPhoneButton Click Event.
+ * Temporary room/phone visuals and the remaining buttons are created by code.
  */
 import { _decorator, Component, Label, Node } from 'cc';
 import { CanonicalImagePreview } from './CanonicalImagePreview';
+import { GameShellViewBuilder, type GameShellView } from './GameShellView';
 import {
   INITIAL_GAME_SHELL_STATE,
   isPhonePanelVisible,
@@ -43,17 +39,32 @@ export class GameShellController extends Component {
   @property({ type: Label })
   public viewStatusLabel: Label | null = null;
 
-  // Optional: use an actual image UID from ComfyReview Studio, not a filepath.
+  // Optional existing ComfyReview demo image, not required for mock navigation.
   @property
   public demoAvatarImageUid = '';
 
   private state: Readonly<GameShellState> = INITIAL_GAME_SHELL_STATE;
+  private view: GameShellView | null = null;
   private avatarLoaded = false;
 
   protected onLoad(): void {
+    if (!this.roomRoot || !this.phoneOverlay) {
+      console.error('GameShell.scene: RoomRoot / PhoneOverlay missing in Inspector');
+      return;
+    }
+    this.view = new GameShellViewBuilder(this.roomRoot, this.phoneOverlay, {
+      closePhone: () => this.closePhone(),
+      showTimeline: () => this.showTimeline(),
+      showMessages: () => this.showMessages(),
+      showCards: () => this.showCards(),
+    }).build();
+    this.timelinePanel = this.view.timelinePanel;
+    this.messagesPanel = this.view.messagesPanel;
+    this.cardsPanel = this.view.cardsPanel;
     this.render();
   }
 
+  // openPhone is still connected by the existing editor-authored Click Event.
   public openPhone(): void {
     this.dispatch('open-phone');
   }
@@ -75,24 +86,24 @@ export class GameShellController extends Component {
   }
 
   private dispatch(action: GameShellAction): void {
-    const oldState = this.state;
-    const newState = reduceGameShellState(oldState, action);
-    if (newState === oldState) return;
+    const newState = reduceGameShellState(this.state, action);
+    if (newState === this.state) return;
     this.state = newState;
     this.render();
+    this.syncOptionalAvatar();
+  }
 
-    const messagesVisible = isPhonePanelVisible(newState, 'messages');
-    if (messagesVisible && !this.avatarLoaded) {
+  private syncOptionalAvatar(): void {
+    const preview = this.avatarPreviewNode?.getComponent(CanonicalImagePreview);
+    const imageUid = this.demoAvatarImageUid.trim();
+    const shouldShow = isPhonePanelVisible(this.state, 'messages') &&
+      Boolean(imageUid) && Boolean(preview);
+    if (shouldShow && !this.avatarLoaded) {
       this.avatarLoaded = true;
-      this.avatarPreviewNode
-        ?.getComponent(CanonicalImagePreview)
-        ?.setImageUid(this.demoAvatarImageUid.trim());
-    } else if (!messagesVisible && this.avatarLoaded) {
-      // Release the preview texture when the user leaves the chat panel.
+      preview?.setImageUid(imageUid);
+    } else if (!shouldShow && this.avatarLoaded) {
       this.avatarLoaded = false;
-      this.avatarPreviewNode
-        ?.getComponent(CanonicalImagePreview)
-        ?.setImageUid('');
+      preview?.setImageUid('');
     }
   }
 
@@ -109,6 +120,7 @@ export class GameShellController extends Component {
     if (this.cardsPanel) {
       this.cardsPanel.active = isPhonePanelVisible(this.state, 'cards');
     }
+    if (phoneVisible) this.view?.selectTab(this.state.phoneTab);
     if (this.viewStatusLabel) {
       this.viewStatusLabel.string = phoneVisible
         ? `Telefon · ${this.state.phoneTab}`
@@ -117,6 +129,9 @@ export class GameShellController extends Component {
   }
 
   protected onDestroy(): void {
+    // Generated UI nodes and their Button listeners are owned by the scene.
+    // CanonicalImagePreview owns/disposes its optional image resources.
+    this.view = null;
     this.avatarLoaded = false;
   }
 }

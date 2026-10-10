@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   INITIAL_GAME_SHELL_STATE,
   isPhonePanelVisible,
   reduceGameShellState,
-} from '../starter/assets/scripts/runtime/GameShellState.ts';
+} from '../cocos/assets/scripts/runtime/GameShellState.ts';
 
 const dispatch = (...actions) => actions.reduce(
   (state, action) => reduceGameShellState(state, action),
@@ -57,4 +59,43 @@ test('independent sessions do not mutate their initial state', () => {
   assert.deepEqual(INITIAL_GAME_SHELL_STATE, {
     screen: 'room', phoneTab: 'timeline',
   });
+});
+
+test('each tab is exclusively visible during repeated navigation', () => {
+  let state = INITIAL_GAME_SHELL_STATE;
+  for (let index = 0; index < 60; index += 1) {
+    const tab = ['timeline', 'messages', 'cards'][index % 3];
+    state = reduceGameShellState(state, `show-${tab}`);
+    assert.equal(state.screen, 'phone');
+    for (const candidate of ['timeline', 'messages', 'cards']) {
+      assert.equal(isPhonePanelVisible(state, candidate), candidate === tab);
+    }
+  }
+});
+
+test('repeated open/close cycles retain the tab and never add backend state', () => {
+  let state = INITIAL_GAME_SHELL_STATE;
+  for (let index = 0; index < 100; index += 1) {
+    state = reduceGameShellState(state, 'open-phone');
+    state = reduceGameShellState(state, 'show-messages');
+    state = reduceGameShellState(state, 'close-phone');
+    assert.deepEqual(state, { screen: 'room', phoneTab: 'messages' });
+    assert.deepEqual(Object.keys(state).sort(), ['phoneTab', 'screen']);
+  }
+  assert.deepEqual(INITIAL_GAME_SHELL_STATE, {
+    screen: 'room', phoneTab: 'timeline',
+  });
+});
+
+test('editor-backed runtime and optional installer source are identical', () => {
+  for (const path of [
+    'GameShellController.ts',
+    'GameShellView.ts',
+    'runtime/GameShellState.ts',
+  ]) {
+    const cocos = new URL(`../cocos/assets/scripts/${path}`, import.meta.url);
+    const starter = new URL(`../starter/assets/scripts/${path}`, import.meta.url);
+    assert.equal(readFileSync(fileURLToPath(cocos), 'utf8'),
+      readFileSync(fileURLToPath(starter), 'utf8'));
+  }
 });

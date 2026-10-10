@@ -1,142 +1,99 @@
-# Character Chronicles – Game-Client
+# Character Chronicles – eigenständiger Game-Client
 
-**Status:** `WORKING_DIRECTION / CANDIDATE` · **Start:** 2026-10-10  
-**Arbeitsbranch:** `feature/character-chronicles-game-client` · **Ausgangsbasis:** `refactor/review-boundary`
+**Stand:** CC-GAME-02, 2026-10-10 · **Arbeitsbranch:**
+`feature/character-chronicles-game-client` · **Editor:** Cocos Creator 3.8.8
 
-## Ziel und Grenze
+## Was hier tatsächlich existiert
 
-Hier soll schrittweise ein **eigenständiges, spielerisch gestaltetes Frontend** für
-Character Chronicles entstehen. Das bisherige ComfyReview-Frontend in
-`templates/` und `static/` bleibt vorerst ausdrücklich als
-**Entwicklungs-/Studiooberfläche** erhalten.
+`cocos/` ist ein **echtes, mit Cocos Creator 3.8.8 erzeugtes Projekt**.
+Die vorhandene Editor-Szene `assets/GameShellController.scene` enthält
+`Canvas`, `RoomRoot`, `OpenPhoneButton`, `PhoneOverlay` und einen mit diesen
+Nodes verbundenen `GameShellController`.
 
-Das neue Frontend ist **kein zweiter Backend-Core**: Python/FastAPI bleibt
-für fachliche Entscheidungen, Canon, Persistenz, Generierung und externe
-Provider zuständig. Der Game-Client stellt bestätigte Zustände dar,
-nimmt Spielereingaben entgegen und inszeniert die Ergebnisse.
+CC-GAME-02 ergänzt eine **vorläufige, code-erzeugte Game-Shell**:
 
-Die aktuelle Produktwelt ist in
-[`docs/character-chronicles/vision/world.md`](../docs/character-chronicles/vision/world.md)
-beschrieben: Kobe ab 2032, eine zweijährige postsekundäre Academy für Erwachsene,
-soziale Charakterinteraktionen, eine etablierte Social-/Kartenkultur und
-langfristig eine erzählerisch zentrale VN. Die Umsetzung bleibt iterativ.
+- Ein sichtbarer, schematisch gezeichneter Raum-Hub und der bereits in der
+  Editor-Szene vorhandene Smartphone-Button.
+- Ein überlagerndes Smartphone mit **Schließen**, **Timeline**,
+  **Nachrichten** und **Karten**. Der Controller erzeugt die fehlenden
+  UI-Nodes und Button-Handler beim Laden der Szene.
+- Ausdrücklich gekennzeichnete Demo-Posts, Demo-Nachrichten und Demo-Karten.
+  Sie sind statisch und werden **nicht** durch Backend-Spielzustand gespeist.
+- Reine, headless testbare Navigation in `GameShellState.ts`. Schließen des
+  Telefons merkt sich den zuletzt geöffneten Tab; es gibt keine Server-Mutation.
+- Optional bleibt die vorhandene `CanonicalImagePreview`-Komponente verfügbar,
+  falls der Projektbesitzer später für einen separaten API-Smoke ein echtes
+  `image_uid` samt Inspector-Verknüpfung einträgt. Für CC-GAME-02 ist **kein**
+  API-Server erforderlich.
 
-## Vorläufige technische Richtung
+**Wichtig:** TypeScript und Headless-Tests sind geprüft; der tatsächliche
+Import, die Darstellung, Klick-Hitboxes und das Laufzeitverhalten im Cocos
+Editor **müssen vom Projektbesitzer noch getestet und abgenommen werden**.
+Der Cocos-Editor war für diesen Arbeitsschritt nicht verfügbar.
 
-| Ebene | Arbeitsannahme | Stand |
-| --- | --- | --- |
-| Spielclient | **Cocos Creator 3.8.x + TypeScript** | Zielkandidat, noch kein Editorprojekt angelegt |
-| UI-Gestaltung | Cocos UI; **FairyGUI Community** als bevorzugte Ergänzung | Versions-/Integrations-Smoke offen |
-| Entwicklungswerkzeuge | Cocos Editor, VS Code, Node.js/npm, Codex/ChatGPT | Noch keine neue Game-Client-Toolchain abgenommen |
-| Fachlogik und API | Vorhandener **Python-/FastAPI-Core** | Beibehalten; neue Game-APIs nur bei tatsächlichem Bedarf |
-| Bildgenerierung | Vorhandene ComfyUI-Provider-/Generierungsgrenzen | Vorhandene Infrastruktur nutzen; Game-Asset-Pipeline noch offen |
-| Datenhaltung | Kanonischer Python-Backend-Datenbestand | Keine zweite lokale Spielwahrheit im Client |
-| Erstplattform | PC/Laptop | Browser/iPad optional; Steam gegenwärtig nicht eingeplant |
+## Schnellstart auf dem lokalen Rechner
 
-**Wichtig:** Cocos Creator nutzt Node.js unter anderem im Entwicklungs-/
-Editor-Ökosystem. Das bedeutet **nicht**, dass der Python-Core ersetzt oder
-für den fertigen Client ein Node.js-Backend eingeführt wird.
+1. Die vorhandene Branch `feature/character-chronicles-game-client` in Git
+   aktualisieren. Das Projekt **nicht noch einmal neu erzeugen** und den
+   Installer nicht über die vorhandenen Dateien laufen lassen.
+2. Cocos Creator **3.8.8** öffnen und
+   `game-client/cocos` als bestehendes Projekt öffnen.
+3. Im Assets-Bereich `GameShellController.scene` öffnen; warten, bis
+   Cocos alle TypeScript-Dateien importiert hat. Für die neue
+   `GameShellView.ts` erzeugt **der Editor** die zugehörige `.meta`-Datei.
+4. **Preview / Play** starten. Den Smartphone-Button, die drei Tabs,
+   Schließen und erneutes Öffnen testen.
+5. Falls ein **Web-Desktop-Build** statt Preview gewünscht ist: im Cocos
+   Build-Fenster diese Szene als Startszene auswählen und den Build erzeugen.
+   Eine vorherige Startszene-Konfiguration ist nicht verifiziert.
 
-FairyGUI Community darf in kommerziellen Spielen verwendet werden und unterstützt
-manuellen UI-Paketexport. Der kostenpflichtige Kommandozeilenexport ist
-**keine Voraussetzung für Runtime-Asset-Loading**. Trotzdem wird FairyGUI
-erst nach einem erfolgreichen Cocos-Kompatibilitätstest eine feste Abhängigkeit.
+Die detaillierten Prüfpunkte stehen in [GAME_SHELL.md](GAME_SHELL.md).
+Weiteres zur optionalen Bild-API und zum lokalen Web-Proxy:
+[SETUP.md](SETUP.md).
 
-## Inhaltliche Trennung: feste UI und generierte Inhalte
+## Architektur und Grenzen
 
-- **Feste, mitgelieferte Darstellung:** UI, Smartphone-Hülle, App-Navigation,
-  Kartenrahmen, Booster-/Kampfeffekte und gegebenenfalls ein Academy-Raum als
-  wiedererkennbarer interaktiver Hub.
-- **Dynamische Assets:** Figurenporträts, Profilbilder, Kartenillustrationen,
-  später VN-Figuren und weitere freigegebene Szenenassets. Sie erhalten
-  fachliche IDs/Versionen im Python-Core und werden **zur Laufzeit** geladen.
-- **Dynamische Texte:** Posts, Chats, KI-generierte Antworten und Dialoge
-  müssen in vorbereitete UI-Komponenten eingebunden werden können.
-- **Animation ist Darstellung:** Karten-/Booster-/Kampf-/VN-Animationen
-  verändern nicht eigenständig den autoritativen Spielzustand.
-- **Checkpoint-Unabhängigkeit:** Feste UI/Umgebung braucht eine eigene,
-  animekompatible Designsprache; sie darf nicht von NetaYume oder einem
-  bestimmten späteren Modell abhängig sein.
+Der **Python-/FastAPI-Core** bleibt allein für Spielregeln, Persistenz,
+Bildgenerierung und die zukünftigen Social-/Card-/Story-Daten verantwortlich.
+Die bestehende ComfyReview-Studiooberfläche in `templates/` und `static/`
+bleibt unverändert. Der Game-Client ist eine Darstellungsschicht und
+**keine zweite Fachlogik**.
 
-**Asset-Regel:** LimeZu wird **nicht** verwendet. Kenney und andere fremde
-Quellen werden **Asset für Asset** auf Stil, Lizenz, kommerzielle Einbettung
-und gegebenenfalls KI-Eingaben geprüft. Fremdgrafik und automatisch generierte
-Bilder gehören nicht ungeprüft in Git.
+CC-GAME-02 führt **keine** Social-, Chat-, Card-Battler-, Academy- oder VN-API
+ein, keine Spielstanddatei, keinen lokalen KI-Aufruf, keine neue Datenbank und
+**keine FairyGUI-Abhängigkeit**. Die Grafiken sind ausschließlich temporäre
+Cocos-`Graphics`-Flächen und eingebaute Textlabels; keine Fremd- oder
+endgültigen Academy-Assets. Die feste Character-Chronicles-Weltvision steht
+unter [`docs/character-chronicles/vision/world.md`](../docs/character-chronicles/vision/world.md).
 
-## Was der aktuelle Backend-Stand bereits hergibt
+### Relevante Dateien
 
-Review, Ranking, Arena (Bildvergleich), Generator/ComfyUI, Katalog,
-Generationshistorie und die dazugehörigen API-v2-Routen existieren.
-Insbesondere `GET /api/v2/images/{image_uid}` liefert kanonischen
-Bildkontext, über den sich ein erstes Runtime-Asset-Experiment anbinden lässt.
+| Pfad | Verantwortung |
+| --- | --- |
+| `cocos/assets/GameShellController.scene` | Echte Editor-Szene; unverändert |
+| `cocos/assets/scripts/GameShellController.ts` | Navigation und Verbindung zur Szene |
+| `cocos/assets/scripts/GameShellView.ts` | Code-erzeugte temporäre Raum-/Telefon-UI |
+| `cocos/assets/scripts/runtime/GameShellState.ts` | Reine Navigation, ohne Cocos-/HTTP-Abhängigkeit |
+| `cocos/assets/scripts/runtime/ComfyReviewImageApi.ts` | Bereits vorhandener optionaler Read-only-Bild-API-Adapter |
+| `starter/assets/scripts/` | Synchroner Starter-Spiegel; keine zweite Runtime |
+| `tests/` | Headless-Tests für Navigation und vorhandene Hilfsmodule |
 
-**Nicht vorhanden oder nicht integriert:** Ein vollständiges Card-Crafting-
-/Collection-/Deck-/PvE-/PvP-HTTP-Game-API, eine Story-/Social-/VN-Runtime
-oder ein fertiges Asset-Readiness-System. Hierfür keine fiktiven
-Produktionsschnittstellen voraussetzen. Die tatsächliche Code-Evidenz steht in
-[`docs/IMPLEMENTATION_AUDIT.md`](../docs/IMPLEMENTATION_AUDIT.md)
-und [`docs/pocs/card-battler.md`](../docs/pocs/card-battler.md).
+## Prüfkommandos außerhalb des Editors
 
-## Nächste abgegrenzte Arbeitsschritte (keine starre Release-Roadmap)
+Ab Repository-Wurzel:
 
-1. **Editor-Basis prüfen:** Cocos Creator 3.8.x im Editor ein neues
-   TypeScript-2D-Projekt erstellen; dessen originale Projekt-/Metadateien
-   versionieren. Keine künstlichen `.scene`-/Prefab-Dateien von Hand erzeugen.
-2. **Ein kleines echtes Game-Fenster:** eine minimale Szene mit Layout,
-   Skalierung, Eingabe, Audio-/Animations-Grundlage und klar gekennzeichneten
-   Platzhaltergrafiken.
-3. **FairyGUI-Kompatibilität prüfen:** UI-Paket in Community manuell exportieren,
-   in genau diesem Cocos-Projekt laden; dynamisches Avatarbild, Scrollliste,
-   Text und Eingabefeld mit dem vorgesehenen UI-Layer testen. Nicht geeignet?
-   Cocos-eigenes UI prüfen statt eine Abhängigkeit zu erzwingen.
-4. **Backend-Smoke:** Cocos-Client bezieht mindestens ein freigegebenes Bild
-   über die bestehende Python-API. Lade-, Fehler-, Wechsel- und
-   Ressourcenfreigabe-Pfade verifizieren. Keine Tests mit privaten Bildern
-   oder Dateien in Git einchecken.
-5. **Szenen-/Assetvertrag:** feste interaktive Hub-/Smartphone-Vorlage mit
-   Mock-Daten gegenüber versionierten Runtime-Assets abgrenzen; die
-   Academy-Raumgestaltung bleibt bis zur Asset-Auswahl offen.
-6. **Gameplay-Flows später anbinden:** zuerst zum tatsächlich integrierten
-   Card-Battler-POC passend, nicht anhand historischer Regeln oder erfundener
-   Booster-/Liga-/VN-Endpunkte.
+```bash
+node --experimental-strip-types --test game-client/tests/*test.mjs
+tsc -p game-client/tsconfig.contract.json
+python -m unittest discover -s game-client/tests -p 'test_*.py'
+```
 
-Bei jedem Schritt gelten die bestehenden Engineering- und
-[Entscheidungsregeln](../docs/DECISION_POLICY.md). Cocos-/FairyGUI-
-Verfügbarkeit, Grafikqualität und Bedienbarkeit sind erst nach echten
-Builds und Nutzerabnahme belegt.
+Die TypeScript-Vertragsprüfung umfasst die beiden **reinen Runtime-Module**
+und deren Starter-Spiegel. Sie ersetzt keine Typprüfung gegen die echten
+Cocos-3.8.8-Engine-Deklarationen oder einen Engine-Build. Die beiden
+Python-Skripttests und der Bild-API-Test gehören zum bestehenden Stand und
+bleiben unverändert.
 
-## Nicht Teil dieses Startschritts
-
-- Kein Umbau/Abschalten des bestehenden Frontend V2.
-- Keine Änderung von Python-Domäne, SQLite-Schema oder ComfyUI-Provider.
-- Keine verbindlichen neuen Card-Battler-Regeln, Welt-Screens oder
-  UI-Lizenz-/Assetfreigaben.
-- Kein Steam-Release, Abo-/Cloud-Deployment oder erzwungener iPad-Support.
-- Kein bereits fertiger oder laufender Cocos-Spielclient.
-
-Die Branch markiert eine **isolierte Arbeitsfläche**. Die erste ausführbare
-Cocos-Szene entsteht regulär im Cocos Creator Editor.
-
-
-## Vorbereiteter Editor-/API-Smoke (noch kein Cocos-Projekt)
-
-- [Einrichtung, Cocos-Editor-Schritte und Abnahmestatus](SETUP.md)
-- `starter/assets/scripts/CanonicalImagePreview.ts`: Cocos-3.8-Komponente für ein zur Laufzeit geladenes kanonisches Bild
-- `starter/assets/scripts/runtime/ComfyReviewImageApi.ts`: getestete, Cocos-unabhängige HTTP-/Bildreferenz-Grenze
-- `scripts/install_starter.py`: kopiert TypeScript erst **nach** der Cocos-Dashboard-Projekterstellung; keine handgemachten `.scene`/`.prefab`/`.meta`
-- `scripts/dev_proxy.py`: nur lokaler Same-Origin-Web-Smoke ohne FastAPI-CORS-Änderung
-- `tests/`: Tests für API-Validierung, Skriptinstallation und Proxy
-
-**Nachgewiesen:** lokale TypeScript-Typprüfung, 8 Node-Tests und 5 Python-Tests bestanden.  
-**Noch offen:** echte Cocos-Editor-Import-/Build-Abnahme, FairyGUI-Kompatibilität und Native-Smoke; der Editor ist in der Ausführungsumgebung nicht installiert.
-
-## Weiterführend: erste Game Shell
-
-Für den ersten sichtbar spielähnlichen Client ist nun
-[GAME_SHELL.md](GAME_SHELL.md) ergänzt: ein Cocos-editorbasiertes Zimmer,
-ein ausklappbares Smartphone mit drei navigierbaren Ansichten und ein
-**dynamisch geladenes kanonisches Demo-Bild** im Nachrichtenpanel.
-Die TypeScript-Navigation wird headless getestet; die Editor-/FairyGUI-
-Integration ist weiterhin offen und darf nicht als bestanden gelten.
-
-Alle neuen Dateien liegen ausschließlich unter `game-client/`.
+Die zukünftige FairyGUI-Integration, Runtime-Image-Smoke, native Builds,
+Animationen, Responsive-UI und echte Spielabläufe werden separat entschieden;
+CC-GAME-03 beginnt **nicht** automatisch.
