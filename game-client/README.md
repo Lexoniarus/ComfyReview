@@ -129,3 +129,14 @@ Cocos-Szene entsteht regulär im Cocos Creator Editor.
 
 **Nachgewiesen:** lokale TypeScript-Typprüfung, 8 Node-Tests und 5 Python-Tests bestanden.  
 **Noch offen:** echte Cocos-Editor-Import-/Build-Abnahme, FairyGUI-Kompatibilität und Native-Smoke; der Editor ist in der Ausführungsumgebung nicht installiert.
+
+## Weiterführend: erste Game Shell
+
+Für den ersten sichtbar spielähnlichen Client ist nun
+[GAME_SHELL.md](GAME_SHELL.md) ergänzt: ein Cocos-editorbasiertes Zimmer,
+ein ausklappbares Smartphone mit drei navigierbaren Ansichten und ein
+**dynamisch geladenes kanonisches Demo-Bild** im Nachrichtenpanel.
+Die TypeScript-Navigation wird headless getestet; die Editor-/FairyGUI-
+Integration ist weiterhin offen und darf nicht als bestanden gelten.
+
+Alle neuen Dateien liegen ausschließlich unter `game-client/`.
