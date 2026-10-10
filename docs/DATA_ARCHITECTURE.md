@@ -1,12 +1,21 @@
 # ComfyReview Data Architecture
 
-Status: canonical schema v18 and the catalog-normalization workflow are
-implemented on `fix/playground-combination-diversity`, 2026-10-08. Images,
-reviews, Arena, Curation,
-revisioned prompts, prompt-variant evidence and native generation outputs use
-the canonical database. Catalog authoring and Playground drafts use structured
-prompt atoms; workspace preferences, content levels and LoRA usage are
-canonical; profile tables are dormant migration compatibility only.
+**Dokumentklasse:** `CURRENT_TECH_REFERENCE` – heutiger Canonical-v18-Codevertrag; privater DB-Cutover und historische Operatorzahlen getrennt.
+
+Status: source-verified canonical SQLite schema **v18** at ComfyReview
+`refactor/review-boundary`, pre-import code commit `a5f4131` (2026-10-09).
+See [schema implementation](../comfyreview/repositories/sqlite/canonical_schema.py)
+and [code/CI audit](IMPLEMENTATION_AUDIT.md). Runtime migration commands
+exist, but user-specific DB upgrades, cutovers, historical counts and private
+reports cannot be independently verified from this repository.
+Generation-profile tables are retained as **dormant migration compatibility**.
+
+> **In-progress boundary:** Schema v18 is the **implemented code contract**,
+> not proof that a private runtime database has already undergone the
+> normalized catalog cutover. Operator review/acceptance and database
+> optimization are still underway. The current design is a maintainable
+> ComfyReview snapshot, **not** a fixed future Character Chronicles schema.
+> [Active Work](ACTIVE_WORK.md).
 
 ## 1. Source-of-truth rule
 
@@ -45,7 +54,8 @@ classification facts together with the v11-to-v18 additions listed below:
 - `prompt_compositions` and their concrete revision membership;
 - singleton `workspace_preferences` and ordered
   `workspace_curation_set_order`;
-- ordered `workspace_content_levels`, beginning with mandatory `standard`;
+- ordered, non-empty `workspace_content_levels` (default `standard`, but
+  selectable without it; visibility matches the effective image level);
 - stable-UID `generation_profiles` and ordered
   `generation_profile_loras`;
 - explicit width/height on generation profiles and concrete generations;
@@ -205,9 +215,8 @@ comparison:
   separate Generator choice.
 
 The Generator offers `Stable`, `Catalog test`, `Calculated` and `Next test`
-independently for the eleven normalized prompt groups
-group. Each selection replaces only that group's atoms in the ordinary editable
-Generator state. A calculated candidate remains derived guidance until
+independently for the eleven normalized prompt groups. Each selection
+replaces only that group's atoms in the ordinary editable Generator state. A calculated candidate remains derived guidance until
 explicitly materialized and then generated. Promotion is initiated
 automatically after a successful Review, Delete or Arena transaction, but
 remains explicit as an append-only fact recording the previous revision,
@@ -339,12 +348,10 @@ derived from ordered slot, position and revision-UID tuples; paths are not
 involved. Audit format version 2 prevents the discarded fixed-slot report from
 being imported.
 
-The completed 2026-10-01 live run linked 363 of 379 generations: 29 rendered
-exactly from their recovered memberships and 334 retained additional historical
-draft text in the canonical prompt snapshot. Sixteen generations remain
-unlinked: two have ambiguous expression evidence and fourteen have no
-sufficient catalog evidence. There were no conflicts. These are observed data
-results, not hard-coded importer expectations.
+Earlier live composition-import counts and their unresolved cases are retained
+solely in the [archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md). They are
+historical source observations, not current database inventory, schema
+invariants or reconstruction defaults.
 
 The v14 legacy-provenance recovery completes retained generation relationships
 from three explicitly labelled evidence
@@ -371,26 +378,12 @@ fragment correction; recovery then creates a new normalized prompt row and
 relinks only the named generations. Review facts, image identity and
 content-level state are not rewritten.
 
-The reviewed 2026-10-06 recovery covered 389 generations and 384 active images.
-Against the pre-recovery runtime source it classified 119 embedded recipes,
-no remaining exact enrichments and 203 reviewed reconstructions, created 117
-historical revisions plus 12 archived recovered detail concepts, relinked 192
-generations and applied 18 hash-bound prompt corrections. The validated output
-was promoted only after preserving the prior runtime database as a backup and
-was then served again on the LAN runtime.
-
-No ordinary scene, outfit, pose, expression, lighting or framing block remains
-unidentified. Seventeen images retain prompt-side LoRA trigger atoms that are
-owned by their normalized LoRA provenance rather than prompt-component
-memberships. The earlier combined modifier and lighting revisions remain
-historical source/provenance facts until the catalog-normalization cutover;
-they are not valid normalized target components. Six active and two deleted
-Hina generations had their missing expression/lighting separator restored and
-were linked to separate historical expression and lighting revisions. All 18
-formerly structural active-image residuals are therefore resolved; the only
-remaining positive atoms outside normal component memberships are attributable
-LoRA triggers. These are curated data facts, not runtime heuristics or importer
-constants.
+The implementation separates embedded-recipe evidence, unique exact matches
+and reviewed semantic reconstruction. **Dated operator totals and item-specific
+repairs** are retained in the [archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md);
+they must not be treated as current runtime counts or universal validation
+rules. Any remaining unknown or ambiguous provenance in a newly audited
+database is reported rather than guessed.
 
 ## 5.2 Current catalog composition and normalization
 
@@ -435,10 +428,16 @@ editorial pass. Rebuild requires every source
 component and live image to be marked reviewed, rejects unsupported kinds or
 duplicate image groups, rejects every Non-Character `keep` decision, and
 requires every replacement to use a new component UID with exactly revision
-1. All ten Non-Character groups must be populated with source-derived entries;
-unresolved `or` alternatives, archived selectable entries and `modifier` are
-validation failures. The mapping checksum is validated in addition to its
-audit and source hashes. It locks and re-hashes the source, upgrades only a
+1. All ten Non-Character groups must have target components referenced by
+reviewed source decisions; unresolved `or` alternatives, archived
+selectable entries and `modifier` are validation failures. The
+validator checks completeness, groups, UIDs, structural references and
+hash bindings, **not whether the editorial semantic interpretation is
+factually correct**. Marking a mapping `reviewed` cannot prove that
+its prompts were split or classified appropriately. The operator must
+review that meaning separately before accepting the rehearsal and any
+cutover. The mapping checksum is validated in addition to its audit
+and source hashes. It locks and re-hashes the source, upgrades only a
 temporary copy, and writes a distinct output database. `--replace` installs
 that database atomically after schema and cutover validation. Per the explicit
 operator decision for this one workflow, it creates no additional backup.
@@ -474,7 +473,11 @@ add to the projections without mutating the baseline facts.
 Character components are excluded from semantic cleanup. Rebuild validation
 compares their internal IDs, UIDs, archive states, revisions, atom identities,
 weights, complete promotion history, selected standards, manual candidates and
-manual-variant bindings. When Aiko exists, exactly 24 revisions are required.
+manual-variant bindings. No fixed per-character revision count is imposed by this documentation:
+source-specific revision counts (including the earlier Aiko snapshot) are
+recorded in the [archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md).
+Rebuild acceptance compares the character's entire existing revision history
+against the audited source instead of enforcing an old inventory count.
 
 ## 5.3 Workspace preferences, content, profiles and LoRA usage
 
@@ -486,7 +489,7 @@ not read by the active runtime, Settings, Playground or V2 API.
 
 New generations persist the concrete LoRA stack used after validation and
 compilation. Capability discovery supplies available names, while the
-`WorkflowCompiler` alone inserts the ordered loader chain into Blueprint v2.
+`WorkflowCompiler` alone inserts the ordered loader chain into the active Blueprint v4.
 The ComfyUI provider still receives only a compiled graph. A normalized
 generation LoRA must have at least one non-zero model or CLIP branch connected
 to a sampler-consumed graph path and at least one exact trigger from its bound
@@ -495,13 +498,17 @@ retained as raw provenance, including disconnected or triggerless nodes; the
 explicit audit/recovery path normalizes only fully evidenced values.
 
 Schema v9 adds an ordered content-level relation and validated image width and
-height fields. Without another schema change, every prompt component now stores
-exactly one canonical `content_level_*` marker in its existing metadata JSON;
-the repository exposes it as a typed field and removes it from descriptive
-tags. Legacy aliases are read only when no canonical marker exists. The shared
-visibility predicate gates ranking, review candidates, Arena pairs, Scope
-facets, Analytics, Catalog evidence and Playground from the immutable
-generation-level snapshot plus an optional image override. Later catalog edits
+height fields. The active catalog create/edit path now writes exactly one
+canonical `content_level_*` marker to component metadata without another
+schema change. **Historical components need not yet carry that marker**:
+reads prefer the canonical level, otherwise accept recognized legacy aliases,
+or default to `standard` if no classification exists. Conflicting
+canonical markers, or conflicting legacy levels without a canonical marker,
+are rejected. The repository exposes the resulting typed level and removes
+canonical markers from descriptive tags. The shared visibility predicate
+gates ranking, review candidates, Arena pairs, Scope facets, Analytics,
+Catalog evidence and Playground from the immutable generation-level
+snapshot plus an optional image override. Later catalog edits
 therefore never change historical image visibility implicitly.
 
 Schema v10 makes stable LoRA identity and generation snapshots canonical.
@@ -536,15 +543,10 @@ the compiled graph and final scoped prompt prove real use. The offline
 provenance recovery applies the same rule to history and refuses promotion
 unless every active prompt atom and every retained LoRA binding is unambiguous.
 
-The live 2026-10-07 promotion copied the v12 runtime through v13 and v14 into a
-new database before replacement. Its bound audit covered 414 generations and
-393 active images, reported zero unattributed or over-attributed atoms and zero
-ambiguous LoRA bindings, and retained 19 exact trigger-evidenced LoRA usages.
-It removed 832 unsupported normalized usage rows while preserving the stored
-raw graphs. Independent validation reported `integrity_check = ok`, no foreign
-key errors, no retained null LoRA revision and complete editable handoffs for
-all 393 active images when all content levels were enabled. The unchanged v12
-source remains as the promotion backup.
+Historical v12-to-v14 promotion counts and its evidence-bound acceptance
+results are documented in the [archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md).
+They do not establish the version or content of a current private runtime
+database. Schema and validation semantics above remain code contracts.
 
 Historical reclassification is a separate two-step operation: preview returns
 the affected generation/image counts and catalog revision, and apply requires
@@ -557,9 +559,11 @@ projection atomically. The effective level is the override when one exists,
 otherwise the inferred generation level.
 
 Prompt-catalog repair uses the separate `content-levels audit/recover`
-workflow. Its versioned curation enumerates all 803 active and archived stable
-component UIDs and binds each decision to the latest revision UID and content
-hash. The audit binds database and curation hashes and previews component,
+workflow. Its versioned curation binds every
+relevant source component UID and each editorial decision to the latest
+revision UID and content hash. Source-specific row counts are archived in the
+[archivierten Canonical-DB-Betriebsnachweisen](archive/canonical-data-operator-evidence-2026-10-01-to-07.md).
+The audit binds database and curation hashes and previews component,
 generation and image transitions. Recovery copies the source into a new
 database, updates canonical markers and generation snapshots, and removes
 graph-inactive LoRA selections from the normalized relation in one short
@@ -653,65 +657,13 @@ Normal runtime startup neither opens nor initializes these files. Known
 additive changes require the explicit `python -m comfyreview legacy-db upgrade`
 command.
 
-## 10. Live schema verification
+## 10. Canonical analytics queries
 
-The live schema-v9 database contains 379 generations, 379 images, 379
-sampler stages, 729 prompt components, 729 immutable first revisions, 275
-recovered compositions and 1,280 ordered composition memberships. All 379
-images have output role, output index and a verified content hash. The existing
-5,534 review events, 1,257 Arena matches and three Curation assignments remain
-canonical facts.
+Die früher hier eingebetteten **Schema-v9-Live-Zahlen, Upgrade- und
+Rehearsalberichte** stehen ausschließlich im
+[historischen Operatorprotokoll](archive/data-schema-v9-operator-report.md).
+Sie sind **keine** aktuelle Statistik der privaten ComfyReview-Datenbank.
 
-The explicit v6-to-v7 migration was rehearsed on a byte-identical copy, then
-run against the stopped live application. Both upgrades created their own
-SQLite backup. The live migration preserved every component, revision,
-composition, generation and rendered prompt snapshot while creating 4,061
-ordered revision atom usages. The later explicit v7-to-v8 upgrade was
-rehearsed on a database copy, backed up and applied with the application
-stopped. It added workspace preferences, generation profiles and normalized
-profile/generation LoRA relations without changing stable image, generation,
-component, revision or composition IDs. The explicit v8-to-v9 upgrade was
-rehearsed on a read-safe SQLite copy, backed up and applied with ComfyReview
-stopped on 2026-10-03. It preserved all 379 generation/image identities and
-added content/canvas settings. That verified live database's `user_version` is 9,
-`integrity_check = ok`, and `foreign_key_check` returns no rows. The verified
-pre-v7 backup remains schema v6 with all 729 revisions.
-
-The application requires schema v18. No older database is silently changed at
-startup. `canonical-db upgrade` first migrates and validates a new database
-file and preserves the source; installation of the validated output is a
-separate controlled step.
-The v10-to-v11 migration creates no image classifications by itself; the
-operator runs `canonical-db rebuild-image-geometry` explicitly after upgrade.
-
-Historical completion was rehearsed from a verified v4 backup through the full
-v4-to-v6 upgrade and all four fresh audit/import stages. The same ordered
-sequence then ran against the already-upgraded live v6 database. Each live
-import created its
-own validated backup before writing. Final `integrity_check`, foreign-key,
-schema, identity, protected-field, provenance, read-only-reader and
-canonical-only startup checks passed. Repeated rehearsal imports created no
-additional facts.
-
-Normal startup never performs this sequence and never opens a legacy database.
-The ignored detailed reports and backups remain the operational evidence; this
-document records only non-sensitive aggregate results.
-
-The design must not duplicate prompt atoms per review or materialize the full
-Cartesian product of possible prompt combinations. Persist combinations when
-they are explicitly authored, generated, curated or uniquely reconstructed. An
-unused authored template or revision remains canonical catalog data.
-
-Frontend V2 uses this completed data. Exact memberships are authoritative for
-the 363 linked generations. Any scope fallback for the sixteen unresolved
-generations must be the smallest read-only policy justified by their explicit
-diagnostics; it must not read legacy databases, paths, directory names or
-sidecars as runtime truth.
-
-Before migrating a derived projection, prefer a direct canonical query, then a
-SQL view. Only measured needs justify a materialized projection and worker.
-
-### Canonical analytics queries
 
 Render guidance reads canonical generations, ordered sampler stages, images
 and append-only `review_events`. It aggregates all rating/delete evidence once
@@ -730,7 +682,15 @@ Prompt combinations are identified by canonical `prompt_composition_id` and
 remain distinct from render discovery. No runtime path reparses legacy
 `combo_key` values or materializes possible prompt/render cross-products.
 
-The approved [Card Battler target](CARD_BATTLER_TARGET.md) may later reuse this
-identity, migration and provider foundation through its own domain boundaries.
-Character Chronicles descriptions, embeddings, RAG and wider gameplay state
-remain separate concerns.
+The Card Battler is being developed **now as a ComfyReview POC**.
+An [earlier target plan](archive/card-battler-target-2026-10-02.md) is
+historical and does not prescribe future card persistence.
+[Card POC](pocs/card-battler.md).
+
+**ComfyReview is still evolving toward Character Chronicles**, but this
+current canonical SQLite v18 design is not a compulsory permanent schema
+for the eventual game. The imported Chronicle concepts include some
+**abandoned earlier schema 47–58/Guardian architecture**; their tables,
+migrations and persistence authority are **not** part of the current
+ComfyReview database and must be independently re-evaluated.
+[Decision Policy](DECISION_POLICY.md).

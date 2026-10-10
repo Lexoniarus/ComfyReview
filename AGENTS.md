@@ -1,5 +1,7 @@
 # ComfyReview – Repository Engineering Rules
 
+**Dokumentklasse:** `ENGINEERING_RULES` – für geänderten ComfyReview-Code, keine feste Character-Chronicles-Architektur.
+
 Status: binding engineering baseline as of 2026-09-28.
 
 These rules apply to all new and changed code immediately. Existing code that
@@ -66,15 +68,27 @@ extend an existing violation merely because it already exists.
 - Semantic workflow compilation belongs to a dedicated `WorkflowCompiler`.
   The compiler maps explicit roles to graph inputs and outputs; it does not
   perform HTTP calls or decide output naming policy.
-- Workflow submission, job polling, output collection and capability discovery
-  belong to the ComfyUI provider boundary. The provider receives an already
-  compiled graph and has no knowledge of prompt, sampler or output roles.
+- The ComfyUI provider owns workflow submission, external job status/history,
+  capability discovery and retrieval of raw output descriptors. It accepts
+  already compiled graphs and does not interpret semantic prompt/sampler roles.
+- The application-owned `GenerationOutputCollector` combines those raw
+  descriptors with the injected filesystem output source, canonical SQLite
+  output repository and optional image-geometry projection. File validation,
+  output identity and canonical persistence do not belong inside the ComfyUI
+  API provider.
 - Long-running ComfyUI jobs are modeled as asynchronous work. A client timeout
   is not equivalent to a failed generation.
 - Generated image identity and generation metadata must remain reproducible
   even if output files are moved later.
-- The repository-specific ComfyUI metadata export node remains a technical
-  integration boundary; its payload must be mapped into canonical domain data.
+- Native ComfyUI generation uses the provider API for prompt status/history
+  and output descriptors. The existing output collection and persistence
+  boundaries normalize generation metadata and provenance. New canonical
+  generations must not depend on a repository-specific metadata export custom
+  node or an accompanying JSON sidecar.
+- Historical custom-node JSON sidecars are legacy import evidence only, handled
+  by explicit audited `legacy-output` import adapters. Preserve available raw
+  metadata as provenance, but do not reintroduce sidecars or custom-node export
+  as requirements for the native generation runtime.
 
 ## Tests and quality
 
@@ -99,9 +113,14 @@ extend an existing violation merely because it already exists.
 - Before each intermediate commit, run focused behavior tests plus formatting,
   linting and typing for every changed file. This targeted mode is feedback,
   not integration evidence.
-- The complete shared quality gate must run formatting, linting, typing, tests,
-  coverage and architecture checks at the end of every refactor slice and
-  before integration.
+- The complete shared quality gate must run formatting, linting, typing,
+  automated Python/frontend/browser tests, coverage and architecture checks
+  at the end of every refactor slice and before integration.
+- **The project owner performs the final manual tests and acceptance.**
+  Developer/CI checks and tool-based review are necessary preparation, not
+  proof of final real UI, provider or private-database acceptance. Record
+  final user test outcomes only when supplied or explicitly confirmed by
+  the project owner; do not assert them from a green CI run.
 
 ## Logging and tracing
 
@@ -130,18 +149,87 @@ extend an existing violation merely because it already exists.
 
 ## Documentation
 
-When behavior or architecture changes, update the relevant documents in the
-same change:
+ComfyReview is the **current, actively developed codebase** on a long-term
+path toward Character Chronicles. This evolution uses POCs; **do not**
+turn imported concepts, old M6/schema claims or discarded architecture into
+binding rules merely because a historical document says “approved”.
 
-- `README.md` for user-facing setup or behavior
-- `docs/ARCHITECTURE.md` for boundaries and runtime topology
-- `docs/CODING_STANDARDS.md` for engineering rules
-- `docs/DATA_ARCHITECTURE.md` for persistence and migration semantics
-- `docs/REFACTOR_PLAN.md` for migration phase status
-- product/status documentation when product scope changes
+For product-documentation changes, retain the **approximate** current
+priority as **Card Battler → Timeline → Social Network with character
+chat → Storyline → VN content last**. Timeline may be the first bounded
+social slice. The **confirmed final world vision** is Japan/Kobe from 2032,
+grounded anime near future, two postsecondary adult Academy years, a
+culturally established social/card-battler platform, a protagonist moving
+into Kobe and independent characters with personal histories, knowledge
+and relationships. The Academy is **not an optional story premise** but
+also **not a separate mandatory implementation phase**. The eventual
+VN/dating-sim story is the long-term narrative center even though its
+content is built last. Future implementation detail, phase boundaries
+and technical choices remain open until explicitly reviewed.
+Do not translate this orientation into a rigid schedule, POC ban or a
+revived historical Chronicle MVP. Source of truth:
+`docs/PROJECT_EVOLUTION.md`, `docs/character-chronicles/vision/world.md`
+and `docs/character-chronicles/vision/README.md`. Keep the confirmed
+story-world intent distinct from historical M6/schema/phase contracts.
+Proofs of concept may refine the path and individual details but do
+not silently revoke this confirmed world target.
 
-Documentation describes the actual state. A target architecture must be marked
-as a target until it is implemented.
+Historical `docs/character-chronicles/sources/` content must keep its
+original wording **and original relative links**. Do not retarget legacy
+Foundation/M4/M6 references to present-day `vision/` or `README.md` pages.
+Explain unavailable old targets in the source index or a separate provenance
+note instead; report historical missing links distinctly from broken current
+documentation navigation.
+Run `python scripts/check_documentation.py` and
+`python -m pytest tests/test_documentation_links.py` after editing current
+navigation or historical source boundaries. These tests deliberately skip
+**old source bodies**, not their current explanatory headers.
+
+The [documentation map](docs/README.md) assigns a single current owner
+for each category: general status, active POCs, refactor acceptance, open
+decisions, operations, working vision and historical evidence. Keep those
+boundaries consistent rather than duplicating live status in historical text.
+
+When ComfyReview behavior or architecture changes, update the relevant
+documents **for the current code**:
+
+- `README.md` for user-facing setup and current behavior
+- `docs/ARCHITECTURE.md` for the current runtime
+- `docs/DATA_ARCHITECTURE.md` for present persistence/migration semantics
+- `docs/CODING_STANDARDS.md` for current engineering baseline
+- `docs/REFACTOR_PLAN.md` for current refactor scope and pending acceptance;
+  its older slice history belongs to `docs/archive/refactor-slice-history-2026-10-09.md`
+- `docs/project_status.md`, `docs/IMPLEMENTATION_AUDIT.md` for
+  implementation claims, with exact commit/CI evidence
+- `docs/ACTIVE_WORK.md` and `docs/pocs/` for in-progress experiments
+- `docs/OPEN_DECISIONS.md` for genuinely unresolved decisions
+- `docs/CONFIRMED_CONSTRAINTS.md` for confirmed scoped project constraints,
+  clearly separated from preferences and technical candidates
+
+The code baseline **before** the 2026-10-09 documentation import is
+`a5f4131`; `76d71f9` only added/moved documentation. Do not mistake
+the imported Chronicle concepts for code in that baseline.
+[Project Evolution](docs/PROJECT_EVOLUTION.md) and
+[Decision Policy](docs/DECISION_POLICY.md) define how old concepts are
+reviewed: a past, discarded Chronicle implementation or an old Card Battler
+plan may provide useful ideas, but does **not** fix the new architecture.
+
+The shared monthly budget for **all billable external AI API calls** in this
+ComfyReview-to-Character-Chronicles project is **below EUR 10**, including
+paid development experiments, tests and later application requests.
+Read [confirmed scoped constraints](docs/CONFIRMED_CONSTRAINTS.md) before
+adding billable AI interactions; the proposed ~EUR 8 app cutoff is **not**
+a verified existing control or a finalized technical design.
+
+The Card Battler is **active POC work** in ComfyReview; isolated deterministic
+tests do not prove an integrated playable game. The Generator was recently
+reworked and catalogue/database optimization and real operator cutover remain
+open; do not call those complete solely because schema/migration code exists.
+
+Do not claim migration, private data metrics, hardware smoke or quality gates
+passed without concrete evidence. Keep the eventual Character Chronicles
+architecture revisable rather than inheriting all present ComfyReview
+design constraints as permanent.
 
 ## Git and change discipline
 

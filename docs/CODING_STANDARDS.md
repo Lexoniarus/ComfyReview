@@ -1,7 +1,18 @@
 # ComfyReview Coding Standards
 
-Status: binding target for all new and changed code from 2026-09-28; canonical
-schema-v4 feature cutover implemented 2026-09-30.
+**Dokumentklasse:** `ENGINEERING_RULES` – für die aktuelle ComfyReview-Codebasis.
+
+Status: binding engineering baseline for new/changed code since
+2026-09-28. The earlier canonical schema-v4 cutover occurred 2026-09-30;
+the current code declares **canonical schema v18** (source reviewed
+2026-10-09). See [Implementation Audit](IMPLEMENTATION_AUDIT.md).
+
+These standards bind **new and changed ComfyReview code in the current
+refactor**, not every conceivable later Character Chronicles implementation.
+The product is still evolving through POCs, and technical architecture from
+an earlier abandoned Chronicle attempt is **not** authoritative. See
+[Project Evolution](PROJECT_EVOLUTION.md), [active work](ACTIVE_WORK.md)
+and [Decision Policy](DECISION_POLICY.md).
 
 The current repository predates this baseline and is not yet fully compliant.
 Existing violations are migration work, not precedent for new code.
@@ -307,10 +318,16 @@ Do not log secrets or entire private prompt payloads by default.
 - Repositories are tested against temporary SQLite databases.
 - Service tests use repository/provider fakes where that isolates behavior.
 - Provider unit tests do not require a live ComfyUI server.
-- Live ComfyUI integration tests are marked separately.
+- Live ComfyUI integration tests are marked separately; mocks and
+  CI cannot establish successful use of the actual local provider.
 - Migration tests run on copies/fixtures and verify row counts, relationships,
   invariants and source preservation.
 - Architecture tests enforce import/dependency boundaries.
+- **Final manual functional, visual and provider tests are performed
+  by the project owner.** When private data or a real cutover is involved,
+  only the project owner may verify and accept the real operational outcome.
+  Automated tests and external review provide preparation and evidence,
+  **not** that final user acceptance.
 
 ## 13. Frontend
 
@@ -325,7 +342,9 @@ Rules for new/changed frontend code:
   attribute setters, not dynamic HTML strings.
 - Stateful components own and release listeners, timers and requests.
 - Public module boundaries use JSDoc contracts.
-- `checkJs`, ESLint, Prettier and Stylelint belong in the eventual shared gate.
+- The current shared gate already runs `checkJs` (TypeScript checking
+  of JavaScript/JSDoc), ESLint, Prettier, Stylelint, Vitest with coverage
+  and Playwright through `npm run quality`. These are not future work.
 
 ## 14. Quality gate
 
@@ -345,7 +364,8 @@ The gate runs:
 6. Python-core statement coverage check
 7. function-test-manifest check
 8. architecture tests
-9. frontend lint/format/checkJs tests once frontend modules are introduced
+9. frontend `npm run quality`: ESLint, Prettier, Stylelint,
+   `checkJs` via TypeScript, Vitest coverage and Playwright browser tests
 
 ### Legacy ratchet
 
@@ -370,7 +390,11 @@ tests and update the manifest/core scope where applicable.
 
 Before each intermediate commit, run focused behavior tests and static checks
 for every changed file. The targeted gate is a fast feedback mechanism only.
-Run the complete gate at the end of every refactor slice and before integration.
+Run the complete automated gate at the end of every refactor slice and before
+integration. **A green gate does not mean final user testing was performed.**
+The project owner performs the final manual tests and explicitly accepts
+the feature or operating procedure; until then report it as awaiting
+user acceptance rather than `final tested` or `released`.
 
 The current baseline is not a claim that the full repository already conforms
 to the target architecture. It is a versioned inventory that prevents new work

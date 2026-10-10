@@ -1,26 +1,38 @@
 # ComfyReview Architecture
 
-Status: canonical Review, Ranking, Arena, Curation, structured Prompt Catalog,
-analytics, native Generation, schema-v18 application support and Frontend V2
-including Settings are implemented and integrated on
-`fix/playground-combination-diversity`, 2026-10-08. The private editorial
-mapping and production catalog cutover remain open.
+**Dokumentklasse:** `CURRENT_TECH_REFERENCE` – geltende ComfyReview-Codegrenzen, **nicht** dauerhaftes Character-Chronicles-Ziel.
 
-## 1. Product boundary
+Status: source-verified on `refactor/review-boundary` at pre-import code commit `a5f4131`
+(2026-10-09). Review, Ranking, Arena, Curation, Prompt Catalog, Analytics,
+native Generation, canonical schema v18 and Frontend V2/Settings are
+runtime-wired. Private editorial mapping and real database cutover remain
+distinct operator work. See [Implementation Audit](IMPLEMENTATION_AUDIT.md).
 
-ComfyReview is a local-first application for discovering ComfyUI outputs,
-reviewing and comparing images, assigning curated sets, analysing review data
-and handing reproducible settings back to ComfyUI. Character Chronicles
-campaign, Champion, VN, social, embeddings and RAG systems are outside this
-refactor.
+## 1. Product boundary — current architecture, not future mandate
 
-A functional Card Battler prototype is an approved post-refactor ComfyReview
-product target, not current runtime behaviour or a refactor acceptance
-requirement. Its manual card-development, deterministic-rules, deck,
-server-authoritative PvE and battle-driven evolution boundaries are defined in
-the [Card Battler target](CARD_BATTLER_TARGET.md). Character Chronicles may
-later reuse that bounded implementation without becoming a runtime dependency
-of ComfyReview.
+ComfyReview is the **current, still-developed** application for discovering,
+reviewing, comparing, curating and analysing ComfyUI output and reproducing
+image generations. It is intended to **evolve toward Character Chronicles**,
+but the later game is **not** obtained by treating every current or previously
+drafted engineering boundary as permanent.
+
+**Current Card Battler POC:** tested read-only model adapters,
+CardImprint mapping, stat/mechanic/trait materialization and visual prompt
+projection exist in ComfyReview. They are **being developed**, not a finished
+card collection, deck engine or PvE game. [POC status](pocs/card-battler.md).
+
+**Current Generator/Database work:** the native Generator was recently
+overhauled and is wired into the application; the catalogue/database
+normalization and real cutover remain a separate ongoing activity.
+[Active Work](ACTIVE_WORK.md).
+
+**Character Chronicles is the long-term vision**. The [imported
+ideas](character-chronicles/README.md) partly describe an **abandoned earlier
+Chronicle architecture**; their old Vite/TypeScript, Schema 47–58, M6
+and orchestration decisions are not part of this current technical contract
+and are **not automatically binding** for future implementation. See
+[Project Evolution](PROJECT_EVOLUTION.md) and
+[Decision Policy](DECISION_POLICY.md).
 
 ## 2. Layering and composition
 
@@ -62,7 +74,13 @@ generation-referenced old rows as hidden provenance and prevents authored
 composition fallback from resolving any composition containing that
 provenance. Character rows, promotions and manual variants remain exact.
 
-### 2.1 Card Battler model resource
+### 2.1 Card Battler model resource (pre-persistence prototype)
+
+**Status:** the read-only external model adapter is registered, with **lazy
+first-use validation**. The default file `data/card_battler.sqlite3`
+is **not shipped** with the repository and its actual authored contents
+cannot be verified here. This is a separate model/design resource, not
+ComfyReview's writable canonical schema v18 and not a gameplay endpoint.
 
 The pre-persistence Card Battler implementation reads design and rules facts
 from the external `card_battler.sqlite3` model database. The composition root
@@ -409,17 +427,18 @@ Blueprint v4 maps `output_width` and `output_height` roles into a fixed
 AnimeSharp path: `VAEDecode -> 4x-AnimeSharp -> ImageSharpen -> Lanczos
 ImageScale -> SaveImage`. `GenerationGeometryPolicy` derives 720p and 1080p
 targets or retains the complete 4x AnimeSharp dimensions for the highest
-quality class without cropping. Required nodes and `example-upscaler.pth` are
-discovered at the provider boundary and are validated before persistence or
+quality class without cropping. Required nodes and the blueprint-declared `4x-AnimeSharp.pth` model are
+discovered at the provider boundary and validated before persistence or
 submission.
 
 ## 9. Schema lifecycle
 
 Runtime startup validates only the supported canonical schema; it never
-upgrades an unsupported database silently. Canonical v3 through v14
-changes are available only through `python -m comfyreview canonical-db
-upgrade --output PATH` and are backed up. The v3-to-v4 step migrates writable legacy review
-state into events, projects delete tombstones and replaces old tables with
+upgrades an unsupported database silently. Canonical schema upgrades
+through v18 are explicit, backed-up operations through
+`python -m comfyreview canonical-db upgrade --output PATH`.
+
+The v3-to-v4 step migrates writable legacy review state into events, projects delete tombstones and replaces old tables with
 read-only views; v5 adds the prompt catalog and v6 stores native output role
 and content-hash provenance. Schema v7 adds normalized revision atom usages;
 the v6-to-v7 upgrade parses only the supported grammar and validates the
@@ -568,10 +587,13 @@ The canonical cutover is intentionally not the end of the wider refactor.
   navigation. Playground character rows and Analytics Overview/Scope/Render
   collections configure that component instead of duplicating wheel, touch or
   wrap-around listeners; each card retains its independent evidence carousel.
-- Live canonical data completion is validated. ImageContext and scope queries
-  can now use exact composition memberships for 363 generations; the sixteen
-  unresolved cases remain explicit diagnostics rather than guessed relations.
-  Application ImageContext will remain free of HTTP URLs; a response mapper
+- Canonical ImageContext and scope queries use exact composition memberships
+  where proven; incomplete or ambiguous historical attribution remains
+  explicit diagnostics rather than guessed relations. The earlier
+  **363-linked / 16-unresolved** inventory is a dated
+  [archived operator observation](archive/canonical-data-operator-evidence-2026-10-01-to-07.md),
+  **not** a current database count or runtime invariant.
+  Application ImageContext remains free of HTTP URLs; a response mapper
   combines it with `OutputFileUrlMapper` at the presentation boundary.
 
 Existing projection workers are not migration targets by default. Each derived
@@ -579,11 +601,13 @@ dataset is first evaluated for replacement by a direct query or canonical SQL
 view. A new idempotent worker is introduced only for a projection whose
 materialization is demonstrably necessary.
 
-The completed audit is recorded in `docs/PROJECTION_AUDIT.md`. It found no
-current projection requiring replacement materialization: canonical repository
-queries are the chosen cutover for rankings, prompt statistics, observed
-composition statistics, recommendations and best-image lookup. The legacy
-worker/jobs/cursors and their runtime have been removed.
+The earlier completed audit is archived as
+[Projection Audit](archive/projection-audit.md). It found no projection
+requiring replacement materialization **for its historical scope**. Current
+architecture uses canonical repository queries for rankings, prompt statistics,
+observed composition statistics, recommendations and best-image lookup;
+the removed legacy worker/jobs/cursors are not a current runtime dependency.
+Any new projection must still be evaluated against current code and data.
 
 Legacy sources may be read by explicit migration tools. They must not become a
 second writable truth for an already cut-over feature.
@@ -599,12 +623,18 @@ write `.env`, open SQLite or call ComfyUI directly. Connection checks are
 explicit provider calls; ordinary Settings reads return cached capability state
 without blocking on the external service.
 
-Content levels are cumulative user choices beginning with mandatory
-`standard`. `PromptContentLevelPolicy` maps exactly one canonical
-`content_level_*` metadata marker to the typed `ContentLevel` on every catalog
-component. `nsfw_level_*` and the older authored aliases remain import
-fallbacks only; a canonical marker always wins. Descriptive tags no longer
-carry content-policy meaning. New generation snapshots derive their level from
+Content levels are a non-empty, canonically ordered selection from five
+available levels. `standard` is the default, but may be disabled. Visibility
+uses exact membership of the effective image level (stored generation level
+or explicit image override), not an implicit cumulative range.
+`PromptContentLevelPolicy` writes exactly one canonical `content_level_*`
+marker for new or edited catalog metadata. Reads prefer a canonical marker,
+fall back to recognized historical `nsfw_level_*` or authored aliases, and
+default to `standard` when none is present. Conflicting canonical markers
+(or conflicting legacy levels without a canonical marker) are rejected.
+Historical catalog rows may lack a canonical marker until edited; generic
+descriptive tags do not override an explicit canonical classification.
+New generation snapshots derive their level from
 typed component levels and LoRA snapshots, while all historical image readers
 use only the stored generation level or a manual image override.
 The Generator owns direct sampler and LoRA choices plus semantic format and
@@ -634,7 +664,7 @@ Catalog revisions include weights because each revision is the exact standard
 recipe that was valid at that point in catalog history. The active standard is
 selected by the newest append-only promotion rather than revision number.
 
-`PromptVariantGuidanceService` parallels render guidance while keeping three
+`PromptVariantGuidanceService` parallels render guidance while keeping four
 independent results for every loaded prompt component:
 
 1. the stable observed variant is the revision selected by the newest promotion

@@ -1,7 +1,16 @@
 # ComfyReview Frontend V2 Design Contract
 
-Status: accepted implementation reference on `refactor/review-boundary`,
-2026-10-01.
+**Dokumentklasse:** `CURRENT_TECH_REFERENCE` – aktueller ComfyReview-UI-Designrahmen, nicht zukünftige VN-Engine.
+
+Status: accepted visual/design reference on `refactor/review-boundary`,
+2026-10-01. The real ComfyReview V2 routes, JS entries, Jinja templates
+and browser tests are present in the [2026-10-09 source audit](IMPLEMENTATION_AUDIT.md).
+**Design acceptance is not proof of a new pixel-perfect manual review**
+or implementation of the longer-term Chronicle/VN vision. ComfyReview is
+an **ongoing** development base: its present Jinja/ES-module design is a
+current prototype contract, **not** a permanent UI mandate for the
+Character Chronicles evolution or a commitment to the discarded earlier
+Vite/TypeScript approach. See [Project Evolution](PROJECT_EVOLUTION.md).
 
 ## Product frame
 
@@ -100,9 +109,10 @@ browser never writes `.env`.
 
 Generation profiles are not an active UI or runtime concept. The Generator
 owns checkpoint, sampler, scheduler, Steps, CFG, Denoise, Batch, classified
-LoRAs, format and resolution class directly. Content levels begin with
-mandatory Standard and are enforced server-side across all image collections;
-the browser only edits the canonical preference. Review and Curation settings
+LoRAs, format and resolution class directly. Content levels are a non-empty,
+canonically ordered workspace selection; Standard is the default, not
+mandatory. The server enforces visibility using the effective image level,
+and the browser only edits the canonical preference. Review and Curation settings
 are UI/session defaults only and do not change review-event or assignment
 semantics.
 
