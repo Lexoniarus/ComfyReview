@@ -46,7 +46,7 @@ def test_request_snapshots_schema_and_hides_its_contents() -> None:
     assert "properties" not in repr(request)
     assert "Extract facts" not in repr(request)
     with pytest.raises(FrozenInstanceError):
-        setattr(request, "schema_name", "different")
+        setattr(request, str("schema_name"), "different")
 
 
 def test_schema_accepts_nested_local_references() -> None:
@@ -78,9 +78,7 @@ def test_requires_safe_schema_name(bad: object) -> None:
 @pytest.mark.parametrize("bad", (None, True, [], 5, "{}"))
 def test_requires_schema_document_object(bad: object) -> None:
     with pytest.raises(ValueError, match="json_schema"):
-        LocalStructuredInferenceRequest(
-            _inference(), "response", cast(dict[str, object], bad)
-        )
+        LocalStructuredInferenceRequest(_inference(), "response", cast(dict[str, object], bad))
 
 
 @pytest.mark.parametrize(
@@ -111,8 +109,6 @@ def test_external_or_dynamic_schema_refs_rejected(
 ) -> None:
     with pytest.raises(ValueError, match="json_schema"):
         LocalStructuredInferenceRequest(_inference(), "response", bad)
-
-
 
 
 def test_declared_schema_dialect_must_match_validator() -> None:
@@ -171,7 +167,7 @@ def test_result_is_typed_immutable_and_defensive() -> None:
     assert result.usage == LocalInferenceUsage(20, 8, 0)
     assert "truth" not in repr(result)
     with pytest.raises(FrozenInstanceError):
-        setattr(result, "reported_model_id", "other")
+        setattr(result, str("reported_model_id"), "other")
     assert issubclass(LocalModelStructuredOutputError, LocalModelProtocolError)
 
 

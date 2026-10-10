@@ -195,9 +195,7 @@ def test_completion_usage_is_normalized_when_available() -> None:
 
 def test_usage_can_omit_reasoning_details() -> None:
     result = NativeLmStudioStructuredInferenceProvider(
-        _Transport(
-            _response(usage={"prompt_tokens": 3, "completion_tokens": 4})
-        )
+        _Transport(_response(usage={"prompt_tokens": 3, "completion_tokens": 4}))
     ).infer_structured(_request())
     assert result.usage == LocalInferenceUsage(3, 4)
 
@@ -216,9 +214,7 @@ def test_usage_can_omit_reasoning_details() -> None:
 )
 def test_json_parsing_rejects_invalid_or_ambiguous_output(bad: str) -> None:
     with pytest.raises(LocalModelProtocolError, match="invalid structured"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(_response(bad))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(_response(bad))).infer_structured(_request())
 
 
 @pytest.mark.parametrize(
@@ -227,9 +223,7 @@ def test_json_parsing_rejects_invalid_or_ambiguous_output(bad: str) -> None:
 )
 def test_schema_is_checked_independently_of_provider(bad: str) -> None:
     with pytest.raises(LocalModelStructuredOutputError, match="schema"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(_response(bad))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(_response(bad))).infer_structured(_request())
 
 
 def test_valid_local_reference_schema_is_checked() -> None:
@@ -255,9 +249,7 @@ def test_missing_local_ref_is_normalized() -> None:
         {"$ref": "#/$defs/unknown"},
     )
     with pytest.raises(LocalModelProtocolError, match="resolution failed"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(_response("{}"))
-        ).infer_structured(request)
+        NativeLmStudioStructuredInferenceProvider(_Transport(_response("{}"))).infer_structured(request)
 
 
 @pytest.mark.parametrize(
@@ -266,16 +258,12 @@ def test_missing_local_ref_is_normalized() -> None:
 )
 def test_missing_or_wrong_content_fails(bad: object) -> None:
     with pytest.raises(LocalModelProtocolError, match="JSON content"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(_response(bad))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(_response(bad))).infer_structured(_request())
 
 
 def test_oversized_json_response_rejected_before_parsing() -> None:
     with pytest.raises(LocalModelProtocolError, match="size limit"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(_response("x" * (128 * 1024 + 1)))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(_response("x" * (128 * 1024 + 1)))).infer_structured(_request())
 
 
 @pytest.mark.parametrize(
@@ -283,9 +271,7 @@ def test_oversized_json_response_rejected_before_parsing() -> None:
 )
 def test_incomplete_or_nonstandard_finish_is_rejected(bad: object) -> None:
     with pytest.raises(LocalModelProtocolError, match="finish normally"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(_response(finish=bad))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(_response(finish=bad))).infer_structured(_request())
 
 
 @pytest.mark.parametrize(
@@ -304,9 +290,7 @@ def test_non_assistant_refusals_and_tool_calls_rejected(
     message: object,
 ) -> None:
     with pytest.raises(LocalModelProtocolError):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(_response(message=message))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(_response(message=message))).infer_structured(_request())
 
 
 @pytest.mark.parametrize(
@@ -324,26 +308,20 @@ def test_non_assistant_refusals_and_tool_calls_rejected(
 )
 def test_malformed_completion_shape_rejected(body: object) -> None:
     with pytest.raises(LocalModelProtocolError):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(LmStudioJsonResponse(200, body))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(LmStudioJsonResponse(200, body))).infer_structured(_request())
 
 
 @pytest.mark.parametrize("bad", ("", " bad ", True, 9))
 def test_malformed_reported_model_rejected(bad: object) -> None:
     response = _response(reported_model=bad)
     with pytest.raises(LocalModelProtocolError, match="reported"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(response)
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(response)).infer_structured(_request())
 
 
 @pytest.mark.parametrize("status", (0, 100, 302, 600, True))
 def test_bad_http_status_rejected(status: object) -> None:
     with pytest.raises(LocalModelProtocolError, match="HTTP status"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(LmStudioJsonResponse(cast(int, status), {}))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(LmStudioJsonResponse(cast(int, status), {}))).infer_structured(_request())
 
 
 @pytest.mark.parametrize(
@@ -361,9 +339,7 @@ def test_http_failures_are_typed_without_leaking_private_payload(
     status: int, expected: type[LocalModelError]
 ) -> None:
     with pytest.raises(expected) as failure:
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(LmStudioJsonResponse(status, {"secret": "never"}))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(LmStudioJsonResponse(status, {"secret": "never"}))).infer_structured(_request())
     assert "never" not in str(failure.value)
 
 
@@ -384,9 +360,7 @@ def test_http_failures_are_typed_without_leaking_private_payload(
 )
 def test_bad_usage_is_normalized(bad: object) -> None:
     with pytest.raises(LocalModelProtocolError, match="usage|token"):
-        NativeLmStudioStructuredInferenceProvider(
-            _Transport(_response(usage=bad))
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(_Transport(_response(usage=bad))).infer_structured(_request())
 
 
 @pytest.mark.parametrize(
@@ -415,9 +389,7 @@ def test_transport_failures_are_normalized(
     transport = _Transport(_response())
     transport.failure = error
     with pytest.raises(expected):
-        NativeLmStudioStructuredInferenceProvider(
-            transport
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(transport).infer_structured(_request())
     assert len(transport.calls) == 1
 
 
@@ -429,6 +401,4 @@ def test_invalid_request_and_transport_result_rejected() -> None:
     assert transport.calls == []
     broken = _Transport(cast(LmStudioJsonResponse, None))
     with pytest.raises(LocalModelProtocolError, match="transport response"):
-        NativeLmStudioStructuredInferenceProvider(
-            broken
-        ).infer_structured(_request())
+        NativeLmStudioStructuredInferenceProvider(broken).infer_structured(_request())
