@@ -81,9 +81,7 @@ def _required_lines(value: object, field: str) -> tuple[str, ...]:
     if (
         not isinstance(value, list)
         or not value
-        or any(
-            not isinstance(item, str) or not item.strip() for item in value
-        )
+        or any(not isinstance(item, str) or not item.strip() for item in value)
     ):
         raise CharacterCatalogDataError(f"Invalid character list: {field}")
     return tuple(value)

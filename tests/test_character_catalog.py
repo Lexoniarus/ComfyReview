@@ -86,21 +86,24 @@ def test_six_profiles_are_loaded_with_revisioned_sources() -> None:
         source_bytes = originals[f"sources/{character_id.title()}.md"]
         voice_bytes = originals[f"prompts/characters/{character_id}.md"]
         profile_bytes = originals[f"characters/{character_id}.json"]
-        assert (
-            service.get_source_document(character_id)
-            == source_bytes.decode("utf-8")
-        )
+        assert service.get_source_document(
+            character_id
+        ) == source_bytes.decode("utf-8")
         assert service.get_voice_prompt(character_id) == voice_bytes.decode(
             "utf-8"
         )
         revision = service.get_revisions(character_id)
         assert revision.source == hashlib.sha256(source_bytes).hexdigest()[:16]
-        assert revision.voice_prompt == hashlib.sha256(
-            voice_bytes
-        ).hexdigest()[:16]
-        assert revision.profile == hashlib.sha256(
-            profile_bytes + revision.source.encode("ascii")
-        ).hexdigest()[:16]
+        assert (
+            revision.voice_prompt
+            == hashlib.sha256(voice_bytes).hexdigest()[:16]
+        )
+        assert (
+            revision.profile
+            == hashlib.sha256(
+                profile_bytes + revision.source.encode("ascii")
+            ).hexdigest()[:16]
+        )
         assert service.get_public(character_id).revisions == revision
 
 
