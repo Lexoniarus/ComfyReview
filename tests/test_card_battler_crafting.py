@@ -85,7 +85,8 @@ def _spec(
 
 
 def _selected(
-    *, base: ConfirmedCardRevision | None = None,
+    *,
+    base: ConfirmedCardRevision | None = None,
 ) -> CardCraftingSession:
     if base is None:
         state = CardCraftingSession.begin(
@@ -111,8 +112,9 @@ def _selected(
     )
 
 
-def test_crafting_lifecycle_requires_explicit_approval_and_confirmation(
-) -> None:
+def test_crafting_lifecycle_requires_explicit_approval_and_confirmation() -> (
+    None
+):
     state = CardCraftingSession.begin(
         session_identity=CraftingSessionIdentity("attempt-1"),
         card_identity=CardIdentity("card-1"),
@@ -296,9 +298,12 @@ def test_development_preserves_identity_and_confirmed_base_revision() -> None:
 
 
 def test_rejected_development_does_not_mutate_confirmed_card() -> None:
-    base = _selected().mark_ready().confirm(
-        CardRevisionIdentity("revision-1")
-    ).confirmed_revision
+    base = (
+        _selected()
+        .mark_ready()
+        .confirm(CardRevisionIdentity("revision-1"))
+        .confirmed_revision
+    )
     assert base is not None
     development = CardCraftingSession.begin_development(
         session_identity=CraftingSessionIdentity("session-2"),
@@ -373,8 +378,8 @@ def test_snapshots_and_identity_types_are_immutable_and_validated() -> None:
 
 
 def test_confirmed_revision_must_match_its_card_and_selection() -> None:
-    confirmed = _selected().mark_ready().confirm(
-        CardRevisionIdentity("revision-1")
+    confirmed = (
+        _selected().mark_ready().confirm(CardRevisionIdentity("revision-1"))
     )
     base = confirmed.confirmed_revision
     assert base is not None

@@ -290,7 +290,8 @@ class CardCraftingSession:
         )
 
     def record_candidates(
-        self, image_uids: tuple[str, str, str, str],
+        self,
+        image_uids: tuple[str, str, str, str],
     ) -> CardCraftingSession:
         """Bind four distinct generated image identities to prepared slots."""
         if self.stage is CraftingStage.CANDIDATES_AVAILABLE:
@@ -347,7 +348,8 @@ class CardCraftingSession:
         return replace(self, stage=CraftingStage.READY_FOR_CONFIRMATION)
 
     def confirm(
-        self, revision_identity: CardRevisionIdentity,
+        self,
+        revision_identity: CardRevisionIdentity,
     ) -> CardCraftingSession:
         """Confirm a selected draft as one immutable card revision."""
         if self.stage is CraftingStage.CONFIRMED:
@@ -400,7 +402,8 @@ class CardCraftingSession:
                 imprint.rng_policy_version,
                 imprint.rng_algorithm,
                 imprint.explicit_seed,
-            ) != (
+            )
+            != (
                 provenance.ruleset_key,
                 provenance.ruleset_version,
                 provenance.mapping_policy_key,
