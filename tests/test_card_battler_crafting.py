@@ -85,7 +85,7 @@ def _spec(
 
 
 def _selected(
-    *, base: ConfirmedCardRevision | None = None
+    *, base: ConfirmedCardRevision | None = None,
 ) -> CardCraftingSession:
     if base is None:
         state = CardCraftingSession.begin(
@@ -324,14 +324,14 @@ def test_rejected_development_does_not_mutate_confirmed_card() -> None:
 def test_snapshots_and_identity_types_are_immutable_and_validated() -> None:
     state = _selected()
     with pytest.raises(FrozenInstanceError):
-        setattr(state, "stage", CraftingStage.CONFIRMED)
+        state.stage = CraftingStage.CONFIRMED  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
-        setattr(state.slots[0], "image_uid", "altered")
+        state.slots[0].image_uid = "altered"  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
-        setattr(state.card_identity, "value", "altered")
+        state.card_identity.value = "altered"  # type: ignore[misc]
     assert state.draft is not None
     with pytest.raises(FrozenInstanceError):
-        setattr(state.draft, "level", 10)
+        state.draft.level = 10  # type: ignore[misc]
     with pytest.raises(CardCraftingError):
         CraftingSessionIdentity("")
     with pytest.raises(CardCraftingError):
