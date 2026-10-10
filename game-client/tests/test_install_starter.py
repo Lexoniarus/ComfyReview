@@ -1,20 +1,32 @@
 """Test the script installation boundary without needing the Cocos editor."""
+
 import tempfile
 import unittest
 from pathlib import Path
-import sys
+from runpy import run_path
+from typing import Protocol, cast
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from install_starter import install, ProjectNotInitializedError
+
+class _Installer(Protocol):
+    def __call__(self, project: Path, source: Path = ...) -> list[Path]: ...
+
+
+# The game-client scripts are standalone files, not an importable package.
+_scripts = Path(__file__).resolve().parents[1] / "scripts"
+_exports = run_path(str(_scripts / "install_starter.py"))
+install = cast(_Installer, _exports["install"])
+ProjectNotInitializedError = cast(
+    type[ValueError], _exports["ProjectNotInitializedError"]
+)
 
 
 class InstallStarterTest(unittest.TestCase):
-    def test_needs_editor_project(self):
+    def test_needs_editor_project(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             with self.assertRaises(ProjectNotInitializedError):
                 install(Path(temp))
 
-    def test_copy_idempotent_and_never_overwrite(self):
+    def test_copy_idempotent_and_never_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)
             project = base / "cocos"
@@ -32,5 +44,5 @@ class InstallStarterTest(unittest.TestCase):
             self.assertEqual(destination.read_text(), "modified")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

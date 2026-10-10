@@ -14,54 +14,66 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-
 BACKEND_ROUTES = ("/api/v2/", "/files/")
 
 
 def is_backend_request(path: str) -> bool:
+    """Only API-v2 and file URLs are eligible for backend forwarding."""
     parsed = urlsplit(path)
     return not parsed.scheme and not parsed.netloc and any(
         parsed.path.startswith(prefix) for prefix in BACKEND_ROUTES
     )
 
 
-def build_handler(build_dir: Path, backend_url: str):
+def build_handler(
+    build_dir: Path,
+    backend_url: str,
+) -> type[SimpleHTTPRequestHandler]:
+    """Build an HTTP handler for a real Cocos build and backend origin."""
     backend = urlsplit(backend_url)
-    if backend.scheme not in ("http", "https") or not backend.hostname:
+    backend_host = backend.hostname
+    if backend.scheme not in ("http", "https") or not backend_host:
         raise ValueError("Backend URL must be an HTTP(S) URL")
     if backend.path not in ("", "/") or backend.query or backend.fragment:
         raise ValueError("Backend URL must be an origin without path or query")
     directory = Path(build_dir).resolve()
     if not (directory / "index.html").is_file():
-        raise ValueError(f"Expected Cocos Web Desktop index.html in {directory}")
+        raise ValueError(
+            f"Expected Cocos Web Desktop index.html in {directory}"
+        )
 
     class LocalDevHandler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(directory), **kwargs)
 
-        def do_GET(self):
+        def do_GET(self) -> None:
             if is_backend_request(self.path):
                 self.forward_request("GET")
             else:
                 super().do_GET()
 
-        def do_HEAD(self):
+        def do_HEAD(self) -> None:
             if is_backend_request(self.path):
                 self.forward_request("HEAD")
             else:
                 super().do_HEAD()
 
         def forward_request(self, method: str) -> None:
-            connection_class = (
-                HTTPSConnection if backend.scheme == "https" else HTTPConnection
-            )
-            conn = connection_class(backend.hostname, backend.port, timeout=12)
+            conn: HTTPConnection
+            if backend.scheme == "https":
+                conn = HTTPSConnection(backend_host, backend.port, timeout=12)
+            else:
+                conn = HTTPConnection(backend_host, backend.port, timeout=12)
             headers_sent = False
             try:
                 conn.request(method, self.path, headers={"Accept": "*/*"})
                 reply = conn.getresponse()
                 self.send_response(reply.status)
-                for header in ("Content-Type", "Content-Length", "Cache-Control"):
+                for header in (
+                    "Content-Type",
+                    "Content-Length",
+                    "Cache-Control",
+                ):
                     value = reply.getheader(header)
                     if value:
                         self.send_header(header, value)
@@ -74,7 +86,9 @@ def build_handler(build_dir: Path, backend_url: str):
                 # A disconnected backend must be visible as a gateway failure.
                 if not headers_sent and not self.wfile.closed:
                     try:
-                        self.send_error(502, "Local ComfyReview backend unavailable")
+                        self.send_error(
+                            502, "Local ComfyReview backend unavailable"
+                        )
                     except (OSError, ValueError):
                         pass
             finally:

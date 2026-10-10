@@ -1,48 +1,77 @@
+"""Behavior tests for the standalone local Cocos development proxy."""
+
 import tempfile
 import unittest
+from collections.abc import Callable
+from http.server import (
+    BaseHTTPRequestHandler,
+    SimpleHTTPRequestHandler,
+    ThreadingHTTPServer,
+)
 from pathlib import Path
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from runpy import run_path
 from threading import Thread
+from typing import cast
 from urllib.request import urlopen
-import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from dev_proxy import build_handler, is_backend_request
+# The "game-client" directory is not an importable Python package.
+# Load the standalone script by path without altering global sys.path.
+_scripts = Path(__file__).resolve().parents[1] / "scripts"
+_exports = run_path(str(_scripts / "dev_proxy.py"))
+build_handler = cast(
+    Callable[[Path, str], type[SimpleHTTPRequestHandler]],
+    _exports["build_handler"],
+)
+is_backend_request = cast(
+    Callable[[str], bool], _exports["is_backend_request"]
+)
 
 
 class QuietBackend(BaseHTTPRequestHandler):
-    def do_GET(self):
-        response = b"123" if self.path.startswith("/files/") else b'{"image_uid":"img-1"}'
+    def do_GET(self) -> None:
+        if self.path.startswith("/files/"):
+            response = b"123"
+            content_type = "image/png"
+        else:
+            response = b'{"image_uid":"img-1"}'
+            content_type = "application/json"
         self.send_response(200)
-        self.send_header("Content-Type", "image/png" if self.path.startswith("/files/") else "application/json")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(response)))
         self.end_headers()
         self.wfile.write(response)
 
-    def log_message(self, _format, *_args):
+    def log_message(self, format: str, *args: object) -> None:
         pass
 
 
 class DevProxyTest(unittest.TestCase):
-    def test_only_allowed_prefixes_go_to_backend(self):
+    def test_only_allowed_prefixes_go_to_backend(self) -> None:
         self.assertTrue(is_backend_request("/api/v2/images/img-1?foo=bar"))
         self.assertTrue(is_backend_request("/files/image%20one.png"))
         for other in (
-            "/", "/index.html", "/admin", "/files-other/secret.png",
+            "/",
+            "/index.html",
+            "/admin",
+            "/files-other/secret.png",
             "https://remote.invalid/api/v2/images/x",
         ):
             self.assertFalse(is_backend_request(other))
 
-    def test_serves_static_files_and_proxies_api_and_images(self):
+    def test_serves_static_files_and_proxies_api_and_images(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
-            (directory / "index.html").write_text("Cocos demo", encoding="utf-8")
+            index = directory / "index.html"
+            index.write_text("Cocos demo", encoding="utf-8")
             backend = ThreadingHTTPServer(("127.0.0.1", 0), QuietBackend)
             backend_thread = Thread(target=backend.serve_forever, daemon=True)
             backend_thread.start()
-            proxy = ThreadingHTTPServer(("127.0.0.1", 0), build_handler(
-                directory, f"http://127.0.0.1:{backend.server_port}"
-            ))
+            proxy = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                build_handler(
+                    directory, f"http://127.0.0.1:{backend.server_port}"
+                ),
+            )
             proxy_thread = Thread(target=proxy.serve_forever, daemon=True)
             proxy_thread.start()
             try:
@@ -61,7 +90,7 @@ class DevProxyTest(unittest.TestCase):
                 proxy_thread.join(timeout=2)
                 backend_thread.join(timeout=2)
 
-    def test_requires_actual_web_build_and_origin(self):
+    def test_requires_actual_web_build_and_origin(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             build = Path(tmp)
             with self.assertRaises(ValueError):
