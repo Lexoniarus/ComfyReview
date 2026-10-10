@@ -8,6 +8,16 @@ from comfyreview.domain.card_battler.cards import (
     CardStats,
     StructuredCardSpec,
 )
+from comfyreview.domain.card_battler.crafting import (
+    CandidateSlot,
+    CardCraftingError,
+    CardCraftingSession,
+    CardIdentity,
+    CardRevisionIdentity,
+    ConfirmedCardRevision,
+    CraftingSessionIdentity,
+    CraftingStage,
+)
 from comfyreview.domain.card_battler.development import (
     CARD_DEVELOPMENT_ALGORITHM_REVISION,
     CardDevelopmentPlan,
@@ -36,6 +46,14 @@ __all__ = [
     "CANONICAL_RULE_RENDERER_REVISION",
     "CARD_DEVELOPMENT_ALGORITHM_REVISION",
     "COMMON_CARD_MATERIALIZATION_REVISION",
+    "CandidateSlot",
+    "CardCraftingError",
+    "CardCraftingSession",
+    "CardIdentity",
+    "CardRevisionIdentity",
+    "ConfirmedCardRevision",
+    "CraftingSessionIdentity",
+    "CraftingStage",
     "CardDevelopmentPlan",
     "CardDevelopmentProvenance",
     "CardDevelopmentResult",

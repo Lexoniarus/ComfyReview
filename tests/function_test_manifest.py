@@ -1,6 +1,50 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.begin": (
+        "tests/test_card_battler_crafting.py::"
+        "test_crafting_lifecycle_requires_explicit_approval_and_confirmation"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.begin_development": (
+        "tests/test_card_battler_crafting.py::"
+        "test_development_preserves_identity_and_confirmed_base_revision"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.record_analysis": (
+        "tests/test_card_battler_crafting.py::"
+        "test_crafting_lifecycle_requires_explicit_approval_and_confirmation"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.approve_analysis": (
+        "tests/test_card_battler_crafting.py::"
+        "test_crafting_lifecycle_requires_explicit_approval_and_confirmation"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.attach_draft": (
+        "tests/test_card_battler_crafting.py::"
+        "test_invalid_order_and_unapproved_or_mismatched_drafts_fail"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.prepare_round": (
+        "tests/test_card_battler_crafting.py::"
+        "test_round_has_exactly_four_ordered_slots_and_unique_images"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.record_candidates": (
+        "tests/test_card_battler_crafting.py::"
+        "test_round_has_exactly_four_ordered_slots_and_unique_images"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.select_candidate": (
+        "tests/test_card_battler_crafting.py::"
+        "test_repeated_decisions_do_not_duplicate_confirmation"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.reject_all": (
+        "tests/test_card_battler_crafting.py::"
+        "test_reject_all_never_confirms_and_allows_a_new_round"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.mark_ready": (
+        "tests/test_card_battler_crafting.py::"
+        "test_crafting_lifecycle_requires_explicit_approval_and_confirmation"
+    ),
+    "comfyreview.domain.card_battler.crafting:CardCraftingSession.confirm": (
+        "tests/test_card_battler_crafting.py::"
+        "test_repeated_decisions_do_not_duplicate_confirmation"
+    ),
     "comfyreview.application.local_model_structured_inference:LocalStructuredInferenceRequest.schema_document": (
         "tests/test_local_model_structured_inference.py::"
         "test_request_snapshots_schema_and_hides_its_contents"
