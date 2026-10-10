@@ -107,3 +107,24 @@ republishing a FairyGUI UI definition.
 - [ ] Owner has manually accepted the UI and interactions.
 
 Reference: [Cocos Creator 3.8 project creation](https://docs.cocos.com/creator/3.8/manual/en/getting-started/helloworld/), [Cocos asset loading](https://docs.cocos.com/creator/3.8/manual/en/asset/dynamic-load-resources.html), [FairyGUI Cocos guide](https://www.fairygui.com/en/docs/sdk/creator/).
+
+## Next: Game Shell room + phone smoke
+
+After the initial `ImagePreviewSmoke` image test, use
+[GAME_SHELL.md](GAME_SHELL.md) to create an editor-authored `GameShellSmoke`
+scene with a fixed room, an overlay smartphone, Timeline / Messages / Cards
+tabs, and an existing canonical image as a demo avatar.
+
+`install_starter.py` now also copies `GameShellController.ts` and
+`runtime/GameShellState.ts`. It does **not** replace edited files, create
+fake scene metadata, connect FairyGUI automatically, or add new Python APIs.
+
+The navigation state can be checked without Cocos Creator via:
+
+```bash
+node --experimental-strip-types --test game-client/tests/*test.mjs
+tsc -p game-client/tsconfig.contract.json
+```
+
+**Status remains code prepared, not editor-accepted.** The actual UI must still
+be created and run using Cocos Creator 3.8.x on the workstation.
