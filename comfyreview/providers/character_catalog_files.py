@@ -82,8 +82,7 @@ def _required_lines(value: object, field: str) -> tuple[str, ...]:
         not isinstance(value, list)
         or not value
         or any(
-            not isinstance(item, str) or not item.strip()
-            for item in value
+            not isinstance(item, str) or not item.strip() for item in value
         )
     ):
         raise CharacterCatalogDataError(f"Invalid character list: {field}")
@@ -102,10 +101,7 @@ def _decode_profile(content: bytes, character_id: str) -> CharacterProfile:
             f"Invalid profile structure: {character_id}"
         )
     data = cast(dict[str, object], raw)
-    if (
-        type(data["schema_version"]) is not int
-        or data["schema_version"] != 1
-    ):
+    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
         raise CharacterCatalogDataError(
             f"Unsupported profile schema: {character_id}"
         )
@@ -208,9 +204,7 @@ class FileCharacterCatalog:
             ) from exc
 
     def _load_record(self, character_id: str) -> _CharacterRecord:
-        profile_bytes = self._read_resource(
-            f"characters/{character_id}.json"
-        )
+        profile_bytes = self._read_resource(f"characters/{character_id}.json")
         voice_bytes = self._read_resource(
             f"prompts/characters/{character_id}.md"
         )

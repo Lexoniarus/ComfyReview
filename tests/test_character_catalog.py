@@ -21,8 +21,7 @@ from comfyreview.providers.character_catalog_files import (
 )
 
 ROOT = (
-    Path(__file__).resolve().parents[1]
-    / "comfyreview/resources/character_lab"
+    Path(__file__).resolve().parents[1] / "comfyreview/resources/character_lab"
 )
 HASH_MANIFEST = ROOT / "original_sha256.json"
 CAST = ("aiko", "hina", "kaori", "mitsuki", "natsumi", "saki")
@@ -40,7 +39,9 @@ def _copy_resources(tmp_path: Path) -> Path:
 
 
 def _alter_resource(
-    tmp_path: Path, relative_path: str, content: bytes,
+    tmp_path: Path,
+    relative_path: str,
+    content: bytes,
 ) -> Path:
     destination = _copy_resources(tmp_path)
     (destination / relative_path).write_bytes(content)
@@ -70,16 +71,18 @@ def test_six_profiles_are_loaded_with_revisioned_sources() -> None:
         assert profile.display_name == character_id.title()
         assert profile.status == "draft_fixture"
         assert profile.source_file == f"{character_id.title()}.md"
-        assert all((
-            profile.public_identity,
-            profile.personal_values,
-            profile.behavioral_signature,
-            profile.voice_signature,
-            profile.internal_mechanisms,
-            profile.private_topics,
-            profile.forbidden_in_low_trust,
-            profile.general_boundaries,
-        ))
+        assert all(
+            (
+                profile.public_identity,
+                profile.personal_values,
+                profile.behavioral_signature,
+                profile.voice_signature,
+                profile.internal_mechanisms,
+                profile.private_topics,
+                profile.forbidden_in_low_trust,
+                profile.general_boundaries,
+            )
+        )
         source_bytes = originals[f"sources/{character_id.title()}.md"]
         voice_bytes = originals[f"prompts/characters/{character_id}.md"]
         profile_bytes = originals[f"characters/{character_id}.json"]
@@ -91,9 +94,7 @@ def test_six_profiles_are_loaded_with_revisioned_sources() -> None:
             "utf-8"
         )
         revision = service.get_revisions(character_id)
-        assert revision.source == hashlib.sha256(
-            source_bytes
-        ).hexdigest()[:16]
+        assert revision.source == hashlib.sha256(source_bytes).hexdigest()[:16]
         assert revision.voice_prompt == hashlib.sha256(
             voice_bytes
         ).hexdigest()[:16]
@@ -108,7 +109,10 @@ def test_public_projection_hides_private_and_personality_details() -> None:
     for summary in service.list_public():
         data = asdict(summary)
         assert set(data) == {
-            "character_id", "display_name", "status", "revisions"
+            "character_id",
+            "display_name",
+            "status",
+            "revisions",
         }
         text = json.dumps(data)
         profile = service.get_profile(summary.character_id)
@@ -119,7 +123,7 @@ def test_public_projection_hides_private_and_personality_details() -> None:
     assert "17" in saki.public_identity[0]
     assert "seventeen" in service.get_source_document("saki").lower()
     with pytest.raises(FrozenInstanceError):
-        setattr(saki, "status", "canon")
+        saki.status = "canon"  # type: ignore[misc]
 
 
 def test_unknown_character_fails_explicitly_for_every_read() -> None:
@@ -137,8 +141,7 @@ def test_unknown_character_fails_explicitly_for_every_read() -> None:
 
 @pytest.mark.parametrize(
     "missing_path",
-    ["characters/aiko.json", "sources/Aiko.md",
-     "prompts/characters/aiko.md"],
+    ["characters/aiko.json", "sources/Aiko.md", "prompts/characters/aiko.md"],
 )
 def test_missing_resource_fails(tmp_path: Path, missing_path: str) -> None:
     destination = _copy_resources(tmp_path)
@@ -170,7 +173,10 @@ def test_extra_resource_fails(tmp_path: Path) -> None:
     ],
 )
 def test_invalid_profile_or_unapproved_personality_fails_closed(
-    tmp_path: Path, field: str, value: object, message: str,
+    tmp_path: Path,
+    field: str,
+    value: object,
+    message: str,
 ) -> None:
     raw = json.loads(_originals()["characters/aiko.json"])
     raw[field] = value
@@ -181,10 +187,8 @@ def test_invalid_profile_or_unapproved_personality_fails_closed(
 
 
 @pytest.mark.parametrize(
-    "path", [
-        "characters/aiko.json", "prompts/characters/aiko.md",
-        "sources/Aiko.md",
-    ],
+    "path",
+    ["characters/aiko.json", "prompts/characters/aiko.md", "sources/Aiko.md"],
 )
 def test_invalid_utf8_fails(tmp_path: Path, path: str) -> None:
     destination = _alter_resource(tmp_path, path, b"\xff\xfe")
@@ -193,7 +197,8 @@ def test_invalid_utf8_fails(tmp_path: Path, path: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "path", ["prompts/characters/aiko.md", "sources/Aiko.md"],
+    "path",
+    ["prompts/characters/aiko.md", "sources/Aiko.md"],
 )
 def test_empty_voice_or_document_fails(tmp_path: Path, path: str) -> None:
     destination = _alter_resource(tmp_path, path, b" ")
