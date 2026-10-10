@@ -69,6 +69,7 @@ from comfyreview.application import (
     WorkflowDefaultsService,
     WorkspacePreferencesService,
 )
+from comfyreview.application.character_catalog import CharacterCatalogService
 from comfyreview.observability import (
     RequestTracingMiddleware,
     configure_logging,
@@ -85,6 +86,7 @@ from comfyreview.providers import (
     UuidGenerationIdentitySource,
     UuidPromptIdentitySource,
 )
+from comfyreview.providers.character_catalog_files import FileCharacterCatalog
 from comfyreview.repositories.filesystem import (
     JsonComfyUiCapabilityCache,
     JsonWorkflowBlueprintRepository,
@@ -195,6 +197,7 @@ class ApplicationContainer:
     lora_drafts: LoraDraftSelectionService
     lora_triggers: LoraTriggerValidationService
     image_content_levels: ImageContentLevelService
+    character_catalog: CharacterCatalogService
 
 
 def _prepare_directories(settings: Settings) -> None:
@@ -359,6 +362,11 @@ def build_application_container(
     card_battler_model = SqliteCardBattlerModelRepository(
         card_battler_model_resource
     )
+    character_catalog = CharacterCatalogService(
+        FileCharacterCatalog(
+            Path(__file__).resolve().parent / "resources" / "character_lab"
+        )
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
@@ -501,6 +509,7 @@ def build_application_container(
                 configured.canonical_database_path
             )
         ),
+        character_catalog=character_catalog,
     )
 
 
