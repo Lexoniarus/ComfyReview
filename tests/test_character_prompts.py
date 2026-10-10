@@ -110,7 +110,8 @@ def _copy(tmp_path: Path) -> Path:
 
 
 def _composer(
-    *, personality: _Personality | None = None,
+    *,
+    personality: _Personality | None = None,
 ) -> CharacterPromptComposer:
     return CharacterPromptComposer(
         _C1Voices(), FilePromptCatalog(ROOT, CAST), personality

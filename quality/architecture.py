@@ -128,7 +128,8 @@ def _record_import_violations(
         }:
             counts[f"{relative_path}|core.no_technical_dependencies"] += 1
         if "prompt_core" in boundaries and (
-            imported_root in {
+            imported_root
+            in {
                 "fastapi",
                 "httpx",
                 "pathlib",

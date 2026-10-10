@@ -46,8 +46,7 @@ class FilePromptCatalog:
             )
         self._global = self._read(root, "global_speaker.md")
         self._variants = {
-            name: self._read(root, f"variants/{name}.md")
-            for name in _VARIANTS
+            name: self._read(root, f"variants/{name}.md") for name in _VARIANTS
         }
         self._candidates = {
             actor: self._read(root, f"candidates/{actor}.md")

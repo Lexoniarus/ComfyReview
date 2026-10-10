@@ -86,18 +86,27 @@ def test_character_prompt_core_rejects_concrete_adapter_imports(
         "from comfyreview.providers import FilePromptCatalog\n",
     )
     violations = collect_architecture_violations(tmp_path)
-    assert violations[
-        "comfyreview/domain/character_prompts.py|"
-        "prompt_core.no_concrete_dependencies"
-    ] == 1
-    assert violations[
-        "comfyreview/application/character_prompt_composer.py|"
-        "prompt_core.no_concrete_dependencies"
-    ] == 1
-    assert violations[
-        "comfyreview/application/character_prompt_composer.py|"
-        "output.no_concrete_provider"
-    ] == 1
+    assert (
+        violations[
+            "comfyreview/domain/character_prompts.py|"
+            "prompt_core.no_concrete_dependencies"
+        ]
+        == 1
+    )
+    assert (
+        violations[
+            "comfyreview/application/character_prompt_composer.py|"
+            "prompt_core.no_concrete_dependencies"
+        ]
+        == 1
+    )
+    assert (
+        violations[
+            "comfyreview/application/character_prompt_composer.py|"
+            "output.no_concrete_provider"
+        ]
+        == 1
+    )
     assert "prompt_core" in _rules_for_path(
         "comfyreview/application/character_prompt_catalog.py"
     )
