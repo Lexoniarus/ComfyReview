@@ -70,6 +70,39 @@ def test_detects_boundary_violations(tmp_path: Path) -> None:
     }
 
 
+
+def test_character_prompt_core_rejects_concrete_adapter_imports(
+    tmp_path: Path,
+) -> None:
+    """The C2a domain and use cases cannot import technical adapters."""
+    _write_module(
+        tmp_path,
+        "comfyreview/domain/character_prompts.py",
+        "import pathlib\n",
+    )
+    _write_module(
+        tmp_path,
+        "comfyreview/application/character_prompt_composer.py",
+        "from comfyreview.providers import FilePromptCatalog\n",
+    )
+    violations = collect_architecture_violations(tmp_path)
+    assert violations[
+        "comfyreview/domain/character_prompts.py|"
+        "prompt_core.no_concrete_dependencies"
+    ] == 1
+    assert violations[
+        "comfyreview/application/character_prompt_composer.py|"
+        "prompt_core.no_concrete_dependencies"
+    ] == 1
+    assert violations[
+        "comfyreview/application/character_prompt_composer.py|"
+        "output.no_concrete_provider"
+    ] == 1
+    assert "prompt_core" in _rules_for_path(
+        "comfyreview/application/character_prompt_catalog.py"
+    )
+
+
 def test_ignores_allowed_dependencies_and_dynamic_calls(
     tmp_path: Path,
 ) -> None:

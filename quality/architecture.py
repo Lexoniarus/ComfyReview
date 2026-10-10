@@ -78,6 +78,13 @@ def _relative_path(root: Path, path: Path) -> str:
 
 
 def _rules_for_path(relative_path: str) -> tuple[str, ...]:
+    if relative_path == "comfyreview/domain/character_prompts.py":
+        return ("core", "prompt_core")
+    if relative_path in {
+        "comfyreview/application/character_prompt_catalog.py",
+        "comfyreview/application/character_prompt_composer.py",
+    }:
+        return ("core", "services", "prompt_core")
     if relative_path.startswith("routers/"):
         return ("routes",)
     if relative_path.startswith("services/"):
@@ -120,6 +127,19 @@ def _record_import_violations(
             "stores",
         }:
             counts[f"{relative_path}|core.no_technical_dependencies"] += 1
+        if "prompt_core" in boundaries and (
+            imported_root in {
+                "fastapi", "httpx", "pathlib", "requests", "sqlite3",
+                "urllib", "websocket",
+            }
+            or imported_module.startswith((
+                "comfyreview.providers",
+                "comfyreview.repositories",
+            ))
+        ):
+            counts[
+                f"{relative_path}|prompt_core.no_concrete_dependencies"
+            ] += 1
         if "routes" in boundaries or "services" in boundaries:
             if imported_module.startswith("comfyreview.providers"):
                 counts[f"{relative_path}|output.no_concrete_provider"] += 1

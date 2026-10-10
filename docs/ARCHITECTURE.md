@@ -769,6 +769,37 @@ best-image UID across both groups before deterministically falling back to the
 remaining ranked candidates. The Playground presenter only translates that
 selection and never derives character identity or diversity in the browser.
 
+### 10.4 Character Lab C2a: prompt composition (read-only)
+
+The C1 `CharacterCatalogService` remains authoritative for the six original
+voice prompts and their source revisions. The new injected
+`CharacterPromptComposer` reads C1 public identity and original voice
+through `CharacterVoicePort`; it does not create another character store or
+repeat private dossiers. `FilePromptCatalog` snapshots the v8.2 global
+speaker contract, three named variants and six explicitly unapproved
+experimental voice candidates from checked-in read-only resources. Their
+SHA-256 revisions are derived from exact UTF-8 source bytes.
+
+`compose(character_id, variant_id="baseline")` returns a frozen typed
+`ComposedCharacterPrompt`: system-only speaker instructions, selected
+variant, original voice revision, each included component's role/resource/
+revision, experimental selection flag and a deterministic SHA-256
+composition revision (`character-lab-c2a-v1`). Only selecting
+`voice_candidate_p2` substitutes the experiment's candidate for the voice
+in the resulting prompt; the C1 original remains unchanged and its revision
+is included in provenance. No selection or comparison promotes a candidate
+to canon. `voice_precise` uses the C1 original voice.
+
+Situational message history, RAG, conversation state, world knowledge,
+later model messages and token-budget/inference execution are deliberately
+outside this system-instruction result and outside C2a. The optional
+`PersonalityPromptPort` is dormant unless `enable_personality=True`
+is explicitly supplied; the production composition root injects no
+personality provider, so enabling it fails closed. No new HTTP endpoints,
+database tables, AI model calls or user interface are added. All new core
+paths participate in the normal 100% statement-coverage gate, manifest
+mapping and strict prompt-core import rules.
+
 ## 11. Observability and quality
 
 Request middleware validates or generates `X-Request-ID`, binds it through a
