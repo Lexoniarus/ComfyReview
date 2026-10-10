@@ -20,9 +20,9 @@ BACKEND_ROUTES = ("/api/v2/", "/files/")
 def is_backend_request(path: str) -> bool:
     """Only API-v2 and file URLs are eligible for backend forwarding."""
     parsed = urlsplit(path)
-    return not parsed.scheme and not parsed.netloc and any(
-        parsed.path.startswith(prefix) for prefix in BACKEND_ROUTES
-    )
+    if parsed.scheme or parsed.netloc:
+        return False
+    return any(parsed.path.startswith(prefix) for prefix in BACKEND_ROUTES)
 
 
 def build_handler(
@@ -31,9 +31,10 @@ def build_handler(
 ) -> type[SimpleHTTPRequestHandler]:
     """Build an HTTP handler for a real Cocos build and backend origin."""
     backend = urlsplit(backend_url)
-    backend_host = backend.hostname
-    if backend.scheme not in ("http", "https") or not backend_host:
+    host_candidate = backend.hostname
+    if backend.scheme not in ("http", "https") or not host_candidate:
         raise ValueError("Backend URL must be an HTTP(S) URL")
+    backend_host: str = host_candidate
     if backend.path not in ("", "/") or backend.query or backend.fragment:
         raise ValueError("Backend URL must be an origin without path or query")
     directory = Path(build_dir).resolve()
