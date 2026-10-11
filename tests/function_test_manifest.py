@@ -101,6 +101,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_semantics.py::"
         "test_semantic_analyzer_uses_controlled_vocabulary_and_stable_profile"
     ),
+    "comfyreview.application.card_battler_presentation:CardPresentationRealizer.realize": (
+        "tests/test_card_battler_presentation.py::"
+        "test_presentation_realizer_builds_cosmetic_text_and_stable_input"
+    ),
     "comfyreview.application.card_battler_development_service:CardDevelopmentService.advance": (
         "tests/test_card_battler_development_service.py::"
         "test_card_development_service_advances_one_tier_and_one_improvement"

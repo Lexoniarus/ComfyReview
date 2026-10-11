@@ -186,6 +186,15 @@ canonical review-image resolver. Only the resulting validated path is read;
 the application receives UID, MIME type, bytes and content hash, never the
 path. This avoids a second `image_uid` lookup policy.
 
+Stage 3 is an independent, optional cosmetic boundary.
+`CardPresentationRealizer` receives the already final semantic profile,
+imprint, structured Card specification and canonical rule text, but may return
+only a title, short non-mechanical description, one display name per trait and
+optional flavor. Its closed schema and application validation reject numeric
+or reserved mechanical syntax. A refresh preserves the existing title. Model,
+schema or policy failure yields no presentation and never changes the valid
+Card specification or authoritative rules.
+
 No HTTP route, database write, Card-Battler session, startup model load or
 fully composed Factory is introduced by these boundaries. Fake-provider tests
 validate the contracts but do not establish a real LM Studio, hardware or
