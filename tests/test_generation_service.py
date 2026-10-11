@@ -626,12 +626,14 @@ def test_generation_service_marks_ambiguous_submit_for_reconciliation(
     external_error,
 ) -> None:
     events: list[str] = []
-    with pytest.raises(GenerationReconciliationRequired):
+    with pytest.raises(GenerationReconciliationRequired) as captured:
         _service(
             generations=_Generations(events),
             comfyui=_ComfyUi(events, submit_error=external_error),
             events=events,
         ).submit(_request())
+    assert captured.value.generation_uid == "generation-1"
+    assert captured.value.prompt_id is None
     assert events[-2:] == ["external_submit", "reconcile"]
 
 
@@ -660,12 +662,16 @@ def test_generation_service_handles_persistence_and_compensation_failures() -> (
         ).submit(_request())
 
     events = []
-    with pytest.raises(GenerationReconciliationRequired, match="confirmation"):
+    with pytest.raises(
+        GenerationReconciliationRequired, match="confirmation"
+    ) as captured:
         _service(
             generations=_Generations(events, {"submitted"}),
             comfyui=_ComfyUi(events),
             events=events,
         ).submit(_request())
+    assert captured.value.generation_uid == "generation-1"
+    assert captured.value.prompt_id == "prompt-1"
     assert events[-2:] == ["submitted", "reconcile"]
 
     events = []

@@ -24,6 +24,7 @@ from comfyreview.application.card_battler_evolution_images import (
 )
 from comfyreview.application.generation import (
     GenerationMutationError,
+    GenerationReconciliationRequired,
     GenerationSubmission,
 )
 from comfyreview.application.generation_outputs import GenerationOutput
@@ -74,9 +75,11 @@ class _Generations:
         database_path: Path,
         *,
         failing_slots: tuple[int, ...] = (),
+        ambiguous_slots: tuple[int, ...] = (),
     ) -> None:
         self._database_path = database_path
         self._failing_slots = set(failing_slots)
+        self._ambiguous_slots = set(ambiguous_slots)
         self.requests = []
         self.observed: dict[str, str] = {}
 
@@ -101,6 +104,12 @@ class _Generations:
             connection.commit()
         finally:
             connection.close()
+        if slot in self._ambiguous_slots:
+            raise GenerationReconciliationRequired(
+                f"slot {slot} is ambiguous",
+                generation_uid=generation_uid,
+                prompt_id=f"prompt-{slot}",
+            )
         return GenerationSubmission(
             generation_uid,
             "submitted",
@@ -192,6 +201,22 @@ def test_image_service_fails_all_slots_before_submission_when_reference_changes(
         and candidate.failure_category == "ValueError"
         for candidate in result.candidates
     )
+
+
+def test_image_service_retains_ambiguous_generation_for_reconciliation(
+    tmp_path: Path,
+) -> None:
+    group = _composed_group(tmp_path)
+    database_path = tmp_path / "card-runtime.sqlite3"
+    generations = _Generations(database_path, ambiguous_slots=(2,))
+    service, _ = _service(tmp_path, generations)
+
+    result = service.submit(group.group_id, expected_revision=group.revision)
+
+    ambiguous = result.candidates[2]
+    assert ambiguous.status is CardCandidateStatus.SUBMITTED
+    assert ambiguous.generation_uid == "generation-2"
+    assert ambiguous.failure_category is None
 
 
 def test_image_service_synchronizes_only_validated_primary_outputs(

@@ -212,7 +212,9 @@ class GenerationReconciliationService:
                 "reconciliation_output_confirmation_failed",
             )
             raise GenerationReconciliationRequired(
-                "Generation outputs still require reconciliation"
+                "Generation outputs still require reconciliation",
+                generation_uid=record.generation_uid,
+                prompt_id=record.prompt_id,
             ) from error
 
     def _transition(

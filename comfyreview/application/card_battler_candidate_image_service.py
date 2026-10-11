@@ -106,9 +106,29 @@ class CardCandidateImageService:
         for candidate, plan in zip(group.candidates, plans, strict=True):
             try:
                 submission = self._generations.submit(plan.request)
+            except GenerationReconciliationRequired as error:
+                if error.generation_uid is None:
+                    current = self._groups.mark_generation_failed(
+                        candidate.candidate_id,
+                        expected_revision=current.revision,
+                        failure_category=type(error).__name__,
+                        recipe_hash=plan.recipe_hash,
+                        generation_policy_revision=(
+                            plan.generation_policy_revision
+                        ),
+                    )
+                else:
+                    current = self._groups.mark_submitted(
+                        candidate.candidate_id,
+                        expected_revision=current.revision,
+                        generation_uid=error.generation_uid,
+                        recipe_hash=plan.recipe_hash,
+                        generation_policy_revision=(
+                            plan.generation_policy_revision
+                        ),
+                    )
             except (
                 GenerationMutationError,
-                GenerationReconciliationRequired,
                 GenerationValidationError,
             ) as error:
                 current = self._groups.mark_generation_failed(
@@ -154,15 +174,9 @@ class CardCandidateImageService:
                 )
             try:
                 submission = self._generations.observe(generation_uid)
-            except (
-                GenerationReconciliationRequired,
-                GenerationValidationError,
-            ) as error:
-                current = self._groups.mark_generation_failed(
-                    candidate.candidate_id,
-                    expected_revision=current.revision,
-                    failure_category=type(error).__name__,
-                )
+            except GenerationReconciliationRequired:
+                continue
+            except GenerationValidationError:
                 continue
             if submission.status == "failed":
                 current = self._groups.mark_generation_failed(

@@ -40,6 +40,17 @@ class GenerationMutationError(RuntimeError):
 class GenerationReconciliationRequired(GenerationMutationError):
     """Report an ambiguous external submit that requires reconciliation."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        generation_uid: str | None = None,
+        prompt_id: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.generation_uid = generation_uid
+        self.prompt_id = prompt_id
+
 
 @dataclass(frozen=True, slots=True)
 class GenerationPromptGroup:
@@ -346,7 +357,8 @@ class GenerationService:
                 reason=type(error).__name__,
             )
             raise GenerationReconciliationRequired(
-                "ComfyUI submission outcome is ambiguous"
+                "ComfyUI submission outcome is ambiguous",
+                generation_uid=generation_uid,
             ) from error
         except ComfyUiError as error:
             self._mark_failed(generation_uid, type(error).__name__)
@@ -366,7 +378,9 @@ class GenerationService:
                 reason="local_confirmation_failed",
             )
             raise GenerationReconciliationRequired(
-                "ComfyUI accepted the graph but local confirmation failed"
+                "ComfyUI accepted the graph but local confirmation failed",
+                generation_uid=generation_uid,
+                prompt_id=external.prompt_id,
             ) from error
         self._logger.info(
             "generation.submitted",
@@ -472,7 +486,9 @@ class GenerationService:
                 reason="output_collection_failed",
             )
             raise GenerationReconciliationRequired(
-                "ComfyUI completed but outputs could not be confirmed"
+                "ComfyUI completed but outputs could not be confirmed",
+                generation_uid=record.generation_uid,
+                prompt_id=record.prompt_id,
             ) from error
 
     def _validate_capabilities(
