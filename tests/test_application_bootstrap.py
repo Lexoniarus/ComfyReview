@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -16,6 +17,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaReport,
     CardBattlerModelRepository,
+    CardBattlerRuntimeSchemaError,
     CardBattlerRuntimeSchemaReport,
     CardImprintMapper,
     CatalogEvidenceService,
@@ -169,6 +171,13 @@ class _RecordingCardFactoryRuntime:
         return True
 
 
+class _UnavailableCardFactoryRuntime(_RecordingCardFactoryRuntime):
+    def get(self):
+        raise CardBattlerRuntimeSchemaError(
+            "Unsupported Card Battler runtime schema version"
+        )
+
+
 def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
     return ApplicationContainer(
@@ -314,6 +323,38 @@ def test_static_modules_require_browser_revalidation(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-cache, must-revalidate"
+
+
+def test_card_runtime_schema_failure_is_a_readable_api_error(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    container = _container(tmp_path, events)
+    application = create_app(
+        replace(
+            container,
+            card_factory_runtime=cast(
+                CardFactoryPrototypeRuntime,
+                _UnavailableCardFactoryRuntime(events),
+            ),
+        )
+    )
+
+    with TestClient(application) as client:
+        response = client.get(
+            "/api/v2/card-factory/candidate-groups",
+            headers={"x-request-id": "card-runtime-test"},
+        )
+
+    assert response.status_code == 503
+    assert response.headers["content-type"] == "application/json"
+    assert response.json() == {
+        "error": {
+            "code": "card_runtime_schema_unavailable",
+            "message": "Unsupported Card Battler runtime schema version",
+            "trace_id": "card-runtime-test",
+        }
+    }
 
 
 def test_entry_points_and_route_contract_remain_compatible() -> None:

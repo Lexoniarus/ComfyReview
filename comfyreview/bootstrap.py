@@ -7,7 +7,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from comfyreview.api.v2_presenters import ImageResponseMapper
@@ -18,6 +19,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaLifecycle,
     CardBattlerModelRepository,
+    CardBattlerRuntimeSchemaError,
     CardBattlerRuntimeSchemaLifecycle,
     CardImprintMapper,
     CatalogEvidenceService,
@@ -78,6 +80,7 @@ from comfyreview.card_battler_runtime import CardFactoryPrototypeRuntime
 from comfyreview.observability import (
     RequestTracingMiddleware,
     configure_logging,
+    get_trace_id,
 )
 from comfyreview.providers import (
     CanonicalOutputImageCatalog,
@@ -568,6 +571,23 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
 
     configure_logging()
     application = FastAPI(title="Comfy Review", lifespan=lifespan)
+
+    @application.exception_handler(CardBattlerRuntimeSchemaError)
+    async def card_runtime_schema_error(
+        _request: Request,
+        error: Exception,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": {
+                    "code": "card_runtime_schema_unavailable",
+                    "message": str(error),
+                    "trace_id": get_trace_id(),
+                }
+            },
+        )
+
     application.state.container = resources
     application.add_middleware(RequestTracingMiddleware)
     application.mount(
