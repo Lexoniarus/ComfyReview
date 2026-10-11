@@ -1,6 +1,48 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    (
+        "comfyreview.application.character_catalog:"
+        "CharacterCatalogService.list_public"
+    ): (
+        "tests/test_character_catalog.py::"
+        "test_six_profiles_are_loaded_with_revisioned_sources"
+    ),
+    (
+        "comfyreview.application.character_catalog:"
+        "CharacterCatalogService.get_public"
+    ): (
+        "tests/test_character_catalog.py::"
+        "test_public_projection_hides_private_and_personality_details"
+    ),
+    (
+        "comfyreview.application.character_catalog:"
+        "CharacterCatalogService.get_profile"
+    ): (
+        "tests/test_character_catalog.py::"
+        "test_six_profiles_are_loaded_with_revisioned_sources"
+    ),
+    (
+        "comfyreview.application.character_catalog:"
+        "CharacterCatalogService.get_voice_prompt"
+    ): (
+        "tests/test_character_catalog.py::"
+        "test_six_profiles_are_loaded_with_revisioned_sources"
+    ),
+    (
+        "comfyreview.application.character_catalog:"
+        "CharacterCatalogService.get_source_document"
+    ): (
+        "tests/test_character_catalog.py::"
+        "test_six_profiles_are_loaded_with_revisioned_sources"
+    ),
+    (
+        "comfyreview.application.character_catalog:"
+        "CharacterCatalogService.get_revisions"
+    ): (
+        "tests/test_character_catalog.py::"
+        "test_six_profiles_are_loaded_with_revisioned_sources"
+    ),
     "comfyreview.application.card_battler_visual_projection:VisualPromptProjector.project": (
         "tests/test_card_battler_visual_projection.py::"
         "test_visual_prompt_projector_builds_stable_golden_recipe"
