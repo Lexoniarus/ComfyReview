@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from comfyreview.__main__ import main
 from comfyreview.application import CardBattlerRuntimeSchemaError
 from comfyreview.repositories.sqlite import (
     CARD_BATTLER_RUNTIME_SCHEMA_VERSION,
@@ -44,11 +45,19 @@ def test_initializes_only_missing_runtime_database(tmp_path: Path) -> None:
         }
     assert {
         "card_runtime_metadata",
-        "card_sessions",
+        "card_candidate_groups",
         "card_generations",
         "card_generation_outputs",
         "card_candidates",
+        "cards",
+        "card_decks",
+        "card_deck_entries",
     } <= tables
+    with sqlite3.connect(runtime) as connection:
+        deck = connection.execute(
+            "SELECT deck_id, revision, capacity FROM card_decks"
+        ).fetchone()
+    assert deck == ("poc-deck", 1, 40)
 
 
 def test_validates_existing_runtime_without_writing(tmp_path: Path) -> None:
@@ -93,7 +102,7 @@ def test_rejects_missing_columns_and_foreign_key_corruption(
         connection.executescript(
             """
             CREATE TABLE card_runtime_metadata(key TEXT PRIMARY KEY, value TEXT);
-            INSERT INTO card_runtime_metadata VALUES ('schema_version', '1');
+            INSERT INTO card_runtime_metadata VALUES ('schema_version', '2');
             """
         )
     with pytest.raises(CardBattlerRuntimeSchemaError, match="is missing"):
@@ -125,3 +134,18 @@ def test_rejects_missing_runtime_on_read_only_validation(
         CardBattlerRuntimeSchemaManager(
             tmp_path / "missing.sqlite3"
         ).validate()
+
+
+def test_cli_creates_only_a_distinct_missing_v2_output(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "candidate" / "runtime-v2.sqlite3"
+
+    assert main(["card-runtime", "create-v2", "--output", str(output)]) == 0
+    payload = capsys.readouterr().out
+    assert '"schema_version": 2' in payload
+    assert output.is_file()
+
+    assert main(["card-runtime", "create-v2", "--output", str(output)]) == 2
+    assert "already exists" in capsys.readouterr().err

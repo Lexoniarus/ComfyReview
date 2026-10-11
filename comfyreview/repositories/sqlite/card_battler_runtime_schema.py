@@ -13,9 +13,9 @@ from comfyreview.application.card_battler_runtime import (
 )
 from comfyreview.repositories.sqlite.connection import connect_read_only
 
-CARD_BATTLER_RUNTIME_SCHEMA_VERSION = 1
+CARD_BATTLER_RUNTIME_SCHEMA_VERSION = 2
 
-_SCHEMA_V1_SQL = """
+_SCHEMA_V2_SQL = """
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE card_runtime_metadata (
@@ -23,27 +23,40 @@ CREATE TABLE card_runtime_metadata (
     value TEXT NOT NULL
 );
 
-CREATE TABLE card_sessions (
-    session_id TEXT PRIMARY KEY,
+CREATE TABLE card_candidate_groups (
+    group_id TEXT PRIMARY KEY,
     revision INTEGER NOT NULL CHECK (revision >= 1),
+    kind TEXT NOT NULL CHECK (kind IN ('initial', 'development')),
+    status TEXT NOT NULL CHECK (status IN (
+        'queued', 'composing', 'generating', 'ready', 'partial_failure',
+        'failed', 'completed', 'rejected'
+    )),
     source_image_uid TEXT NOT NULL,
     source_content_hash TEXT NOT NULL,
-    active_image_uid TEXT NOT NULL,
-    active_content_hash TEXT NOT NULL,
-    active_image_kind TEXT NOT NULL
-        CHECK (active_image_kind IN ('source', 'candidate')),
-    active_visual_tier TEXT NOT NULL,
-    operation_state TEXT NOT NULL
-        CHECK (operation_state IN ('idle', 'generating')),
-    semantic_profile_json TEXT NOT NULL,
-    card_imprint_json TEXT NOT NULL,
-    structured_card_spec_json TEXT NOT NULL,
-    visual_recipe_json TEXT NOT NULL,
-    presentation_json TEXT,
-    presentation_status TEXT NOT NULL,
-    presentation_error_category TEXT,
+    group_seed TEXT NOT NULL,
+    semantic_profile_json TEXT,
+    card_imprint_json TEXT,
+    shared_stat_profile_key TEXT,
+    shared_mechanic_key TEXT,
+    source_card_id TEXT,
+    source_card_revision INTEGER CHECK (
+        source_card_revision IS NULL OR source_card_revision >= 1
+    ),
+    failure_category TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    CHECK (
+        (semantic_profile_json IS NULL AND card_imprint_json IS NULL)
+        OR
+        (semantic_profile_json IS NOT NULL AND card_imprint_json IS NOT NULL)
+    ),
+    CHECK (
+        (kind = 'initial' AND source_card_id IS NULL
+            AND source_card_revision IS NULL)
+        OR
+        (kind = 'development' AND source_card_id IS NOT NULL
+            AND source_card_revision IS NOT NULL)
+    )
 );
 
 CREATE TABLE card_generations (
@@ -75,50 +88,138 @@ CREATE TABLE card_generation_outputs (
 
 CREATE TABLE card_candidates (
     candidate_id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL
-        REFERENCES card_sessions(session_id) ON DELETE CASCADE,
-    session_revision INTEGER NOT NULL CHECK (session_revision >= 1),
+    group_id TEXT NOT NULL
+        REFERENCES card_candidate_groups(group_id) ON DELETE CASCADE,
+    group_revision INTEGER NOT NULL CHECK (group_revision >= 1),
     slot_index INTEGER NOT NULL CHECK (slot_index BETWEEN 0 AND 3),
-    tier_key TEXT NOT NULL,
-    recipe_revision TEXT NOT NULL,
-    recipe_hash TEXT NOT NULL,
-    reference_image_uid TEXT NOT NULL,
-    reference_content_hash TEXT NOT NULL,
-    generation_uid TEXT
-        REFERENCES card_generations(generation_uid),
-    status TEXT NOT NULL CHECK (
-        status IN ('pending', 'submitted', 'completed', 'failed', 'accepted')
-    ),
+    status TEXT NOT NULL CHECK (status IN (
+        'queued', 'composing', 'submitted', 'completed', 'failed',
+        'accepted', 'rejected'
+    )),
+    materialization_seed TEXT NOT NULL,
+    materialization_revision TEXT NOT NULL,
+    structured_card_spec_json TEXT,
+    visual_recipe_json TEXT,
+    presentation_json TEXT,
+    presentation_status TEXT,
+    presentation_error_category TEXT,
+    generation_uid TEXT REFERENCES card_generations(generation_uid),
     failure_category TEXT,
-    output_image_uid TEXT
-        REFERENCES card_generation_outputs(image_uid),
+    output_image_uid TEXT REFERENCES card_generation_outputs(image_uid),
+    output_content_hash TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE (session_id, session_revision, slot_index)
+    UNIQUE (group_id, slot_index),
+    CHECK (
+        (output_image_uid IS NULL AND output_content_hash IS NULL)
+        OR
+        (output_image_uid IS NOT NULL AND output_content_hash IS NOT NULL)
+    )
 );
 
-CREATE INDEX idx_card_candidates_session
-ON card_candidates(session_id, slot_index);
+CREATE TABLE cards (
+    card_id TEXT PRIMARY KEY,
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    source_image_uid TEXT NOT NULL,
+    source_content_hash TEXT NOT NULL,
+    semantic_profile_json TEXT NOT NULL,
+    card_imprint_json TEXT NOT NULL,
+    structured_card_spec_json TEXT NOT NULL,
+    visual_recipe_json TEXT NOT NULL,
+    presentation_json TEXT,
+    presentation_status TEXT NOT NULL,
+    presentation_error_category TEXT,
+    active_image_uid TEXT NOT NULL
+        REFERENCES card_generation_outputs(image_uid),
+    active_content_hash TEXT NOT NULL,
+    visual_tier INTEGER NOT NULL CHECK (visual_tier >= 1),
+    accepted_group_id TEXT NOT NULL
+        REFERENCES card_candidate_groups(group_id),
+    accepted_candidate_id TEXT NOT NULL
+        REFERENCES card_candidates(candidate_id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE card_decks (
+    deck_id TEXT PRIMARY KEY,
+    revision INTEGER NOT NULL CHECK (revision >= 1),
+    capacity INTEGER NOT NULL CHECK (capacity = 40),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE card_deck_entries (
+    deck_id TEXT NOT NULL
+        REFERENCES card_decks(deck_id) ON DELETE CASCADE,
+    card_id TEXT NOT NULL REFERENCES cards(card_id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 39),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (deck_id, card_id),
+    UNIQUE (deck_id, position)
+);
+
+CREATE INDEX idx_card_candidate_groups_status
+ON card_candidate_groups(status, created_at, group_id);
+
+CREATE INDEX idx_card_candidates_group
+ON card_candidates(group_id, slot_index);
 
 CREATE INDEX idx_card_generations_prompt
 ON card_generations(prompt_id);
 
 INSERT INTO card_runtime_metadata(key, value)
-VALUES ('schema_version', '1');
+VALUES ('schema_version', '2');
+
+INSERT INTO card_decks(deck_id, revision, capacity)
+VALUES ('poc-deck', 1, 40);
 """
 
 _REQUIRED_COLUMNS = {
     "card_runtime_metadata": {"key", "value"},
-    "card_sessions": {
-        "session_id",
+    "card_candidate_groups": {
+        "group_id",
+        "revision",
+        "kind",
+        "status",
+        "source_image_uid",
+        "source_content_hash",
+        "group_seed",
+        "semantic_profile_json",
+        "card_imprint_json",
+        "shared_stat_profile_key",
+        "shared_mechanic_key",
+        "source_card_id",
+        "source_card_revision",
+        "failure_category",
+        "created_at",
+        "updated_at",
+    },
+    "card_candidates": {
+        "candidate_id",
+        "group_id",
+        "group_revision",
+        "slot_index",
+        "status",
+        "materialization_seed",
+        "materialization_revision",
+        "structured_card_spec_json",
+        "visual_recipe_json",
+        "presentation_json",
+        "presentation_status",
+        "presentation_error_category",
+        "generation_uid",
+        "failure_category",
+        "output_image_uid",
+        "output_content_hash",
+        "created_at",
+        "updated_at",
+    },
+    "cards": {
+        "card_id",
         "revision",
         "source_image_uid",
         "source_content_hash",
-        "active_image_uid",
-        "active_content_hash",
-        "active_image_kind",
-        "active_visual_tier",
-        "operation_state",
         "semantic_profile_json",
         "card_imprint_json",
         "structured_card_spec_json",
@@ -126,8 +227,26 @@ _REQUIRED_COLUMNS = {
         "presentation_json",
         "presentation_status",
         "presentation_error_category",
+        "active_image_uid",
+        "active_content_hash",
+        "visual_tier",
+        "accepted_group_id",
+        "accepted_candidate_id",
         "created_at",
         "updated_at",
+    },
+    "card_decks": {
+        "deck_id",
+        "revision",
+        "capacity",
+        "created_at",
+        "updated_at",
+    },
+    "card_deck_entries": {
+        "deck_id",
+        "card_id",
+        "position",
+        "created_at",
     },
     "card_generations": {
         "generation_uid",
@@ -152,28 +271,11 @@ _REQUIRED_COLUMNS = {
         "content_hash",
         "created_at",
     },
-    "card_candidates": {
-        "candidate_id",
-        "session_id",
-        "session_revision",
-        "slot_index",
-        "tier_key",
-        "recipe_revision",
-        "recipe_hash",
-        "reference_image_uid",
-        "reference_content_hash",
-        "generation_uid",
-        "status",
-        "failure_category",
-        "output_image_uid",
-        "created_at",
-        "updated_at",
-    },
 }
 
 
 class CardBattlerRuntimeSchemaManager:
-    """Create only a missing v1 store and reject unsupported existing files."""
+    """Create only a missing v2 store and reject unsupported existing files."""
 
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path).resolve()
@@ -189,7 +291,7 @@ class CardBattlerRuntimeSchemaManager:
         try:
             connection = sqlite3.connect(temporary)
             try:
-                connection.executescript(_SCHEMA_V1_SQL)
+                connection.executescript(_SCHEMA_V2_SQL)
                 connection.commit()
             finally:
                 connection.close()

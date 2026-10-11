@@ -10,6 +10,7 @@ from pathlib import Path
 
 from comfyreview.application import (
     CanonicalSchemaReport,
+    CardBattlerRuntimeSchemaError,
     GenerationMutationError,
     GenerationValidationError,
     ImageGeometryProjectionService,
@@ -51,6 +52,7 @@ from comfyreview.providers import (
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
+    CardBattlerRuntimeSchemaManager,
     LegacySchemaManager,
     SqliteImageGeometryRepository,
     SqlitePromptPromotionRepository,
@@ -102,6 +104,14 @@ def _parser() -> argparse.ArgumentParser:
     canonical_upgrade.add_argument("--output", type=Path, required=True)
     canonical_upgrade.add_argument("--generator-state", type=Path)
     canonical_actions.add_parser("rebuild-image-geometry")
+
+    card_runtime = commands.add_parser("card-runtime")
+    card_runtime_actions = card_runtime.add_subparsers(
+        dest="action",
+        required=True,
+    )
+    card_runtime_create = card_runtime_actions.add_parser("create-v2")
+    card_runtime_create.add_argument("--output", type=Path, required=True)
 
     legacy_output = commands.add_parser("legacy-output")
     output_actions = legacy_output.add_subparsers(
@@ -692,6 +702,26 @@ def _run_content_levels(options: argparse.Namespace) -> int:
     return 0
 
 
+def _run_card_runtime(options: argparse.Namespace) -> int:
+    output = Path(options.output).resolve()
+    if output.exists():
+        raise CardBattlerRuntimeSchemaError(
+            "Card runtime output already exists; choose a new path"
+        )
+    report = CardBattlerRuntimeSchemaManager(output).prepare_startup()
+    print(
+        json.dumps(
+            {
+                "initialized": report.initialized,
+                "output_path": str(output),
+                "schema_version": report.schema_version,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def main(arguments: list[str] | None = None) -> int:
     """Run a maintenance command and return its stable process exit code."""
     options = _parser().parse_args(arguments)
@@ -700,6 +730,8 @@ def main(arguments: list[str] | None = None) -> int:
             return _run_legacy(options)
         if options.command == "canonical-db":
             return _run_canonical(options)
+        if options.command == "card-runtime":
+            return _run_card_runtime(options)
         if options.command == "legacy-features":
             return _run_legacy_features(options)
         if options.command == "legacy-prompts":
@@ -721,6 +753,9 @@ def main(arguments: list[str] | None = None) -> int:
         print(_render_legacy(error.report), file=sys.stderr)
         return 2
     except CanonicalSchemaValidationError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except CardBattlerRuntimeSchemaError as error:
         print(str(error), file=sys.stderr)
         return 2
     except LegacyOutputImportValidationError as error:
