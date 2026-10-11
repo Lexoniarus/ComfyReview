@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -78,6 +79,118 @@ def test_candidate_group_requires_four_ordered_same_group_slots() -> None:
             group_seed=42,
             candidates=_slots("group-2")[:3],
         )
+
+
+@pytest.mark.parametrize(
+    "source_image_uid, group_seed", [("", 1), ("image-1", -1)]
+)
+def test_candidate_seed_inputs_are_validated(
+    source_image_uid: str,
+    group_seed: int,
+) -> None:
+    with pytest.raises(ValueError):
+        candidate_materialization_seeds(source_image_uid, group_seed)
+
+
+def test_complete_candidate_artifacts_reject_inconsistent_facts() -> None:
+    valid = CompleteCardCandidateArtifacts(
+        structured_card(),
+        visual_recipe(),
+        absent_presentation(),
+        7,
+    )
+
+    invalid_changes = (
+        {"materialization_seed": -1},
+        {"materialization_revision": " "},
+        {"visual_recipe": visual_recipe(tier=2)},
+        {"development": SimpleNamespace(card=structured_card(tier=2))},
+    )
+    for changes in invalid_changes:
+        with pytest.raises(ValueError):
+            replace(valid, **changes)
+
+
+def test_candidate_rejects_invalid_identity_state_and_provenance() -> None:
+    queued = _slots("group-1")[0]
+    artifacts = CompleteCardCandidateArtifacts(
+        structured_card(),
+        visual_recipe(),
+        absent_presentation(),
+        queued.materialization_seed,
+    )
+    invalid_changes = (
+        {"candidate_id": ""},
+        {"group_revision": 0},
+        {"materialization_seed": -1},
+        {"slot_index": 4},
+        {"output_image_uid": "output-1"},
+        {"artifacts": replace(artifacts, materialization_seed=999)},
+    )
+    for changes in invalid_changes:
+        with pytest.raises(ValueError):
+            replace(queued, **changes)
+
+    submitted = replace(
+        queued,
+        status=CardCandidateStatus.SUBMITTED,
+        artifacts=artifacts,
+        generation_uid="generation-1",
+        recipe_hash="recipe-1",
+        generation_policy_revision="generation-policy-1",
+    )
+    with pytest.raises(ValueError, match="output image"):
+        replace(submitted, status=CardCandidateStatus.COMPLETED)
+
+
+def test_candidate_group_rejects_inconsistent_identity_and_dna() -> None:
+    group = CardCandidateGroup(
+        group_id="group-1",
+        revision=1,
+        kind=CardCandidateGroupKind.INITIAL,
+        status=CardCandidateGroupStatus.QUEUED,
+        source_image_uid="image-1",
+        source_content_hash="hash-1",
+        reference_image_uid="image-1",
+        reference_content_hash="hash-1",
+        group_seed=42,
+        candidates=_slots("group-1"),
+    )
+
+    invalid_changes = (
+        {"group_id": ""},
+        {"revision": 0},
+        {"group_seed": -1},
+        {"candidates": tuple(reversed(group.candidates))},
+        {
+            "candidates": (
+                replace(group.candidates[0], group_id="other"),
+                *group.candidates[1:],
+            )
+        },
+        {"semantic_profile": semantic_profile()},
+        {
+            "semantic_profile": replace(
+                semantic_profile(), semantic_revision="different"
+            ),
+            "imprint": card_imprint(),
+        },
+        {"source_card_revision": 1},
+    )
+    for changes in invalid_changes:
+        with pytest.raises(ValueError):
+            replace(group, **changes)
+
+    development = replace(
+        group,
+        kind=CardCandidateGroupKind.DEVELOPMENT,
+        source_card_id="card-1",
+        source_card_revision=1,
+    )
+    with pytest.raises(ValueError, match="source revision"):
+        replace(development, source_card_revision=None)
+    with pytest.raises(ValueError, match="positive"):
+        replace(development, source_card_revision=0)
 
 
 def test_development_group_requires_card_identity_and_revision() -> None:
@@ -159,6 +272,36 @@ def test_confirmed_card_state_retains_identity_dna_and_tier() -> None:
         )
 
 
+def test_card_identity_and_state_reject_changed_provenance() -> None:
+    source = card_source_image()
+    profile = semantic_profile()
+    imprint = card_imprint()
+    identity = CardIdentity(
+        "card-1",
+        source.image_uid,
+        source.content_hash,
+        profile.semantic_revision,
+        imprint,
+    )
+    card = structured_card()
+    state = CardState(identity, 1, card, "output-1", "hash-1", 1)
+
+    for changes in (
+        {"card_id": ""},
+        {"imprint": replace(imprint, source_image_uid="other")},
+        {"imprint": replace(imprint, semantic_revision="other")},
+    ):
+        with pytest.raises(ValueError):
+            replace(identity, **changes)
+    for state_changes in (
+        {"revision": 0},
+        {"active_image_uid": ""},
+        {"card": replace(card, imprint=replace(imprint, explicit_seed=99))},
+    ):
+        with pytest.raises(ValueError):
+            replace(state, **state_changes)
+
+
 def test_poc_deck_requires_unique_contiguous_entries_and_caps_at_forty() -> (
     None
 ):
@@ -180,4 +323,25 @@ def test_poc_deck_requires_unique_contiguous_entries_and_caps_at_forty() -> (
             deck_id=POC_DECK_ID,
             revision=2,
             entries=(CardDeckEntry("card-1", 1),),
+        )
+
+
+def test_deck_contract_rejects_invalid_entry_and_aggregate_facts() -> None:
+    with pytest.raises(ValueError, match="identity"):
+        CardDeckEntry("", 0)
+    with pytest.raises(ValueError, match="negative"):
+        CardDeckEntry("card-1", -1)
+    with pytest.raises(ValueError, match="identity"):
+        CardDeck("", 1, ())
+    with pytest.raises(ValueError, match="revision"):
+        CardDeck(POC_DECK_ID, 0, ())
+    with pytest.raises(ValueError, match="fixed"):
+        CardDeck(POC_DECK_ID, 1, (), capacity=39)
+    with pytest.raises(ValueError, match="capacity exceeded"):
+        CardDeck(
+            POC_DECK_ID,
+            1,
+            tuple(
+                CardDeckEntry(f"card-{index}", index) for index in range(41)
+            ),
         )

@@ -27,6 +27,7 @@ from comfyreview.application.generation import (
     GenerationReconciliationRequired,
     GenerationRequest,
     GenerationSubmission,
+    GenerationValidationError,
 )
 from comfyreview.application.generation_outputs import GenerationOutput
 from comfyreview.repositories.sqlite.card_battler_candidate_groups import (
@@ -49,10 +50,10 @@ class _ReferenceImages:
         source = card_source_image()
         if self._changed:
             return type(source)(
-                source.image_uid,
+                "changed-image-uid",
                 source.mime_type,
                 source.content,
-                "0" * 64,
+                source.content_hash,
             )
         assert group.reference_image_uid == source.image_uid
         return source
@@ -77,20 +78,27 @@ class _Generations:
         *,
         failing_slots: tuple[int, ...] = (),
         ambiguous_slots: tuple[int, ...] = (),
+        lost_ambiguous_slots: tuple[int, ...] = (),
         prefix: str = "generation",
     ) -> None:
         self._database_path = database_path
         self._failing_slots = set(failing_slots)
         self._ambiguous_slots = set(ambiguous_slots)
+        self._lost_ambiguous_slots = set(lost_ambiguous_slots)
         self._prefix = prefix
         self.requests: list[GenerationRequest] = []
         self.observed: dict[str, str] = {}
+        self.observe_errors: dict[str, Exception] = {}
 
     def submit(self, request):
         slot = len(self.requests)
         self.requests.append(request)
         if slot in self._failing_slots:
             raise GenerationMutationError(f"slot {slot} failed")
+        if slot in self._lost_ambiguous_slots:
+            raise GenerationReconciliationRequired(
+                f"slot {slot} has no external identity"
+            )
         generation_uid = f"{self._prefix}-{slot}"
         connection = sqlite3.connect(self._database_path)
         try:
@@ -120,6 +128,9 @@ class _Generations:
         )
 
     def observe(self, generation_uid):
+        error = self.observe_errors.get(generation_uid)
+        if error is not None:
+            raise error
         return GenerationSubmission(
             generation_uid,
             self.observed.get(generation_uid, "submitted"),
@@ -227,6 +238,25 @@ def test_image_service_retains_ambiguous_generation_for_reconciliation(
     assert ambiguous.failure_category is None
 
 
+def test_image_service_marks_ambiguous_submit_without_identity_failed(
+    tmp_path: Path,
+) -> None:
+    group = _composed_group(tmp_path)
+    generations = _Generations(
+        tmp_path / "card-runtime.sqlite3",
+        lost_ambiguous_slots=(0,),
+    )
+    service, _ = _service(tmp_path, generations)
+
+    result = service.submit(group.group_id, expected_revision=group.revision)
+
+    assert result.candidates[0].status is CardCandidateStatus.FAILED
+    assert (
+        result.candidates[0].failure_category
+        == "GenerationReconciliationRequired"
+    )
+
+
 def test_image_service_resumes_only_unsubmitted_slots_after_restart(
     tmp_path: Path,
 ) -> None:
@@ -317,5 +347,82 @@ def test_image_service_synchronizes_only_validated_primary_outputs(
     with pytest.raises(CardCandidateGroupConflictError, match="stale"):
         service.synchronize(
             group.group_id,
+            expected_revision=submitted.revision,
+        )
+
+
+def test_image_service_synchronization_keeps_ambiguous_and_fails_bad_outputs(
+    tmp_path: Path,
+) -> None:
+    group = _composed_group(tmp_path)
+    generations = _Generations(tmp_path / "card-runtime.sqlite3")
+    service, _ = _service(tmp_path, generations)
+    submitted = service.submit(
+        group.group_id, expected_revision=group.revision
+    )
+    generation_uids = tuple(
+        candidate.generation_uid for candidate in submitted.candidates
+    )
+    assert all(
+        generation_uid is not None for generation_uid in generation_uids
+    )
+    first, second, third, fourth = generation_uids
+    assert first is not None
+    assert second is not None
+    assert third is not None
+    assert fourth is not None
+    generations.observe_errors[first] = GenerationReconciliationRequired(
+        "ambiguous",
+        generation_uid=first,
+    )
+    generations.observe_errors[second] = GenerationValidationError("invalid")
+    generations.observed[third] = "failed"
+    generations.observed[fourth] = "completed"
+
+    result = service.synchronize(
+        group.group_id,
+        expected_revision=submitted.revision,
+    )
+
+    assert [candidate.status for candidate in result.candidates] == [
+        CardCandidateStatus.SUBMITTED,
+        CardCandidateStatus.SUBMITTED,
+        CardCandidateStatus.FAILED,
+        CardCandidateStatus.FAILED,
+    ]
+    assert result.candidates[2].failure_category == "generation_failed"
+    assert result.candidates[3].failure_category == "primary_output_missing"
+
+
+def test_image_service_rejects_missing_group_and_corrupt_submission(
+    tmp_path: Path,
+) -> None:
+    group = _composed_group(tmp_path)
+    generations = _Generations(tmp_path / "card-runtime.sqlite3")
+    service, outputs = _service(tmp_path, generations)
+    with pytest.raises(KeyError, match="Unknown Card candidate group"):
+        service.synchronize("missing", expected_revision=1)
+
+    submitted = service.submit(
+        group.group_id, expected_revision=group.revision
+    )
+    object.__setattr__(submitted.candidates[0], "generation_uid", None)
+
+    class _CorruptGroups:
+        @staticmethod
+        def get(group_id):
+            return submitted if group_id == submitted.group_id else None
+
+    corrupt_service = CardCandidateImageService(
+        groups=_CorruptGroups(),  # type: ignore[arg-type]
+        reference_images=_ReferenceImages(),
+        stager=_Stager(),
+        policy=CardCandidateGenerationPolicy(checkpoint="card.safetensors"),
+        generations=generations,
+        outputs=outputs,
+    )
+    with pytest.raises(CardCandidateGroupConflictError, match="no generation"):
+        corrupt_service.synchronize(
+            submitted.group_id,
             expected_revision=submitted.revision,
         )

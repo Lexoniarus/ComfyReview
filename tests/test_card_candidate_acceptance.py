@@ -131,6 +131,25 @@ def test_acceptance_policy_requires_terminal_group_and_completed_candidate(
             group.candidates[0].candidate_id,
             expected_revision=group.revision,
         )
+    with pytest.raises(CardPoolConflictError, match="initial Candidate group"):
+        policy.select(
+            replace(
+                group,
+                kind=CardCandidateGroupKind.DEVELOPMENT,
+                source_card_id="card-1",
+                source_card_revision=1,
+            ),
+            group.candidates[0].candidate_id,
+            expected_revision=group.revision,
+        )
+    with pytest.raises(CardPoolConflictError, match="comparison-ready"):
+        policy.select(
+            replace(group, status=CardCandidateGroupStatus.GENERATING),
+            group.candidates[0].candidate_id,
+            expected_revision=group.revision,
+        )
+    with pytest.raises(CardPoolNotFoundError):
+        policy.select(group, "missing", expected_revision=group.revision)
 
 
 def test_acceptance_service_delegates_one_revision_safe_card_identity(
@@ -209,6 +228,12 @@ def test_development_acceptance_requires_exact_completed_action(
         )
         == group.candidates[0]
     )
+    with pytest.raises(CardPoolConflictError, match="revision is stale"):
+        policy.select(
+            group,
+            group.candidates[0].candidate_id,
+            expected_revision=group.revision - 1,
+        )
     first_artifacts = group.candidates[0].artifacts
     assert first_artifacts is not None
     without_action = replace(
@@ -249,3 +274,38 @@ def test_development_acceptance_requires_exact_completed_action(
     assert cards.development_calls == [
         (group.group_id, group.candidates[2].candidate_id, group.revision)
     ]
+
+    with pytest.raises(CardPoolConflictError, match="source Card revision"):
+        policy.select(
+            initial,
+            initial.candidates[0].candidate_id,
+            expected_revision=initial.revision,
+        )
+    with pytest.raises(CardPoolConflictError, match="comparison-ready"):
+        policy.select(
+            replace(group, status=CardCandidateGroupStatus.GENERATING),
+            group.candidates[0].candidate_id,
+            expected_revision=group.revision,
+        )
+    with pytest.raises(CardPoolNotFoundError):
+        policy.select(group, "missing", expected_revision=group.revision)
+
+
+def test_confirmed_pool_card_validates_acceptance_provenance() -> None:
+    card = _pool_card()
+
+    with pytest.raises(ValueError, match="provenance"):
+        replace(card, accepted_group_id="")
+    with pytest.raises(ValueError, match="semantic provenance"):
+        replace(
+            card,
+            semantic_profile=replace(
+                card.semantic_profile,
+                image_uid="other-image",
+            ),
+        )
+    with pytest.raises(ValueError, match="Recipe tier"):
+        replace(
+            card,
+            visual_recipe=replace(card.visual_recipe, tier_ordinal=2),
+        )

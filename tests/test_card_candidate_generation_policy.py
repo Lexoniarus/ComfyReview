@@ -119,3 +119,30 @@ def test_generation_policy_rejects_uncomposed_or_foreign_candidates(
             replace(group.candidates[0], artifacts=None),
             staged_reference="reference.png",
         )
+    with pytest.raises(ValueError, match="revision is stale"):
+        policy.build(
+            group,
+            replace(group.candidates[0], group_revision=group.revision + 1),
+            staged_reference="reference.png",
+        )
+    with pytest.raises(ValueError, match="staged reference"):
+        policy.build(group, group.candidates[0], staged_reference=" ")
+    candidate = group.candidates[0]
+    assert candidate.artifacts is not None
+    without_negative = replace(
+        candidate,
+        artifacts=replace(
+            candidate.artifacts,
+            visual_recipe=replace(
+                candidate.artifacts.visual_recipe,
+                negative_atoms=(),
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="both prompt channels"):
+        policy.build(group, without_negative, staged_reference="reference.png")
+
+
+def test_generation_policy_requires_checkpoint() -> None:
+    with pytest.raises(ValueError, match="checkpoint"):
+        CardCandidateGenerationPolicy(checkpoint=" ")

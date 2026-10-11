@@ -161,6 +161,8 @@ def test_development_candidate_seeds_are_stable_and_revision_separated() -> (
     assert first == development_candidate_seeds("card-1", 1, 2, 91)
     assert len(first) == len(set(first)) == 4
     assert first != development_candidate_seeds("card-1", 2, 3, 91)
+    with pytest.raises(ValueError, match="inputs are invalid"):
+        development_candidate_seeds("", 1, 2, 91)
 
 
 def test_development_composer_builds_four_one_step_candidates() -> None:
@@ -188,6 +190,10 @@ def test_development_composer_builds_four_one_step_candidates() -> None:
         == CARD_DEVELOPMENT_CANDIDATE_REVISION
         for candidate in result.candidates
     )
+    with pytest.raises(ValueError, match="four seeds"):
+        composer.compose(card, seeds[:3])
+    with pytest.raises(ValueError, match="four Candidates"):
+        replace(result, candidates=result.candidates[:3])
 
 
 def test_development_group_reserves_from_current_card_without_analysis() -> (
@@ -216,3 +222,5 @@ def test_development_group_reserves_from_current_card_without_analysis() -> (
     )
     with pytest.raises(CardPoolConflictError, match="revision is stale"):
         service.reserve("card-1", expected_revision=2)
+    with pytest.raises(LookupError):
+        service.reserve("missing", expected_revision=1)

@@ -36,6 +36,15 @@ class _Processor:
         return False
 
 
+class _TransientlyFailingProcessor(_Processor):
+    def process_next(self):
+        self.process_calls += 1
+        if self.process_calls == 1:
+            raise RuntimeError("transient pass failure")
+        self.processed.set()
+        return False
+
+
 def test_candidate_group_worker_owns_one_recovering_thread() -> None:
     processor = _Processor()
     worker = CardCandidateGroupWorker(processor, poll_interval_seconds=0.05)
@@ -61,6 +70,33 @@ def test_candidate_group_worker_does_not_start_after_recovery_failure() -> (
 
     assert worker.stop() is True
     assert processor.process_calls == 0
+
+
+def test_candidate_group_worker_survives_pass_failure() -> None:
+    processor = _TransientlyFailingProcessor()
+    worker = CardCandidateGroupWorker(processor, poll_interval_seconds=0.05)
+
+    worker.start()
+    assert processor.processed.wait(timeout=1.0)
+
+    assert worker.stop(timeout_seconds=1.0) is True
+    assert processor.process_calls >= 2
+
+
+def test_candidate_group_worker_reports_shutdown_timeout() -> None:
+    class _ThreadThatDoesNotStop:
+        @staticmethod
+        def join(timeout=None):
+            return None
+
+        @staticmethod
+        def is_alive():
+            return True
+
+    worker = CardCandidateGroupWorker(_Processor())
+    worker._thread = _ThreadThatDoesNotStop()  # type: ignore[assignment]
+
+    assert worker.stop(timeout_seconds=0) is False
 
 
 class _LifecycleComposition:
@@ -125,6 +161,12 @@ def test_lifecycle_processor_dispatches_composition_submission_and_polling(
     assert images.submitted == []
 
     composition.processed = False
+    empty_lifecycle = CardCandidateGroupLifecycleProcessor(
+        composition=composition,
+        groups=_LifecycleGroups(),
+        images=images,
+    )
+    assert empty_lifecycle.process_next() is False
     assert lifecycle.process_next() is True
     assert images.submitted == [(group.group_id, group.revision)]
 

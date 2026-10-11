@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 from typing import cast
 
 import pytest
 
 from comfyreview.application import (
+    CardBattlerModelInvalid,
+    CardCandidateComposition,
     CardFactory,
     CardImprintMapper,
     CardImprintMappingResult,
@@ -326,3 +329,64 @@ def test_factory_rejects_negative_candidate_group_seed() -> None:
 
     with pytest.raises(ValueError, match="must not be negative"):
         factory.compose_candidates(_profile(), group_seed=-1)
+
+
+class _InvalidCandidateMaterializer(_Materializer):
+    def __init__(self, calls: list[str], mode: str) -> None:
+        super().__init__(calls)
+        self.mode = mode
+
+    def materialize_candidates(
+        self,
+        imprint,
+        candidate_seeds,
+        *,
+        locale="de-DE",
+    ):
+        cards = super().materialize_candidates(
+            imprint,
+            candidate_seeds,
+            locale=locale,
+        )
+        if self.mode == "count":
+            return cards[:3]
+        if self.mode == "traits":
+            return (replace(cards[0], traits=()), *cards[1:])
+        changed_stats = replace(cards[1].stats, stat_profile_key="other")
+        return (cards[0], replace(cards[1], stats=changed_stats), *cards[2:])
+
+
+@pytest.mark.parametrize("mode", ["count", "traits", "dna"])
+def test_factory_rejects_invalid_candidate_materialization(mode: str) -> None:
+    calls: list[str] = []
+    materializer = _InvalidCandidateMaterializer(calls, mode)
+    factory = CardFactory(
+        analyzer=cast(SemanticImageAnalyzer, _Analyzer(calls)),
+        mapper=cast(CardImprintMapper, _Mapper(calls)),
+        materializer=cast(CommonCardMaterializer, materializer),
+        visual_projector=cast(VisualPromptProjector, _Projector(calls)),
+        presentation_realizer=cast(
+            CardPresentationRealizer,
+            _Presenter(
+                calls,
+                CardPresentationResult(
+                    None,
+                    CardPresentationStatus.INFERENCE_FAILED,
+                ),
+            ),
+        ),
+    )
+
+    with pytest.raises(CardBattlerModelInvalid):
+        factory.compose_candidates(_profile(), group_seed=1)
+
+
+def test_candidate_composition_requires_exactly_four_candidates() -> None:
+    with pytest.raises(ValueError, match="exactly four"):
+        CardCandidateComposition(
+            _profile(),
+            _mapping(1),
+            (),
+            1,
+            1,
+        )

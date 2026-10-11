@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from typing import cast
+
+import pytest
+
 from comfyreview.application.card_battler_candidate_groups import (
     CardCandidateGroupStatus,
 )
 from comfyreview.application.card_battler_candidate_processing import (
     CardCandidateCompositionCoordinator,
+    DevelopmentCandidateGroupRepository,
     DevelopmentCardCandidateGroupProcessor,
 )
 from comfyreview.application.card_battler_development_groups import (
     CardDevelopmentCandidateComposer,
     CardDevelopmentCandidateGroupService,
+    CardDevelopmentGroupRepository,
 )
 from comfyreview.repositories.sqlite.card_battler_candidate_groups import (
     SqliteCardCandidateGroupRepository,
@@ -22,6 +28,7 @@ from comfyreview.repositories.sqlite.card_battler_card_pool import (
 from tests.test_card_development_candidate_groups import (
     _Development,
     _Identities,
+    _pool_card,
     _Presentations,
     _Seeds,
     _Visuals,
@@ -50,7 +57,7 @@ def test_development_processor_composes_without_analysis_or_mapping(
     ).reserve("card-1", expected_revision=1)
     development = _Development()
     processor = DevelopmentCardCandidateGroupProcessor(
-        groups=groups,
+        groups=cast(DevelopmentCandidateGroupRepository, groups),
         cards=cards,
         composer=CardDevelopmentCandidateComposer(
             development=development,
@@ -98,3 +105,88 @@ def test_composition_coordinator_prioritizes_initial_groups() -> None:
     assert development.calls == 0
     assert coordinator.process_next() is True
     assert development.calls == 1
+
+
+class _FailingDevelopmentGroups:
+    def __init__(self, group) -> None:
+        self.group = group
+        self.failures: list[str] = []
+
+    def claim_next_queued(self, kind):
+        group, self.group = self.group, None
+        return group
+
+    def complete_development_composition(self, *args, **kwargs):
+        raise AssertionError("composition must not complete")
+
+    def fail_composition(
+        self,
+        group_id,
+        *,
+        expected_revision,
+        failure_category,
+    ):
+        self.failures.append(failure_category)
+
+
+class _CaptureGroups:
+    @staticmethod
+    def create(reserved):
+        return reserved
+
+
+class _CardQuery:
+    def __init__(self, card) -> None:
+        self.card = card
+
+    def get(self, card_id):
+        return self.card
+
+
+class _FailingComposer:
+    @staticmethod
+    def compose(card, seeds):
+        raise RuntimeError("composition failed")
+
+
+@pytest.mark.parametrize(
+    "mode, expected_failure",
+    [
+        ("missing-source", "ValueError"),
+        ("stale-card", "ValueError"),
+        ("composer", "RuntimeError"),
+    ],
+)
+def test_development_processor_persists_controlled_failures(
+    mode: str,
+    expected_failure: str,
+) -> None:
+    card = _pool_card()
+    group = CardDevelopmentCandidateGroupService(
+        cards=_CardQuery(card),
+        groups=cast(CardDevelopmentGroupRepository, _CaptureGroups()),
+        identities=_Identities(),
+        seeds=_Seeds(),
+    ).reserve("card-1", expected_revision=1)
+    if mode == "missing-source":
+        object.__setattr__(group, "source_card_id", None)
+    cards = _CardQuery(None if mode == "stale-card" else card)
+    groups = _FailingDevelopmentGroups(group)
+    composer = (
+        _FailingComposer()
+        if mode == "composer"
+        else CardDevelopmentCandidateComposer(
+            development=_Development(),
+            visual_projector=_Visuals(card.visual_recipe),
+            presentation_realizer=_Presentations(card.presentation),
+        )
+    )
+    processor = DevelopmentCardCandidateGroupProcessor(
+        groups=cast(DevelopmentCandidateGroupRepository, groups),
+        cards=cards,
+        composer=composer,  # type: ignore[arg-type]
+    )
+
+    assert processor.process_next() is True
+    assert groups.failures == [expected_failure]
+    assert processor.process_next() is False

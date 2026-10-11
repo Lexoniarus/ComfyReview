@@ -24,12 +24,13 @@ from tests.test_card_development_candidate_groups import _pool_card
 
 class _Decks:
     def __init__(self) -> None:
-        self.deck = CardDeck(POC_DECK_ID, 1, ())
+        self.deck: CardDeck | None = CardDeck(POC_DECK_ID, 1, ())
 
     def get(self, deck_id=POC_DECK_ID):
         return self.deck if deck_id == POC_DECK_ID else None
 
     def replace_entries(self, deck_id, entries, *, expected_revision):
+        assert self.deck is not None
         if self.deck.revision != expected_revision:
             raise CardDeckConflictError("Deck revision is stale")
         self.deck = CardDeck(deck_id, expected_revision + 1, entries)
@@ -76,6 +77,12 @@ def test_deck_policy_enforces_unique_cards_capacity_and_exact_order() -> None:
     )
     with pytest.raises(CardDeckConflictError, match="capacity exceeded"):
         policy.add(full, "overflow")
+    with pytest.raises(ValueError, match="identity"):
+        policy.add(deck, " ")
+    with pytest.raises(CardDeckNotFoundError):
+        policy.remove(deck, "missing")
+    with pytest.raises(CardDeckConflictError, match="duplicate"):
+        policy.reorder(deck, ("card-1", "card-1"))
 
 
 def test_deck_service_requires_revision_and_existing_pool_card() -> None:
@@ -105,3 +112,7 @@ def test_deck_service_requires_revision_and_existing_pool_card() -> None:
 
     assert removed.entries == (CardDeckEntry("card-2", 0),)
     assert removed.revision == 5
+
+    decks.deck = None
+    with pytest.raises(CardDeckNotFoundError, match=POC_DECK_ID):
+        service.get()
