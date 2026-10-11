@@ -154,6 +154,8 @@ class _VisualPromptSelectionPolicy:
     def _intensity(self, channel: str) -> int:
         normalized = channel.strip().casefold()
         intensities = {
+            "none": self._policy.weight_scale,
+            "composite": self._policy.weight_scale,
             "world": self._progression.world_intensity_milli,
             "class": self._progression.class_intensity_milli,
             "role": self._progression.role_intensity_milli,

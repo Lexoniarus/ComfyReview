@@ -542,3 +542,28 @@ def test_visual_prompt_projector_supports_unscaled_weights_and_order_validation(
         VisualPromptProjector(repository, _RULESET).project(
             _profile(), _card(), explicit_seed=1
         )
+
+
+@pytest.mark.parametrize("channel", ("NONE", "COMPOSITE"))
+def test_visual_prompt_projector_treats_neutral_channels_as_unscaled(
+    channel: str,
+) -> None:
+    atom = VisualPromptAtomDefinition("atom", "atom", "style")
+    repository = _VisualRepository(
+        bindings=(
+            _binding(
+                "class",
+                "alpha",
+                "atom",
+                weight=1234,
+                channel=channel,
+            ),
+        ),
+        atoms=(atom,),
+    )
+
+    recipe = VisualPromptProjector(repository, _RULESET).project(
+        _profile(), _card(), explicit_seed=1
+    )
+
+    assert recipe.positive_atoms[0].weight_milli == 1234
