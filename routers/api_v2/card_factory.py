@@ -1,4 +1,4 @@
-"""Revision-safe Card Factory prototype HTTP adapter."""
+"""Revision-safe HTTP adapter for complete Card groups, pool, and deck."""
 
 from typing import Any
 
@@ -7,29 +7,29 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from comfyreview.api import get_application_container
-from comfyreview.api.card_battler_presenters import (
-    CardFactorySessionResponseMapper,
-)
+from comfyreview.api.card_battler_presenters import CardFactoryResponseMapper
 from comfyreview.application import (
-    CardSessionCapacityError,
-    CardSessionConflictError,
-    CardSessionDevelopmentLockedError,
-    CardSessionNotFoundError,
-    CardSourceEligibilityError,
     ContentLevel,
     ImageContextNotFoundError,
     ImageFilter,
     ImageOrder,
     ImageQuery,
     ImageQueryValidationError,
-    LocalModelConnectionError,
-    LocalModelProtocolError,
-    LocalModelTimeoutError,
-    LocalModelUnavailableError,
-    SemanticImageAnalysisError,
 )
-from comfyreview.application.card_battler_development import (
-    CardDevelopmentPlanningError,
+from comfyreview.application.card_battler_candidate_group_service import (
+    CardCandidateSourceEligibilityError,
+)
+from comfyreview.application.card_battler_candidate_groups import (
+    CardCandidateGroupConflictError,
+    CardCandidateGroupNotFoundError,
+)
+from comfyreview.application.card_battler_card_pool import (
+    CardPoolConflictError,
+    CardPoolNotFoundError,
+)
+from comfyreview.application.card_battler_deck import (
+    CardDeckConflictError,
+    CardDeckNotFoundError,
 )
 from comfyreview.application.card_battler_model import CardBattlerModelError
 from routers.api_v2.common import error_response
@@ -37,20 +37,26 @@ from routers.api_v2.common import error_response
 router = APIRouter()
 
 
-class CreateCardSessionRequest(BaseModel):
-    """Select one canonical source image for initial analysis."""
+class CreateCardCandidateGroupRequest(BaseModel):
+    """Select one canonical source for a new four-Card analysis."""
 
     model_config = ConfigDict(extra="forbid")
 
     image_uid: str = Field(min_length=1)
 
 
-class CardSessionMutationRequest(BaseModel):
-    """Carry the exact revision expected by one mutation."""
+class CardMutationRequest(BaseModel):
+    """Carry the exact aggregate revision expected by one mutation."""
 
     model_config = ConfigDict(extra="forbid")
 
     expected_revision: int = Field(gt=0)
+
+
+class ReorderCardDeckRequest(CardMutationRequest):
+    """Carry one complete ordered deck membership permutation."""
+
+    card_ids: tuple[str, ...] = Field(max_length=40)
 
 
 @router.get("/card-factory/sources")
@@ -59,7 +65,7 @@ def list_card_sources(
     offset: int = Query(0),
     limit: int = Query(48),
 ) -> JSONResponse:
-    """Return live canonical STANDARD images using the shared SQL query."""
+    """Return live canonical STANDARD images through the shared query."""
     container = get_application_container(request)
     try:
         page = container.image_contexts.list_images(
@@ -92,140 +98,264 @@ def list_card_sources(
     )
 
 
-@router.post("/card-factory/sessions")
-def create_card_session(
+@router.get("/card-factory/candidate-groups")
+def list_candidate_groups(request: Request) -> JSONResponse:
+    """Return all persisted group summaries and current slot progress."""
+    container = get_application_container(request)
+    services = container.card_factory_runtime.get()
+    mapper = _mapper(container, services.outputs)
+    return JSONResponse(
+        {
+            "items": [
+                mapper.group(group) for group in services.groups.list_groups()
+            ]
+        }
+    )
+
+
+@router.post("/card-factory/candidate-groups")
+def create_candidate_group(
     request: Request,
-    payload: CreateCardSessionRequest,
+    payload: CreateCardCandidateGroupRequest,
 ) -> JSONResponse:
-    """Analyze one source exactly once and persist its initial Card session."""
+    """Reserve one initial group; the owned worker performs external work."""
     container = get_application_container(request)
     try:
         services = container.card_factory_runtime.get()
-        snapshot = services.prototype.create(payload.image_uid)
+        group = services.initial_groups.reserve(payload.image_uid)
     except ImageContextNotFoundError as error:
         return error_response(404, "card_source_not_found", str(error))
-    except CardSourceEligibilityError as error:
+    except CardCandidateSourceEligibilityError as error:
         return error_response(422, "card_source_ineligible", str(error))
-    except CardSessionCapacityError as error:
-        return error_response(409, "card_session_capacity", str(error))
-    except (LocalModelConnectionError, LocalModelTimeoutError) as error:
-        return error_response(503, "local_model_unavailable", str(error))
-    except LocalModelUnavailableError as error:
-        return error_response(503, "local_model_missing", str(error))
-    except (
-        LocalModelProtocolError,
-        SemanticImageAnalysisError,
-    ) as error:
-        return error_response(502, "semantic_analysis_failed", str(error))
     except CardBattlerModelError as error:
         return error_response(503, "card_model_unavailable", str(error))
     return JSONResponse(
-        _mapper(container, services.outputs).snapshot(snapshot), 201
+        _mapper(container, services.outputs).group(group),
+        status_code=202,
     )
 
 
-@router.get("/card-factory/sessions/{session_id}")
-def card_session(request: Request, session_id: str) -> JSONResponse:
-    """Synchronize once and return all inspectable session artifacts."""
+@router.get("/card-factory/candidate-groups/{group_id}")
+def candidate_group(request: Request, group_id: str) -> JSONResponse:
+    """Return one complete Candidate group projection."""
     container = get_application_container(request)
     try:
         services = container.card_factory_runtime.get()
-        snapshot = services.prototype.get(session_id)
-    except CardSessionNotFoundError as error:
-        return error_response(404, "card_session_not_found", str(error))
-    except CardBattlerModelError as error:
-        return error_response(503, "card_model_unavailable", str(error))
-    return JSONResponse(
-        _mapper(container, services.outputs).snapshot(snapshot)
-    )
+        group = services.groups.get(group_id)
+    except CardCandidateGroupNotFoundError as error:
+        return error_response(
+            404, "card_candidate_group_not_found", str(error)
+        )
+    return JSONResponse(_mapper(container, services.outputs).group(group))
 
 
-@router.post("/card-factory/sessions/{session_id}/develop")
-def develop_card_session(
+@router.post("/card-factory/candidate-groups/{group_id}/reject")
+def reject_candidate_group(
     request: Request,
-    session_id: str,
-    payload: CardSessionMutationRequest,
+    group_id: str,
+    payload: CardMutationRequest,
 ) -> JSONResponse:
-    """Advance exactly one accepted tier using compare-and-swap."""
+    """Reject one terminal group without changing a confirmed Card."""
     container = get_application_container(request)
     try:
         services = container.card_factory_runtime.get()
-        snapshot = services.prototype.develop(
-            session_id,
+        group = services.groups.reject(
+            group_id,
             expected_revision=payload.expected_revision,
         )
-    except CardSessionNotFoundError as error:
-        return error_response(404, "card_session_not_found", str(error))
-    except (
-        CardDevelopmentPlanningError,
-        CardSessionConflictError,
-        CardSessionDevelopmentLockedError,
-    ) as error:
-        return error_response(409, "card_development_conflict", str(error))
-    except CardBattlerModelError as error:
-        return error_response(503, "card_model_unavailable", str(error))
-    return JSONResponse(
-        _mapper(container, services.outputs).snapshot(snapshot)
-    )
+    except CardCandidateGroupNotFoundError as error:
+        return error_response(
+            404, "card_candidate_group_not_found", str(error)
+        )
+    except CardCandidateGroupConflictError as error:
+        return error_response(409, "card_candidate_group_conflict", str(error))
+    return JSONResponse(_mapper(container, services.outputs).group(group))
 
 
-@router.post("/card-factory/sessions/{session_id}/candidates")
-def generate_card_candidates(
+@router.post("/card-factory/candidate-groups/{group_id}/retry")
+def retry_initial_candidate_group(
     request: Request,
-    session_id: str,
-    payload: CardSessionMutationRequest,
+    group_id: str,
+    payload: CardMutationRequest,
 ) -> JSONResponse:
-    """Reserve and submit four independently visible Card candidates."""
+    """Discard one initial set and reserve a fully new source analysis."""
     container = get_application_container(request)
     try:
         services = container.card_factory_runtime.get()
-        snapshot = services.prototype.generate_candidates(
-            session_id,
+        group = services.groups.retry_initial(
+            group_id,
             expected_revision=payload.expected_revision,
         )
-    except KeyError as error:
-        return error_response(404, "card_session_not_found", str(error))
-    except CardSessionConflictError as error:
-        return error_response(409, "card_generation_conflict", str(error))
-    except CardBattlerModelError as error:
-        return error_response(503, "card_model_unavailable", str(error))
+    except CardCandidateGroupNotFoundError as error:
+        return error_response(
+            404, "card_candidate_group_not_found", str(error)
+        )
+    except CardCandidateGroupConflictError as error:
+        return error_response(409, "card_candidate_group_conflict", str(error))
+    except CardCandidateSourceEligibilityError as error:
+        return error_response(422, "card_source_ineligible", str(error))
     return JSONResponse(
-        _mapper(container, services.outputs).snapshot(snapshot),
+        _mapper(container, services.outputs).group(group),
         status_code=202,
     )
 
 
 @router.post(
-    "/card-factory/sessions/{session_id}/candidates/{candidate_id}/accept"
+    "/card-factory/candidate-groups/{group_id}/"
+    "candidates/{candidate_id}/accept"
 )
 def accept_card_candidate(
     request: Request,
-    session_id: str,
+    group_id: str,
     candidate_id: str,
-    payload: CardSessionMutationRequest,
+    payload: CardMutationRequest,
 ) -> JSONResponse:
-    """Accept one completed current slot using compare-and-swap."""
+    """Accept a completed initial or development Candidate by CAS."""
     container = get_application_container(request)
     try:
         services = container.card_factory_runtime.get()
-        snapshot = services.prototype.accept_candidate(
-            session_id,
+        card = services.acceptance.accept(
+            group_id,
             candidate_id,
             expected_revision=payload.expected_revision,
         )
-    except KeyError as error:
+    except CardPoolNotFoundError as error:
         return error_response(404, "card_candidate_not_found", str(error))
-    except CardSessionConflictError as error:
+    except CardPoolConflictError as error:
         return error_response(409, "card_candidate_conflict", str(error))
-    except CardBattlerModelError as error:
-        return error_response(503, "card_model_unavailable", str(error))
+    return JSONResponse(_mapper(container, services.outputs).card(card))
+
+
+@router.get("/card-factory/cards")
+def list_pool_cards(request: Request) -> JSONResponse:
+    """Return every current Card in the unbounded POC pool."""
+    container = get_application_container(request)
+    services = container.card_factory_runtime.get()
+    mapper = _mapper(container, services.outputs)
     return JSONResponse(
-        _mapper(container, services.outputs).snapshot(snapshot)
+        {"items": [mapper.card(card) for card in services.cards.list_cards()]}
     )
 
 
-def _mapper(container: Any, outputs: Any) -> CardFactorySessionResponseMapper:
-    return CardFactorySessionResponseMapper(
+@router.get("/card-factory/cards/{card_id}")
+def pool_card(request: Request, card_id: str) -> JSONResponse:
+    """Return one current confirmed Card."""
+    container = get_application_container(request)
+    try:
+        services = container.card_factory_runtime.get()
+        card = services.cards.get(card_id)
+    except CardPoolNotFoundError as error:
+        return error_response(404, "card_not_found", str(error))
+    return JSONResponse(_mapper(container, services.outputs).card(card))
+
+
+@router.post("/card-factory/cards/{card_id}/development-groups")
+def create_development_group(
+    request: Request,
+    card_id: str,
+    payload: CardMutationRequest,
+) -> JSONResponse:
+    """Reserve four one-tier development Candidates for a current Card."""
+    container = get_application_container(request)
+    try:
+        services = container.card_factory_runtime.get()
+        group = services.development_groups.reserve(
+            card_id,
+            expected_revision=payload.expected_revision,
+        )
+    except CardPoolNotFoundError as error:
+        return error_response(404, "card_not_found", str(error))
+    except CardPoolConflictError as error:
+        return error_response(409, "card_development_conflict", str(error))
+    return JSONResponse(
+        _mapper(container, services.outputs).group(group),
+        status_code=202,
+    )
+
+
+@router.get("/card-factory/deck")
+def card_deck(request: Request) -> JSONResponse:
+    """Return the one POC deck together with the available Card pool."""
+    container = get_application_container(request)
+    try:
+        services = container.card_factory_runtime.get()
+        deck = services.deck.get()
+        cards = services.cards.list_cards()
+    except CardDeckNotFoundError as error:
+        return error_response(404, "card_deck_not_found", str(error))
+    mapper = _mapper(container, services.outputs)
+    return JSONResponse(
+        {
+            "deck": mapper.deck(deck, cards),
+            "pool": [mapper.card(card) for card in cards],
+        }
+    )
+
+
+@router.post("/card-factory/deck/cards/{card_id}")
+def add_deck_card(
+    request: Request,
+    card_id: str,
+    payload: CardMutationRequest,
+) -> JSONResponse:
+    """Append one unique pool Card to the POC deck by CAS."""
+    return _mutate_deck(request, "add", card_id, payload.expected_revision)
+
+
+@router.delete("/card-factory/deck/cards/{card_id}")
+def remove_deck_card(
+    request: Request,
+    card_id: str,
+    payload: CardMutationRequest,
+) -> JSONResponse:
+    """Remove one Card from the POC deck by CAS."""
+    return _mutate_deck(request, "remove", card_id, payload.expected_revision)
+
+
+@router.put("/card-factory/deck/order")
+def reorder_card_deck(
+    request: Request,
+    payload: ReorderCardDeckRequest,
+) -> JSONResponse:
+    """Replace the complete POC deck order by CAS."""
+    container = get_application_container(request)
+    try:
+        services = container.card_factory_runtime.get()
+        deck = services.deck.reorder(
+            payload.card_ids,
+            expected_revision=payload.expected_revision,
+        )
+        cards = services.cards.list_cards()
+    except CardDeckNotFoundError as error:
+        return error_response(404, "card_deck_not_found", str(error))
+    except CardDeckConflictError as error:
+        return error_response(409, "card_deck_conflict", str(error))
+    return JSONResponse(_mapper(container, services.outputs).deck(deck, cards))
+
+
+def _mutate_deck(
+    request: Request,
+    operation: str,
+    card_id: str,
+    expected_revision: int,
+) -> JSONResponse:
+    container = get_application_container(request)
+    try:
+        services = container.card_factory_runtime.get()
+        command = (
+            services.deck.add if operation == "add" else services.deck.remove
+        )
+        deck = command(card_id, expected_revision=expected_revision)
+        cards = services.cards.list_cards()
+    except CardDeckNotFoundError as error:
+        return error_response(404, "card_or_deck_not_found", str(error))
+    except CardDeckConflictError as error:
+        return error_response(409, "card_deck_conflict", str(error))
+    return JSONResponse(_mapper(container, services.outputs).deck(deck, cards))
+
+
+def _mapper(container: Any, outputs: Any) -> CardFactoryResponseMapper:
+    return CardFactoryResponseMapper(
         canonical_images=container.image_responses,
         card_outputs=outputs,
         file_urls=container.file_urls,
