@@ -59,6 +59,12 @@ from comfyreview.application.card_battler_development_improvement import (
 from comfyreview.application.card_battler_development_service import (
     CardDevelopmentService,
 )
+from comfyreview.application.card_battler_factory import (
+    CARD_SOURCE_SEED_REVISION,
+    CardFactory,
+    CardFactoryResult,
+    DeterministicCardArtifacts,
+)
 from comfyreview.application.card_battler_generation_prompt import (
     CardEvolutionComfyUiPromptRenderer,
     CardEvolutionDebugPromptRenderer,
@@ -644,6 +650,9 @@ __all__ = [
     "CardBalancePolicy",
     "CardDevelopmentModelRepository",
     "CardDevelopmentPolicy",
+    "CardFactory",
+    "CardFactoryResult",
+    "DeterministicCardArtifacts",
     "CompatibilityRelation",
     "CommonCardMaterializer",
     "CardStatMaterializer",
@@ -693,6 +702,7 @@ __all__ = [
     "SemanticSignal",
     "SEMANTIC_PROFILE_CONTRACT_REVISION",
     "CARD_PRESENTATION_CONTRACT_REVISION",
+    "CARD_SOURCE_SEED_REVISION",
     "Sha256CounterV1",
     "CardClassDefinition",
     "CombatRoleDefinition",

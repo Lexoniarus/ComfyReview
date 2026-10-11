@@ -16,6 +16,7 @@
 | Visuelle Projektion | [Visual-Prompt-Projektion](../../comfyreview/application/card_battler_visual_projection.py) | Kein fertig gerendertes Card-Face und keine spielerseitige Komposition |
 | Semantische Bildanalyse | [Strikter Stage-1-Analyzer](../../comfyreview/application/card_battler_semantics.py), [kanonischer Bildadapter](../../comfyreview/providers/card_source_images.py) | Noch keine reale Modellabnahme oder verdrahtete Factory/API |
 | Kosmetische Kartentexte | [Stage-3-Realizer](../../comfyreview/application/card_battler_presentation.py) | Keine Autorität über Regeln und noch keine reale Modellabnahme |
+| Wiederverwendbare Factory | [Orchestrator](../../comfyreview/application/card_battler_factory.py) | Noch keine Eligibility-, Session-, API- oder UI-Integration |
 | Isolierte POC-Runtime | [Versionierter Schema-Owner](../../comfyreview/repositories/sqlite/card_battler_runtime_schema.py) | Noch keine verdrahteten Session-/Factory-Befehle oder reale Providerprobe |
 
 Die [App](../../comfyreview/bootstrap.py) erzeugt Modell-Adapter und Mapper; die [registrierten API-Router](../../routers/api_v2/__init__.py) bieten jedoch **keine** vollständigen Card-Crafting-/Deck-/Match-Operationen. Genau diese Trennung ist wichtig: **funktionierender Bibliotheks-Code ≠ spielbarer Battler**.
@@ -82,8 +83,8 @@ sowie die getrennte
 Ein injizierbarer Stage-1-Analyzer und ein Adapter über die bestehende
 kanonische Bildauflösung sind inzwischen implementiert und isoliert getestet.
 **Nicht** als fertiger End-to-End-Ablauf nachgewiesen sind dagegen die reale
-Modellinferenz, Spielerfreigabe und vollständige Kartenübernahme. Factory,
-Provider-Komposition und Prüf-UI bleiben offen. Der erste Persistenzvertrag ist nun als
+Modellinferenz, Spielerfreigabe und vollständige Kartenübernahme. Runtime-
+Komposition, Session-Befehle und Prüf-UI bleiben offen. Der erste Persistenzvertrag ist nun als
 isolierte `card_battler_runtime.sqlite3` festgelegt: Die normale
 `comfyreview.sqlite3` wird nur zur Quellbildauflösung gelesen, während die
 read-only `card_battler.sqlite3` ausschließlich Regel-/Modelldaten liefert.

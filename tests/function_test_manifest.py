@@ -105,6 +105,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_presentation.py::"
         "test_presentation_realizer_builds_cosmetic_text_and_stable_input"
     ),
+    "comfyreview.application.card_battler_factory:CardFactory.compose": (
+        "tests/test_card_battler_factory.py::"
+        "test_factory_composes_existing_collaborators_in_order"
+    ),
+    "comfyreview.application.card_battler_factory:CardFactory.create": (
+        "tests/test_card_battler_factory.py::"
+        "test_factory_runs_stage_one_once_and_keeps_presentation_degradation"
+    ),
     "comfyreview.application.card_battler_development_service:CardDevelopmentService.advance": (
         "tests/test_card_battler_development_service.py::"
         "test_card_development_service_advances_one_tier_and_one_improvement"

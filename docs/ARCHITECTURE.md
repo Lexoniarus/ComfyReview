@@ -195,10 +195,18 @@ or reserved mechanical syntax. A refresh preserves the existing title. Model,
 schema or policy failure yields no presentation and never changes the valid
 Card specification or authoritative rules.
 
-No HTTP route, database write, Card-Battler session, startup model load or
-fully composed Factory is introduced by these boundaries. Fake-provider tests
-validate the contracts but do not establish a real LM Studio, hardware or
-model smoke; the project owner performs that final manual acceptance.
+The reusable `CardFactory` composes these existing collaborators in one
+direction: Stage 1, `CardImprintMapper`, `CommonCardMaterializer`,
+`VisualPromptProjector`, then optional Stage 3. Its explicit deterministic
+seed is derived from source-image identity and semantic revision under
+`card-source-seed-v1`; intermediate mapping, specification and recipe remain
+inspectable. The Factory contains no eligibility, HTTP, session or persistence
+rules.
+
+No HTTP route, database write, Card-Battler session or startup model load is
+introduced by these boundaries. Fake-provider tests validate the contracts
+but do not establish a real LM Studio, hardware or model smoke; the project
+owner performs that final manual acceptance.
 
 ## 3. Canonical identity and runtime data
 
