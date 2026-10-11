@@ -1,0 +1,7 @@
+# Cocos Creator-generated/cache/build data. Keep editor .meta files in Git.
+cocos/library/
+cocos/local/
+cocos/temp/
+cocos/build/
+cocos/node_modules/
+cocos/.creator/
