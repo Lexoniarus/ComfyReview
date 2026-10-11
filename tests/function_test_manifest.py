@@ -145,6 +145,30 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_evolution.py::"
         "test_candidate_repository_accepts_only_current_completed_slot"
     ),
+    "comfyreview.application.card_battler_session_queries:CardFactorySessionQueryService.get": (
+        "tests/test_card_battler_evolution.py::"
+        "test_session_query_synchronizes_generating_batch_before_projection"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.create": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.get": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.develop": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.generate_candidates": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.accept_candidate": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
     "comfyreview.application.card_battler_development_service:CardDevelopmentService.advance": (
         "tests/test_card_battler_development_service.py::"
         "test_card_development_service_advances_one_tier_and_one_improvement"

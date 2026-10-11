@@ -12,9 +12,14 @@ import pytest
 
 from comfyreview.application import (
     CardActiveImageKind,
+    CardCandidateRepository,
     CardCandidateStatus,
     CardEvolutionGenerationPolicy,
     CardEvolutionService,
+    CardFactoryPrototypeService,
+    CardFactorySessionQueryService,
+    CardFactorySessionService,
+    CardFactorySessionSnapshot,
     CardGenerationLifecycle,
     CardGenerationOutputQuery,
     CardPresentationResult,
@@ -361,7 +366,9 @@ def test_candidate_repository_accepts_only_current_completed_slot(
     generations.observed["generation-0"] = "completed"
     service.synchronize("session-1", session_revision=2)
 
-    accepted = service.accept(candidate.candidate_id, expected_revision=2)
+    accepted = service.accept(
+        "session-1", candidate.candidate_id, expected_revision=2
+    )
 
     assert accepted.revision == 3
     assert accepted.active_image_uid == "accepted-image"
@@ -439,3 +446,104 @@ def test_reference_provider_rejects_changed_source_bytes() -> None:
 
     with pytest.raises(ValueError, match="hash no longer matches"):
         provider.load(_session())
+
+
+def test_session_query_synchronizes_generating_batch_before_projection() -> (
+    None
+):
+    session = replace(
+        _session(),
+        revision=2,
+        operation_state=CardSessionOperationState.GENERATING,
+    )
+    synchronized: list[tuple[str, int]] = []
+
+    class _Sessions:
+        def get(self, session_id):
+            assert session_id == "session-1"
+            return session
+
+    class _Evolution:
+        def synchronize(self, session_id, *, session_revision):
+            synchronized.append((session_id, session_revision))
+            return ()
+
+    class _Candidates:
+        def latest_for_session(self, session_id):
+            assert session_id == "session-1"
+            return ()
+
+    result = CardFactorySessionQueryService(
+        sessions=cast(CardFactorySessionService, _Sessions()),
+        evolution=cast(CardEvolutionService, _Evolution()),
+        candidates=cast(CardCandidateRepository, _Candidates()),
+    ).get("session-1")
+
+    assert result.session == session
+    assert result.candidates == ()
+    assert synchronized == [("session-1", 2)]
+
+
+def test_prototype_service_delegates_revision_safe_use_cases() -> None:
+    session = _session()
+    events: list[tuple[object, ...]] = []
+
+    class _Sessions:
+        def create(self, image_uid):
+            events.append(("create", image_uid))
+            return session
+
+        def get(self, session_id):
+            events.append(("session-get", session_id))
+            return session
+
+        def develop(self, session_id, *, expected_revision):
+            events.append(("develop", session_id, expected_revision))
+            return replace(session, revision=expected_revision + 1)
+
+    class _Queries:
+        def get(self, session_id):
+            events.append(("query-get", session_id))
+            return CardFactorySessionSnapshot(session, ())
+
+    class _Evolution:
+        def generate_candidates(self, session_id, *, expected_revision):
+            events.append(("generate", session_id, expected_revision))
+            return ()
+
+        def accept(self, session_id, candidate_id, *, expected_revision):
+            events.append(
+                ("accept", session_id, candidate_id, expected_revision)
+            )
+            return session
+
+    service = CardFactoryPrototypeService(
+        sessions=cast(CardFactorySessionService, _Sessions()),
+        queries=cast(CardFactorySessionQueryService, _Queries()),
+        evolution=cast(CardEvolutionService, _Evolution()),
+    )
+
+    assert service.create("image-1").session == session
+    assert service.get("session-1").session == session
+    assert (
+        service.develop("session-1", expected_revision=1).session.revision == 2
+    )
+    assert (
+        service.generate_candidates("session-1", expected_revision=1).session
+        == session
+    )
+    assert (
+        service.accept_candidate(
+            "session-1", "candidate-1", expected_revision=2
+        ).session
+        == session
+    )
+    assert events == [
+        ("create", "image-1"),
+        ("query-get", "session-1"),
+        ("develop", "session-1", 1),
+        ("generate", "session-1", 1),
+        ("session-get", "session-1"),
+        ("accept", "session-1", "candidate-1", 2),
+        ("query-get", "session-1"),
+    ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 from dataclasses import replace
 from pathlib import Path
 
@@ -184,6 +185,41 @@ def test_session_repository_rejects_capacity_and_immutable_changes(
     with pytest.raises(CardSessionConflictError, match="immutable"):
         repository.replace(changed_source, expected_revision=1)
     assert repository.get(original.session_id) == original
+
+
+def test_session_development_replace_clears_previous_candidate_slots(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "runtime.sqlite3"
+    repository = _repository(path)
+    original = repository.create(_session())
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO card_candidates(
+                candidate_id, session_id, session_revision, slot_index,
+                tier_key, recipe_revision, recipe_hash,
+                reference_image_uid, reference_content_hash, status
+            ) VALUES ('candidate-1', 'session-1', 1, 0, '1',
+                      'projection-v1', 'hash', 'image-1', ?, 'accepted')
+            """,
+            (original.source_content_hash,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    repository.replace(replace(original, revision=2), expected_revision=1)
+
+    connection = sqlite3.connect(path)
+    try:
+        remaining = connection.execute(
+            "SELECT COUNT(*) FROM card_candidates"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    assert remaining == 0
 
 
 def test_session_writes_do_not_touch_canonical_or_model_databases(

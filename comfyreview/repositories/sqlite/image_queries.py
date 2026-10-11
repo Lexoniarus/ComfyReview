@@ -256,6 +256,14 @@ def _filter_fragment(
     if filters.minimum_rating_count:
         conditions.append("summary.rating_count >= ?")
         parameters.append(filters.minimum_rating_count)
+    if filters.effective_content_level is not None:
+        conditions.append(
+            "COALESCE((SELECT state.override_content_level "
+            "FROM image_content_level_state AS state "
+            "WHERE state.image_id = image.id), "
+            "generation.inferred_content_level) = ?"
+        )
+        parameters.append(filters.effective_content_level.value)
     for kind, component_uids in sorted(scope_groups.items()):
         placeholders = ", ".join("?" for _uid in component_uids)
         conditions.append(

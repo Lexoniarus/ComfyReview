@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from routers.api_v2.analytics import router as analytics_router
 from routers.api_v2.arena import router as arena_router
+from routers.api_v2.card_factory import router as card_factory_router
 from routers.api_v2.catalog import router as catalog_router
 from routers.api_v2.curation import router as curation_router
 from routers.api_v2.generations import router as generations_router
@@ -19,6 +20,7 @@ router.include_router(images_router)
 router.include_router(review_router)
 router.include_router(arena_router)
 router.include_router(catalog_router)
+router.include_router(card_factory_router)
 router.include_router(playground_router)
 router.include_router(generations_router)
 router.include_router(curation_router)

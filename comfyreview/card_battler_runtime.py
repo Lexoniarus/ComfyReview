@@ -1,4 +1,4 @@
-"""Lazy composition owner for the optional Card Factory prototype runtime."""
+"""Lazy composition owner for the Card Factory prototype runtime."""
 
 from __future__ import annotations
 
@@ -32,12 +32,18 @@ from comfyreview.application.card_battler_presentation import (
 from comfyreview.application.card_battler_preview import (
     CardSourceEligibilityPolicy,
 )
+from comfyreview.application.card_battler_prototype import (
+    CardFactoryPrototypeService,
+)
 from comfyreview.application.card_battler_rules import (
     CanonicalRuleRenderer,
     MechanicMaterializer,
 )
 from comfyreview.application.card_battler_semantics import (
     SemanticImageAnalyzer,
+)
+from comfyreview.application.card_battler_session_queries import (
+    CardFactorySessionQueryService,
 )
 from comfyreview.application.card_battler_session_service import (
     CardFactorySessionService,
@@ -119,12 +125,15 @@ class CardFactoryPrototypeServices:
     """Expose the focused services required by Card API adapters."""
 
     sessions: CardFactorySessionService
+    queries: CardFactorySessionQueryService
     evolution: CardEvolutionService
+    prototype: CardFactoryPrototypeService
     candidates: SqliteCardCandidateRepository
+    outputs: SqliteCardGenerationOutputRepository
 
 
 class CardFactoryPrototypeRuntime:
-    """Build the optional Card service graph once on first Card use."""
+    """Build the Card service graph once on first Card use."""
 
     def __init__(
         self,
@@ -286,8 +295,20 @@ class CardFactoryPrototypeRuntime:
             generations=generation_service,
             outputs=card_outputs,
         )
-        return CardFactoryPrototypeServices(
+        queries = CardFactorySessionQueryService(
             sessions=session_service,
             evolution=evolution,
             candidates=candidates,
+        )
+        return CardFactoryPrototypeServices(
+            sessions=session_service,
+            queries=queries,
+            evolution=evolution,
+            prototype=CardFactoryPrototypeService(
+                sessions=session_service,
+                queries=queries,
+                evolution=evolution,
+            ),
+            candidates=candidates,
+            outputs=card_outputs,
         )

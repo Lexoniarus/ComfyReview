@@ -141,8 +141,8 @@ owner.
 
 ### 2.3 Local-model lifecycle and inference foundation
 
-The local-model foundation is optional and is not yet a runtime-wired Card
-Factory. `Settings` defines the LM Studio base URL, optional bearer token,
+The local-model foundation is wired lazily into the Card Factory runtime.
+`Settings` defines the LM Studio base URL, optional bearer token,
 separate list/load/inference/unload timeouts and explicit Vision/Text model
 keys. Reading settings performs no connection, model discovery, loading or
 inference. The app process never starts LM Studio itself.
@@ -259,12 +259,22 @@ persisted `primary` output. Candidate acceptance atomically changes the active
 image reference and visual tier; semantic profile, imprint and structured Card
 rules remain unchanged.
 
-The optional Card Factory graph is composed by one lazy
+The Card Factory graph is composed by one lazy
 `CardFactoryPrototypeRuntime`. Building the normal application container does
 not open the model database or connect to LM Studio or ComfyUI. The first Card
 use resolves the active ruleset and then caches one shared graph containing the
 model resource, local-model runtime, deterministic policies, Card-only
 generation adapters and session services for the process lifetime.
+`card_battler.sqlite3` is a required read-only resource for Card Battler use and
+is intended to ship with the feature; absence or contract mismatch fails the
+Card request explicitly rather than creating or repairing model data.
+
+`routers/api_v2/card_factory.py` translates the prototype HTTP contract only.
+Its source query reuses the canonical image service with a repository-side
+`STANDARD` effective-content filter. Create, Get, Develop, Generate and Accept
+delegate to `CardFactoryPrototypeService`; every mutation carries an expected
+session revision. HTTP projections expose typed artifacts and mounted URLs,
+never SQLite rows or local paths.
 
 ## 3. Canonical identity and runtime data
 

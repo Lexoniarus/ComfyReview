@@ -151,6 +151,29 @@ class SqliteCardCandidateRepository:
         finally:
             connection.close()
 
+    def latest_for_session(
+        self, session_id: str
+    ) -> tuple[CardEvolutionCandidate, ...]:
+        """Return the latest batch for projection after acceptance."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            row = connection.execute(
+                "SELECT MAX(session_revision) AS revision "
+                "FROM card_candidates WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            if row is None or row["revision"] is None:
+                return ()
+            rows = connection.execute(
+                "SELECT * FROM card_candidates "
+                "WHERE session_id = ? AND session_revision = ? "
+                "ORDER BY slot_index",
+                (session_id, int(row["revision"])),
+            ).fetchall()
+            return tuple(self._decode(item) for item in rows)
+        finally:
+            connection.close()
+
     def mark_submitted(
         self, candidate_id: str, generation_uid: str
     ) -> CardEvolutionCandidate:
@@ -186,6 +209,7 @@ class SqliteCardCandidateRepository:
 
     def accept(
         self,
+        session_id: str,
         candidate_id: str,
         *,
         expected_revision: int,
@@ -195,8 +219,9 @@ class SqliteCardCandidateRepository:
         try:
             connection.execute("BEGIN IMMEDIATE")
             candidate = connection.execute(
-                "SELECT * FROM card_candidates WHERE candidate_id = ?",
-                (candidate_id,),
+                "SELECT * FROM card_candidates "
+                "WHERE candidate_id = ? AND session_id = ?",
+                (candidate_id, session_id),
             ).fetchone()
             if candidate is None:
                 raise KeyError(f"Unknown Card candidate: {candidate_id}")

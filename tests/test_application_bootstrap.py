@@ -366,7 +366,7 @@ def test_default_container_wires_canonical_review_runtime(
     assert container.character_prompts.compose("aiko").variant_id == "baseline"
 
 
-def test_card_factory_runtime_builds_its_optional_graph_only_once(
+def test_card_factory_runtime_builds_its_graph_only_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runtime = CardFactoryPrototypeRuntime(

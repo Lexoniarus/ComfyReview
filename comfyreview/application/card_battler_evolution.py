@@ -110,6 +110,12 @@ class CardCandidateRepository(Protocol):
         """Return stable slot order for one batch revision."""
         ...
 
+    def latest_for_session(
+        self, session_id: str
+    ) -> tuple[CardEvolutionCandidate, ...]:
+        """Return the latest persisted batch in stable slot order."""
+        ...
+
     def mark_submitted(
         self, candidate_id: str, generation_uid: str
     ) -> CardEvolutionCandidate:
@@ -130,6 +136,7 @@ class CardCandidateRepository(Protocol):
 
     def accept(
         self,
+        session_id: str,
         candidate_id: str,
         *,
         expected_revision: int,
@@ -331,7 +338,19 @@ class CardEvolutionService:
                 or candidate.generation_uid is None
             ):
                 continue
-            submission = self._generations.observe(candidate.generation_uid)
+            try:
+                submission = self._generations.observe(
+                    candidate.generation_uid
+                )
+            except (
+                GenerationReconciliationRequired,
+                GenerationValidationError,
+            ) as error:
+                self._candidates.mark_failed(
+                    candidate.candidate_id,
+                    type(error).__name__,
+                )
+                continue
             if submission.status == "failed":
                 self._candidates.mark_failed(
                     candidate.candidate_id, "generation_failed"
@@ -353,10 +372,15 @@ class CardEvolutionService:
         )
 
     def accept(
-        self, candidate_id: str, *, expected_revision: int
+        self,
+        session_id: str,
+        candidate_id: str,
+        *,
+        expected_revision: int,
     ) -> CardSession:
         """Accept one completed current Candidate without changing Card facts."""
         return self._candidates.accept(
+            session_id,
             candidate_id,
             expected_revision=expected_revision,
         )

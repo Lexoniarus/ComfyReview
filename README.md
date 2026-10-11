@@ -47,11 +47,12 @@ Wichtige Werte:
 | `COMFYREVIEW_PORT` | Lokaler HTTP-Port (Standard 8000) |
 | `COMFYREVIEW_LM_STUDIO_BASE_URL` | Optionaler lokaler LM-Studio-Endpunkt |
 
-Die lokale Modellgrundlage ist derzeit ein **technischer POC-Baustein**, kein
-fertiger Card-Factory-Workflow. Sie stellt typisierte Model-Lifecycle-, Text-,
-Vision- und JSON-Schema-Inferenzgrenzen bereit. LM Studio wird beim App-Start
-weder verbunden noch gestartet und Modelle werden nicht vorsorglich geladen.
-Erst ein späterer, explizit verdrahteter Use Case darf diese Provider nutzen.
+Die lokale Modellgrundlage ist in den **Card-Factory-POC** verdrahtet, aber noch
+nicht durch einen realen Modell-Smoke des Projektinhabers abgenommen. Sie stellt
+typisierte Model-Lifecycle-, Text-, Vision- und JSON-Schema-Inferenzgrenzen
+bereit. LM Studio wird beim App-Start weder verbunden noch gestartet und
+Modelle werden nicht vorsorglich geladen; erst ein Card-Factory-Aufruf baut den
+gemeinsamen Runtime-Graph lazy auf.
 
 Die vollständigen optionalen Variablen stehen in [`.env.example`](.env.example):
 ein API-Token, getrennte List-/Load-/Inference-/Unload-Timeouts sowie Vision-
@@ -63,10 +64,16 @@ Projektinhaber.
 **Wichtig bei vorhandenen lokalen Daten:** Startup migriert keine unbekannte alte Datenbank still auf v18. Vor einem Upgrade die [getrennte Betriebs-/Migrationsanleitung](docs/OPERATIONS.md) und [Datenarchitektur](docs/DATA_ARCHITECTURE.md) prüfen. Datenbank, generierte Bilder, Modelle, Geheimnisse und persönliche Pfade gehören **nicht** ins Git-Repository.
 
 Der Card-Factory-POC trennt seine Daten zusätzlich: Die externe
-`card_battler.sqlite3` bleibt unveränderliche Model-/Regelquelle, während
+`card_battler.sqlite3` ist für Card-Battler-Funktionen eine erforderliche,
+mitzuliefernde unveränderliche Model-/Regelquelle, während
 `card_battler_runtime.sqlite3` ausschließlich POC-Sessions, Kandidaten und
 Card-Generationen aufnehmen darf. Diese Einträge werden nicht in Review,
 Ranking, Arena oder die normale Generator-Historie geschrieben.
+
+Die revision-sichere POC-API liegt unter `/api/v2/card-factory/`: Sie listet
+STANDARD-Quellbilder, erstellt und liest Sessions, entwickelt genau einen Tier
+und verwaltet vier getrennte Candidate-Slots. Eine funktionale Workshop-Seite
+und die reale LM-Studio-/ComfyUI-Abnahme folgen noch.
 
 ## Qualität und Mitwirkung
 

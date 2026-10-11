@@ -9,18 +9,22 @@
 | Teilgebiet | Code / Evidenz | Was das noch nicht beweist |
 | --- | --- | --- |
 | Kartendomäne | [Immutable Card-/Trait-Fakten](../../comfyreview/domain/card_battler) | Keine durchgehende Spieler-Kartenlebenszeit |
-| Externes Modell | [Read-only Card Battler SQLite Model](../../comfyreview/repositories/sqlite/card_battler_model_resource.py), [Tests](../../tests/test_card_battler_model.py) | Produktionsinhalt der externen Modell-DB ist nicht eingecheckt |
-| Card-Imprint-Mapping | [Deterministischer Mapper](../../comfyreview/application/card_battler_mapping.py) | Noch kein Kartenentwicklungs-Befehl in der öffentlichen API |
+| Externes Modell | [Read-only Card Battler SQLite Model](../../comfyreview/repositories/sqlite/card_battler_model_resource.py), [Tests](../../tests/test_card_battler_model.py) | Für Card Battler erforderlich und später mitzuliefern; reale Inhaltsabnahme bleibt offen |
+| Card-Imprint-Mapping | [Deterministischer Mapper](../../comfyreview/application/card_battler_mapping.py) | Noch keine reale Bild-/Modellabnahme |
 | Mechaniken/Stats | [Materialisierung und Regeltext](../../comfyreview/application/card_battler_rules.py), [Tests](../../tests/test_card_battler_rule_rendering.py) | Keine ausführbare vollständige Matchsimulation |
 | Tier/Trait-Entwicklung | [Service](../../comfyreview/application/card_battler_development_service.py), [Golden Path](../../tests/test_card_battler_development_golden_path.py) | Kein integrierter Post-Match-Experience-/Evolution-Flow |
 | Visuelle Projektion | [Visual-Prompt-Projektion](../../comfyreview/application/card_battler_visual_projection.py) | Kein fertig gerendertes Card-Face und keine spielerseitige Komposition |
-| Semantische Bildanalyse | [Strikter Stage-1-Analyzer](../../comfyreview/application/card_battler_semantics.py), [kanonischer Bildadapter](../../comfyreview/providers/card_source_images.py) | Noch keine reale Modellabnahme oder verdrahtete Factory/API |
+| Semantische Bildanalyse | [Strikter Stage-1-Analyzer](../../comfyreview/application/card_battler_semantics.py), [kanonischer Bildadapter](../../comfyreview/providers/card_source_images.py) | Noch keine reale Modellabnahme |
 | Kosmetische Kartentexte | [Stage-3-Realizer](../../comfyreview/application/card_battler_presentation.py) | Keine Autorität über Regeln und noch keine reale Modellabnahme |
-| Wiederverwendbare Factory | [Orchestrator](../../comfyreview/application/card_battler_factory.py) | Noch keine API-, Candidate- oder UI-Integration |
-| Isolierte POC-Runtime | [Versionierter Schema-Owner](../../comfyreview/repositories/sqlite/card_battler_runtime_schema.py), [Session-Repository](../../comfyreview/repositories/sqlite/card_battler_sessions.py), [Create/Develop-Service](../../comfyreview/application/card_battler_session_service.py) | Candidate-Lifecycle vorhanden; noch keine API, UI oder reale Providerprobe |
-| Img2img-Handoff | [Dedizierter Blueprint](../../data/workflows/card-evolution/v1.json), [Multipart-Stager](../../comfyreview/providers/comfyui_uploads.py), [Vierer-Orchestrator](../../comfyreview/application/card_battler_evolution.py) | Noch keine API/UI oder reale ComfyUI-Abnahme |
+| Wiederverwendbare Factory | [Orchestrator](../../comfyreview/application/card_battler_factory.py) | API verdrahtet; Workshop-UI und reale Abnahme fehlen |
+| Isolierte POC-Runtime | [Versionierter Schema-Owner](../../comfyreview/repositories/sqlite/card_battler_runtime_schema.py), [Session-Repository](../../comfyreview/repositories/sqlite/card_battler_sessions.py), [Create/Develop-Service](../../comfyreview/application/card_battler_session_service.py) | Revision-sichere API vorhanden; noch keine UI oder reale Providerprobe |
+| Img2img-Handoff | [Dedizierter Blueprint](../../data/workflows/card-evolution/v1.json), [Multipart-Stager](../../comfyreview/providers/comfyui_uploads.py), [Vierer-Orchestrator](../../comfyreview/application/card_battler_evolution.py) | Vier Slots und API vorhanden; noch keine UI oder reale ComfyUI-Abnahme |
 
-Die [App](../../comfyreview/bootstrap.py) erzeugt Modell-Adapter und Mapper; die [registrierten API-Router](../../routers/api_v2/__init__.py) bieten jedoch **keine** vollständigen Card-Crafting-/Deck-/Match-Operationen. Genau diese Trennung ist wichtig: **funktionierender Bibliotheks-Code ≠ spielbarer Battler**.
+Die [App](../../comfyreview/bootstrap.py) verdrahtet den Card-Factory-POC lazy;
+der [Card-Factory-Router](../../routers/api_v2/card_factory.py) bietet Create,
+Get, Develop, Generate und Accept. Es gibt weiterhin **keine** Collection-,
+Deck- oder Match-Operationen. Genau diese Trennung ist wichtig:
+**funktionierender POC-Workflow ≠ spielbarer Battler**.
 
 ## Konkreter Erstversuch: eine Karte von der Bildwahl bis zur Sammlung
 

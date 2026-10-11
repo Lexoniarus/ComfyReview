@@ -145,6 +145,10 @@ class SqliteCardSessionRepository:
                 raise CardSessionConflictError(
                     "Card session revision is stale"
                 )
+            connection.execute(
+                "DELETE FROM card_candidates WHERE session_id = ?",
+                (session.session_id,),
+            )
             connection.commit()
             return session
         except Exception:
