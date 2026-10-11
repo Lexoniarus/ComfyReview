@@ -1,6 +1,14 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_card_catalog:CardPoolCatalogService.list_cards": (
+        "tests/test_card_pool_catalog.py::"
+        "test_card_pool_catalog_lists_and_requires_current_cards"
+    ),
+    "comfyreview.application.card_battler_card_catalog:CardPoolCatalogService.get": (
+        "tests/test_card_pool_catalog.py::"
+        "test_card_pool_catalog_lists_and_requires_current_cards"
+    ),
     "comfyreview.application.card_battler_candidate_group_catalog:CardCandidateGroupCatalogService.list_groups": (
         "tests/test_card_candidate_group_catalog.py::"
         "test_group_catalog_lists_reads_and_rejects_terminal_groups"
