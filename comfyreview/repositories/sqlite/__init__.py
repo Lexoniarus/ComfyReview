@@ -12,6 +12,9 @@ from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
 )
+from comfyreview.repositories.sqlite.card_battler_candidate_groups import (
+    SqliteCardCandidateGroupRepository,
+)
 from comfyreview.repositories.sqlite.card_battler_candidates import (
     SqliteCardCandidateRepository,
 )
@@ -129,6 +132,7 @@ __all__ = [
     "SqliteCardGenerationOutputRepository",
     "SqliteCardGenerationRepository",
     "SqliteCardCandidateRepository",
+    "SqliteCardCandidateGroupRepository",
     "SqliteCardMaterializationModelRepository",
     "SqliteCardBattlerModelResource",
     "CardBattlerModelSchemaRequirement",
