@@ -241,6 +241,14 @@ receives only the returned relative `LoadImage` name and hash. The provider
 owns multipart HTTP, timeout and response validation; paths do not cross into
 the application boundary.
 
+Card-specific generation lifecycle and output adapters implement the existing
+`GenerationRepository` and `GenerationOutputRepository` ports against the
+isolated runtime DB. They allow a separately composed `GenerationService` to
+reuse the same compiler, ComfyUI provider, capability validation and output
+collector without writing normal canonical generation history. Collected files
+must resolve beneath the shared output root's reserved `card-battler/`
+subdirectory; only a relative path and content hash are stored in the Card DB.
+
 ## 3. Canonical identity and runtime data
 
 The canonical database has an explicit schema version. Schema v18 is the active

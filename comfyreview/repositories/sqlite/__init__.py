@@ -15,6 +15,10 @@ from comfyreview.repositories.sqlite.canonical_schema import (
 from comfyreview.repositories.sqlite.card_battler_development_model import (
     SqliteCardDevelopmentModelRepository,
 )
+from comfyreview.repositories.sqlite.card_battler_generations import (
+    SqliteCardGenerationOutputRepository,
+    SqliteCardGenerationRepository,
+)
 from comfyreview.repositories.sqlite.card_battler_materialization_model import (
     SqliteCardMaterializationModelRepository,
 )
@@ -119,6 +123,8 @@ __all__ = [
     "CanonicalSchemaValidationError",
     "SqliteCardBattlerModelRepository",
     "SqliteCardDevelopmentModelRepository",
+    "SqliteCardGenerationOutputRepository",
+    "SqliteCardGenerationRepository",
     "SqliteCardMaterializationModelRepository",
     "SqliteCardBattlerModelResource",
     "CardBattlerModelSchemaRequirement",

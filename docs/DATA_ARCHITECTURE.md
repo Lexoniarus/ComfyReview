@@ -33,6 +33,10 @@ prototype store is not a final Collection or Character Chronicles schema.
 The implemented session repository defaults to a hard limit of 64 sessions,
 never silently evicts, uses monotone compare-and-swap revisions and preserves
 the source UID/hash, original semantic profile and imprint across updates.
+Card generation adapters store prepared requests, compiled graphs, lifecycle
+state and output identities only in this runtime database. Their output paths
+are relative to the reserved `card-battler/` output subtree. They do not insert
+rows into canonical `generations`, `images`, Review, Ranking or Arena tables.
 
 Stable IDs are identity. Paths are mutable evidence and file attributes:
 
