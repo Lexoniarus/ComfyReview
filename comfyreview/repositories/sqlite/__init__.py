@@ -31,6 +31,9 @@ from comfyreview.repositories.sqlite.card_battler_runtime_schema import (
     CARD_BATTLER_RUNTIME_SCHEMA_VERSION,
     CardBattlerRuntimeSchemaManager,
 )
+from comfyreview.repositories.sqlite.card_battler_sessions import (
+    SqliteCardSessionRepository,
+)
 from comfyreview.repositories.sqlite.catalog_evidence import (
     SqliteCatalogEvidenceRepository,
 )
@@ -123,6 +126,7 @@ __all__ = [
     "CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS",
     "CARD_BATTLER_RUNTIME_SCHEMA_VERSION",
     "CardBattlerRuntimeSchemaManager",
+    "SqliteCardSessionRepository",
     "SqliteCatalogEvidenceRepository",
     "LegacySchemaManager",
     "SqliteOutputImageRepository",

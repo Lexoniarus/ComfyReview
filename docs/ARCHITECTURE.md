@@ -203,10 +203,18 @@ seed is derived from source-image identity and semantic revision under
 inspectable. The Factory contains no eligibility, HTTP, session or persistence
 rules.
 
-No HTTP route, database write, Card-Battler session or startup model load is
-introduced by these boundaries. Fake-provider tests validate the contracts
-but do not establish a real LM Studio, hardware or model smoke; the project
-owner performs that final manual acceptance.
+Prototype session persistence is a separate application port implemented by
+`SqliteCardSessionRepository`. It stores immutable source-image provenance,
+the original semantic profile and imprint, plus the current specification,
+visual recipe, optional presentation and active image reference. Updates use a
+monotone revision and one short `BEGIN IMMEDIATE` compare-and-swap; external
+calls never occur inside that transaction. The repository has a hard bounded
+capacity and never silently evicts sessions.
+
+No HTTP route, session command service or startup model load is introduced by
+these boundaries. Fake-provider tests validate the contracts but do not
+establish a real LM Studio, hardware or model smoke; the project owner
+performs that final manual acceptance.
 
 ## 3. Canonical identity and runtime data
 

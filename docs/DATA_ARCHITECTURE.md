@@ -30,6 +30,9 @@ canonical database is read for an eligible source image but receives no Card
 writes. The separate `card_battler.sqlite3` remains a read-only authored
 model/rules resource. No foreign key crosses these database files, and the
 prototype store is not a final Collection or Character Chronicles schema.
+The implemented session repository defaults to a hard limit of 64 sessions,
+never silently evicts, uses monotone compare-and-swap revisions and preserves
+the source UID/hash, original semantic profile and imprint across updates.
 
 Stable IDs are identity. Paths are mutable evidence and file attributes:
 

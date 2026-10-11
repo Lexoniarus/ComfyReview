@@ -159,6 +159,15 @@ from comfyreview.application.card_battler_semantics import (
     SemanticImageAnalysisError,
     SemanticImageAnalyzer,
 )
+from comfyreview.application.card_battler_sessions import (
+    CardActiveImageKind,
+    CardSession,
+    CardSessionCapacityError,
+    CardSessionConflictError,
+    CardSessionNotFoundError,
+    CardSessionOperationState,
+    CardSessionRepository,
+)
 from comfyreview.application.card_battler_trait_selection import (
     InitialTraitCandidateScore,
     InitialTraitSelection,
@@ -658,6 +667,13 @@ __all__ = [
     "CardStatMaterializer",
     "CardSourceImage",
     "CardSourceImageProvider",
+    "CardActiveImageKind",
+    "CardSession",
+    "CardSessionCapacityError",
+    "CardSessionConflictError",
+    "CardSessionNotFoundError",
+    "CardSessionOperationState",
+    "CardSessionRepository",
     "CardPresentation",
     "CardPresentationRealizer",
     "CardPresentationResult",
