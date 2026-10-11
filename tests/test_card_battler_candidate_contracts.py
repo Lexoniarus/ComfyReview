@@ -12,6 +12,7 @@ from comfyreview.application.card_battler_candidate_groups import (
     CardCandidateGroupKind,
     CardCandidateGroupStatus,
     CardCandidateStatus,
+    CompleteCardCandidateArtifacts,
     candidate_materialization_seeds,
 )
 from comfyreview.domain.card_battler import (
@@ -85,6 +86,37 @@ def test_development_group_requires_card_identity_and_revision() -> None:
             reference_content_hash="hash-1",
             group_seed=42,
             candidates=_slots("group-1"),
+        )
+
+
+def test_submitted_candidate_requires_generation_provenance() -> None:
+    queued = _slots("group-1")[0]
+
+    with pytest.raises(ValueError, match="complete artifacts"):
+        CardCandidate(
+            candidate_id=queued.candidate_id,
+            group_id=queued.group_id,
+            group_revision=queued.group_revision,
+            slot_index=queued.slot_index,
+            status=CardCandidateStatus.SUBMITTED,
+            materialization_seed=queued.materialization_seed,
+        )
+    session = _session()
+    artifacts = CompleteCardCandidateArtifacts(
+        session.card,
+        session.visual_recipe,
+        session.presentation,
+        queued.materialization_seed,
+    )
+    with pytest.raises(ValueError, match="generation provenance"):
+        CardCandidate(
+            candidate_id=queued.candidate_id,
+            group_id=queued.group_id,
+            group_revision=queued.group_revision,
+            slot_index=queued.slot_index,
+            status=CardCandidateStatus.SUBMITTED,
+            materialization_seed=queued.materialization_seed,
+            artifacts=artifacts,
         )
 
 

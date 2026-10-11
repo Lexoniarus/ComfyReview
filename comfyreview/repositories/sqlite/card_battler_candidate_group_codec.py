@@ -113,6 +113,14 @@ def _decode_candidate(row: sqlite3.Row) -> CardCandidate:
             if row["generation_uid"] is None
             else str(row["generation_uid"])
         ),
+        recipe_hash=(
+            None if row["recipe_hash"] is None else str(row["recipe_hash"])
+        ),
+        generation_policy_revision=(
+            None
+            if row["generation_policy_revision"] is None
+            else str(row["generation_policy_revision"])
+        ),
         failure_category=(
             None
             if row["failure_category"] is None

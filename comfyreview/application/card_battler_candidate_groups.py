@@ -120,6 +120,8 @@ class CardCandidate:
     materialization_seed: int
     artifacts: CompleteCardCandidateArtifacts | None = None
     generation_uid: str | None = None
+    recipe_hash: str | None = None
+    generation_policy_revision: str | None = None
     failure_category: str | None = None
     output_image_uid: str | None = None
     output_content_hash: str | None = None
@@ -151,6 +153,18 @@ class CardCandidate:
             and self.artifacts is None
         ):
             raise ValueError("Submitted candidates require complete artifacts")
+        if self.status in (
+            CardCandidateStatus.SUBMITTED,
+            CardCandidateStatus.COMPLETED,
+            CardCandidateStatus.ACCEPTED,
+        ) and (
+            self.generation_uid is None
+            or self.recipe_hash is None
+            or self.generation_policy_revision is None
+        ):
+            raise ValueError(
+                "Submitted candidates require complete generation provenance"
+            )
         if (
             self.status
             in (
