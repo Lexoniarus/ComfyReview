@@ -235,10 +235,6 @@ class NativeLmStudioProvider:
         returned_id = self._identifier(
             payload.get("instance_id"), "instance id"
         )
-        if payload.get("status") != "unloaded":
-            raise LocalModelProtocolError(
-                "LM Studio unload response has no unloaded status"
-            )
         if returned_id != instance_id:
             raise LocalModelProtocolError(
                 "LM Studio unload response contains another instance id"

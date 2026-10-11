@@ -267,9 +267,7 @@ def test_provider_loads_and_unloads_with_separate_timeouts() -> None:
             LmStudioJsonResponse(
                 200, {"status": "loaded", "instance_id": "instance-1"}
             ),
-            LmStudioJsonResponse(
-                200, {"status": "unloaded", "instance_id": "instance-1"}
-            ),
+            LmStudioJsonResponse(200, {"instance_id": "instance-1"}),
         ]
     )
     provider = NativeLmStudioProvider(
@@ -346,16 +344,7 @@ def test_provider_rejects_invalid_unload_responses() -> None:
             "JSON object",
         ),
         (
-            LmStudioJsonResponse(
-                200, {"status": "other", "instance_id": "instance-1"}
-            ),
-            LocalModelProtocolError,
-            "unloaded status",
-        ),
-        (
-            LmStudioJsonResponse(
-                200, {"status": "unloaded", "instance_id": "instance-2"}
-            ),
+            LmStudioJsonResponse(200, {"instance_id": "instance-2"}),
             LocalModelProtocolError,
             "another instance",
         ),
