@@ -1,6 +1,14 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_card_pool:InitialCardCandidateAcceptancePolicy.select": (
+        "tests/test_card_candidate_acceptance.py::"
+        "test_acceptance_policy_requires_terminal_group_and_completed_candidate"
+    ),
+    "comfyreview.application.card_battler_card_pool:CardCandidateAcceptanceService.accept": (
+        "tests/test_card_candidate_acceptance.py::"
+        "test_acceptance_service_delegates_one_revision_safe_card_identity"
+    ),
     "comfyreview.application.card_battler_candidate_processing:CardCandidateGroupLifecycleProcessor.recover_interrupted": (
         "tests/test_card_candidate_group_worker.py::"
         "test_lifecycle_processor_dispatches_composition_submission_and_polling"
