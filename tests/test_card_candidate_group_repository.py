@@ -174,6 +174,7 @@ def test_sqlite_repository_persists_generation_transitions_atomically(
     assert completed.candidates[0].status is CardCandidateStatus.COMPLETED
     assert completed.candidates[0].output_image_uid == "image-0"
     assert completed.status is CardCandidateGroupStatus.GENERATING
+    assert repository.generating_groups() == (completed,)
 
 
 def _composed_group(repository: SqliteCardCandidateGroupRepository):

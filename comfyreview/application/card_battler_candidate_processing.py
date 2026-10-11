@@ -8,6 +8,10 @@ from typing import Protocol
 
 from comfyreview.application.card_battler_candidate_groups import (
     CardCandidateGroupRepository,
+    CardCandidateStatus,
+)
+from comfyreview.application.card_battler_candidate_image_service import (
+    CardCandidateImageService,
 )
 from comfyreview.application.card_battler_factory import CardFactory
 from comfyreview.application.card_battler_semantics import (
@@ -84,6 +88,58 @@ class InitialCardCandidateGroupProcessor:
             },
         )
         return True
+
+
+class CardCandidateGroupLifecycleProcessor:
+    """Advance composition, submission, or observation by one bounded pass."""
+
+    def __init__(
+        self,
+        *,
+        composition: InitialCardCandidateGroupProcessor,
+        groups: CardCandidateGroupRepository,
+        images: CardCandidateImageService,
+    ) -> None:
+        self._composition = composition
+        self._groups = groups
+        self._images = images
+        self._poll_index = 0
+
+    def recover_interrupted(self) -> int:
+        """Fail only interrupted inference/composition work."""
+        return self._composition.recover_interrupted()
+
+    def process_next(self) -> bool:
+        """Advance one queued or generating group without a busy poll loop."""
+        if self._composition.process_next():
+            return True
+        groups = self._groups.generating_groups()
+        if not groups:
+            return False
+        composing = next(
+            (
+                group
+                for group in groups
+                if any(
+                    candidate.status is CardCandidateStatus.COMPOSING
+                    for candidate in group.candidates
+                )
+            ),
+            None,
+        )
+        if composing is not None:
+            self._images.submit(
+                composing.group_id,
+                expected_revision=composing.revision,
+            )
+            return True
+        group = groups[self._poll_index % len(groups)]
+        self._poll_index += 1
+        synchronized = self._images.synchronize(
+            group.group_id,
+            expected_revision=group.revision,
+        )
+        return synchronized.revision != group.revision
 
 
 class CardCandidateGroupProcessingPass(Protocol):

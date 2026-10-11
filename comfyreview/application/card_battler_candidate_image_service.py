@@ -89,13 +89,18 @@ class CardCandidateImageService:
             ):
                 raise ValueError("candidate reference image changed")
             staged = self._stager.stage(reference)
+            candidates = tuple(
+                candidate
+                for candidate in group.candidates
+                if candidate.status is CardCandidateStatus.COMPOSING
+            )
             plans = tuple(
                 self._policy.build(
                     group,
                     candidate,
                     staged_reference=staged.relative_name,
                 )
-                for candidate in group.candidates
+                for candidate in candidates
             )
         except (ComfyUiError, FileNotFoundError, OSError, ValueError) as error:
             return self._fail_candidates(
@@ -103,7 +108,7 @@ class CardCandidateImageService:
                 failure_category=type(error).__name__,
             )
         current = group
-        for candidate, plan in zip(group.candidates, plans, strict=True):
+        for candidate, plan in zip(candidates, plans, strict=True):
             try:
                 submission = self._generations.submit(plan.request)
             except GenerationReconciliationRequired as error:

@@ -287,6 +287,10 @@ class CardCandidateGroupRepository(Protocol):
         """Fail composing groups left behind by an interrupted process."""
         ...
 
+    def generating_groups(self) -> tuple[CardCandidateGroup, ...]:
+        """Return groups that still need image lifecycle work."""
+        ...
+
     def mark_submitted(
         self,
         candidate_id: str,

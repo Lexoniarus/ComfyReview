@@ -319,6 +319,21 @@ class SqliteCardCandidateGroupRepository:
         finally:
             connection.close()
 
+    def generating_groups(self) -> tuple[CardCandidateGroup, ...]:
+        """Return groups that still need image lifecycle work."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                """
+                SELECT group_id FROM card_candidate_groups
+                WHERE status = ? ORDER BY created_at, group_id
+                """,
+                (CardCandidateGroupStatus.GENERATING.value,),
+            ).fetchall()
+        finally:
+            connection.close()
+        return tuple(self._required(str(row["group_id"])) for row in rows)
+
     def mark_submitted(
         self,
         candidate_id: str,

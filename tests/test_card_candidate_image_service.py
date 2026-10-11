@@ -219,6 +219,50 @@ def test_image_service_retains_ambiguous_generation_for_reconciliation(
     assert ambiguous.failure_category is None
 
 
+def test_image_service_resumes_only_unsubmitted_slots_after_restart(
+    tmp_path: Path,
+) -> None:
+    group = _composed_group(tmp_path)
+    database_path = tmp_path / "card-runtime.sqlite3"
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO card_generations(
+                generation_uid, status, prompt_id, prepared_request_json,
+                compiled_workflow_json, workflow_hash,
+                output_policy_json, output_bindings_json
+            ) VALUES ('existing-generation', 'submitted', 'existing-prompt',
+                      '{}', '{}', 'hash', '{}', '[]')
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    repository = SqliteCardCandidateGroupRepository(database_path)
+    partial = repository.mark_submitted(
+        group.candidates[0].candidate_id,
+        expected_revision=group.revision,
+        generation_uid="existing-generation",
+        recipe_hash="existing-recipe",
+        generation_policy_revision=(CARD_CANDIDATE_GENERATION_POLICY_REVISION),
+    )
+    generations = _Generations(database_path)
+    service, _ = _service(tmp_path, generations)
+
+    resumed = service.submit(
+        group.group_id,
+        expected_revision=partial.revision,
+    )
+
+    assert len(generations.requests) == 3
+    assert resumed.candidates[0].generation_uid == "existing-generation"
+    assert all(
+        candidate.status is CardCandidateStatus.SUBMITTED
+        for candidate in resumed.candidates
+    )
+
+
 def test_image_service_synchronizes_only_validated_primary_outputs(
     tmp_path: Path,
 ) -> None:

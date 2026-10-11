@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from threading import Event
+from types import SimpleNamespace
 
 import pytest
 
+from comfyreview.application.card_battler_candidate_groups import (
+    CardCandidateStatus,
+)
 from comfyreview.application.card_battler_candidate_processing import (
+    CardCandidateGroupLifecycleProcessor,
     CardCandidateGroupWorker,
 )
+from tests.test_card_candidate_generation_policy import _composed_group
 
 
 class _Processor:
@@ -55,3 +62,108 @@ def test_candidate_group_worker_does_not_start_after_recovery_failure() -> (
 
     assert worker.stop() is True
     assert processor.process_calls == 0
+
+
+class _LifecycleComposition:
+    def __init__(self, processed: bool) -> None:
+        self.processed = processed
+
+    def recover_interrupted(self):
+        return 2
+
+    def process_next(self):
+        return self.processed
+
+
+class _LifecycleGroups:
+    def __init__(self, *groups) -> None:
+        self.groups = groups
+
+    def generating_groups(self):
+        return self.groups
+
+
+class _LifecycleImages:
+    def __init__(self, *, revision_changed: bool = True) -> None:
+        self.revision_changed = revision_changed
+        self.submitted = []
+        self.synchronized = []
+
+    def submit(self, group_id, *, expected_revision):
+        self.submitted.append((group_id, expected_revision))
+
+    def synchronize(self, group_id, *, expected_revision):
+        self.synchronized.append((group_id, expected_revision))
+        increment = 1 if self.revision_changed else 0
+        return SimpleNamespace(revision=expected_revision + increment)
+
+
+def test_lifecycle_processor_dispatches_composition_submission_and_polling(
+    tmp_path,
+) -> None:
+    group = _composed_group(tmp_path)
+    images = _LifecycleImages()
+    composition = _LifecycleComposition(True)
+    lifecycle = CardCandidateGroupLifecycleProcessor(
+        composition=composition,
+        groups=_LifecycleGroups(group),
+        images=images,
+    )
+
+    assert lifecycle.recover_interrupted() == 2
+    assert lifecycle.process_next() is True
+    assert images.submitted == []
+
+    composition.processed = False
+    assert lifecycle.process_next() is True
+    assert images.submitted == [(group.group_id, group.revision)]
+
+    submitted = replace(
+        group,
+        candidates=tuple(
+            replace(
+                candidate,
+                status=CardCandidateStatus.SUBMITTED,
+                generation_uid=f"generation-{candidate.slot_index}",
+                recipe_hash="recipe-hash",
+                generation_policy_revision="generation-v1",
+            )
+            for candidate in group.candidates
+        ),
+    )
+    groups = _LifecycleGroups(submitted)
+    lifecycle = CardCandidateGroupLifecycleProcessor(
+        composition=composition,
+        groups=groups,
+        images=images,
+    )
+
+    assert lifecycle.process_next() is True
+    assert images.synchronized[-1] == (group.group_id, group.revision)
+    images.revision_changed = False
+    assert lifecycle.process_next() is False
+
+    second = replace(
+        submitted,
+        group_id="group-2",
+        candidates=tuple(
+            replace(
+                candidate,
+                candidate_id=f"group-2-candidate-{candidate.slot_index}",
+                group_id="group-2",
+            )
+            for candidate in submitted.candidates
+        ),
+    )
+    lifecycle = CardCandidateGroupLifecycleProcessor(
+        composition=composition,
+        groups=_LifecycleGroups(submitted, second),
+        images=images,
+    )
+
+    assert lifecycle.process_next() is False
+    assert lifecycle.process_next() is False
+    assert [item[0] for item in images.synchronized[-2:]] == [
+        group.group_id,
+        second.group_id,
+    ]
