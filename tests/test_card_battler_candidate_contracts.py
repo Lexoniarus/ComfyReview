@@ -12,6 +12,7 @@ from comfyreview.application.card_battler_candidate_groups import (
     CardCandidateGroupKind,
     CardCandidateGroupStatus,
     CardCandidateStatus,
+    candidate_materialization_seeds,
 )
 from comfyreview.domain.card_battler import (
     POC_DECK_ID,
@@ -24,6 +25,7 @@ from tests.test_card_battler_session_repository import _session
 
 
 def _slots(group_id: str) -> tuple[CardCandidate, ...]:
+    seeds = candidate_materialization_seeds("image-1", 42)
     return tuple(
         CardCandidate(
             candidate_id=f"candidate-{index}",
@@ -31,6 +33,7 @@ def _slots(group_id: str) -> tuple[CardCandidate, ...]:
             group_revision=1,
             slot_index=index,
             status=CardCandidateStatus.QUEUED,
+            materialization_seed=seeds[index],
         )
         for index in range(4)
     )

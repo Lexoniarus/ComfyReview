@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Protocol
 
 from comfyreview.application.card_battler_presentation import (
     CardPresentationResult,
+)
+from comfyreview.application.card_battler_random import (
+    DomainSeparatedCardRandom,
 )
 from comfyreview.application.card_battler_semantics import SemanticImageProfile
 from comfyreview.application.card_battler_visuals import VisualPromptRecipe
@@ -14,6 +18,33 @@ from comfyreview.domain.card_battler import CardImprint, StructuredCardSpec
 
 CARD_CANDIDATE_COUNT = 4
 CARD_CANDIDATE_MATERIALIZATION_REVISION = "card-candidate-materialization-v1"
+_SQLITE_INTEGER_MODULO = 2**63 - 1
+
+
+def candidate_materialization_seeds(
+    source_image_uid: str,
+    group_seed: int,
+) -> tuple[int, ...]:
+    """Derive four stable independent slot seeds before external work."""
+    normalized_uid = source_image_uid.strip()
+    if not normalized_uid:
+        raise ValueError("Candidate source image identity is required")
+    if group_seed < 0:
+        raise ValueError("Card candidate group seed must not be negative")
+    random = DomainSeparatedCardRandom(
+        (
+            CARD_CANDIDATE_MATERIALIZATION_REVISION,
+            normalized_uid,
+            str(group_seed),
+        )
+    )
+    return tuple(
+        random.integer(
+            f"initial-card-candidate:{slot_index}",
+            modulo=_SQLITE_INTEGER_MODULO,
+        )
+        for slot_index in range(CARD_CANDIDATE_COUNT)
+    )
 
 
 class CardCandidateGroupKind(StrEnum):
@@ -48,6 +79,14 @@ class CardCandidateStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class CardCandidateGroupConflictError(RuntimeError):
+    """Reject duplicate identities or stale group revisions."""
+
+
+class CardCandidateGroupNotFoundError(LookupError):
+    """Report an unknown Card candidate group identity."""
+
+
 @dataclass(frozen=True, slots=True)
 class CompleteCardCandidateArtifacts:
     """Hold every inspectable non-technical artifact of one candidate."""
@@ -78,6 +117,7 @@ class CardCandidate:
     group_revision: int
     slot_index: int
     status: CardCandidateStatus
+    materialization_seed: int
     artifacts: CompleteCardCandidateArtifacts | None = None
     generation_uid: str | None = None
     failure_category: str | None = None
@@ -89,6 +129,10 @@ class CardCandidate:
             raise ValueError("Candidate identities must be non-empty")
         if self.group_revision < 1:
             raise ValueError("Candidate group revision must be positive")
+        if self.materialization_seed < 0:
+            raise ValueError(
+                "Candidate materialization seed must be nonnegative"
+            )
         if not 0 <= self.slot_index < CARD_CANDIDATE_COUNT:
             raise ValueError("Candidate slot must be between zero and three")
         if (self.output_image_uid is None) != (
@@ -116,6 +160,12 @@ class CardCandidate:
             and self.output_image_uid is None
         ):
             raise ValueError("Completed candidates require an output image")
+        if (
+            self.artifacts is not None
+            and self.artifacts.materialization_seed
+            != self.materialization_seed
+        ):
+            raise ValueError("Candidate artifact seed does not match its slot")
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,3 +226,15 @@ class CardCandidateGroup:
             and self.source_card_revision < 1
         ):
             raise ValueError("Source Card revision must be positive")
+
+
+class CardCandidateGroupRepository(Protocol):
+    """Persist revisioned four-slot groups without external calls."""
+
+    def create(self, group: CardCandidateGroup) -> CardCandidateGroup:
+        """Atomically reserve one group and all four candidate slots."""
+        ...
+
+    def get(self, group_id: str) -> CardCandidateGroup | None:
+        """Return one group with its ordered candidate slots."""
+        ...

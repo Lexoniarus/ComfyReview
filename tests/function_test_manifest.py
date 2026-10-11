@@ -1,6 +1,14 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_candidate_groups:candidate_materialization_seeds": (
+        "tests/test_card_candidate_group_reservation.py::"
+        "test_candidate_seed_derivation_is_stable_and_group_separated"
+    ),
+    "comfyreview.application.card_battler_candidate_group_service:InitialCardCandidateGroupService.reserve": (
+        "tests/test_card_candidate_group_reservation.py::"
+        "test_initial_group_reservation_does_not_run_analysis_or_mapping"
+    ),
     (
         "comfyreview.application.card_battler_generation_prompt:"
         "CardEvolutionDebugPromptRenderer.render"

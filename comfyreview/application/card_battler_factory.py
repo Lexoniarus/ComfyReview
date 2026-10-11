@@ -8,8 +8,8 @@ from dataclasses import dataclass
 
 from comfyreview.application.card_battler_candidate_groups import (
     CARD_CANDIDATE_COUNT,
-    CARD_CANDIDATE_MATERIALIZATION_REVISION,
     CompleteCardCandidateArtifacts,
+    candidate_materialization_seeds,
 )
 from comfyreview.application.card_battler_common import CommonCardMaterializer
 from comfyreview.application.card_battler_mapping import (
@@ -20,9 +20,6 @@ from comfyreview.application.card_battler_model import CardBattlerModelInvalid
 from comfyreview.application.card_battler_presentation import (
     CardPresentationRealizer,
     CardPresentationResult,
-)
-from comfyreview.application.card_battler_random import (
-    DomainSeparatedCardRandom,
 )
 from comfyreview.application.card_battler_semantics import (
     CardSourceImage,
@@ -36,7 +33,6 @@ from comfyreview.application.card_battler_visuals import VisualPromptRecipe
 from comfyreview.domain.card_battler import StructuredCardSpec
 
 CARD_SOURCE_SEED_REVISION = "card-source-seed-v1"
-_SQLITE_INTEGER_MODULO = 2**63 - 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,8 +135,7 @@ class CardFactory:
         source_seed = self._source_seed(semantic_profile)
         mapping = self._mapper(semantic_profile, explicit_seed=source_seed)
         candidate_seeds = self._candidate_seeds(
-            semantic_profile,
-            source_seed=source_seed,
+            semantic_profile.image_uid,
             group_seed=group_seed,
         )
         cards = self._materializer.materialize_candidates(
@@ -178,27 +173,11 @@ class CardFactory:
 
     @staticmethod
     def _candidate_seeds(
-        semantic_profile: SemanticImageProfile,
+        source_image_uid: str,
         *,
-        source_seed: int,
         group_seed: int,
     ) -> tuple[int, ...]:
-        random = DomainSeparatedCardRandom(
-            (
-                CARD_CANDIDATE_MATERIALIZATION_REVISION,
-                semantic_profile.image_uid,
-                semantic_profile.semantic_revision,
-                str(source_seed),
-                str(group_seed),
-            )
-        )
-        return tuple(
-            random.integer(
-                f"initial-card-candidate:{slot_index}",
-                modulo=_SQLITE_INTEGER_MODULO,
-            )
-            for slot_index in range(CARD_CANDIDATE_COUNT)
-        )
+        return candidate_materialization_seeds(source_image_uid, group_seed)
 
     @staticmethod
     def _validate_same_dna(
