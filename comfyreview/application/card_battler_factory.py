@@ -6,14 +6,23 @@ import hashlib
 import json
 from dataclasses import dataclass
 
+from comfyreview.application.card_battler_candidate_groups import (
+    CARD_CANDIDATE_COUNT,
+    CARD_CANDIDATE_MATERIALIZATION_REVISION,
+    CompleteCardCandidateArtifacts,
+)
 from comfyreview.application.card_battler_common import CommonCardMaterializer
 from comfyreview.application.card_battler_mapping import (
     CardImprintMapper,
     CardImprintMappingResult,
 )
+from comfyreview.application.card_battler_model import CardBattlerModelInvalid
 from comfyreview.application.card_battler_presentation import (
     CardPresentationRealizer,
     CardPresentationResult,
+)
+from comfyreview.application.card_battler_random import (
+    DomainSeparatedCardRandom,
 )
 from comfyreview.application.card_battler_semantics import (
     CardSourceImage,
@@ -27,6 +36,7 @@ from comfyreview.application.card_battler_visuals import VisualPromptRecipe
 from comfyreview.domain.card_battler import StructuredCardSpec
 
 CARD_SOURCE_SEED_REVISION = "card-source-seed-v1"
+_SQLITE_INTEGER_MODULO = 2**63 - 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +58,24 @@ class CardFactoryResult:
     source_image: CardSourceImage
     artifacts: DeterministicCardArtifacts
     presentation: CardPresentationResult
+
+
+@dataclass(frozen=True, slots=True)
+class CardCandidateComposition:
+    """Expose one mapping and four complete same-DNA Card candidates."""
+
+    semantic_profile: SemanticImageProfile
+    mapping: CardImprintMappingResult
+    candidates: tuple[CompleteCardCandidateArtifacts, ...]
+    source_seed: int
+    group_seed: int
+    seed_revision: str = CARD_SOURCE_SEED_REVISION
+
+    def __post_init__(self) -> None:
+        if len(self.candidates) != CARD_CANDIDATE_COUNT:
+            raise ValueError(
+                "Card composition requires exactly four candidates"
+            )
 
 
 class CardFactory:
@@ -98,6 +126,106 @@ class CardFactory:
             artifacts.card,
         )
         return CardFactoryResult(source_image, artifacts, presentation)
+
+    def compose_candidates(
+        self,
+        semantic_profile: SemanticImageProfile,
+        *,
+        group_seed: int,
+    ) -> CardCandidateComposition:
+        """Compose four variants from one semantic mapping and shared DNA."""
+        if group_seed < 0:
+            raise ValueError("Card candidate group seed must not be negative")
+        source_seed = self._source_seed(semantic_profile)
+        mapping = self._mapper(semantic_profile, explicit_seed=source_seed)
+        candidate_seeds = self._candidate_seeds(
+            semantic_profile,
+            source_seed=source_seed,
+            group_seed=group_seed,
+        )
+        cards = self._materializer.materialize_candidates(
+            mapping.imprint,
+            candidate_seeds,
+        )
+        self._validate_same_dna(mapping, cards)
+        candidates = tuple(
+            CompleteCardCandidateArtifacts(
+                card=card,
+                visual_recipe=self._visual_projector.project(
+                    semantic_profile,
+                    card,
+                    explicit_seed=candidate_seed,
+                ),
+                presentation=self._presentation_realizer.realize(
+                    semantic_profile,
+                    card,
+                ),
+                materialization_seed=candidate_seed,
+            )
+            for card, candidate_seed in zip(
+                cards,
+                candidate_seeds,
+                strict=True,
+            )
+        )
+        return CardCandidateComposition(
+            semantic_profile,
+            mapping,
+            candidates,
+            source_seed,
+            group_seed,
+        )
+
+    @staticmethod
+    def _candidate_seeds(
+        semantic_profile: SemanticImageProfile,
+        *,
+        source_seed: int,
+        group_seed: int,
+    ) -> tuple[int, ...]:
+        random = DomainSeparatedCardRandom(
+            (
+                CARD_CANDIDATE_MATERIALIZATION_REVISION,
+                semantic_profile.image_uid,
+                semantic_profile.semantic_revision,
+                str(source_seed),
+                str(group_seed),
+            )
+        )
+        return tuple(
+            random.integer(
+                f"initial-card-candidate:{slot_index}",
+                modulo=_SQLITE_INTEGER_MODULO,
+            )
+            for slot_index in range(CARD_CANDIDATE_COUNT)
+        )
+
+    @staticmethod
+    def _validate_same_dna(
+        mapping: CardImprintMappingResult,
+        cards: tuple[StructuredCardSpec, ...],
+    ) -> None:
+        if len(cards) != CARD_CANDIDATE_COUNT:
+            raise CardBattlerModelInvalid(
+                "Card candidate materialization must return four Cards"
+            )
+        first = cards[0]
+        if len(first.traits) != 1:
+            raise CardBattlerModelInvalid(
+                "Card candidates require one shared initial trait"
+            )
+        first_trait = first.traits[0]
+        for card in cards:
+            if (
+                card.imprint != mapping.imprint
+                or card.stats.stat_profile_key != first.stats.stat_profile_key
+                or len(card.traits) != 1
+                or card.traits[0].lineage_key != first_trait.lineage_key
+                or card.traits[0].mechanic.key != first_trait.mechanic.key
+            ):
+                raise CardBattlerModelInvalid(
+                    "Card candidate materialization changed shared DNA"
+                )
 
     @staticmethod
     def _source_seed(semantic_profile: SemanticImageProfile) -> int:

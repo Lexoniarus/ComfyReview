@@ -109,6 +109,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_factory.py::"
         "test_factory_composes_existing_collaborators_in_order"
     ),
+    "comfyreview.application.card_battler_factory:CardFactory.compose_candidates": (
+        "tests/test_card_battler_factory.py::"
+        "test_factory_composes_four_candidates_from_one_mapping"
+    ),
     "comfyreview.application.card_battler_factory:CardFactory.create": (
         "tests/test_card_battler_factory.py::"
         "test_factory_runs_stage_one_once_and_keeps_presentation_degradation"
@@ -192,6 +196,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
     "comfyreview.application.card_battler_common:CommonCardMaterializer.materialize": (
         "tests/test_card_battler_common_materialization.py::"
         "test_common_card_materializer_has_a_stable_golden_vector"
+    ),
+    "comfyreview.application.card_battler_common:CommonCardMaterializer.materialize_candidates": (
+        "tests/test_card_battler_common_materialization.py::"
+        "test_common_card_materializer_builds_four_replayable_same_dna_variants"
     ),
     "comfyreview.application.card_battler_rules:CanonicalRuleRenderer.render": (
         "tests/test_card_battler_rule_rendering.py::"

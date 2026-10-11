@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 from typing import cast
 
+import pytest
+
 from comfyreview.application import (
     CardFactory,
     CardImprintMapper,
@@ -164,11 +166,24 @@ class _Mapper:
 class _Materializer:
     def __init__(self, calls: list[str]) -> None:
         self.calls = calls
+        self.candidate_seeds: list[tuple[int, ...]] = []
 
     def materialize(self, imprint, *, locale="de-DE"):
         self.calls.append("materialize")
         assert locale == "de-DE"
         return _card(imprint.explicit_seed)
+
+    def materialize_candidates(
+        self,
+        imprint,
+        candidate_seeds,
+        *,
+        locale="de-DE",
+    ):
+        self.calls.append("materialize-candidates")
+        assert locale == "de-DE"
+        self.candidate_seeds.append(candidate_seeds)
+        return tuple(_card(imprint.explicit_seed) for _seed in candidate_seeds)
 
 
 class _Projector:
@@ -178,7 +193,7 @@ class _Projector:
     def project(self, profile, card, *, explicit_seed):
         self.calls.append("project")
         assert profile == _profile()
-        assert card == _card(explicit_seed)
+        assert card.imprint.semantic_revision == profile.semantic_revision
         return _recipe(explicit_seed)
 
 
@@ -199,11 +214,12 @@ class _Presenter:
 
 def _factory(calls: list[str], presentation: CardPresentationResult):
     mapper = _Mapper(calls)
+    materializer = _Materializer(calls)
     return (
         CardFactory(
             analyzer=cast(SemanticImageAnalyzer, _Analyzer(calls)),
             mapper=cast(CardImprintMapper, mapper),
-            materializer=cast(CommonCardMaterializer, _Materializer(calls)),
+            materializer=cast(CommonCardMaterializer, materializer),
             visual_projector=cast(VisualPromptProjector, _Projector(calls)),
             presentation_realizer=cast(
                 CardPresentationRealizer,
@@ -211,12 +227,13 @@ def _factory(calls: list[str], presentation: CardPresentationResult):
             ),
         ),
         mapper,
+        materializer,
     )
 
 
 def test_factory_composes_existing_collaborators_in_order() -> None:
     calls: list[str] = []
-    factory, mapper = _factory(
+    factory, mapper, _ = _factory(
         calls,
         CardPresentationResult(None, CardPresentationStatus.INFERENCE_FAILED),
     )
@@ -243,7 +260,7 @@ def test_factory_runs_stage_one_once_and_keeps_presentation_degradation() -> (
         None,
         CardPresentationStatus.INVALID_OUTPUT,
     )
-    factory, _ = _factory(calls, degraded)
+    factory, _, _ = _factory(calls, degraded)
 
     result = factory.create(_source())
 
@@ -251,3 +268,61 @@ def test_factory_runs_stage_one_once_and_keeps_presentation_degradation() -> (
     assert result.source_image == _source()
     assert result.artifacts.semantic_profile == _profile()
     assert result.presentation is degraded
+
+
+def test_factory_composes_four_candidates_from_one_mapping() -> None:
+    calls: list[str] = []
+    presentation = CardPresentationResult(
+        None,
+        CardPresentationStatus.INFERENCE_FAILED,
+    )
+    factory, mapper, materializer = _factory(calls, presentation)
+
+    first = factory.compose_candidates(_profile(), group_seed=71)
+    second = factory.compose_candidates(_profile(), group_seed=71)
+
+    assert first == second
+    assert (
+        calls
+        == [
+            "map",
+            "materialize-candidates",
+            "project",
+            "present",
+            "project",
+            "present",
+            "project",
+            "present",
+            "project",
+            "present",
+        ]
+        * 2
+    )
+    assert len(mapper.seeds) == 2
+    assert mapper.seeds == [first.source_seed, first.source_seed]
+    assert materializer.candidate_seeds == [
+        tuple(item.materialization_seed for item in first.candidates),
+        tuple(item.materialization_seed for item in first.candidates),
+    ]
+    assert len(set(materializer.candidate_seeds[0])) == 4
+    assert all(
+        candidate.card.imprint == first.mapping.imprint
+        for candidate in first.candidates
+    )
+    assert {
+        candidate.visual_recipe.provenance.explicit_seed
+        for candidate in first.candidates
+    } == set(materializer.candidate_seeds[0])
+
+
+def test_factory_rejects_negative_candidate_group_seed() -> None:
+    factory, _, _ = _factory(
+        [],
+        CardPresentationResult(
+            None,
+            CardPresentationStatus.INFERENCE_FAILED,
+        ),
+    )
+
+    with pytest.raises(ValueError, match="must not be negative"):
+        factory.compose_candidates(_profile(), group_seed=-1)

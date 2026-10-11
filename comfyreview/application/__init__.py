@@ -76,6 +76,7 @@ from comfyreview.application.card_battler_evolution_images import (
 )
 from comfyreview.application.card_battler_factory import (
     CARD_SOURCE_SEED_REVISION,
+    CardCandidateComposition,
     CardFactory,
     CardFactoryResult,
     DeterministicCardArtifacts,
@@ -692,6 +693,7 @@ __all__ = [
     "CardBalancePolicy",
     "CardDevelopmentModelRepository",
     "CardDevelopmentPolicy",
+    "CardCandidateComposition",
     "CardFactory",
     "CardFactoryResult",
     "DeterministicCardArtifacts",

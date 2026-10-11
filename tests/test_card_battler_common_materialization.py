@@ -134,6 +134,63 @@ def test_common_card_materializer_has_a_stable_golden_vector(
     assert service.materialize(_imprint()) == spec
 
 
+def test_common_card_materializer_builds_four_replayable_same_dna_variants(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    model, materialization = _repositories(path)
+    service = _service(model, materialization)
+    seeds = (1, 2, 3, 4)
+
+    cards = service.materialize_candidates(_imprint(), seeds)
+
+    assert service.materialize_candidates(_imprint(), seeds) == cards
+    assert service.materialize_candidates(
+        _imprint(), tuple(reversed(seeds))
+    ) == tuple(reversed(cards))
+    assert len(cards) == 4
+    assert {card.imprint for card in cards} == {_imprint()}
+    assert {card.stats.stat_profile_key for card in cards} == {"offensive"}
+    assert {
+        (card.traits[0].lineage_key, card.traits[0].mechanic.key)
+        for card in cards
+    } == {("alpha", "alpha")}
+    parameter_vectors = {
+        tuple(
+            (parameter.key, parameter.value)
+            for branch in card.traits[0].mechanic.branches
+            for step in branch.steps
+            for parameter in step.parameters
+        )
+        for card in cards
+    }
+    assert len(parameter_vectors) > 1
+
+
+@pytest.mark.parametrize(
+    "seeds, message",
+    [
+        ((1, 2, 3), "four unique"),
+        ((1, 2, 3, 3), "four unique"),
+        ((1, 2, 3, -1), "must not be negative"),
+    ],
+)
+def test_common_card_materializer_rejects_invalid_candidate_seeds(
+    tmp_path: Path,
+    seeds: tuple[int, ...],
+    message: str,
+) -> None:
+    path = tmp_path / "model.sqlite3"
+    _create_model_database(path)
+    model, materialization = _repositories(path)
+
+    with pytest.raises(ValueError, match=message):
+        _service(model, materialization).materialize_candidates(
+            _imprint(), seeds
+        )
+
+
 class _TierOverrideRepository:
     def __init__(
         self,
