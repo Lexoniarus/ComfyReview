@@ -557,7 +557,11 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
         resources.card_battler_runtime_schema.prepare_startup()
         resources.generation_worker.start()
         try:
-            yield
+            resources.card_factory_runtime.start()
+            try:
+                yield
+            finally:
+                resources.card_factory_runtime.stop()
         finally:
             resources.generation_worker.stop()
 

@@ -1,24 +1,55 @@
-"""Lazy composition owner for the Card Factory prototype runtime."""
+"""Lazy composition owner for the complete Card-candidate POC runtime."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock
 
+from comfyreview.application.card_battler_candidate_group_catalog import (
+    CardCandidateGroupCatalogService,
+)
+from comfyreview.application.card_battler_candidate_group_service import (
+    InitialCardCandidateGroupService,
+)
+from comfyreview.application.card_battler_candidate_image_service import (
+    CardCandidateImageService,
+)
+from comfyreview.application.card_battler_candidate_images import (
+    CardCandidateGenerationPolicy,
+)
+from comfyreview.application.card_battler_candidate_processing import (
+    CardCandidateCompositionCoordinator,
+    CardCandidateGroupLifecycleProcessor,
+    CardCandidateGroupWorker,
+    DevelopmentCardCandidateGroupProcessor,
+    InitialCardCandidateGroupProcessor,
+)
+from comfyreview.application.card_battler_card_catalog import (
+    CardPoolCatalogService,
+)
+from comfyreview.application.card_battler_card_pool import (
+    CardCandidateAcceptanceService,
+    DevelopmentCardCandidateAcceptancePolicy,
+    InitialCardCandidateAcceptancePolicy,
+)
 from comfyreview.application.card_battler_common import CommonCardMaterializer
+from comfyreview.application.card_battler_deck import (
+    CardDeckPolicy,
+    CardDeckService,
+)
 from comfyreview.application.card_battler_development import DevelopmentPlanner
 from comfyreview.application.card_battler_development_addition import (
     CompatibleTraitAdditionPolicy,
+)
+from comfyreview.application.card_battler_development_groups import (
+    CardDevelopmentCandidateComposer,
+    CardDevelopmentCandidateGroupService,
 )
 from comfyreview.application.card_battler_development_improvement import (
     ExistingTraitImprovementPolicy,
 )
 from comfyreview.application.card_battler_development_service import (
     CardDevelopmentService,
-)
-from comfyreview.application.card_battler_evolution import (
-    CardEvolutionGenerationPolicy,
-    CardEvolutionService,
 )
 from comfyreview.application.card_battler_factory import CardFactory
 from comfyreview.application.card_battler_mapping import CardImprintMapper
@@ -32,21 +63,12 @@ from comfyreview.application.card_battler_presentation import (
 from comfyreview.application.card_battler_preview import (
     CardSourceEligibilityPolicy,
 )
-from comfyreview.application.card_battler_prototype import (
-    CardFactoryPrototypeService,
-)
 from comfyreview.application.card_battler_rules import (
     CanonicalRuleRenderer,
     MechanicMaterializer,
 )
 from comfyreview.application.card_battler_semantics import (
     SemanticImageAnalyzer,
-)
-from comfyreview.application.card_battler_session_queries import (
-    CardFactorySessionQueryService,
-)
-from comfyreview.application.card_battler_session_service import (
-    CardFactorySessionService,
 )
 from comfyreview.application.card_battler_trait_selection import (
     InitialTraitSelector,
@@ -65,11 +87,13 @@ from comfyreview.application.workflow_compilation import (
     WorkflowBlueprintRepository,
     WorkflowCompiler,
 )
-from comfyreview.providers.card_reference_images import (
-    CanonicalCardSessionReferenceImageProvider,
+from comfyreview.providers.card_candidate_group_identities import (
+    SecureCardCandidateGroupSeedSource,
+    UuidCardCandidateGroupIdentitySource,
 )
-from comfyreview.providers.card_session_identities import (
-    UuidCardSessionIdentitySource,
+from comfyreview.providers.card_identities import UuidCardIdentitySource
+from comfyreview.providers.card_reference_images import (
+    CanonicalCardCandidateReferenceImageProvider,
 )
 from comfyreview.providers.card_source_images import (
     CanonicalCardImageResolver,
@@ -92,8 +116,14 @@ from comfyreview.providers.lm_studio_structured_inference import (
 from comfyreview.providers.prompt_identities import (
     UuidGenerationIdentitySource,
 )
-from comfyreview.repositories.sqlite.card_battler_candidates import (
-    SqliteCardCandidateRepository,
+from comfyreview.repositories.sqlite.card_battler_candidate_groups import (
+    SqliteCardCandidateGroupRepository,
+)
+from comfyreview.repositories.sqlite.card_battler_card_pool import (
+    SqliteCardPoolRepository,
+)
+from comfyreview.repositories.sqlite.card_battler_deck import (
+    SqliteCardDeckRepository,
 )
 from comfyreview.repositories.sqlite.card_battler_development_model import (
     SqliteCardDevelopmentModelRepository,
@@ -111,9 +141,6 @@ from comfyreview.repositories.sqlite.card_battler_model import (
 from comfyreview.repositories.sqlite.card_battler_model_resource import (
     SqliteCardBattlerModelResource,
 )
-from comfyreview.repositories.sqlite.card_battler_sessions import (
-    SqliteCardSessionRepository,
-)
 from comfyreview.repositories.sqlite.card_battler_visual_model import (
     SqliteCardVisualModelRepository,
 )
@@ -122,18 +149,20 @@ from comfyreview.settings import Settings
 
 @dataclass(frozen=True, slots=True)
 class CardFactoryPrototypeServices:
-    """Expose the focused services required by Card API adapters."""
+    """Expose Application services required by Card HTTP adapters."""
 
-    sessions: CardFactorySessionService
-    queries: CardFactorySessionQueryService
-    evolution: CardEvolutionService
-    prototype: CardFactoryPrototypeService
-    candidates: SqliteCardCandidateRepository
+    initial_groups: InitialCardCandidateGroupService
+    groups: CardCandidateGroupCatalogService
+    acceptance: CardCandidateAcceptanceService
+    development_groups: CardDevelopmentCandidateGroupService
+    cards: CardPoolCatalogService
+    deck: CardDeckService
     outputs: SqliteCardGenerationOutputRepository
+    worker: CardCandidateGroupWorker
 
 
 class CardFactoryPrototypeRuntime:
-    """Build the Card service graph once on first Card use."""
+    """Build and own the Card-candidate service graph once per process."""
 
     def __init__(
         self,
@@ -161,6 +190,16 @@ class CardFactoryPrototypeRuntime:
                 self._services = self._build()
             return self._services
 
+    def start(self) -> None:
+        """Start the one owned Candidate worker after application startup."""
+        self.get().worker.start()
+
+    def stop(self) -> bool:
+        """Stop the Candidate worker if the service graph was initialized."""
+        with self._lock:
+            services = self._services
+        return True if services is None else services.worker.stop()
+
     def _build(self) -> CardFactoryPrototypeServices:
         settings = self._settings
         model = SqliteCardBattlerModelRepository(self._model_resource)
@@ -181,7 +220,7 @@ class CardFactoryPrototypeRuntime:
             settings.lm_studio_base_url,
             settings.lm_studio_api_token,
         )
-        runtime = LocalModelRuntime(
+        local_models = LocalModelRuntime(
             NativeLmStudioProvider(
                 transport,
                 list_timeout_seconds=settings.lm_studio_list_timeout_seconds,
@@ -199,12 +238,12 @@ class CardFactoryPrototypeRuntime:
         )
         analyzer = SemanticImageAnalyzer(
             model_repository=model,
-            runtime=runtime,
+            runtime=local_models,
             inference=inference,
             vision_model_id=settings.lm_studio_vision_model,
         )
         presentation = CardPresentationRealizer(
-            runtime=runtime,
+            runtime=local_models,
             inference=inference,
             text_model_id=settings.lm_studio_text_model,
         )
@@ -246,19 +285,18 @@ class CardFactoryPrototypeRuntime:
         )
 
         database_path = settings.card_battler_runtime_database_path
-        sessions = SqliteCardSessionRepository(database_path)
-        session_service = CardFactorySessionService(
+        groups = SqliteCardCandidateGroupRepository(database_path)
+        cards = SqliteCardPoolRepository(database_path)
+        identities = UuidCardCandidateGroupIdentitySource()
+        seeds = SecureCardCandidateGroupSeedSource()
+        source_images = CanonicalCardSourceImageProvider(self._image_resolver)
+        initial_groups = InitialCardCandidateGroupService(
             image_contexts=self._image_contexts,
-            source_images=CanonicalCardSourceImageProvider(
-                self._image_resolver
-            ),
+            source_images=source_images,
             eligibility=CardSourceEligibilityPolicy(),
-            factory=factory,
-            sessions=sessions,
-            identities=UuidCardSessionIdentitySource(),
-            development=development_service,
-            visual_projector=projector,
-            presentation_realizer=presentation,
+            groups=groups,
+            identities=identities,
+            seeds=seeds,
         )
 
         card_generations = SqliteCardGenerationRepository(database_path)
@@ -278,37 +316,71 @@ class CardFactoryPrototypeRuntime:
             ),
             identities=UuidGenerationIdentitySource(),
         )
-        candidates = SqliteCardCandidateRepository(database_path)
-        evolution = CardEvolutionService(
-            sessions=sessions,
-            candidates=candidates,
-            reference_images=CanonicalCardSessionReferenceImageProvider(
-                CanonicalCardSourceImageProvider(self._image_resolver),
+        candidate_images = CardCandidateImageService(
+            groups=groups,
+            reference_images=CanonicalCardCandidateReferenceImageProvider(
+                source_images,
                 card_outputs,
             ),
             stager=ComfyUiCardReferenceImageStager(
                 UrlLibMultipartUploadTransport(settings.comfyui_base_url)
             ),
-            policy=CardEvolutionGenerationPolicy(
+            policy=CardCandidateGenerationPolicy(
                 checkpoint=settings.card_evolution_checkpoint
             ),
             generations=generation_service,
             outputs=card_outputs,
         )
-        queries = CardFactorySessionQueryService(
-            sessions=session_service,
-            evolution=evolution,
-            candidates=candidates,
+        development_groups = CardDevelopmentCandidateGroupService(
+            cards=cards,
+            groups=groups,
+            identities=identities,
+            seeds=seeds,
+        )
+        composition = CardCandidateCompositionCoordinator(
+            initial=InitialCardCandidateGroupProcessor(
+                groups=groups,
+                source_images=source_images,
+                analyzer=analyzer,
+                factory=factory,
+            ),
+            development=DevelopmentCardCandidateGroupProcessor(
+                groups=groups,
+                cards=cards,
+                composer=CardDevelopmentCandidateComposer(
+                    development=development_service,
+                    visual_projector=projector,
+                    presentation_realizer=presentation,
+                ),
+            ),
+        )
+        worker = CardCandidateGroupWorker(
+            CardCandidateGroupLifecycleProcessor(
+                composition=composition,
+                groups=groups,
+                images=candidate_images,
+            )
         )
         return CardFactoryPrototypeServices(
-            sessions=session_service,
-            queries=queries,
-            evolution=evolution,
-            prototype=CardFactoryPrototypeService(
-                sessions=session_service,
-                queries=queries,
-                evolution=evolution,
+            initial_groups=initial_groups,
+            groups=CardCandidateGroupCatalogService(
+                groups=groups,
+                initial_groups=initial_groups,
             ),
-            candidates=candidates,
+            acceptance=CardCandidateAcceptanceService(
+                groups=groups,
+                cards=cards,
+                identities=UuidCardIdentitySource(),
+                policy=InitialCardCandidateAcceptancePolicy(),
+                development_policy=DevelopmentCardCandidateAcceptancePolicy(),
+            ),
+            development_groups=development_groups,
+            cards=CardPoolCatalogService(cards),
+            deck=CardDeckService(
+                decks=SqliteCardDeckRepository(database_path),
+                cards=cards,
+                policy=CardDeckPolicy(),
+            ),
             outputs=card_outputs,
+            worker=worker,
         )

@@ -157,6 +157,18 @@ class _RecordingGenerationWorker:
         return True
 
 
+class _RecordingCardFactoryRuntime:
+    def __init__(self, events: list[str]) -> None:
+        self._events = events
+
+    def start(self) -> None:
+        self._events.append("card-worker-start")
+
+    def stop(self) -> bool:
+        self._events.append("card-worker-stop")
+        return True
+
+
 def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     settings = load_settings(base_directory=tmp_path, environ={})
     return ApplicationContainer(
@@ -167,7 +179,10 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         ),
         card_battler_model=cast(CardBattlerModelRepository, object()),
         card_imprint_mapper=cast(CardImprintMapper, object()),
-        card_factory_runtime=cast(CardFactoryPrototypeRuntime, object()),
+        card_factory_runtime=cast(
+            CardFactoryPrototypeRuntime,
+            _RecordingCardFactoryRuntime(events),
+        ),
         output_images=_EmptyOutputImageCatalog(),
         file_urls=OutputFileUrlMapper(settings.output_root),
         image_contexts=cast(ImageContextQueryService, object()),
@@ -248,7 +263,12 @@ def test_lifespan_prepares_canonical_and_card_runtime_schemas(
     assert not container.settings.data_directory.exists()
 
     with TestClient(application):
-        assert events == ["canonical", "card-runtime", "worker-start"]
+        assert events == [
+            "canonical",
+            "card-runtime",
+            "worker-start",
+            "card-worker-start",
+        ]
         assert container.settings.trash_root.is_dir()
         assert container.settings.lora_export_root.is_dir()
         assert container.settings.workflows_directory.is_dir()
@@ -258,6 +278,8 @@ def test_lifespan_prepares_canonical_and_card_runtime_schemas(
         "canonical",
         "card-runtime",
         "worker-start",
+        "card-worker-start",
+        "card-worker-stop",
         "worker-stop",
     ]
 
@@ -276,6 +298,8 @@ def test_lifespan_preserves_schema_order_when_application_body_fails(
         "canonical",
         "card-runtime",
         "worker-start",
+        "card-worker-start",
+        "card-worker-stop",
         "worker-stop",
     ]
 
@@ -377,7 +401,20 @@ def test_card_factory_runtime_builds_its_graph_only_once(
         comfyui=cast(Any, object()),
         blueprints=cast(Any, object()),
     )
-    service_graph = cast(Any, object())
+
+    class _Worker:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+
+        def start(self) -> None:
+            self.events.append("start")
+
+        def stop(self) -> bool:
+            self.events.append("stop")
+            return True
+
+    worker = _Worker()
+    service_graph = cast(Any, type("Services", (), {"worker": worker})())
     calls = 0
 
     def build() -> Any:
@@ -390,3 +427,6 @@ def test_card_factory_runtime_builds_its_graph_only_once(
     assert runtime.get() is service_graph
     assert runtime.get() is service_graph
     assert calls == 1
+    runtime.start()
+    assert runtime.stop()
+    assert worker.events == ["start", "stop"]
