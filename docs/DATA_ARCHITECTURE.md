@@ -24,19 +24,25 @@ Curation runtime writes now go only to `comfyreview.sqlite3`; the old files are
 read-only import sources for these concerns. There are no dual-writes.
 
 The Card Factory proof is an explicit bounded exception with its own
-`card_battler_runtime.sqlite3`. It owns only Card-POC sessions, candidate slots,
-Card-specific generation lifecycle and their output identities. The normal
+`card_battler_runtime.sqlite3`. Its explicit schema v2 owns Candidate Groups,
+four complete Candidates per Group, current POC Cards, one ordered 40-Card POC
+Deck, Card-specific generation lifecycle and output identities. The normal
 canonical database is read for an eligible source image but receives no Card
 writes. The separate `card_battler.sqlite3` remains a read-only authored
 model/rules resource. No foreign key crosses these database files, and the
 prototype store is not a final Collection or Character Chronicles schema.
-The implemented session repository defaults to a hard limit of 64 sessions,
-never silently evicts, uses monotone compare-and-swap revisions and preserves
-the source UID/hash, original semantic profile and imprint across updates.
-Card generation adapters store prepared requests, compiled graphs, lifecycle
-state and output identities only in this runtime database. Their output paths
-are relative to the reserved `card-battler/` output subtree. They do not insert
-rows into canonical `generations`, `images`, Review, Ranking or Arena tables.
+
+The runtime schema owner initializes only an absent file and rejects schema v1
+or another unsupported version; repositories contain no DDL and perform no
+silent upgrade. Groups, Cards and Deck mutations use monotone compare-and-swap
+revisions. Initial Groups preserve the source UID/hash and the one original
+semantic profile and Imprint shared by their four candidate-specific Card
+materializations. Development Groups retain those facts and the stable
+`card_id`. Card generation adapters store prepared requests, compiled graphs,
+lifecycle state and output identities only in this runtime database. Their
+output paths are relative to the reserved `card-battler/` output subtree. They
+do not insert rows into canonical `generations`, `images`, Review, Ranking or
+Arena tables.
 
 Stable IDs are identity. Paths are mutable evidence and file attributes:
 

@@ -64,7 +64,15 @@ heutigen Entwicklungswegs.
 - [Tier-/Trait-Entwicklungsalgorithmen](../comfyreview/application/card_battler_development_service.py) und [Golden-Path-Tests](../tests/test_card_battler_development_golden_path.py);
 - [Visuelle Promptprojektion](../comfyreview/application/card_battler_visual_projection.py).
 
-Der [Bootstrap](../comfyreview/bootstrap.py) konstruiert einen Model-Adapter und Mapper. **Weder** die [registrierten API-Router](../routers/api_v2/__init__.py) **noch** die Browser-Templates enthalten eine vollständige Card-Battler-Collection, Deckverwaltung, Match-/Combat-API oder spielbare PvE-Oberfläche. Das externe Model-DB-File ist zudem **nicht** als Produktionsressource committed, weshalb sein realer Datenstand hier nicht verifizierbar ist.
+Der aktuelle [Bootstrap](../comfyreview/bootstrap.py) verdrahtet zusätzlich die
+isolierte Candidate-Group-Runtime. Der
+[Card-Factory-Router](../routers/api_v2/card_factory.py) und die Browserseiten
+enthalten einen POC-Kartenpool sowie genau ein revisioniertes, auf 40
+unterschiedliche Karten begrenztes POC-Deck. Das ist weiterhin **keine**
+endgültige Collection, Mehrdeckverwaltung, Match-/Combat-API oder spielbare
+PvE-Oberfläche. Die mitzuliefernde externe Model-DB ist eine erforderliche
+read-only Regelquelle; grüne Tests ersetzen nicht ihre fachliche oder reale
+Providerabnahme.
 
 Der **bereits vor dem Import** verfasste [Card-Battler-Zielplan vom 2. Oktober 2026](archive/card-battler-target-2026-10-02.md) dokumentiert frühere **ComfyReview-Planung**, nicht einen durch die neuen Character-Chronicles-Texte bestätigten gemeinsamen Folgeplan. Seine damaligen „approved“-/Phasenformulierungen dürfen für den Neustart nicht übernommen werden, ohne neu entschieden zu werden.
 

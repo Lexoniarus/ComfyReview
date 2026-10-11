@@ -10,7 +10,7 @@ ComfyReview hilft beim **Bewerten, Vergleichen, Kuratieren und Analysieren** gen
 - **Playground / Generator / ComfyUI-Integration** mit Workflow-Blueprint v4, nativer Generierung, Lifecycle und Output-Collection.
 - **Prompt-/LoRA-Katalog, Settings und Analytics** sowie Frontend V2 aus Jinja-Templates und nativen JavaScript-Modulen.
 - **Canonical SQLite Schema v18 ist im Code implementiert.** Ob die **private** laufende Datenbank bereits den finalen Normalisierungs-/Cutover-Schritt durchlaufen hat, ist daraus **nicht** ableitbar.
-- **Card Battler ist derzeit ein aktiver POC**: getestete Mechanik-, Karten-, Entwicklungs- und Visual-Prompt-Bausteine sowie ein funktionaler Card-Factory-Workshop mit isolierter Session-/Candidate-Runtime, aber kein spielbares Match-/Deck-Frontend.
+- **Card Battler ist derzeit ein aktiver POC**: getestete Mechanik-, Karten-, Entwicklungs- und Visual-Prompt-Bausteine sowie vollständige Vierer-Kartengruppen, ein persistenter POC-Kartenpool und ein einzelnes revisioniertes 40-Karten-POC-Deck. Eine spielbare Match-/PvE-Runtime und die reale Providerabnahme fehlen weiterhin.
 
 [Nachweisbarer Code](docs/IMPLEMENTATION_AUDIT.md) · [Kurzstatus](docs/project_status.md) · [Laufende Arbeiten](docs/ACTIVE_WORK.md) · [Card-Battler-POC](docs/pocs/card-battler.md).
 
@@ -51,8 +51,9 @@ Die lokale Modellgrundlage ist in den **Card-Factory-POC** verdrahtet, aber noch
 nicht durch einen realen Modell-Smoke des Projektinhabers abgenommen. Sie stellt
 typisierte Model-Lifecycle-, Text-, Vision- und JSON-Schema-Inferenzgrenzen
 bereit. LM Studio wird beim App-Start weder verbunden noch gestartet und
-Modelle werden nicht vorsorglich geladen; erst ein Card-Factory-Aufruf baut den
-gemeinsamen Runtime-Graph lazy auf.
+Modelle werden nicht vorsorglich geladen. Der Card-Worker und sein gemeinsamer
+Runtime-Graph werden beim App-Start vorbereitet; erst eine reservierte Gruppe
+verursacht externe Vision-, Text- oder ComfyUI-Aufrufe.
 
 Die vollständigen optionalen Variablen stehen in [`.env.example`](.env.example):
 ein API-Token, getrennte List-/Load-/Inference-/Unload-Timeouts sowie Vision-
@@ -66,17 +67,19 @@ Projektinhaber.
 Der Card-Factory-POC trennt seine Daten zusätzlich: Die externe
 `card_battler.sqlite3` ist für Card-Battler-Funktionen eine erforderliche,
 mitzuliefernde unveränderliche Model-/Regelquelle, während
-`card_battler_runtime.sqlite3` ausschließlich POC-Sessions, Kandidaten und
-Card-Generationen aufnehmen darf. Diese Einträge werden nicht in Review,
-Ranking, Arena oder die normale Generator-Historie geschrieben.
+`card_battler_runtime.sqlite3` ausschließlich Candidate Groups, vollständige
+Kandidaten, aktuelle POC-Karten, das einzelne POC-Deck und Card-Generationen
+aufnehmen darf. Diese Einträge werden nicht in Review, Ranking, Arena oder die
+normale Generator-Historie geschrieben.
 
 Die revision-sichere POC-API liegt unter `/api/v2/card-factory/`: Sie listet
-STANDARD-Quellbilder, erstellt und liest Sessions, entwickelt genau einen Tier
-und verwaltet vier getrennte Candidate-Slots. Die funktionalen Seiten
-`/card-factory` und `/card-workshop/{session_id}` machen diesen Ablauf
-bedienbar. Ein automatisierter Fake-Provider-Test beweist die persistierte
-Referenzkette über zwei Generationen; die reale LM-Studio-/ComfyUI- und
-Bildqualitätsabnahme durch den Projektinhaber bleibt offen.
+STANDARD-Quellbilder, reserviert und liest Candidate Groups, nimmt vollständige
+Karten in den Pool auf, startet Development Groups und verwaltet das POC-Deck.
+Die vier funktionalen Seiten `/card-factory`, `/card-candidate-groups`,
+`/card-candidate-groups/{group_id}` und `/card-deck` führen durch Quelle,
+Gruppenstatus, Vierer-Vergleich sowie Pool/Deck/Entwicklung. Automatisierte
+Tests prüfen die technischen Verträge; die reale LM-Studio-/ComfyUI-,
+Bildqualitäts- und Bedienabnahme durch den Projektinhaber bleibt offen.
 
 ## Qualität und Mitwirkung
 

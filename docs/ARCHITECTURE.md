@@ -18,9 +18,10 @@ drafted engineering boundary as permanent.
 
 **Current Card Battler POC:** tested read-only model adapters,
 CardImprint mapping, stat/mechanic/trait materialization, visual prompt
-projection and a functional Card Factory workshop exist in ComfyReview. They
-are **being developed**, not a finished card collection, deck engine or PvE
-game. [POC status](pocs/card-battler.md).
+projection, persistent four-Card Candidate Groups, a POC Card pool and one
+ordered 40-Card POC Deck exist in ComfyReview. They are **being developed**,
+not a final Collection, multi-deck engine, match runtime or PvE game.
+[POC status](pocs/card-battler.md).
 
 **Current Generator/Database work:** the native Generator was recently
 overhauled and is wired into the application; the catalogue/database
@@ -103,16 +104,17 @@ input only.
 
 The evolving Card Factory proof uses a second, deliberately isolated writable
 store, `card_battler_runtime.sqlite3`. Its dedicated schema owner may create a
-completely absent schema-v1 file atomically and validates every existing file;
-it never upgrades or repairs an unknown schema during startup. Ordinary Card
-repositories contain no DDL. The store is limited to prototype sessions,
-candidate slots, Card-specific generation lifecycle and Card-generated output
-identity. It is not the canonical ComfyReview review/catalog database and does
-not create Collection, Deck, Battle or XP facts.
+completely absent schema-v2 file atomically and validates every existing file;
+it never upgrades or repairs v1 or another unsupported schema during startup.
+Ordinary Card repositories contain no DDL. The store owns Candidate Groups,
+four complete Candidates per group, the current POC Card pool, one ordered
+40-Card POC Deck, Card-specific generation lifecycle and Card-generated output
+identity. These are bounded prototype facts, not the final Collection,
+multi-deck, Battle or XP model.
 
 The main `comfyreview.sqlite3` remains the read source for an initial canonical
-image and its content eligibility. Card workflows never write their sessions,
-generations or outputs there. The two databases therefore have no cross-file
+image and its content eligibility. Card workflows never write their Groups,
+Cards, Deck, generations or outputs there. The databases therefore have no cross-file
 foreign keys or dual writes; source image UID and content hash are captured as
 provenance in the Card runtime store. Existing compiler, provider and
 generation services are reused with separately injected Card persistence
@@ -205,27 +207,37 @@ seed is derived from source-image identity and semantic revision under
 inspectable. The Factory contains no eligibility, HTTP, session or persistence
 rules.
 
-Prototype session persistence is a separate application port implemented by
-`SqliteCardSessionRepository`. It stores immutable source-image provenance,
-the original semantic profile and imprint, plus the current specification,
-visual recipe, optional presentation and active image reference. Updates use a
-monotone revision and one short `BEGIN IMMEDIATE` compare-and-swap; external
-calls never occur inside that transaction. The repository has a hard bounded
-capacity and never silently evicts sessions.
+Candidate persistence is exposed through focused Group, Candidate, Card,
+Generation and Deck repository ports. The SQLite adapters store immutable
+source provenance, original semantics and Imprint DNA beside each initial
+group. Four candidate-specific specifications, recipes, presentations and
+generation references share the group's StatProfile and base mechanic. Short
+transactions reserve work and apply monotone revision compare-and-swap; no
+external call occurs while a SQLite transaction is open.
 
-`CardFactorySessionService` owns the current create/develop commands. Create
-first obtains live canonical image facts, applies the focused STANDARD-content
-eligibility policy, resolves accessible bytes through the canonical adapter,
-runs the Factory once and persists revision one. Develop requires an accepted
-candidate for the current tier, advances exactly once through
-`CardDevelopmentService`, then reprojects visuals from the original semantics
-and refreshes optional presentation text. It never reruns Stage 1 or imprint
-mapping, and the repository CAS is the only state mutation.
+`CardCandidateGroupService` reserves an initial group only after applying the
+focused STANDARD-content eligibility policy. `CardCandidateGroupWorker` is the
+single asynchronous lifecycle owner: it performs Stage 1 and Imprint mapping
+once for an initial group, composes four complete Cards, submits their images
+and reconciles submitted jobs after restart. Work interrupted during analysis
+or composition fails explicitly and is not silently inferred again. A complete
+initial-group rejection creates no Card; an explicit retry reserves a new
+group and therefore performs a new analysis and mapping.
 
-The Card Factory HTTP and workshop boundaries compose these services lazily;
-normal application startup still performs no model load. Fake-provider tests
-validate the contracts but do not establish a real LM Studio, hardware or
-model smoke; the project owner performs that final manual acceptance.
+Accepting a completed initial Candidate creates a stable `card_id` in the POC
+pool. A Development Group starts from that current Card, retains its original
+semantics, Imprint, StatProfile and identity, and composes four candidates that
+each advance exactly one adjacent tier with one legal primary Trait action.
+Rejecting such a group leaves the Card unchanged; accepting one candidate
+replaces only the current state through Card-revision CAS. The single POC Deck
+contains each `card_id` at most once, preserves explicit order, and rejects a
+41st entry.
+
+Application startup validates/builds the Card runtime graph and starts the
+worker, but does not load an LM Studio model or call ComfyUI without reserved
+work. Fake-provider tests validate the contracts but do not establish a real
+LM Studio, hardware, ComfyUI or model-quality smoke; the project owner performs
+that final manual acceptance.
 
 ### 2.4 Card evolution image handoff
 
@@ -251,39 +263,39 @@ collector without writing normal canonical generation history. Collected files
 must resolve beneath the shared output root's reserved `card-battler/`
 subdirectory; only a relative path and content hash are stored in the Card DB.
 
-`CardEvolutionService` reserves exactly four deterministic slots in one Card
-runtime transaction, then stages and submits outside the lock. Each request is
-built only from the current visual recipe and active reference, with separate
-`evolution:<tier>:candidate:<slot>` seed domains. Submission failures are
-stored per slot. Synchronization delegates job observation and output
-collection to the shared generation infrastructure and accepts only one
-persisted `primary` output. Candidate acceptance atomically changes the active
-image reference and visual tier; semantic profile, imprint and structured Card
-rules remain unchanged.
+`CardCandidateImageService` submits the four already persisted complete
+Candidates outside the reservation transaction. Each request is built only
+from that Candidate's current visual recipe and the Group's active reference,
+with separate `evolution:<tier>:candidate:<slot>` seed domains. Submission
+failures remain visible per slot. Synchronization delegates job observation
+and output collection to the shared generation infrastructure and accepts only
+one persisted `primary` output per Candidate.
 
-The Card Factory graph is composed by one lazy
-`CardFactoryPrototypeRuntime`. Building the normal application container does
-not open the model database or connect to LM Studio or ComfyUI. The first Card
-use resolves the active ruleset and then caches one shared graph containing the
-model resource, local-model runtime, deterministic policies, Card-only
-generation adapters and session services for the process lifetime.
+The Card Factory graph is composed by one `CardFactoryPrototypeRuntime`.
+Application startup resolves the active ruleset once, caches a shared graph
+containing the model resource, local-model runtime, deterministic policies and
+Card-only generation adapters, and starts the Candidate worker. This performs
+no LM Studio or ComfyUI call by itself.
 `card_battler.sqlite3` is a required read-only resource for Card Battler use and
 is intended to ship with the feature; absence or contract mismatch fails the
 Card request explicitly rather than creating or repairing model data.
 
 `routers/api_v2/card_factory.py` translates the prototype HTTP contract only.
 Its source query reuses the canonical image service with a repository-side
-`STANDARD` effective-content filter. Create, Get, Develop, Generate and Accept
-delegate to `CardFactoryPrototypeService`; every mutation carries an expected
-session revision. HTTP projections expose typed artifacts and mounted URLs,
-never SQLite rows or local paths.
+`STANDARD` effective-content filter. Group, Candidate-Accept, Card,
+Development and Deck commands delegate to focused application services; every
+state-changing command carries the relevant expected revision. HTTP
+projections expose typed artifacts and mounted URLs, never SQLite rows or local
+paths. The removed Session/Workshop endpoints are not a parallel legacy path.
 
-The pages `/card-factory` and `/card-workshop/{session_id}` use native ES
-modules over the shared browser `ApiClient`. The server projects eligibility,
-available actions and candidate acceptance state; the browser only dispatches
-commands and renders confirmed facts. Its lifecycle owner aborts in-flight
-requests, removes listeners and stops Candidate polling once all four slots
-are terminal.
+The pages `/card-factory`, `/card-candidate-groups`,
+`/card-candidate-groups/{group_id}` and `/card-deck` use native ES modules over
+the shared browser `ApiClient`. They cover source selection, asynchronous Group
+status, comparison of four complete Cards and the POC pool/deck/development
+flow. The server projects eligibility and available actions; the browser only
+dispatches commands and renders confirmed facts. Page controllers abort
+in-flight requests, remove listeners and stop polling when their lifecycle or
+terminal Group state requires it.
 
 ## 3. Canonical identity and runtime data
 
