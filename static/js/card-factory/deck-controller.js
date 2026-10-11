@@ -1,5 +1,6 @@
 /** @typedef {{deck: (options?: {signal?: AbortSignal}) => Promise<any>, addDeckCard: (cardId: string, revision: number, options?: {signal?: AbortSignal}) => Promise<any>, removeDeckCard: (cardId: string, revision: number, options?: {signal?: AbortSignal}) => Promise<any>, reorderDeck: (cardIds: Array<string>, revision: number, options?: {signal?: AbortSignal}) => Promise<any>, develop: (cardId: string, revision: number, options?: {signal?: AbortSignal}) => Promise<any>}} DeckApi */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, dispose: () => void}} RequestBoundary */
+/** @typedef {{deck: {revision: number, entries: Array<{card_id: string}>}, pool: Array<{card_id: string, revision: number}>}} DeckPayload */
 
 /** Own revision-safe deck mutations and Card development navigation. */
 export class CardDeckController {
@@ -9,6 +10,7 @@ export class CardDeckController {
     this.view = dependencies.view;
     this.requests = dependencies.requests;
     this.locationRef = dependencies.locationRef || window.location;
+    /** @type {DeckPayload|null} */
     this.payload = null;
   }
 
@@ -78,13 +80,14 @@ export class CardDeckController {
 
   /** @param {(revision: number, signal: AbortSignal) => Promise<any>} operation */
   async #deckMutation(operation) {
-    if (!this.payload) return;
+    const currentPayload = this.payload;
+    if (!currentPayload) return;
     this.view.setBusy(true);
     try {
       const deck = await this.requests.run((signal) =>
-        operation(Number(this.payload.deck.revision), signal),
+        operation(Number(currentPayload.deck.revision), signal),
       );
-      this.payload = { ...this.payload, deck };
+      this.payload = { ...currentPayload, deck };
       this.view.render(this.payload);
     } catch (error) {
       this.view.showError(errorMessage(error));

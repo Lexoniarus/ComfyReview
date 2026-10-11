@@ -35,6 +35,7 @@ export class CardCandidateGroupOverview {
       const payload = await this.requests.run((signal) =>
         this.api.groups({ signal }),
       );
+      /** @type {Array<Record<string, any>>} */
       const groups = Array.isArray(payload.items) ? payload.items : [];
       this.#render(groups);
       this.status.textContent = `${groups.length} Candidate-Gruppen`;
