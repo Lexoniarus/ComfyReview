@@ -18,6 +18,7 @@ from comfyreview.application.card_battler_presentation import (
 )
 from comfyreview.repositories.sqlite.card_battler_runtime_codec import (
     decode_card_spec,
+    decode_development_result,
     decode_imprint,
     decode_presentation,
     decode_semantic_profile,
@@ -98,6 +99,13 @@ def _decode_candidate(row: sqlite3.Row) -> CardCandidate:
                 presentation_status,
             ),
             materialization_seed=materialization_seed,
+            development=(
+                None
+                if row["development_result_json"] is None
+                else decode_development_result(
+                    str(row["development_result_json"])
+                )
+            ),
             materialization_revision=str(row["materialization_revision"]),
         )
     return CardCandidate(

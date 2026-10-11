@@ -19,6 +19,8 @@ from comfyreview.application.card_battler_visuals import (
     VisualPromptRecipe,
 )
 from comfyreview.domain.card_battler import (
+    CardDevelopmentProvenance,
+    CardDevelopmentResult,
     CardImprint,
     CardRulesProvenance,
     CardStats,
@@ -34,6 +36,7 @@ from comfyreview.domain.card_battler import (
     MaterializedTrait,
     MaterializedUsageLimit,
     StructuredCardSpec,
+    TraitDevelopmentAction,
 )
 
 RuntimeEncodedValue = (
@@ -42,6 +45,7 @@ RuntimeEncodedValue = (
     | StructuredCardSpec
     | VisualPromptRecipe
     | CardPresentation
+    | CardDevelopmentResult
 )
 
 
@@ -136,6 +140,45 @@ def decode_card_spec(payload: str) -> StructuredCardSpec:
                 provenance, "materialization_algorithm_revision"
             ),
             rule_renderer_revision=_text(provenance, "rule_renderer_revision"),
+        ),
+    )
+
+
+def decode_development_result(payload: str) -> CardDevelopmentResult:
+    """Decode one persisted exact-tier Development result."""
+    value = _object(payload)
+    action = _mapping(value, "action")
+    provenance = _mapping(value, "provenance")
+    previous = action.get("previous_trait")
+    if previous is not None and not isinstance(previous, dict):
+        raise ValueError("runtime previous trait must be an object")
+    return CardDevelopmentResult(
+        card=decode_card_spec(
+            json.dumps(
+                _mapping(value, "card"),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        ),
+        action=TraitDevelopmentAction(
+            action=cast(Any, _text(action, "action")),
+            trait_index=_integer(action, "trait_index"),
+            previous_trait=(
+                None
+                if previous is None
+                else _decode_trait(cast(dict[str, Any], previous))
+            ),
+            developed_trait=_decode_trait(_mapping(action, "developed_trait")),
+        ),
+        provenance=CardDevelopmentProvenance(
+            development_policy_key=_text(provenance, "development_policy_key"),
+            development_policy_version=_integer(
+                provenance, "development_policy_version"
+            ),
+            development_algorithm_revision=_text(
+                provenance, "development_algorithm_revision"
+            ),
         ),
     )
 

@@ -501,7 +501,8 @@ class SqliteCardCandidateGroupRepository:
                 group_revision = ?, status = ?,
                 structured_card_spec_json = ?, visual_recipe_json = ?,
                 presentation_json = ?, presentation_status = ?,
-                presentation_error_category = ?, failure_category = NULL,
+                presentation_error_category = ?, development_result_json = ?,
+                failure_category = NULL,
                 updated_at = datetime('now')
             WHERE candidate_id = ? AND group_revision = ?
             """,
@@ -513,6 +514,11 @@ class SqliteCardCandidateGroupRepository:
                 None if presentation is None else encode_value(presentation),
                 artifacts.presentation.status.value,
                 presentation_error,
+                (
+                    None
+                    if artifacts.development is None
+                    else encode_value(artifacts.development)
+                ),
                 candidate_id,
                 expected_revision,
             ),

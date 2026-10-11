@@ -14,7 +14,11 @@ from comfyreview.application.card_battler_random import (
 )
 from comfyreview.application.card_battler_semantics import SemanticImageProfile
 from comfyreview.application.card_battler_visuals import VisualPromptRecipe
-from comfyreview.domain.card_battler import CardImprint, StructuredCardSpec
+from comfyreview.domain.card_battler import (
+    CardDevelopmentResult,
+    CardImprint,
+    StructuredCardSpec,
+)
 
 CARD_CANDIDATE_COUNT = 4
 CARD_CANDIDATE_MATERIALIZATION_REVISION = "card-candidate-materialization-v1"
@@ -95,6 +99,7 @@ class CompleteCardCandidateArtifacts:
     visual_recipe: VisualPromptRecipe
     presentation: CardPresentationResult
     materialization_seed: int
+    development: CardDevelopmentResult | None = None
     materialization_revision: str = CARD_CANDIDATE_MATERIALIZATION_REVISION
 
     def __post_init__(self) -> None:
@@ -106,6 +111,10 @@ class CompleteCardCandidateArtifacts:
             raise ValueError("Candidate materialization revision is required")
         if self.visual_recipe.tier_ordinal != self.card.tier_ordinal:
             raise ValueError("Candidate recipe must match its Card tier")
+        if self.development is not None and self.development.card != self.card:
+            raise ValueError(
+                "Candidate development result must match its Card"
+            )
 
 
 @dataclass(frozen=True, slots=True)
