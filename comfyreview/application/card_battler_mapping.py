@@ -15,48 +15,15 @@ from comfyreview.application.card_battler_model import (
     FallbackCandidate,
     SemanticAffinity,
 )
+from comfyreview.application.card_battler_semantics import (
+    SemanticImageProfile,
+    SemanticSignal,
+)
 from comfyreview.domain.card_battler import CardImprint
 
 
 class CardImprintMappingError(RuntimeError):
     """Signal that a semantic profile cannot produce a legal CardImprint."""
-
-
-@dataclass(frozen=True, slots=True)
-class SemanticSignal:
-    """One stable semantic concept observation in integer milli-space."""
-
-    concept_key: str
-    strength_milli: int
-
-    def __post_init__(self) -> None:
-        if not self.concept_key.strip():
-            raise ValueError("semantic concept key must be non-empty")
-        if not isinstance(self.strength_milli, int) or isinstance(
-            self.strength_milli, bool
-        ):
-            raise ValueError("semantic strength must be an integer")
-        if not 0 <= self.strength_milli <= 1000:
-            raise ValueError("semantic strength must be between 0 and 1000")
-
-
-@dataclass(frozen=True, slots=True)
-class SemanticImageProfile:
-    """Typed, game-mechanic-free input produced by the future Stage 1."""
-
-    image_uid: str
-    semantic_revision: str
-    signals: tuple[SemanticSignal, ...]
-
-    def __post_init__(self) -> None:
-        if not self.image_uid.strip():
-            raise ValueError("image_uid must be non-empty")
-        if not self.semantic_revision.strip():
-            raise ValueError("semantic_revision must be non-empty")
-        object.__setattr__(self, "signals", tuple(self.signals))
-        keys = [signal.concept_key for signal in self.signals]
-        if len(keys) != len(set(keys)):
-            raise ValueError("duplicate semantic concept keys are invalid")
 
 
 @dataclass(frozen=True, slots=True)

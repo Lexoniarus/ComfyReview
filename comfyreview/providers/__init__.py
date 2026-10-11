@@ -1,5 +1,8 @@
 """Concrete external-system providers used by the composition root."""
 
+from comfyreview.providers.card_source_images import (
+    CanonicalCardSourceImageProvider,
+)
 from comfyreview.providers.comfyui import (
     JsonHttpResponse,
     NativeComfyUiProvider,
@@ -38,6 +41,7 @@ from comfyreview.providers.prompt_identities import (
 
 __all__ = [
     "CanonicalOutputImageCatalog",
+    "CanonicalCardSourceImageProvider",
     "LocalCurationFileManager",
     "LocalGenerationOutputSource",
     "LocalGenerationOutputRecoverySource",

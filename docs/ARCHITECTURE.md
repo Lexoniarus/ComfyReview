@@ -172,10 +172,24 @@ duplicate keys and non-finite numbers, and are independently validated with
 Draft 2020-12 before typed application data is returned. Provider-side schema
 enforcement is therefore an aid, not application authority.
 
-No HTTP route, database write, Card-Battler session or startup model load is
-introduced by this foundation. Fake-transport tests and CI validate the
-contracts but do not establish a real LM Studio, hardware or model smoke; the
-project owner performs that final manual acceptance.
+The Card Factory Stage-1 boundary now adds an injectable
+`SemanticImageAnalyzer`. It leases the configured vision model through the
+single runtime owner, submits a closed structured-output schema, validates the
+result again against the active read-only semantic vocabulary and returns only
+game-free visible-image facts plus controlled signals. A semantic revision
+binds the contract revision, model key, source-image hash and normalized
+result. The analyzer neither resolves paths nor decides Card rules.
+
+Source bytes are obtained through `CanonicalCardSourceImageProvider`, which
+first delegates UID resolution and output-root validation to the existing
+canonical review-image resolver. Only the resulting validated path is read;
+the application receives UID, MIME type, bytes and content hash, never the
+path. This avoids a second `image_uid` lookup policy.
+
+No HTTP route, database write, Card-Battler session, startup model load or
+fully composed Factory is introduced by these boundaries. Fake-provider tests
+validate the contracts but do not establish a real LM Studio, hardware or
+model smoke; the project owner performs that final manual acceptance.
 
 ## 3. Canonical identity and runtime data
 

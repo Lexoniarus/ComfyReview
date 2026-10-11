@@ -97,6 +97,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_visual_projection.py::"
         "test_visual_prompt_projector_builds_stable_golden_recipe"
     ),
+    "comfyreview.application.card_battler_semantics:SemanticImageAnalyzer.analyze": (
+        "tests/test_card_battler_semantics.py::"
+        "test_semantic_analyzer_uses_controlled_vocabulary_and_stable_profile"
+    ),
     "comfyreview.application.card_battler_development_service:CardDevelopmentService.advance": (
         "tests/test_card_battler_development_service.py::"
         "test_card_development_service_advances_one_tier_and_one_improvement"

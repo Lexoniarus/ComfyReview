@@ -14,6 +14,7 @@
 | Mechaniken/Stats | [Materialisierung und Regeltext](../../comfyreview/application/card_battler_rules.py), [Tests](../../tests/test_card_battler_rule_rendering.py) | Keine ausführbare vollständige Matchsimulation |
 | Tier/Trait-Entwicklung | [Service](../../comfyreview/application/card_battler_development_service.py), [Golden Path](../../tests/test_card_battler_development_golden_path.py) | Kein integrierter Post-Match-Experience-/Evolution-Flow |
 | Visuelle Projektion | [Visual-Prompt-Projektion](../../comfyreview/application/card_battler_visual_projection.py) | Kein fertig gerendertes Card-Face und keine spielerseitige Komposition |
+| Semantische Bildanalyse | [Strikter Stage-1-Analyzer](../../comfyreview/application/card_battler_semantics.py), [kanonischer Bildadapter](../../comfyreview/providers/card_source_images.py) | Noch keine reale Modellabnahme oder verdrahtete Factory/API |
 | Isolierte POC-Runtime | [Versionierter Schema-Owner](../../comfyreview/repositories/sqlite/card_battler_runtime_schema.py) | Noch keine verdrahteten Session-/Factory-Befehle oder reale Providerprobe |
 
 Die [App](../../comfyreview/bootstrap.py) erzeugt Modell-Adapter und Mapper; die [registrierten API-Router](../../routers/api_v2/__init__.py) bieten jedoch **keine** vollständigen Card-Crafting-/Deck-/Match-Operationen. Genau diese Trennung ist wichtig: **funktionierender Bibliotheks-Code ≠ spielbarer Battler**.
@@ -77,10 +78,11 @@ typisierten [`SemanticImageProfile` und den deterministischen
 `CardImprintMapper`](../../comfyreview/application/card_battler_mapping.py)
 sowie die getrennte
 [Regel-/Wertematerialisierung](../../comfyreview/application/card_battler_common.py).
-**Nicht** als fertiger End-to-End-Ablauf nachgewiesen ist dagegen die
-automatische Erstellung des semantischen Profils aus einem realen Bild samt
-Spielerfreigabe und vollständiger Kartenübernahme. Bildanalysemodell,
-Provider und Prüf-UI bleiben offen. Der erste Persistenzvertrag ist nun als
+Ein injizierbarer Stage-1-Analyzer und ein Adapter über die bestehende
+kanonische Bildauflösung sind inzwischen implementiert und isoliert getestet.
+**Nicht** als fertiger End-to-End-Ablauf nachgewiesen sind dagegen die reale
+Modellinferenz, Spielerfreigabe und vollständige Kartenübernahme. Factory,
+Provider-Komposition und Prüf-UI bleiben offen. Der erste Persistenzvertrag ist nun als
 isolierte `card_battler_runtime.sqlite3` festgelegt: Die normale
 `comfyreview.sqlite3` wird nur zur Quellbildauflösung gelesen, während die
 read-only `card_battler.sqlite3` ausschließlich Regel-/Modelldaten liefert.
@@ -103,13 +105,12 @@ Konditionierung, einen separaten Workflow oder einen weiteren Ansatz
 erzeugt werden, ist **offen** und muss praktisch erprobt werden.
 Vier technisch fertige PNGs allein erfüllen diesen POC daher nicht.
 
-Auch das bisherige `SemanticImageProfile` speichert typisierte
-Konzeptsignale mit Stärken, aber **noch keine eigenständige Zuordnung**
-von sichtbaren Beobachtungen, Interpretationen und Unsicherheiten.
-Die fachliche Trennung in Stufe 1 ist somit ein **Abnahmeziel**,
-nicht schon als implementiertes Bildverständnis nachgewiesen.
-Weder eine bestimmte VLM-/LLM-Lösung noch eine neue API wird
-hierdurch vorab festgelegt.
+Das erweiterte `SemanticImageProfile` speichert eine kurze Zusammenfassung,
+begrenzte sichtbare Faktengruppen und kontrollierte Konzeptsignale mit
+Stärken. Das ist eine implementierte, spielmechanikfreie Vertragsgrenze, aber
+noch kein Nachweis, dass das konfigurierte reale Vision-Modell Bilder fachlich
+ausreichend versteht. Modellqualität, Unsicherheitsdarstellung und die spätere
+Prüf-UI bleiben deshalb Abnahmeziele statt behaupteter Ergebnisse.
 
 ## Minimale Oberfläche für den Versuch
 

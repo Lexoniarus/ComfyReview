@@ -138,6 +138,13 @@ from comfyreview.application.card_battler_runtime import (
     CardBattlerRuntimeSchemaLifecycle,
     CardBattlerRuntimeSchemaReport,
 )
+from comfyreview.application.card_battler_semantics import (
+    SEMANTIC_PROFILE_CONTRACT_REVISION,
+    CardSourceImage,
+    CardSourceImageProvider,
+    SemanticImageAnalysisError,
+    SemanticImageAnalyzer,
+)
 from comfyreview.application.card_battler_trait_selection import (
     InitialTraitCandidateScore,
     InitialTraitSelection,
@@ -632,6 +639,8 @@ __all__ = [
     "CompatibilityRelation",
     "CommonCardMaterializer",
     "CardStatMaterializer",
+    "CardSourceImage",
+    "CardSourceImageProvider",
     "InitialTraitCandidateScore",
     "InitialTraitSelection",
     "InitialTraitSelector",
@@ -659,6 +668,8 @@ __all__ = [
     "CompatibilityFact",
     "FallbackCandidate",
     "SemanticAffinity",
+    "SemanticImageAnalysisError",
+    "SemanticImageAnalyzer",
     "CandidateScore",
     "CardImprint",
     "CardImprintMapper",
@@ -667,6 +678,7 @@ __all__ = [
     "MappingDecision",
     "SemanticImageProfile",
     "SemanticSignal",
+    "SEMANTIC_PROFILE_CONTRACT_REVISION",
     "Sha256CounterV1",
     "CardClassDefinition",
     "CombatRoleDefinition",
