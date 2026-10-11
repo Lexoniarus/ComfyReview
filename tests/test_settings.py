@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import os
+import socket
 from pathlib import Path
+
+import pytest
 
 from comfyreview.settings import (
     load_legacy_migration_settings,
@@ -26,6 +29,14 @@ def test_load_settings_uses_documented_defaults_without_writes(
     assert settings.pool_limit == 128
     assert settings.default_unrated_only is False
     assert settings.soft_delete_to_trash is False
+    assert settings.lm_studio_base_url == "http://127.0.0.1:1234"
+    assert settings.lm_studio_api_token is None
+    assert settings.lm_studio_vision_model == "qwen3-vl-4b-instruct-uncensored"
+    assert settings.lm_studio_text_model == "qwen2.5-7b-instruct"
+    assert settings.lm_studio_list_timeout_seconds == 5.0
+    assert settings.lm_studio_load_timeout_seconds == 180.0
+    assert settings.lm_studio_inference_timeout_seconds == 180.0
+    assert settings.lm_studio_unload_timeout_seconds == 30.0
     assert settings.ssl_enabled is False
     assert not settings.output_root.exists()
     assert not settings.data_directory.exists()
@@ -53,6 +64,14 @@ def test_environment_overrides_env_file_without_mutating_process(
                 "COMFYREVIEW_DEFAULT_MAX_TRIES=12",
                 "COMFYREVIEW_DEFAULT_UNRATED_ONLY=yes",
                 "COMFYREVIEW_SOFT_DELETE_TO_TRASH=off",
+                'COMFYREVIEW_LM_STUDIO_BASE_URL="http://file.test:1234"',
+                "COMFYREVIEW_LM_STUDIO_API_TOKEN= file-token ",
+                "COMFYREVIEW_LM_STUDIO_VISION_MODEL=file-vision",
+                "COMFYREVIEW_LM_STUDIO_TEXT_MODEL=file-text",
+                "COMFYREVIEW_LM_STUDIO_LIST_TIMEOUT_SECONDS=6",
+                "COMFYREVIEW_LM_STUDIO_LOAD_TIMEOUT_SECONDS=181",
+                "COMFYREVIEW_LM_STUDIO_INFERENCE_TIMEOUT_SECONDS=182",
+                "COMFYREVIEW_LM_STUDIO_UNLOAD_TIMEOUT_SECONDS=31",
                 "COMFYREVIEW_SSL_ENABLED=true",
             )
         ),
@@ -63,6 +82,10 @@ def test_environment_overrides_env_file_without_mutating_process(
         "COMFYREVIEW_OUTPUT_ROOT": str(custom_output),
         "COMFYREVIEW_DATABASE": str(custom_database),
         "COMFYREVIEW_RATINGS_DB": "",
+        "COMFYREVIEW_LM_STUDIO_BASE_URL": "http://127.0.0.1:5678",
+        "COMFYREVIEW_LM_STUDIO_API_TOKEN": "env-token",
+        "COMFYREVIEW_LM_STUDIO_VISION_MODEL": "env-vision",
+        "COMFYREVIEW_LM_STUDIO_LIST_TIMEOUT_SECONDS": "5.5",
     }
     process_environment = dict(os.environ)
 
@@ -82,6 +105,14 @@ def test_environment_overrides_env_file_without_mutating_process(
     assert settings.default_max_tries == 12
     assert settings.default_unrated_only is True
     assert settings.soft_delete_to_trash is False
+    assert settings.lm_studio_base_url == "http://127.0.0.1:5678"
+    assert settings.lm_studio_api_token == "env-token"
+    assert settings.lm_studio_vision_model == "env-vision"
+    assert settings.lm_studio_text_model == "file-text"
+    assert settings.lm_studio_list_timeout_seconds == 5.5
+    assert settings.lm_studio_load_timeout_seconds == 181.0
+    assert settings.lm_studio_inference_timeout_seconds == 182.0
+    assert settings.lm_studio_unload_timeout_seconds == 31.0
     assert settings.ssl_enabled is True
     assert dict(os.environ) == process_environment
 
@@ -116,3 +147,38 @@ def test_default_environment_source_is_read_only(tmp_path: Path) -> None:
 
     assert settings.base_directory == tmp_path.resolve()
     assert dict(os.environ) == before
+
+
+@pytest.mark.parametrize(
+    "environment_name",
+    (
+        "COMFYREVIEW_LM_STUDIO_LIST_TIMEOUT_SECONDS",
+        "COMFYREVIEW_LM_STUDIO_LOAD_TIMEOUT_SECONDS",
+        "COMFYREVIEW_LM_STUDIO_INFERENCE_TIMEOUT_SECONDS",
+        "COMFYREVIEW_LM_STUDIO_UNLOAD_TIMEOUT_SECONDS",
+    ),
+)
+@pytest.mark.parametrize("invalid_value", ("0", "-1", "inf", "nan"))
+def test_lm_studio_timeout_must_be_positive_and_finite(
+    tmp_path: Path, environment_name: str, invalid_value: str
+) -> None:
+    with pytest.raises(ValueError, match=environment_name):
+        load_settings(
+            base_directory=tmp_path,
+            environ={environment_name: invalid_value},
+        )
+
+
+def test_lm_studio_settings_do_not_connect_to_a_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def forbid_connect(_socket: socket.socket, _address: object) -> None:
+        raise AssertionError("Settings loading must not access the network")
+
+    monkeypatch.setattr(socket.socket, "connect", forbid_connect)
+    settings = load_settings(
+        base_directory=tmp_path,
+        environ={"COMFYREVIEW_LM_STUDIO_API_TOKEN": "   "},
+    )
+
+    assert settings.lm_studio_api_token is None
