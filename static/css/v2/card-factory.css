@@ -342,6 +342,89 @@
   background: rgb(4 9 16 / 44%);
 }
 
+.deck-capacity {
+  display: inline-flex;
+  min-height: 2.65rem;
+  align-items: center;
+  padding: 0.55rem 0.85rem;
+  border: 0.0625rem solid rgb(65 217 255 / 36%);
+  border-radius: var(--radius-control);
+  color: var(--card-energy);
+  background: var(--card-energy-soft);
+  font-weight: 800;
+}
+
+.deck-section {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--card-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.deck-card-grid,
+.pool-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--space-4);
+}
+
+.deck-card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+}
+
+.pool-card {
+  display: grid;
+  overflow: hidden;
+  min-width: 0;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-media);
+  background: linear-gradient(155deg, #142238, #090f19 64%);
+}
+
+.pool-card > img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.pool-card-body {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+}
+
+.pool-card-body h3,
+.pool-card-body p {
+  margin: 0;
+}
+
+.pool-card-body p {
+  color: var(--color-text-muted);
+}
+
+.pool-card-eyebrow {
+  color: var(--card-energy);
+  font-size: var(--font-size-caption);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.deck-card-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-3);
+  border-top: 0.0625rem solid var(--color-border);
+}
+
+.deck-card-controls .secondary-button {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .candidate-group-empty {
   margin: 0;
   padding: var(--space-4);

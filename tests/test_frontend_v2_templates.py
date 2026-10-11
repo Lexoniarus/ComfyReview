@@ -134,6 +134,7 @@ def test_card_factory_urls_render_external_module_shells() -> None:
     factory = client.get("/card-factory")
     groups = client.get("/card-candidate-groups")
     comparison = client.get("/card-candidate-groups/group-1")
+    deck = client.get("/card-deck")
 
     assert factory.status_code == 200
     assert "data-card-factory-sources" in factory.text
@@ -145,8 +146,11 @@ def test_card_factory_urls_render_external_module_shells() -> None:
     assert 'data-group-id="group-1"' in comparison.text
     assert "data-card-candidate-group" in comparison.text
     assert "/static/js/entries/card-candidate-group.js" in comparison.text
+    assert deck.status_code == 200
+    assert "data-card-deck" in deck.text
+    assert "/static/js/entries/card-deck.js" in deck.text
     assert client.get("/card-workshop/session-1").status_code == 404
-    rendered = factory.text + groups.text + comparison.text
+    rendered = factory.text + groups.text + comparison.text + deck.text
     assert "/api/v2" not in rendered
     assert "<style" not in rendered
     assert "onclick=" not in rendered
@@ -180,6 +184,7 @@ def test_only_external_asset_v2_templates_remain() -> None:
         "arena.html",
         "card_candidate_group.html",
         "card_candidate_groups.html",
+        "card_deck.html",
         "card_factory.html",
         "generations.html",
         "index.html",

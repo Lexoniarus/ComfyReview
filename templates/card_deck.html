@@ -1,0 +1,46 @@
+{% extends "_v2_base.html" %} {% set page_title = "Kartenpool & Deck ·
+ComfyReview" %} {% set active_nav = "card_factory" %} {% block styles %}
+<link rel="stylesheet" href="/static/css/v2/card-factory.css?v=20261012-deck" />
+{% endblock %} {% block content %}
+<main class="card-factory-shell card-poc-surface" data-card-deck>
+  <header class="card-factory-hero">
+    <div>
+      <p class="card-factory-kicker">Card Battler · POC Collection</p>
+      <h1>Kartenpool &amp; Deck</h1>
+      <p class="muted">
+        Angenommene Karten bleiben im Pool. Das einzelne POC-Deck enthält bis zu
+        40 unterschiedliche Karten und kann jederzeit neu sortiert werden.
+      </p>
+    </div>
+    <div class="card-workshop-actions">
+      <span class="card-factory-status" data-deck-status aria-live="polite"
+        >Deck wird geladen …</span
+      >
+      <span class="deck-capacity" data-deck-capacity>0 / 40</span>
+      <a class="secondary-button" href="/card-candidate-groups"
+        >Candidate Groups</a
+      >
+      <a class="secondary-button" href="/card-factory">Neue Karten</a>
+    </div>
+  </header>
+  <section class="deck-section" aria-labelledby="deck-heading">
+    <div class="card-section-heading">
+      <p>Spielbereite Auswahl</p>
+      <h2 id="deck-heading">POC-Deck</h2>
+    </div>
+    <div class="deck-card-grid" data-deck-list></div>
+  </section>
+  <section class="deck-section" aria-labelledby="pool-heading">
+    <div class="card-section-heading">
+      <p>Alle bestätigten Karten</p>
+      <h2 id="pool-heading">Kartenpool</h2>
+    </div>
+    <div class="pool-card-grid" data-card-pool></div>
+  </section>
+</main>
+{% endblock %} {% block scripts %}
+<script
+  type="module"
+  src="/static/js/entries/card-deck.js?v=20261012-deck"
+></script>
+{% endblock %}
