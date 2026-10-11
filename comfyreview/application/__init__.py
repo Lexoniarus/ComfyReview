@@ -338,10 +338,24 @@ from comfyreview.application.lifecycle import (
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
+from comfyreview.application.local_model_inference import (
+    LocalInferenceProvider,
+    LocalInferenceRequest,
+    LocalInferenceResult,
+    LocalInferenceUsage,
+    LocalModelInferenceError,
+)
 from comfyreview.application.local_model_runtime import (
     LocalModelCleanupFailure,
     LocalModelLease,
     LocalModelRuntime,
+)
+from comfyreview.application.local_model_structured_inference import (
+    JsonValue,
+    LocalModelStructuredOutputError,
+    LocalStructuredInferenceProvider,
+    LocalStructuredInferenceRequest,
+    LocalStructuredInferenceResult,
 )
 from comfyreview.application.local_models import (
     LocalModelConnectionError,
@@ -801,6 +815,7 @@ __all__ = [
     "ImageOrder",
     "ImageQueryValidationError",
     "ImageScope",
+    "JsonValue",
     "LegacySchemaIssue",
     "LegacySchemaReport",
     "LegacySchemaValidationError",
@@ -814,10 +829,16 @@ __all__ = [
     "LoraGraphEffect",
     "LoraGraphEffectPolicy",
     "LocalModelCleanupFailure",
+    "LocalInferenceProvider",
+    "LocalInferenceRequest",
+    "LocalInferenceResult",
+    "LocalInferenceUsage",
     "LocalModelConnectionError",
     "LocalModelDescriptor",
     "LocalModelError",
     "LocalModelInstance",
+    "LocalModelInferenceError",
+    "LocalModelStructuredOutputError",
     "LocalModelLease",
     "LocalModelLifecycleError",
     "LocalModelProtocolError",
@@ -825,6 +846,9 @@ __all__ = [
     "LocalModelRuntime",
     "LocalModelTimeoutError",
     "LocalModelUnavailableError",
+    "LocalStructuredInferenceProvider",
+    "LocalStructuredInferenceRequest",
+    "LocalStructuredInferenceResult",
     "CompiledLoraGraphPolicy",
     "LoraGraphValidationError",
     "LoraReclassificationImpact",
