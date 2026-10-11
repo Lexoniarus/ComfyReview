@@ -2,7 +2,14 @@ name: Quality
 
 on:
   push:
+    branches:
+      - master
+      - refactor/review-boundary
   pull_request:
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
