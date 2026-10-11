@@ -150,11 +150,20 @@ def test_semantic_analyzer_uses_controlled_vocabulary_and_stable_profile() -> (
     )
     schema = cast(dict[str, Any], request.schema_document())
     signal_schema = schema["properties"]["signals"]["items"]
+    assert schema["properties"]["signals"]["maxItems"] == 2
     assert signal_schema["properties"]["concept_key"]["enum"] == [
         "calm",
         "focused",
     ]
     assert "game classes" in str(request.inference.system_prompt)
+
+
+def test_semantic_analyzer_bounds_large_vocabularies() -> None:
+    concept_keys = tuple(f"concept-{index:02d}" for index in range(20))
+
+    schema = cast(dict[str, Any], SemanticImageAnalyzer._schema(concept_keys))
+
+    assert schema["properties"]["signals"]["maxItems"] == 16
 
 
 def test_semantic_analyzer_rejects_unknown_or_duplicate_signals() -> None:
@@ -171,6 +180,16 @@ def test_semantic_analyzer_rejects_unknown_or_duplicate_signals() -> None:
     ]
     analyzer, _, _ = _analyzer(duplicate)
     with pytest.raises(SemanticImageAnalysisError, match="duplicate"):
+        analyzer.analyze(_source_image())
+
+    oversized = _document()
+    oversized["signals"] = [
+        {"concept_key": "calm", "strength_milli": 500} for _ in range(17)
+    ]
+    analyzer, _, _ = _analyzer(oversized)
+    with pytest.raises(
+        SemanticImageAnalysisError, match="signals are invalid"
+    ):
         analyzer.analyze(_source_image())
 
 

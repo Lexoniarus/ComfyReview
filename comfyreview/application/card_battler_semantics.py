@@ -24,6 +24,7 @@ from comfyreview.application.local_model_structured_inference import (
 SEMANTIC_PROFILE_CONTRACT_REVISION = "card-semantic-profile-v1"
 _MAX_IMAGE_BYTES = 16 * 1024 * 1024
 _MAX_FACTS_PER_GROUP = 8
+_MAX_SEMANTIC_SIGNALS = 16
 
 
 class SemanticImageAnalysisError(RuntimeError):
@@ -249,8 +250,9 @@ class SemanticImageAnalyzer:
         ]
         return (
             "Return a concise visual summary, concrete fact lists, and only "
-            "the controlled semantic signals that are visibly supported. "
-            "Use strength_milli 0..1000. Vocabulary: "
+            "the strongest controlled semantic signals that are visibly "
+            "supported. Return at most 16 distinct signals and at most 8 "
+            "items in each fact list. Use strength_milli 0..1000. Vocabulary: "
             + json.dumps(vocabulary, ensure_ascii=False, separators=(",", ":"))
         )
 
@@ -283,7 +285,7 @@ class SemanticImageAnalyzer:
                 "objects": short_strings,
                 "signals": {
                     "type": "array",
-                    "maxItems": len(concept_keys),
+                    "maxItems": min(len(concept_keys), _MAX_SEMANTIC_SIGNALS),
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
@@ -346,7 +348,10 @@ class SemanticImageAnalyzer:
                 raise SemanticImageAnalysisError(f"semantic {name} is invalid")
             facts[name] = normalized
         raw_signals = value["signals"]
-        if not isinstance(raw_signals, list):
+        if (
+            not isinstance(raw_signals, list)
+            or len(raw_signals) > _MAX_SEMANTIC_SIGNALS
+        ):
             raise SemanticImageAnalysisError("semantic signals are invalid")
         signals: list[SemanticSignal] = []
         for raw in raw_signals:
