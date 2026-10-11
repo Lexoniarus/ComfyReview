@@ -51,9 +51,10 @@ Die lokale Modellgrundlage ist in den **Card-Factory-POC** verdrahtet, aber noch
 nicht durch einen realen Modell-Smoke des Projektinhabers abgenommen. Sie stellt
 typisierte Model-Lifecycle-, Text-, Vision- und JSON-Schema-Inferenzgrenzen
 bereit. LM Studio wird beim App-Start weder verbunden noch gestartet und
-Modelle werden nicht vorsorglich geladen. Der Card-Worker und sein gemeinsamer
-Runtime-Graph werden beim App-Start vorbereitet; erst eine reservierte Gruppe
-verursacht externe Vision-, Text- oder ComfyUI-Aufrufe.
+Modelle werden nicht vorsorglich geladen. Beim App-Start wird der Card-Worker
+nur als Lifecycle-Ressource vorgemerkt; Runtime-Graph und Model-DB werden erst
+beim ersten Card-Aufruf aufgebaut. Erst eine reservierte Gruppe verursacht
+externe Vision-, Text- oder ComfyUI-Aufrufe.
 
 Die vollständigen optionalen Variablen stehen in [`.env.example`](.env.example):
 ein API-Token, getrennte List-/Load-/Inference-/Unload-Timeouts sowie Vision-

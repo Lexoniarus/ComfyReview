@@ -424,9 +424,11 @@ def test_card_factory_runtime_builds_its_graph_only_once(
 
     monkeypatch.setattr(runtime, "_build", build)
 
+    runtime.start()
+    assert calls == 0
+    assert worker.events == []
     assert runtime.get() is service_graph
     assert runtime.get() is service_graph
     assert calls == 1
-    runtime.start()
     assert runtime.stop()
     assert worker.events == ["start", "stop"]

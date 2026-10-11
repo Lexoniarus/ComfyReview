@@ -182,23 +182,39 @@ class CardFactoryPrototypeRuntime:
         self._blueprints = blueprints
         self._lock = Lock()
         self._services: CardFactoryPrototypeServices | None = None
+        self._start_requested = False
+        self._worker_started = False
 
     def get(self) -> CardFactoryPrototypeServices:
         """Return the one lazily composed Card service graph."""
         with self._lock:
             if self._services is None:
                 self._services = self._build()
+            if self._start_requested and not self._worker_started:
+                self._services.worker.start()
+                self._worker_started = True
             return self._services
 
     def start(self) -> None:
-        """Start the one owned Candidate worker after application startup."""
-        self.get().worker.start()
+        """Arm the owned Candidate worker without forcing graph creation."""
+        with self._lock:
+            self._start_requested = True
+            if self._services is not None and not self._worker_started:
+                self._services.worker.start()
+                self._worker_started = True
 
     def stop(self) -> bool:
         """Stop the Candidate worker if the service graph was initialized."""
         with self._lock:
+            self._start_requested = False
             services = self._services
-        return True if services is None else services.worker.stop()
+        if services is None:
+            return True
+        stopped = services.worker.stop()
+        if stopped:
+            with self._lock:
+                self._worker_started = False
+        return stopped
 
     def _build(self) -> CardFactoryPrototypeServices:
         settings = self._settings

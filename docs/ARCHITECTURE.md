@@ -233,8 +233,9 @@ replaces only the current state through Card-revision CAS. The single POC Deck
 contains each `card_id` at most once, preserves explicit order, and rejects a
 41st entry.
 
-Application startup validates/builds the Card runtime graph and starts the
-worker, but does not load an LM Studio model or call ComfyUI without reserved
+Application startup arms the worker lifecycle without building the Card graph.
+The first Card API use validates the Model DB, builds the graph and starts the
+worker. No LM Studio model is loaded and ComfyUI is not called without reserved
 work. Fake-provider tests validate the contracts but do not establish a real
 LM Studio, hardware, ComfyUI or model-quality smoke; the project owner performs
 that final manual acceptance.
@@ -271,8 +272,9 @@ failures remain visible per slot. Synchronization delegates job observation
 and output collection to the shared generation infrastructure and accepts only
 one persisted `primary` output per Candidate.
 
-The Card Factory graph is composed by one `CardFactoryPrototypeRuntime`.
-Application startup resolves the active ruleset once, caches a shared graph
+The Card Factory graph is composed lazily by one
+`CardFactoryPrototypeRuntime`. Application startup arms its lifecycle only.
+The first Card API use resolves the active ruleset, caches a shared graph
 containing the model resource, local-model runtime, deterministic policies and
 Card-only generation adapters, and starts the Candidate worker. This performs
 no LM Studio or ComfyUI call by itself.
