@@ -2,6 +2,10 @@
 static/js/core/api-error.js
 static/js/core/api-client.js
 static/js/core/request-lifecycle.js
+static/js/card-factory/card-factory-api.js
+static/js/card-factory/source-browser.js
+static/js/card-factory/workshop-view.js
+static/js/card-factory/workshop-controller.js
 static/js/components/confirmation-dialog.js
 static/js/components/evidence-carousel.js
 static/js/components/cyclic-card-rail.js

@@ -7,10 +7,15 @@ from pathlib import Path
 from typing import Protocol
 
 from comfyreview.application.card_battler_evolution import (
+    CardCandidateStatus,
     CardEvolutionCandidate,
 )
 from comfyreview.application.card_battler_session_queries import (
     CardFactorySessionSnapshot,
+)
+from comfyreview.application.card_battler_sessions import (
+    CardActiveImageKind,
+    CardSessionOperationState,
 )
 from comfyreview.application.generation_outputs import GenerationOutput
 
@@ -82,6 +87,17 @@ class CardFactorySessionResponseMapper:
                 None if presentation is None else asdict(presentation)
             ),
             "presentation_status": session.presentation.status.value,
+            "actions": {
+                "can_generate": (
+                    session.operation_state is CardSessionOperationState.IDLE
+                ),
+                "can_develop": (
+                    session.operation_state is CardSessionOperationState.IDLE
+                    and session.active_image_kind
+                    is CardActiveImageKind.CANDIDATE
+                    and session.active_visual_tier == session.card.tier_ordinal
+                ),
+            },
             "candidates": [
                 self._candidate(item) for item in snapshot.candidates
             ],
@@ -92,6 +108,9 @@ class CardFactorySessionResponseMapper:
     ) -> dict[str, object]:
         payload = asdict(candidate)
         payload["status"] = candidate.status.value
+        payload["can_accept"] = (
+            candidate.status is CardCandidateStatus.COMPLETED
+        )
         payload["image_url"] = (
             ""
             if candidate.output_image_uid is None

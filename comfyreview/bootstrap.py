@@ -141,6 +141,7 @@ from comfyreview.revalidating_static_files import RevalidatingStaticFiles
 from comfyreview.settings import Settings, load_settings
 from routers.api_v2_router import router as api_v2_router
 from routers.arena_router import router as arena_router
+from routers.card_factory import router as card_factory_router
 from routers.index_router import router as index_router
 from routers.playground import router as playground_router
 from routers.settings_router import router as settings_router
@@ -585,6 +586,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     application.include_router(settings_router)
     application.include_router(top_router)
     application.include_router(arena_router)
+    application.include_router(card_factory_router)
     application.include_router(stats_router)
     application.include_router(playground_router)
     return application

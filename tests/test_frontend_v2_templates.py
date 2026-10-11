@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from routers.arena_router import router as arena_router
+from routers.card_factory import router as card_factory_router
 from routers.index_router import router as review_router
 from routers.playground.browse import router as playground_catalog_router
 from routers.playground.generator import router as playground_generator_router
@@ -125,6 +126,26 @@ def test_catalog_url_renders_the_revisioned_v2_shell() -> None:
     assert "<style" not in response.text
 
 
+def test_card_factory_urls_render_external_module_shells() -> None:
+    application = FastAPI()
+    application.include_router(card_factory_router)
+    client = TestClient(application)
+
+    factory = client.get("/card-factory")
+    workshop = client.get("/card-workshop/session-1")
+
+    assert factory.status_code == 200
+    assert "data-card-factory-sources" in factory.text
+    assert "/static/js/entries/card-factory.js" in factory.text
+    assert workshop.status_code == 200
+    assert 'data-session-id="session-1"' in workshop.text
+    assert "data-card-workshop" in workshop.text
+    assert "/static/js/entries/card-workshop.js" in workshop.text
+    assert "/api/v2" not in factory.text + workshop.text
+    assert "<style" not in factory.text + workshop.text
+    assert "onclick=" not in factory.text + workshop.text
+
+
 def test_all_analytics_urls_render_one_canonical_v2_shell() -> None:
     application = FastAPI()
     application.include_router(analytics_router)
@@ -151,6 +172,8 @@ def test_only_external_asset_v2_templates_remain() -> None:
         "_v2_base.html",
         "analytics.html",
         "arena.html",
+        "card_factory.html",
+        "card_workshop.html",
         "generations.html",
         "index.html",
         "playground.html",

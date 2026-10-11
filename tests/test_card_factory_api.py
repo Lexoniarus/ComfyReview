@@ -149,6 +149,10 @@ def test_card_session_api_delegates_all_revision_safe_commands() -> None:
     assert created.json()["semantic_profile"]["image_uid"] == "image-1"
     assert created.json()["imprint"]["world_style"] == "near_future"
     assert created.json()["card_spec"]["stats"]["attack"] == 100
+    assert created.json()["actions"] == {
+        "can_generate": True,
+        "can_develop": False,
+    }
     assert prototype.calls == [
         ("create", "image-1"),
         ("get", "session-1"),

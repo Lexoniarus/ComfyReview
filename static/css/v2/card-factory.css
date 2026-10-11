@@ -1,0 +1,398 @@
+.card-factory-shell,
+.card-workshop-shell {
+  width: min(100%, 108rem);
+  margin: 0 auto;
+  padding: clamp(1rem, 2vw, 2rem);
+}
+
+.card-factory-hero,
+.card-workshop-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.card-factory-hero h1,
+.card-workshop-header h1,
+.card-section-heading h2 {
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+
+.card-factory-hero h1,
+.card-workshop-header h1 {
+  font-size: clamp(1.8rem, 3vw, 2.75rem);
+}
+
+.card-factory-hero .muted,
+.card-workshop-header .muted {
+  max-width: 48rem;
+}
+
+.card-factory-kicker,
+.card-section-heading p {
+  margin: 0 0 var(--space-1);
+  color: var(--color-accent-strong);
+  font-size: var(--font-size-label);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.card-factory-status {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  padding: 0.4rem 0.65rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+  font-size: var(--font-size-control);
+}
+
+.card-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--space-4);
+}
+
+.card-source-item {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  min-width: 0;
+  padding: 0;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-media);
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+  cursor: pointer;
+  text-align: left;
+}
+
+.card-source-item:hover {
+  border-color: var(--color-accent);
+  transform: translateY(-0.125rem);
+}
+
+.card-source-item img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--color-surface-subtle);
+}
+
+.card-source-item span {
+  overflow: hidden;
+  padding: var(--space-3);
+  font-size: var(--font-size-control);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-source-item:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.card-source-pagination,
+.card-workshop-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.card-source-pagination {
+  justify-content: center;
+  margin-top: var(--space-6);
+}
+
+.secondary-button {
+  min-height: 2.65rem;
+  padding: 0.55rem 0.85rem;
+  border: 0.0625rem solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.secondary-button:disabled,
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.card-workshop-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.card-workshop-grid {
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.85fr) minmax(18rem, 1fr) minmax(
+      18rem,
+      1fr
+    );
+  gap: var(--space-5);
+}
+
+.card-source-column,
+.card-preview-column,
+.card-inspector-column,
+.card-candidate-section {
+  min-width: 0;
+  padding: var(--space-5);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: rgb(17 24 39 / 86%);
+  box-shadow: var(--shadow-panel);
+}
+
+.card-section-heading {
+  margin-bottom: var(--space-4);
+}
+
+.card-reference-frame,
+.prototype-card-art {
+  overflow: hidden;
+  margin: 0;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-media);
+  background: var(--color-surface-subtle);
+}
+
+.card-reference-frame img,
+.prototype-card-art img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.card-fact-list {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 1fr;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.card-fact-list dt {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+}
+
+.card-fact-list dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-weight: 650;
+}
+
+.card-inspector-block {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 0.0625rem solid var(--color-border);
+}
+
+.card-inspector-block h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-control);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.card-tag-list,
+.prompt-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.card-tag,
+.prompt-chip {
+  display: inline-flex;
+  padding: 0.3rem 0.5rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+  font-size: var(--font-size-caption);
+}
+
+.prompt-chip[data-required="true"] {
+  color: var(--color-accent-strong);
+  border-color: rgb(50 197 255 / 40%);
+}
+
+.prototype-card {
+  overflow: hidden;
+  max-width: 29rem;
+  margin: 0 auto;
+  padding: var(--space-3);
+  border: 0.125rem solid rgb(50 197 255 / 48%);
+  border-radius: 1rem;
+  background: linear-gradient(160deg, #142238, #0b111d 55%, #17243a);
+  box-shadow: 0 1.4rem 3rem rgb(0 0 0 / 42%);
+}
+
+.prototype-card > header {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+}
+
+.prototype-card > header strong {
+  font-size: 1.35rem;
+}
+
+.prototype-card-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+}
+
+.prototype-card-stats span {
+  padding: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+  text-align: center;
+}
+
+.prototype-card > header span {
+  color: var(--color-accent-strong);
+  font-size: var(--font-size-caption);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.card-trait {
+  padding: var(--space-3) 0;
+  border-top: 0.0625rem solid var(--color-border);
+}
+
+.card-trait h3,
+.card-trait p,
+.prototype-card > p {
+  margin: 0;
+}
+
+.card-trait p,
+.prototype-card > p {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.card-candidate-section {
+  margin-top: var(--space-5);
+}
+
+.card-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.card-candidate {
+  display: grid;
+  overflow: hidden;
+  min-width: 0;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-media);
+  background: var(--color-surface-subtle);
+}
+
+.card-candidate img,
+.card-candidate-placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.card-candidate-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--color-text-faint);
+  background: repeating-linear-gradient(
+    135deg,
+    #111827,
+    #111827 0.75rem,
+    #151f30 0.75rem,
+    #151f30 1.5rem
+  );
+}
+
+.card-candidate footer {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.card-candidate-status {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.card-candidate[data-status="completed"] .card-candidate-status,
+.card-candidate[data-status="accepted"] .card-candidate-status {
+  color: var(--status-completed);
+}
+
+.card-candidate[data-status="failed"] .card-candidate-status {
+  color: var(--status-failed);
+}
+
+.card-empty-state,
+.card-error-state {
+  grid-column: 1 / -1;
+  padding: var(--space-8);
+  border: 0.0625rem dashed var(--color-border-strong);
+  border-radius: var(--radius-panel);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.card-error-state {
+  color: var(--status-failed);
+}
+
+@media (width <= 78rem) {
+  .card-workshop-grid {
+    grid-template-columns: minmax(15rem, 0.8fr) minmax(18rem, 1.2fr);
+  }
+
+  .card-inspector-column {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (width <= 56rem) {
+  .card-factory-hero,
+  .card-workshop-header,
+  .card-workshop-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .card-workshop-actions {
+    justify-content: flex-start;
+  }
+
+  .card-workshop-grid,
+  .card-candidate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-inspector-column {
+    grid-column: auto;
+  }
+}
