@@ -266,8 +266,11 @@ class CardCandidateGroupRepository(Protocol):
         """Return one group with its ordered candidate slots."""
         ...
 
-    def claim_next_queued(self) -> CardCandidateGroup | None:
-        """Atomically claim the oldest queued group for composition."""
+    def claim_next_queued(
+        self,
+        kind: CardCandidateGroupKind = CardCandidateGroupKind.INITIAL,
+    ) -> CardCandidateGroup | None:
+        """Atomically claim the oldest queued group of one kind."""
         ...
 
     def complete_composition(
@@ -280,6 +283,16 @@ class CardCandidateGroupRepository(Protocol):
         candidates: tuple[CompleteCardCandidateArtifacts, ...],
     ) -> CardCandidateGroup:
         """Persist one successful four-Card composition by CAS."""
+        ...
+
+    def complete_development_composition(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+        candidates: tuple[CompleteCardCandidateArtifacts, ...],
+    ) -> CardCandidateGroup:
+        """Persist four one-step development Candidates atomically."""
         ...
 
     def fail_composition(

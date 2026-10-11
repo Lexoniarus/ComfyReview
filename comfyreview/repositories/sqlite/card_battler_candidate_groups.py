@@ -9,6 +9,7 @@ from comfyreview.application.card_battler_candidate_groups import (
     CARD_CANDIDATE_MATERIALIZATION_REVISION,
     CardCandidateGroup,
     CardCandidateGroupConflictError,
+    CardCandidateGroupKind,
     CardCandidateGroupStatus,
     CardCandidateStatus,
     CompleteCardCandidateArtifacts,
@@ -20,6 +21,9 @@ from comfyreview.repositories.sqlite.card_battler_candidate_generation_state imp
 )
 from comfyreview.repositories.sqlite.card_battler_candidate_group_codec import (
     decode_candidate_group,
+)
+from comfyreview.repositories.sqlite.card_battler_development_groups import (
+    SqliteCardDevelopmentGroupComposer,
 )
 from comfyreview.repositories.sqlite.card_battler_runtime_codec import (
     encode_value,
@@ -36,6 +40,9 @@ class SqliteCardCandidateGroupRepository:
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path).resolve()
         self._generation_state = SqliteCardCandidateGenerationStateWriter(
+            self._database_path
+        )
+        self._development_composition = SqliteCardDevelopmentGroupComposer(
             self._database_path
         )
 
@@ -117,8 +124,11 @@ class SqliteCardCandidateGroupRepository:
         finally:
             connection.close()
 
-    def claim_next_queued(self) -> CardCandidateGroup | None:
-        """Atomically claim the oldest queued group for composition."""
+    def claim_next_queued(
+        self,
+        kind: CardCandidateGroupKind = CardCandidateGroupKind.INITIAL,
+    ) -> CardCandidateGroup | None:
+        """Atomically claim the oldest queued group of one kind."""
         connection = connect_existing(self._database_path, rows=True)
         group_id: str | None = None
         try:
@@ -126,9 +136,10 @@ class SqliteCardCandidateGroupRepository:
             row = connection.execute(
                 """
                 SELECT group_id, revision FROM card_candidate_groups
-                WHERE status = ? ORDER BY created_at, group_id LIMIT 1
+                WHERE status = ? AND kind = ?
+                ORDER BY created_at, group_id LIMIT 1
                 """,
-                (CardCandidateGroupStatus.QUEUED.value,),
+                (CardCandidateGroupStatus.QUEUED.value, kind.value),
             ).fetchone()
             if row is None:
                 connection.commit()
@@ -262,6 +273,21 @@ class SqliteCardCandidateGroupRepository:
             raise
         finally:
             connection.close()
+        return self._required(group_id)
+
+    def complete_development_composition(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+        candidates: tuple[CompleteCardCandidateArtifacts, ...],
+    ) -> CardCandidateGroup:
+        """Persist four one-step development Candidates atomically."""
+        self._development_composition.complete(
+            group_id,
+            expected_revision=expected_revision,
+            candidates=candidates,
+        )
         return self._required(group_id)
 
     def fail_composition(
@@ -598,7 +624,7 @@ class SqliteCardCandidateGroupRepository:
                 reference_content_hash, group_seed, semantic_profile_json,
                 card_imprint_json, source_card_id, source_card_revision,
                 failure_category
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 group.group_id,
@@ -610,6 +636,16 @@ class SqliteCardCandidateGroupRepository:
                 group.reference_image_uid,
                 group.reference_content_hash,
                 str(group.group_seed),
+                (
+                    None
+                    if group.semantic_profile is None
+                    else encode_value(group.semantic_profile)
+                ),
+                (
+                    None
+                    if group.imprint is None
+                    else encode_value(group.imprint)
+                ),
                 group.source_card_id,
                 group.source_card_revision,
                 group.failure_category,
