@@ -39,6 +39,7 @@ Wichtige Werte:
 | --- | --- |
 | `COMFYREVIEW_OUTPUT_ROOT` | Lokales Bildausgabeverzeichnis |
 | `COMFYREVIEW_COMFYUI_BASE_URL` | ComfyUI-API-Endpunkt |
+| `COMFYREVIEW_CARD_EVOLUTION_CHECKPOINT` | Checkpoint für den isolierten Card-img2img-Workflow |
 | `COMFYREVIEW_WORKFLOWS_DIR` | Workflow-Dateien |
 | `COMFYREVIEW_DATABASE` | Kanonische ComfyReview-SQLite-Datei |
 | `COMFYREVIEW_CARD_BATTLER_MODEL_DATABASE` | Read-only Card-Regel-/Modelldatenbank |

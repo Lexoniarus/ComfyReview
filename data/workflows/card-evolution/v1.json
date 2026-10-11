@@ -1,0 +1,142 @@
+{
+  "blueprint_uid": "card-evolution",
+  "version": 1,
+  "graph": {
+    "checkpoint": {
+      "inputs": {
+        "ckpt_name": "NetaYumev35_pretrained_all_in_one.safetensors"
+      },
+      "class_type": "CheckpointLoaderSimple"
+    },
+    "positive": {
+      "inputs": {
+        "text": "",
+        "clip": ["checkpoint", 1]
+      },
+      "class_type": "CLIPTextEncode"
+    },
+    "negative": {
+      "inputs": {
+        "text": "",
+        "clip": ["checkpoint", 1]
+      },
+      "class_type": "CLIPTextEncode"
+    },
+    "reference": {
+      "inputs": {
+        "image": "comfyreview/card-battler/reference.png"
+      },
+      "class_type": "LoadImage"
+    },
+    "input-scale": {
+      "inputs": {
+        "image": ["reference", 0],
+        "upscale_method": "lanczos",
+        "width": 1024,
+        "height": 1024,
+        "crop": "center"
+      },
+      "class_type": "ImageScale"
+    },
+    "encode": {
+      "inputs": {
+        "pixels": ["input-scale", 0],
+        "vae": ["checkpoint", 2]
+      },
+      "class_type": "VAEEncode"
+    },
+    "sampler": {
+      "inputs": {
+        "seed": 1,
+        "steps": 32,
+        "cfg": 6,
+        "sampler_name": "sa_solver",
+        "scheduler": "simple",
+        "denoise": 0.55,
+        "model": ["checkpoint", 0],
+        "positive": ["positive", 0],
+        "negative": ["negative", 0],
+        "latent_image": ["encode", 0]
+      },
+      "class_type": "KSampler"
+    },
+    "decode": {
+      "inputs": {
+        "samples": ["sampler", 0],
+        "vae": ["checkpoint", 2]
+      },
+      "class_type": "VAEDecode"
+    },
+    "output-scale": {
+      "inputs": {
+        "image": ["decode", 0],
+        "upscale_method": "lanczos",
+        "width": 1080,
+        "height": 1080,
+        "crop": "center"
+      },
+      "class_type": "ImageScale"
+    },
+    "output-subdirectory": {
+      "inputs": {
+        "value": "card-battler"
+      },
+      "class_type": "PrimitiveString"
+    },
+    "filename-prefix": {
+      "inputs": {
+        "value": "CardEvolution"
+      },
+      "class_type": "PrimitiveString"
+    },
+    "output-path": {
+      "inputs": {
+        "string_a": ["output-subdirectory", 0],
+        "string_b": ["filename-prefix", 0],
+        "delimiter": "/"
+      },
+      "class_type": "StringConcatenate"
+    },
+    "save": {
+      "inputs": {
+        "filename_prefix": ["output-path", 0],
+        "images": ["output-scale", 0]
+      },
+      "class_type": "SaveImage"
+    }
+  },
+  "role_bindings": {
+    "positive_prompt": {"node_id": "positive", "input_name": "text"},
+    "negative_prompt": {"node_id": "negative", "input_name": "text"},
+    "checkpoint": {"node_id": "checkpoint", "input_name": "ckpt_name"},
+    "reference_image": {"node_id": "reference", "input_name": "image"},
+    "image_width": {"node_id": "input-scale", "input_name": "width"},
+    "image_height": {"node_id": "input-scale", "input_name": "height"},
+    "output_width": {"node_id": "output-scale", "input_name": "width"},
+    "output_height": {"node_id": "output-scale", "input_name": "height"},
+    "base_sampler": {"node_id": "sampler"},
+    "output_subdirectory": {
+      "node_id": "output-subdirectory",
+      "input_name": "value"
+    },
+    "filename_prefix": {"node_id": "filename-prefix", "input_name": "value"},
+    "save_image": {"node_id": "save"}
+  },
+  "output_bindings": [
+    {"role": "primary", "node_id": "save"}
+  ],
+  "sampler_roles": ["base_sampler"],
+  "capability_requirements": [
+    "CheckpointLoaderSimple",
+    "CLIPTextEncode",
+    "LoadImage",
+    "ImageScale",
+    "VAEEncode",
+    "KSampler",
+    "VAEDecode",
+    "PrimitiveString",
+    "StringConcatenate",
+    "SaveImage"
+  ],
+  "upscale_model_requirements": []
+}

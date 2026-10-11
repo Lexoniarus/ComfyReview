@@ -225,6 +225,22 @@ introduced by these boundaries. Fake-provider tests validate the contracts but
 do not establish a real LM Studio, hardware or model smoke; the project owner
 performs that final manual acceptance.
 
+### 2.4 Card evolution image handoff
+
+Card evolution uses a dedicated `card-evolution` v1 workflow rather than
+modifying the normal character blueprint. Its explicit `reference_image` role
+binds the existing `GenerationRequest.reference_image` to `LoadImage`; the
+built-in graph scales to 1024 square, VAE-encodes, samples with default denoise
+0.55, decodes and scales the primary output to 1080 square. The checkpoint is
+configured independently through `COMFYREVIEW_CARD_EVOLUTION_CHECKPOINT`.
+
+`ComfyUiCardReferenceImageStager` uploads already validated PNG bytes to
+ComfyUI `/upload/image` under the reserved input subfolder
+`comfyreview/card-battler/`, using a content-hash filename. Application code
+receives only the returned relative `LoadImage` name and hash. The provider
+owns multipart HTTP, timeout and response validation; paths do not cross into
+the application boundary.
+
 ## 3. Canonical identity and runtime data
 
 The canonical database has an explicit schema version. Schema v18 is the active

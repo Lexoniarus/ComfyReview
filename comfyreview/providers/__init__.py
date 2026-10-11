@@ -11,6 +11,12 @@ from comfyreview.providers.comfyui import (
     NativeComfyUiProvider,
     UrlLibJsonTransport,
 )
+from comfyreview.providers.comfyui_uploads import (
+    ComfyUiCardReferenceImageStager,
+    MultipartUploadResponse,
+    MultipartUploadTransport,
+    UrlLibMultipartUploadTransport,
+)
 from comfyreview.providers.curation_files import LocalCurationFileManager
 from comfyreview.providers.file_urls import OutputFileUrlMapper
 from comfyreview.providers.generation_outputs import (
@@ -46,6 +52,10 @@ __all__ = [
     "CanonicalOutputImageCatalog",
     "CanonicalCardSourceImageProvider",
     "UuidCardSessionIdentitySource",
+    "ComfyUiCardReferenceImageStager",
+    "MultipartUploadResponse",
+    "MultipartUploadTransport",
+    "UrlLibMultipartUploadTransport",
     "LocalCurationFileManager",
     "LocalGenerationOutputSource",
     "LocalGenerationOutputRecoverySource",

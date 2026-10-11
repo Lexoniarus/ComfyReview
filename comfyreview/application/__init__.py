@@ -59,6 +59,10 @@ from comfyreview.application.card_battler_development_improvement import (
 from comfyreview.application.card_battler_development_service import (
     CardDevelopmentService,
 )
+from comfyreview.application.card_battler_evolution_images import (
+    CardReferenceImageStager,
+    StagedCardReferenceImage,
+)
 from comfyreview.application.card_battler_factory import (
     CARD_SOURCE_SEED_REVISION,
     CardFactory,
@@ -673,6 +677,8 @@ __all__ = [
     "CardFactory",
     "CardFactoryResult",
     "DeterministicCardArtifacts",
+    "CardReferenceImageStager",
+    "StagedCardReferenceImage",
     "CompatibilityRelation",
     "CommonCardMaterializer",
     "CardStatMaterializer",

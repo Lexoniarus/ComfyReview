@@ -18,6 +18,7 @@
 | Kosmetische Kartentexte | [Stage-3-Realizer](../../comfyreview/application/card_battler_presentation.py) | Keine Autorität über Regeln und noch keine reale Modellabnahme |
 | Wiederverwendbare Factory | [Orchestrator](../../comfyreview/application/card_battler_factory.py) | Noch keine API-, Candidate- oder UI-Integration |
 | Isolierte POC-Runtime | [Versionierter Schema-Owner](../../comfyreview/repositories/sqlite/card_battler_runtime_schema.py), [Session-Repository](../../comfyreview/repositories/sqlite/card_battler_sessions.py), [Create/Develop-Service](../../comfyreview/application/card_battler_session_service.py) | Noch keine Candidate-Generierung, API oder reale Providerprobe |
+| Img2img-Handoff | [Dedizierter Blueprint](../../data/workflows/card-evolution/v1.json), [Multipart-Stager](../../comfyreview/providers/comfyui_uploads.py) | Noch keine Vierer-Orchestration oder reale ComfyUI-Abnahme |
 
 Die [App](../../comfyreview/bootstrap.py) erzeugt Modell-Adapter und Mapper; die [registrierten API-Router](../../routers/api_v2/__init__.py) bieten jedoch **keine** vollständigen Card-Crafting-/Deck-/Match-Operationen. Genau diese Trennung ist wichtig: **funktionierender Bibliotheks-Code ≠ spielbarer Battler**.
 

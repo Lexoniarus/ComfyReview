@@ -39,6 +39,7 @@ class Settings:
     default_unrated_only: bool
     soft_delete_to_trash: bool
     comfyui_base_url: str
+    card_evolution_checkpoint: str
     lm_studio_base_url: str
     lm_studio_api_token: str | None
     lm_studio_vision_model: str
@@ -229,6 +230,10 @@ def load_settings(
         comfyui_base_url=values.get(
             "COMFYREVIEW_COMFYUI_BASE_URL",
             "http://127.0.0.1:8188",
+        ),
+        card_evolution_checkpoint=values.get(
+            "COMFYREVIEW_CARD_EVOLUTION_CHECKPOINT",
+            "NetaYumev35_pretrained_all_in_one.safetensors",
         ),
         lm_studio_base_url=values.get(
             "COMFYREVIEW_LM_STUDIO_BASE_URL",
