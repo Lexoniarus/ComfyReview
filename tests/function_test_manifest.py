@@ -113,6 +113,22 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_factory.py::"
         "test_factory_runs_stage_one_once_and_keeps_presentation_degradation"
     ),
+    "comfyreview.application.card_battler_preview:CardSourceEligibilityPolicy.evaluate": (
+        "tests/test_card_battler_session_service.py::"
+        "test_session_create_requires_standard_accessible_source"
+    ),
+    "comfyreview.application.card_battler_session_service:CardFactorySessionService.create": (
+        "tests/test_card_battler_session_service.py::"
+        "test_session_create_persists_factory_result_once"
+    ),
+    "comfyreview.application.card_battler_session_service:CardFactorySessionService.get": (
+        "tests/test_card_battler_session_service.py::"
+        "test_session_get_reports_unknown_identity"
+    ),
+    "comfyreview.application.card_battler_session_service:CardFactorySessionService.develop": (
+        "tests/test_card_battler_session_service.py::"
+        "test_develop_preserves_semantics_imprint_and_active_reference"
+    ),
     "comfyreview.application.card_battler_development_service:CardDevelopmentService.advance": (
         "tests/test_card_battler_development_service.py::"
         "test_card_development_service_advances_one_tier_and_one_improvement"

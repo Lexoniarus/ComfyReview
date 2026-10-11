@@ -139,6 +139,11 @@ from comfyreview.application.card_battler_presentation import (
     CardPresentationStatus,
     CardPresentationValidationError,
 )
+from comfyreview.application.card_battler_preview import (
+    CardSourceEligibilityDecision,
+    CardSourceEligibilityPolicy,
+    CardSourceEligibilityReason,
+)
 from comfyreview.application.card_battler_random import (
     DomainSeparatedCardRandom,
 )
@@ -158,6 +163,12 @@ from comfyreview.application.card_battler_semantics import (
     CardSourceImageProvider,
     SemanticImageAnalysisError,
     SemanticImageAnalyzer,
+)
+from comfyreview.application.card_battler_session_service import (
+    CardFactorySessionService,
+    CardSessionDevelopmentLockedError,
+    CardSessionIdentitySource,
+    CardSourceEligibilityError,
 )
 from comfyreview.application.card_battler_sessions import (
     CardActiveImageKind,
@@ -674,6 +685,13 @@ __all__ = [
     "CardSessionNotFoundError",
     "CardSessionOperationState",
     "CardSessionRepository",
+    "CardFactorySessionService",
+    "CardSessionDevelopmentLockedError",
+    "CardSessionIdentitySource",
+    "CardSourceEligibilityDecision",
+    "CardSourceEligibilityError",
+    "CardSourceEligibilityPolicy",
+    "CardSourceEligibilityReason",
     "CardPresentation",
     "CardPresentationRealizer",
     "CardPresentationResult",

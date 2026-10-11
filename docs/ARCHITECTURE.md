@@ -211,9 +211,18 @@ monotone revision and one short `BEGIN IMMEDIATE` compare-and-swap; external
 calls never occur inside that transaction. The repository has a hard bounded
 capacity and never silently evicts sessions.
 
-No HTTP route, session command service or startup model load is introduced by
-these boundaries. Fake-provider tests validate the contracts but do not
-establish a real LM Studio, hardware or model smoke; the project owner
+`CardFactorySessionService` owns the current create/develop commands. Create
+first obtains live canonical image facts, applies the focused STANDARD-content
+eligibility policy, resolves accessible bytes through the canonical adapter,
+runs the Factory once and persists revision one. Develop requires an accepted
+candidate for the current tier, advances exactly once through
+`CardDevelopmentService`, then reprojects visuals from the original semantics
+and refreshes optional presentation text. It never reruns Stage 1 or imprint
+mapping, and the repository CAS is the only state mutation.
+
+No HTTP route, candidate-generation command or startup model load is
+introduced by these boundaries. Fake-provider tests validate the contracts but
+do not establish a real LM Studio, hardware or model smoke; the project owner
 performs that final manual acceptance.
 
 ## 3. Canonical identity and runtime data
