@@ -338,6 +338,22 @@ from comfyreview.application.lifecycle import (
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
+from comfyreview.application.local_model_runtime import (
+    LocalModelCleanupFailure,
+    LocalModelLease,
+    LocalModelRuntime,
+)
+from comfyreview.application.local_models import (
+    LocalModelConnectionError,
+    LocalModelDescriptor,
+    LocalModelError,
+    LocalModelInstance,
+    LocalModelLifecycleError,
+    LocalModelProtocolError,
+    LocalModelProvider,
+    LocalModelTimeoutError,
+    LocalModelUnavailableError,
+)
 from comfyreview.application.lora_effects import (
     CompiledLoraGraphPolicy,
     LoraGraphEffect,
@@ -797,6 +813,18 @@ __all__ = [
     "LoraRevisionDraft",
     "LoraGraphEffect",
     "LoraGraphEffectPolicy",
+    "LocalModelCleanupFailure",
+    "LocalModelConnectionError",
+    "LocalModelDescriptor",
+    "LocalModelError",
+    "LocalModelInstance",
+    "LocalModelLease",
+    "LocalModelLifecycleError",
+    "LocalModelProtocolError",
+    "LocalModelProvider",
+    "LocalModelRuntime",
+    "LocalModelTimeoutError",
+    "LocalModelUnavailableError",
     "CompiledLoraGraphPolicy",
     "LoraGraphValidationError",
     "LoraReclassificationImpact",
