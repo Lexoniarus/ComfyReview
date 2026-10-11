@@ -338,6 +338,13 @@ from comfyreview.application.lifecycle import (
     LegacySchemaReport,
     LegacySchemaValidationError,
 )
+from comfyreview.application.local_model_inference import (
+    LocalInferenceProvider,
+    LocalInferenceRequest,
+    LocalInferenceResult,
+    LocalInferenceUsage,
+    LocalModelInferenceError,
+)
 from comfyreview.application.local_model_runtime import (
     LocalModelCleanupFailure,
     LocalModelLease,
@@ -814,10 +821,15 @@ __all__ = [
     "LoraGraphEffect",
     "LoraGraphEffectPolicy",
     "LocalModelCleanupFailure",
+    "LocalInferenceProvider",
+    "LocalInferenceRequest",
+    "LocalInferenceResult",
+    "LocalInferenceUsage",
     "LocalModelConnectionError",
     "LocalModelDescriptor",
     "LocalModelError",
     "LocalModelInstance",
+    "LocalModelInferenceError",
     "LocalModelLease",
     "LocalModelLifecycleError",
     "LocalModelProtocolError",

@@ -23,6 +23,9 @@ from comfyreview.providers.lm_studio import (
     NativeLmStudioProvider,
     UrlLibLmStudioJsonTransport,
 )
+from comfyreview.providers.lm_studio_inference import (
+    NativeLmStudioInferenceProvider,
+)
 from comfyreview.providers.output_images import CanonicalOutputImageCatalog
 from comfyreview.providers.prompt_identities import (
     UuidGenerationIdentitySource,
@@ -42,6 +45,7 @@ __all__ = [
     "JsonHttpResponse",
     "NativeComfyUiProvider",
     "NativeLmStudioProvider",
+    "NativeLmStudioInferenceProvider",
     "OutputFileUrlMapper",
     "UrlLibJsonTransport",
     "UrlLibLmStudioJsonTransport",
