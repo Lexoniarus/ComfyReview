@@ -47,6 +47,8 @@ def test_candidate_group_requires_four_ordered_same_group_slots() -> None:
         status=CardCandidateGroupStatus.QUEUED,
         source_image_uid="image-1",
         source_content_hash="hash-1",
+        reference_image_uid="image-1",
+        reference_content_hash="hash-1",
         group_seed=42,
         candidates=_slots("group-1"),
     )
@@ -63,6 +65,8 @@ def test_candidate_group_requires_four_ordered_same_group_slots() -> None:
             status=CardCandidateGroupStatus.QUEUED,
             source_image_uid="image-1",
             source_content_hash="hash-1",
+            reference_image_uid="image-1",
+            reference_content_hash="hash-1",
             group_seed=42,
             candidates=_slots("group-2")[:3],
         )
@@ -77,6 +81,8 @@ def test_development_group_requires_card_identity_and_revision() -> None:
             status=CardCandidateGroupStatus.QUEUED,
             source_image_uid="image-1",
             source_content_hash="hash-1",
+            reference_image_uid="image-1",
+            reference_content_hash="hash-1",
             group_seed=42,
             candidates=_slots("group-1"),
         )

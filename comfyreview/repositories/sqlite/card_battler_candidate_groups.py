@@ -494,10 +494,11 @@ class SqliteCardCandidateGroupRepository:
             """
             INSERT INTO card_candidate_groups (
                 group_id, revision, kind, status, source_image_uid,
-                source_content_hash, group_seed, semantic_profile_json,
+                source_content_hash, reference_image_uid,
+                reference_content_hash, group_seed, semantic_profile_json,
                 card_imprint_json, source_card_id, source_card_revision,
                 failure_category
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
             """,
             (
                 group.group_id,
@@ -506,6 +507,8 @@ class SqliteCardCandidateGroupRepository:
                 group.status.value,
                 group.source_image_uid,
                 group.source_content_hash,
+                group.reference_image_uid,
+                group.reference_content_hash,
                 str(group.group_seed),
                 group.source_card_id,
                 group.source_card_revision,

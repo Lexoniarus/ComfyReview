@@ -178,6 +178,8 @@ class CardCandidateGroup:
     status: CardCandidateGroupStatus
     source_image_uid: str
     source_content_hash: str
+    reference_image_uid: str
+    reference_content_hash: str
     group_seed: int
     candidates: tuple[CardCandidate, ...]
     semantic_profile: SemanticImageProfile | None = None
@@ -191,6 +193,8 @@ class CardCandidateGroup:
             self.group_id,
             self.source_image_uid,
             self.source_content_hash,
+            self.reference_image_uid,
+            self.reference_content_hash,
         )
         if any(not value.strip() for value in required):
             raise ValueError("Candidate group identities must be non-empty")

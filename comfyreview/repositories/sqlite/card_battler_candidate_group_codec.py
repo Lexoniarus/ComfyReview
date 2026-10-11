@@ -39,6 +39,8 @@ def decode_candidate_group(
         status=CardCandidateGroupStatus(str(row["status"])),
         source_image_uid=str(row["source_image_uid"]),
         source_content_hash=str(row["source_content_hash"]),
+        reference_image_uid=str(row["reference_image_uid"]),
+        reference_content_hash=str(row["reference_content_hash"]),
         group_seed=int(row["group_seed"]),
         candidates=tuple(_decode_candidate(item) for item in candidate_rows),
         semantic_profile=(

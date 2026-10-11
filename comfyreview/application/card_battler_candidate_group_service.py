@@ -107,6 +107,8 @@ class InitialCardCandidateGroupService:
                 status=CardCandidateGroupStatus.QUEUED,
                 source_image_uid=source.image_uid,
                 source_content_hash=source.content_hash,
+                reference_image_uid=source.image_uid,
+                reference_content_hash=source.content_hash,
                 group_seed=group_seed,
                 candidates=candidates,
             )
