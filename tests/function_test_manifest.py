@@ -1,6 +1,14 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_candidate_image_service:CardCandidateImageService.submit": (
+        "tests/test_card_candidate_image_service.py::"
+        "test_image_service_submits_four_plans_with_independent_failure"
+    ),
+    "comfyreview.application.card_battler_candidate_image_service:CardCandidateImageService.synchronize": (
+        "tests/test_card_candidate_image_service.py::"
+        "test_image_service_synchronizes_only_validated_primary_outputs"
+    ),
     "comfyreview.application.card_battler_candidate_images:CardCandidateGenerationPolicy.build": (
         "tests/test_card_candidate_generation_policy.py::"
         "test_generation_policy_builds_four_fresh_candidate_specific_requests"

@@ -44,21 +44,18 @@ def _composed_group(tmp_path: Path):
         _profile(),
         group_seed=group.group_seed,
     )
+    candidates = tuple(
+        replace(candidate, visual_recipe=_recipe())
+        for candidate in composition.candidates
+    )
     persisted = repository.complete_composition(
         group.group_id,
         expected_revision=group.revision,
         semantic_profile=_profile(),
         imprint=composition.mapping.imprint,
-        candidates=composition.candidates,
+        candidates=candidates,
     )
-    candidates = tuple(
-        replace(
-            candidate,
-            artifacts=replace(candidate.artifacts, visual_recipe=_recipe()),
-        )
-        for candidate in persisted.candidates
-    )
-    return replace(persisted, candidates=candidates)
+    return persisted
 
 
 def test_generation_policy_builds_four_fresh_candidate_specific_requests(
