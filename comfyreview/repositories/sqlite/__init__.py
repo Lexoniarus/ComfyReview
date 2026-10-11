@@ -21,6 +21,9 @@ from comfyreview.repositories.sqlite.card_battler_candidates import (
 from comfyreview.repositories.sqlite.card_battler_card_pool import (
     SqliteCardPoolRepository,
 )
+from comfyreview.repositories.sqlite.card_battler_deck import (
+    SqliteCardDeckRepository,
+)
 from comfyreview.repositories.sqlite.card_battler_development_model import (
     SqliteCardDevelopmentModelRepository,
 )
@@ -132,6 +135,7 @@ __all__ = [
     "CanonicalSchemaValidationError",
     "SqliteCardBattlerModelRepository",
     "SqliteCardDevelopmentModelRepository",
+    "SqliteCardDeckRepository",
     "SqliteCardGenerationOutputRepository",
     "SqliteCardGenerationRepository",
     "SqliteCardCandidateRepository",
