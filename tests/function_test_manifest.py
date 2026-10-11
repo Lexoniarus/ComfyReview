@@ -9,6 +9,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_candidate_group_reservation.py::"
         "test_initial_group_reservation_does_not_run_analysis_or_mapping"
     ),
+    "comfyreview.application.card_battler_candidate_processing:InitialCardCandidateGroupProcessor.process_next": (
+        "tests/test_card_candidate_group_processing.py::"
+        "test_processor_analyzes_and_maps_once_then_persists_four_cards"
+    ),
+    "comfyreview.application.card_battler_candidate_processing:InitialCardCandidateGroupProcessor.recover_interrupted": (
+        "tests/test_card_candidate_group_processing.py::"
+        "test_restart_recovery_fails_claimed_composition_without_inference"
+    ),
     (
         "comfyreview.application.card_battler_generation_prompt:"
         "CardEvolutionDebugPromptRenderer.render"
