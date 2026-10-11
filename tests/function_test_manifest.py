@@ -17,6 +17,14 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_candidate_group_processing.py::"
         "test_restart_recovery_fails_claimed_composition_without_inference"
     ),
+    "comfyreview.application.card_battler_candidate_processing:CardCandidateGroupWorker.start": (
+        "tests/test_card_candidate_group_worker.py::"
+        "test_candidate_group_worker_owns_one_recovering_thread"
+    ),
+    "comfyreview.application.card_battler_candidate_processing:CardCandidateGroupWorker.stop": (
+        "tests/test_card_candidate_group_worker.py::"
+        "test_candidate_group_worker_owns_one_recovering_thread"
+    ),
     (
         "comfyreview.application.card_battler_generation_prompt:"
         "CardEvolutionDebugPromptRenderer.render"

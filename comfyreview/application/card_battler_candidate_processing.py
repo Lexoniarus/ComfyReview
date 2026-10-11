@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from threading import Event, Lock, Thread
+from typing import Protocol
 
 from comfyreview.application.card_battler_candidate_groups import (
     CardCandidateGroupRepository,
@@ -82,3 +84,87 @@ class InitialCardCandidateGroupProcessor:
             },
         )
         return True
+
+
+class CardCandidateGroupProcessingPass(Protocol):
+    """Expose one recoverable candidate-group polling pass."""
+
+    def recover_interrupted(self) -> int:
+        """Fail groups interrupted before the current process started."""
+        ...
+
+    def process_next(self) -> bool:
+        """Process at most one queued group."""
+        ...
+
+
+class CardCandidateGroupWorker:
+    """Own exactly one polling thread for Card candidate composition."""
+
+    def __init__(
+        self,
+        processor: CardCandidateGroupProcessingPass,
+        *,
+        poll_interval_seconds: float = 0.5,
+    ) -> None:
+        self._processor = processor
+        self._poll_interval_seconds = max(
+            0.05,
+            float(poll_interval_seconds),
+        )
+        self._stop_event = Event()
+        self._lock = Lock()
+        self._thread: Thread | None = None
+        self._logger = logging.getLogger("comfyreview.card_battler.candidates")
+
+    def start(self) -> None:
+        """Recover interrupted work and start one owned polling thread."""
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            recovered = self._processor.recover_interrupted()
+            self._stop_event.clear()
+            self._thread = Thread(
+                target=self._run,
+                name="comfyreview-card-candidate-groups",
+                daemon=True,
+            )
+            self._thread.start()
+        if recovered:
+            self._logger.warning(
+                "card_battler.candidate_group.interrupted_recovered",
+                extra={"recovered_count": recovered},
+            )
+
+    def stop(self, *, timeout_seconds: float = 5.0) -> bool:
+        """Request shutdown and report whether the worker stopped in time."""
+        with self._lock:
+            thread = self._thread
+            self._stop_event.set()
+        if thread is None:
+            return True
+        thread.join(timeout=max(0.0, float(timeout_seconds)))
+        stopped = not thread.is_alive()
+        if stopped:
+            with self._lock:
+                if self._thread is thread:
+                    self._thread = None
+        else:
+            self._logger.warning(
+                "card_battler.candidate_group.shutdown_timeout",
+                extra={"error_type": "CardCandidateGroupShutdownTimeout"},
+            )
+        return stopped
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                processed = self._processor.process_next()
+            except Exception as error:  # keep the owned resource alive
+                self._logger.exception(
+                    "card_battler.candidate_group.pass_failed",
+                    extra={"error_type": type(error).__name__},
+                )
+                processed = False
+            if not processed:
+                self._stop_event.wait(self._poll_interval_seconds)
