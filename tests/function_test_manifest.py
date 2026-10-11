@@ -129,6 +129,22 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_session_service.py::"
         "test_develop_preserves_semantics_imprint_and_active_reference"
     ),
+    "comfyreview.application.card_battler_evolution:CardEvolutionGenerationPolicy.build_requests": (
+        "tests/test_card_battler_evolution.py::"
+        "test_generation_policy_builds_four_stable_fresh_requests"
+    ),
+    "comfyreview.application.card_battler_evolution:CardEvolutionService.generate_candidates": (
+        "tests/test_card_battler_evolution.py::"
+        "test_evolution_service_returns_four_slots_with_partial_failures"
+    ),
+    "comfyreview.application.card_battler_evolution:CardEvolutionService.synchronize": (
+        "tests/test_card_battler_evolution.py::"
+        "test_evolution_service_synchronizes_completed_primary_outputs"
+    ),
+    "comfyreview.application.card_battler_evolution:CardEvolutionService.accept": (
+        "tests/test_card_battler_evolution.py::"
+        "test_candidate_repository_accepts_only_current_completed_slot"
+    ),
     "comfyreview.application.card_battler_development_service:CardDevelopmentService.advance": (
         "tests/test_card_battler_development_service.py::"
         "test_card_development_service_advances_one_tier_and_one_improvement"

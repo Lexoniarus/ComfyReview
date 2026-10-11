@@ -1,5 +1,9 @@
 """Concrete external-system providers used by the composition root."""
 
+from comfyreview.providers.card_reference_images import (
+    CanonicalCardSessionReferenceImageProvider,
+    CardRuntimeOutputQuery,
+)
 from comfyreview.providers.card_session_identities import (
     UuidCardSessionIdentitySource,
 )
@@ -52,6 +56,8 @@ __all__ = [
     "CanonicalOutputImageCatalog",
     "CanonicalCardSourceImageProvider",
     "UuidCardSessionIdentitySource",
+    "CanonicalCardSessionReferenceImageProvider",
+    "CardRuntimeOutputQuery",
     "ComfyUiCardReferenceImageStager",
     "MultipartUploadResponse",
     "MultipartUploadTransport",

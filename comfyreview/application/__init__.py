@@ -59,6 +59,17 @@ from comfyreview.application.card_battler_development_improvement import (
 from comfyreview.application.card_battler_development_service import (
     CardDevelopmentService,
 )
+from comfyreview.application.card_battler_evolution import (
+    CARD_EVOLUTION_GENERATION_POLICY_REVISION,
+    CardCandidateRepository,
+    CardCandidateStatus,
+    CardEvolutionCandidate,
+    CardEvolutionGenerationPolicy,
+    CardEvolutionService,
+    CardGenerationLifecycle,
+    CardGenerationOutputQuery,
+    CardSessionReferenceImageProvider,
+)
 from comfyreview.application.card_battler_evolution_images import (
     CardReferenceImageStager,
     StagedCardReferenceImage,
@@ -679,6 +690,15 @@ __all__ = [
     "DeterministicCardArtifacts",
     "CardReferenceImageStager",
     "StagedCardReferenceImage",
+    "CARD_EVOLUTION_GENERATION_POLICY_REVISION",
+    "CardCandidateRepository",
+    "CardCandidateStatus",
+    "CardEvolutionCandidate",
+    "CardEvolutionGenerationPolicy",
+    "CardEvolutionService",
+    "CardGenerationLifecycle",
+    "CardGenerationOutputQuery",
+    "CardSessionReferenceImageProvider",
     "CompatibilityRelation",
     "CommonCardMaterializer",
     "CardStatMaterializer",

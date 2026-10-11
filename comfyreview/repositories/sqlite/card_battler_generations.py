@@ -376,6 +376,31 @@ class SqliteCardGenerationOutputRepository:
         finally:
             connection.close()
 
+    def output_by_image_uid(self, image_uid: str) -> GenerationOutput | None:
+        """Resolve one Card output for accepted-reference byte loading."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            row = connection.execute(
+                """
+                SELECT image_uid, output_role, output_node_id, output_index,
+                       relative_path, content_hash
+                FROM card_generation_outputs WHERE image_uid = ?
+                """,
+                (image_uid,),
+            ).fetchone()
+            if row is None:
+                return None
+            return GenerationOutput(
+                str(row["image_uid"]),
+                str(row["output_role"]),
+                str(row["output_node_id"]),
+                int(row["output_index"]),
+                self._output_root / str(row["relative_path"]),
+                str(row["content_hash"]),
+            )
+        finally:
+            connection.close()
+
     def _relative_output(self, path: Path) -> str:
         resolved = Path(path).resolve()
         try:
