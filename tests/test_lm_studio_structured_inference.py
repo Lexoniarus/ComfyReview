@@ -171,6 +171,22 @@ def test_missing_model_does_not_fabricate_reported_or_instance_id() -> None:
     assert result.model_instance_id is None
 
 
+def test_empty_compatibility_tool_calls_are_not_a_tool_request() -> None:
+    result = NativeLmStudioStructuredInferenceProvider(
+        _Transport(
+            _response(
+                message={
+                    "role": "assistant",
+                    "tool_calls": [],
+                    "content": '{"name":"Aiko"}',
+                }
+            )
+        )
+    ).infer_structured(_request())
+
+    assert result.value == {"name": "Aiko"}
+
+
 def test_differing_reported_model_is_not_silently_rewritten() -> None:
     result = NativeLmStudioStructuredInferenceProvider(
         _Transport(_response(reported_model="an/alias"))
@@ -288,7 +304,7 @@ def test_incomplete_or_nonstandard_finish_is_rejected(bad: object) -> None:
     (
         {"role": "system", "content": "{}"},
         {"role": "assistant", "refusal": "not permitted", "content": "{}"},
-        {"role": "assistant", "tool_calls": [], "content": "{}"},
+        {"role": "assistant", "tool_calls": [{}], "content": "{}"},
         {"role": "assistant", "function_call": {}, "content": "{}"},
         {},
         [],

@@ -191,7 +191,8 @@ class NativeLmStudioStructuredInferenceProvider:
             raise LocalModelProtocolError(
                 "LM Studio refused structured output"
             )
-        if result_message.get("tool_calls") is not None or (
+        tool_calls = result_message.get("tool_calls")
+        if tool_calls not in (None, []) or (
             result_message.get("function_call") is not None
         ):
             raise LocalModelProtocolError(
