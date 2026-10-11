@@ -251,7 +251,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     )
 
 
-def test_lifespan_prepares_canonical_and_card_runtime_schemas(
+def test_lifespan_defers_card_runtime_schema_until_card_access(
     tmp_path: Path,
 ) -> None:
     events: list[str] = []
@@ -265,7 +265,6 @@ def test_lifespan_prepares_canonical_and_card_runtime_schemas(
     with TestClient(application):
         assert events == [
             "canonical",
-            "card-runtime",
             "worker-start",
             "card-worker-start",
         ]
@@ -276,7 +275,6 @@ def test_lifespan_prepares_canonical_and_card_runtime_schemas(
 
     assert events == [
         "canonical",
-        "card-runtime",
         "worker-start",
         "card-worker-start",
         "card-worker-stop",
@@ -296,7 +294,6 @@ def test_lifespan_preserves_schema_order_when_application_body_fails(
 
     assert events == [
         "canonical",
-        "card-runtime",
         "worker-start",
         "card-worker-start",
         "card-worker-stop",
@@ -395,6 +392,7 @@ def test_card_factory_runtime_builds_its_graph_only_once(
 ) -> None:
     runtime = CardFactoryPrototypeRuntime(
         settings=cast(Settings, object()),
+        runtime_schema=cast(Any, object()),
         model_resource=cast(Any, object()),
         image_contexts=cast(ImageContextQueryService, object()),
         image_resolver=cast(Any, object()),

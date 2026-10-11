@@ -386,18 +386,20 @@ def build_application_container(
             character_root / "prompts", character_source.character_ids()
         ),
     )
+    card_battler_runtime_schema = CardBattlerRuntimeSchemaManager(
+        configured.card_battler_runtime_database_path
+    )
     return ApplicationContainer(
         settings=configured,
         canonical_schema=CanonicalSchemaManager(
             configured.canonical_database_path
         ),
-        card_battler_runtime_schema=CardBattlerRuntimeSchemaManager(
-            configured.card_battler_runtime_database_path
-        ),
+        card_battler_runtime_schema=card_battler_runtime_schema,
         card_battler_model=card_battler_model,
         card_imprint_mapper=CardImprintMapper(card_battler_model),
         card_factory_runtime=CardFactoryPrototypeRuntime(
             settings=configured,
+            runtime_schema=card_battler_runtime_schema,
             model_resource=card_battler_model_resource,
             image_contexts=image_contexts,
             image_resolver=output_images,
@@ -554,7 +556,6 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
         _prepare_directories(resources.settings)
         resources.canonical_schema.prepare_startup()
-        resources.card_battler_runtime_schema.prepare_startup()
         resources.generation_worker.start()
         try:
             resources.card_factory_runtime.start()

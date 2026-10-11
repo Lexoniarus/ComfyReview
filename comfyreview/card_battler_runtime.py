@@ -67,6 +67,9 @@ from comfyreview.application.card_battler_rules import (
     CanonicalRuleRenderer,
     MechanicMaterializer,
 )
+from comfyreview.application.card_battler_runtime import (
+    CardBattlerRuntimeSchemaLifecycle,
+)
 from comfyreview.application.card_battler_semantics import (
     SemanticImageAnalyzer,
 )
@@ -168,6 +171,7 @@ class CardFactoryPrototypeRuntime:
         self,
         *,
         settings: Settings,
+        runtime_schema: CardBattlerRuntimeSchemaLifecycle,
         model_resource: SqliteCardBattlerModelResource,
         image_contexts: ImageContextQueryService,
         image_resolver: CanonicalCardImageResolver,
@@ -175,6 +179,7 @@ class CardFactoryPrototypeRuntime:
         blueprints: WorkflowBlueprintRepository,
     ) -> None:
         self._settings = settings
+        self._runtime_schema = runtime_schema
         self._model_resource = model_resource
         self._image_contexts = image_contexts
         self._image_resolver = image_resolver
@@ -218,6 +223,7 @@ class CardFactoryPrototypeRuntime:
 
     def _build(self) -> CardFactoryPrototypeServices:
         settings = self._settings
+        self._runtime_schema.prepare_startup()
         model = SqliteCardBattlerModelRepository(self._model_resource)
         materialization = SqliteCardMaterializationModelRepository(
             self._model_resource
