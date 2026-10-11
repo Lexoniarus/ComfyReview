@@ -14,7 +14,7 @@ describe("CardSourceBrowser", () => {
       </main>`;
   });
 
-  it("loads, pages, creates a session and disposes", async () => {
+  it("loads, pages, reserves a group and disposes", async () => {
     const fixture = createFixture();
     await fixture.browser.start();
     expect(document.querySelectorAll(".card-source-item")).toHaveLength(1);
@@ -28,7 +28,7 @@ describe("CardSourceBrowser", () => {
     document.querySelector(".card-source-item").click();
     await settle();
     expect(fixture.locationRef.assign).toHaveBeenCalledWith(
-      "/card-workshop/session-1",
+      "/card-candidate-groups",
     );
     fixture.browser.dispose();
     expect(fixture.requests.dispose).toHaveBeenCalledOnce();
@@ -96,10 +96,10 @@ function createFixture(options = {}) {
           : [{ image_uid: `image-${offset + 1}`, image_url: "/image.png" }],
       });
     }),
-    create: vi.fn(() =>
+    createGroup: vi.fn(() =>
       options.createError
         ? Promise.reject(options.createError)
-        : Promise.resolve({ session_id: "session-1" }),
+        : Promise.resolve({ group_id: "group-1" }),
     ),
   };
   const requests = {

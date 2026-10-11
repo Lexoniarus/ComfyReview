@@ -1,7 +1,7 @@
-/** @typedef {{sources: (options: {offset: number, limit: number, signal?: AbortSignal}) => Promise<any>, create: (imageUid: string, options?: {signal?: AbortSignal}) => Promise<any>}} SourceApi */
+/** @typedef {{sources: (options: {offset: number, limit: number, signal?: AbortSignal}) => Promise<any>, createGroup: (imageUid: string, options?: {signal?: AbortSignal}) => Promise<any>}} SourceApi */
 /** @typedef {{run: <T>(operation: (signal: AbortSignal) => Promise<T>) => Promise<T>, cancelRequests: () => void, dispose: () => void}} RequestBoundary */
 
-/** Own source selection, pagination and initial Card session creation. */
+/** Own source selection, pagination and initial Candidate-group reservation. */
 export class CardSourceBrowser {
   /** @param {{root: HTMLElement, api: SourceApi, requests: RequestBoundary, locationRef?: Location, pageSize?: number}} dependencies */
   constructor(dependencies) {
@@ -112,12 +112,10 @@ export class CardSourceBrowser {
     button.disabled = true;
     this.status.textContent = "Bild wird analysiert und Karte erstellt …";
     try {
-      const result = await this.requests.run((signal) =>
-        this.api.create(imageUid, { signal }),
+      await this.requests.run((signal) =>
+        this.api.createGroup(imageUid, { signal }),
       );
-      this.locationRef.assign(
-        `/card-workshop/${encodeURIComponent(String(result.session_id))}`,
-      );
+      this.locationRef.assign("/card-candidate-groups");
     } catch (error) {
       if (!isAbortError(error)) this.status.textContent = errorMessage(error);
       button.disabled = false;

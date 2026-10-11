@@ -40,6 +40,15 @@ export class ApiClient {
   }
 
   /**
+   * @param {string} path
+   * @param {unknown} body
+   * @param {{signal?: AbortSignal, keepalive?: boolean}} [options]
+   */
+  delete(path, body, options = {}) {
+    return this.#request("DELETE", path, body, options);
+  }
+
+  /**
    * @param {string} method
    * @param {string} path
    * @param {unknown} body

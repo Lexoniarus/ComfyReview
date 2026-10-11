@@ -33,6 +33,9 @@ describe("ApiClient", () => {
     ).resolves.toEqual({
       value: 7,
     });
+    await expect(client.delete("deck/a", { revision: 4 })).resolves.toEqual({
+      value: 7,
+    });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,

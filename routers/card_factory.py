@@ -17,6 +17,16 @@ def card_factory_page(request: Request):
     )
 
 
+@router.get("/card-candidate-groups")
+def card_candidate_groups_page(request: Request):
+    """Render the persistent four-Card group overview shell."""
+    return templates.TemplateResponse(
+        request=request,
+        name="card_candidate_groups.html",
+        context={"request": request},
+    )
+
+
 @router.get("/card-workshop/{session_id}")
 def card_workshop_page(request: Request, session_id: str):
     """Render one revision-safe Card workshop shell."""
