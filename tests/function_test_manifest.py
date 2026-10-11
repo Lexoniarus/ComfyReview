@@ -1,6 +1,34 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_deck:CardDeckPolicy.add": (
+        "tests/test_card_deck_service.py::"
+        "test_deck_policy_enforces_unique_cards_capacity_and_exact_order"
+    ),
+    "comfyreview.application.card_battler_deck:CardDeckPolicy.remove": (
+        "tests/test_card_deck_service.py::"
+        "test_deck_policy_enforces_unique_cards_capacity_and_exact_order"
+    ),
+    "comfyreview.application.card_battler_deck:CardDeckPolicy.reorder": (
+        "tests/test_card_deck_service.py::"
+        "test_deck_policy_enforces_unique_cards_capacity_and_exact_order"
+    ),
+    "comfyreview.application.card_battler_deck:CardDeckService.get": (
+        "tests/test_card_deck_service.py::"
+        "test_deck_service_requires_revision_and_existing_pool_card"
+    ),
+    "comfyreview.application.card_battler_deck:CardDeckService.add": (
+        "tests/test_card_deck_service.py::"
+        "test_deck_service_requires_revision_and_existing_pool_card"
+    ),
+    "comfyreview.application.card_battler_deck:CardDeckService.remove": (
+        "tests/test_card_deck_service.py::"
+        "test_deck_service_requires_revision_and_existing_pool_card"
+    ),
+    "comfyreview.application.card_battler_deck:CardDeckService.reorder": (
+        "tests/test_card_deck_service.py::"
+        "test_deck_service_requires_revision_and_existing_pool_card"
+    ),
     "comfyreview.application.card_battler_candidate_processing:DevelopmentCardCandidateGroupProcessor.process_next": (
         "tests/test_card_development_group_processing.py::"
         "test_development_processor_composes_without_analysis_or_mapping"
