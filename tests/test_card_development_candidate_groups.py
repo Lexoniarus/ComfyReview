@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 from comfyreview.application.card_battler_candidate_groups import (
+    CardCandidateGroup,
     CardCandidateGroupKind,
     CardCandidateGroupStatus,
 )
@@ -20,12 +21,14 @@ from comfyreview.application.card_battler_development_groups import (
     CardDevelopmentCandidateGroupService,
     development_candidate_seeds,
 )
+from comfyreview.application.card_battler_presentation import CardPresentation
 from comfyreview.domain.card_battler import (
     CARD_DEVELOPMENT_ALGORITHM_REVISION,
     CardDevelopmentProvenance,
     CardDevelopmentResult,
     CardIdentity,
     CardState,
+    StructuredCardSpec,
     TraitDevelopmentAction,
 )
 from tests.test_card_battler_session_repository import _session
@@ -59,7 +62,7 @@ def _pool_card() -> CardPoolCard:
 
 class _Development:
     def __init__(self) -> None:
-        self.calls = []
+        self.calls: list[StructuredCardSpec] = []
 
     def advance(self, card):
         self.calls.append(card)
@@ -89,7 +92,7 @@ class _Development:
 class _Visuals:
     def __init__(self, recipe) -> None:
         self.recipe = recipe
-        self.seeds = []
+        self.seeds: list[int] = []
 
     def project(self, semantic_profile, card, *, explicit_seed):
         assert semantic_profile == _pool_card().semantic_profile
@@ -101,7 +104,7 @@ class _Visuals:
 class _Presentations:
     def __init__(self, result) -> None:
         self.result = result
-        self.existing = []
+        self.existing: list[CardPresentation | None] = []
 
     def realize(self, semantic_profile, card, *, existing=None):
         assert semantic_profile == _pool_card().semantic_profile
@@ -122,7 +125,7 @@ class _Cards:
 
 class _Groups:
     def __init__(self) -> None:
-        self.created = []
+        self.created: list[CardCandidateGroup] = []
 
     def create(self, group):
         self.created.append(group)

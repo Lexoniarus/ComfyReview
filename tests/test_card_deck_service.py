@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
+from dataclasses import replace
 
 import pytest
 
+from comfyreview.application.card_battler_card_pool import CardPoolCard
 from comfyreview.application.card_battler_deck import (
     CardDeckConflictError,
     CardDeckNotFoundError,
@@ -18,6 +19,7 @@ from comfyreview.domain.card_battler import (
     CardDeck,
     CardDeckEntry,
 )
+from tests.test_card_development_candidate_groups import _pool_card
 
 
 class _Decks:
@@ -38,10 +40,12 @@ class _Cards:
     def __init__(self, *card_ids: str) -> None:
         self.card_ids = set(card_ids)
 
-    def get(self, card_id):
+    def get(self, card_id: str) -> CardPoolCard | None:
         if card_id not in self.card_ids:
             return None
-        return SimpleNamespace(card_id=card_id)
+        card = _pool_card()
+        identity = replace(card.state.identity, card_id=card_id)
+        return replace(card, state=replace(card.state, identity=identity))
 
 
 def test_deck_policy_enforces_unique_cards_capacity_and_exact_order() -> None:

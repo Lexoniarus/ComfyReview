@@ -7,14 +7,13 @@ from threading import Event, Lock, Thread
 from typing import Protocol
 
 from comfyreview.application.card_battler_candidate_groups import (
+    CardCandidateGroup,
     CardCandidateGroupKind,
     CardCandidateGroupRepository,
     CardCandidateStatus,
+    CompleteCardCandidateArtifacts,
 )
-from comfyreview.application.card_battler_candidate_image_service import (
-    CardCandidateImageService,
-)
-from comfyreview.application.card_battler_card_pool import CardPoolRepository
+from comfyreview.application.card_battler_card_pool import CardPoolCard
 from comfyreview.application.card_battler_development_groups import (
     CardDevelopmentCandidateComposer,
 )
@@ -95,14 +94,53 @@ class InitialCardCandidateGroupProcessor:
         return True
 
 
+class DevelopmentCandidateGroupRepository(Protocol):
+    """Persist only the transitions used by development composition."""
+
+    def claim_next_queued(
+        self,
+        kind: CardCandidateGroupKind = CardCandidateGroupKind.INITIAL,
+    ) -> CardCandidateGroup | None:
+        """Claim the oldest queued group of one kind."""
+        ...
+
+    def complete_development_composition(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+        candidates: tuple[CompleteCardCandidateArtifacts, ...],
+    ) -> CardCandidateGroup:
+        """Persist four developed Candidate artifacts by CAS."""
+        ...
+
+    def fail_composition(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+        failure_category: str,
+    ) -> CardCandidateGroup:
+        """Persist one controlled composition failure."""
+        ...
+
+
+class DevelopmentCardQuery(Protocol):
+    """Resolve the exact Card revision used for development composition."""
+
+    def get(self, card_id: str) -> CardPoolCard | None:
+        """Return one current pool Card."""
+        ...
+
+
 class DevelopmentCardCandidateGroupProcessor:
     """Compose queued development groups from one current confirmed Card."""
 
     def __init__(
         self,
         *,
-        groups: CardCandidateGroupRepository,
-        cards: CardPoolRepository,
+        groups: DevelopmentCandidateGroupRepository,
+        cards: DevelopmentCardQuery,
         composer: CardDevelopmentCandidateComposer,
     ) -> None:
         self._groups = groups
@@ -175,8 +213,8 @@ class CardCandidateCompositionCoordinator:
     def __init__(
         self,
         *,
-        initial: InitialCardCandidateGroupProcessor,
-        development: DevelopmentCardCandidateGroupProcessor,
+        initial: InitialCardCandidateCompositionPass,
+        development: CardCandidateCompositionPass,
     ) -> None:
         self._initial = initial
         self._development = development
@@ -197,8 +235,8 @@ class CardCandidateGroupLifecycleProcessor:
         self,
         *,
         composition: CardCandidateGroupProcessingPass,
-        groups: CardCandidateGroupRepository,
-        images: CardCandidateImageService,
+        groups: GeneratingCardCandidateGroupQuery,
+        images: CardCandidateImageLifecycle,
     ) -> None:
         self._composition = composition
         self._groups = groups
@@ -251,6 +289,63 @@ class CardCandidateGroupProcessingPass(Protocol):
 
     def process_next(self) -> bool:
         """Process at most one queued group."""
+        ...
+
+
+class CardCandidateCompositionPass(Protocol):
+    """Compose at most one queued Candidate group."""
+
+    def process_next(self) -> bool:
+        """Report whether one group was processed."""
+        ...
+
+
+class InitialCardCandidateCompositionPass(
+    CardCandidateCompositionPass, Protocol
+):
+    """Recover and compose initial Candidate groups."""
+
+    def recover_interrupted(self) -> int:
+        """Fail initial compositions interrupted by process shutdown."""
+        ...
+
+
+class GeneratingCardCandidateGroupQuery(Protocol):
+    """List groups that still need image lifecycle work."""
+
+    def generating_groups(self) -> tuple[CardCandidateGroup, ...]:
+        """Return active groups in stable order."""
+        ...
+
+
+class CardCandidateGroupRevision(Protocol):
+    """Expose the only image-lifecycle result used by the coordinator."""
+
+    @property
+    def revision(self) -> int:
+        """Return the persisted group revision after image processing."""
+        ...
+
+
+class CardCandidateImageLifecycle(Protocol):
+    """Submit and synchronize Candidate-specific image generations."""
+
+    def submit(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+    ) -> object:
+        """Submit every composited slot that has no generation yet."""
+        ...
+
+    def synchronize(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+    ) -> CardCandidateGroupRevision:
+        """Refresh one group's submitted jobs and outputs."""
         ...
 
 

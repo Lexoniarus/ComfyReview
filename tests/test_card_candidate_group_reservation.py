@@ -14,6 +14,7 @@ from comfyreview.application.card_battler_candidate_group_service import (
     InitialCardCandidateGroupService,
 )
 from comfyreview.application.card_battler_candidate_groups import (
+    CardCandidateGroup,
     CardCandidateGroupRepository,
     CardCandidateGroupStatus,
     CardCandidateStatus,
@@ -68,7 +69,7 @@ class _Seeds:
 
 class _Groups:
     def __init__(self) -> None:
-        self.created = []
+        self.created: list[CardCandidateGroup] = []
 
     def create(self, group):
         self.created.append(group)

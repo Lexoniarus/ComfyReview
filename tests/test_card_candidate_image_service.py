@@ -25,6 +25,7 @@ from comfyreview.application.card_battler_evolution_images import (
 from comfyreview.application.generation import (
     GenerationMutationError,
     GenerationReconciliationRequired,
+    GenerationRequest,
     GenerationSubmission,
 )
 from comfyreview.application.generation_outputs import GenerationOutput
@@ -82,7 +83,7 @@ class _Generations:
         self._failing_slots = set(failing_slots)
         self._ambiguous_slots = set(ambiguous_slots)
         self._prefix = prefix
-        self.requests = []
+        self.requests: list[GenerationRequest] = []
         self.observed: dict[str, str] = {}
 
     def submit(self, request):

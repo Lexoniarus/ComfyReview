@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from types import SimpleNamespace
 
 import pytest
 
@@ -14,13 +13,17 @@ from comfyreview.application.card_battler_candidate_groups import (
 )
 from comfyreview.application.card_battler_card_pool import (
     CardCandidateAcceptanceService,
+    CardPoolCard,
     CardPoolConflictError,
     CardPoolNotFoundError,
     DevelopmentCardCandidateAcceptancePolicy,
     InitialCardCandidateAcceptancePolicy,
 )
 from tests.test_card_candidate_generation_policy import _composed_group
-from tests.test_card_development_candidate_groups import _Development
+from tests.test_card_development_candidate_groups import (
+    _Development,
+    _pool_card,
+)
 
 
 class _Groups:
@@ -34,29 +37,29 @@ class _Groups:
 
 
 class _Cards:
-    def __init__(self, result) -> None:
+    def __init__(self, result: CardPoolCard) -> None:
         self.result = result
-        self.calls = []
-        self.development_calls = []
+        self.calls: list[tuple[str, str, int, str]] = []
+        self.development_calls: list[tuple[str, str, int]] = []
 
     def accept_initial_candidate(
         self,
-        group_id,
-        candidate_id,
+        group_id: str,
+        candidate_id: str,
         *,
-        expected_revision,
-        card_id,
-    ):
+        expected_revision: int,
+        card_id: str,
+    ) -> CardPoolCard:
         self.calls.append((group_id, candidate_id, expected_revision, card_id))
         return self.result
 
     def accept_development_candidate(
         self,
-        group_id,
-        candidate_id,
+        group_id: str,
+        candidate_id: str,
         *,
-        expected_revision,
-    ):
+        expected_revision: int,
+    ) -> CardPoolCard:
         self.development_calls.append(
             (group_id, candidate_id, expected_revision)
         )
@@ -134,7 +137,7 @@ def test_acceptance_service_delegates_one_revision_safe_card_identity(
     tmp_path,
 ) -> None:
     group = _ready_group(tmp_path)
-    expected = SimpleNamespace(state="confirmed")
+    expected = _pool_card()
     cards = _Cards(expected)
     service = CardCandidateAcceptanceService(
         groups=_Groups(group),
@@ -206,13 +209,15 @@ def test_development_acceptance_requires_exact_completed_action(
         )
         == group.candidates[0]
     )
+    first_artifacts = group.candidates[0].artifacts
+    assert first_artifacts is not None
     without_action = replace(
         group,
         candidates=(
             replace(
                 group.candidates[0],
                 artifacts=replace(
-                    group.candidates[0].artifacts,
+                    first_artifacts,
                     development=None,
                 ),
             ),
@@ -226,7 +231,8 @@ def test_development_acceptance_requires_exact_completed_action(
             expected_revision=without_action.revision,
         )
 
-    cards = _Cards(SimpleNamespace(state="developed"))
+    expected = _pool_card()
+    cards = _Cards(expected)
     result = CardCandidateAcceptanceService(
         groups=_Groups(group),
         cards=cards,
@@ -238,7 +244,7 @@ def test_development_acceptance_requires_exact_completed_action(
         group.candidates[2].candidate_id,
         expected_revision=group.revision,
     )
-    assert result.state == "developed"
+    assert result is expected
     assert cards.calls == []
     assert cards.development_calls == [
         (group.group_id, group.candidates[2].candidate_id, group.revision)

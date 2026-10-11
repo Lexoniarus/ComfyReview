@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from comfyreview.application.card_battler_card_pool import CardPoolRepository
+from comfyreview.application.card_battler_card_pool import CardPoolCard
 from comfyreview.domain.card_battler import (
     POC_DECK_CAPACITY,
     POC_DECK_ID,
@@ -36,6 +36,14 @@ class CardDeckRepository(Protocol):
         expected_revision: int,
     ) -> CardDeck:
         """Atomically replace ordered membership by revision CAS."""
+        ...
+
+
+class CardPoolCardQuery(Protocol):
+    """Resolve current pool membership without accepting Candidates."""
+
+    def get(self, card_id: str) -> CardPoolCard | None:
+        """Return one current pool Card."""
         ...
 
 
@@ -93,7 +101,7 @@ class CardDeckService:
         self,
         *,
         decks: CardDeckRepository,
-        cards: CardPoolRepository,
+        cards: CardPoolCardQuery,
         policy: CardDeckPolicy,
     ) -> None:
         self._decks = decks

@@ -84,14 +84,14 @@ def test_card_pool_accepts_one_candidate_and_completes_group_atomically(
         ready.candidates[1].candidate_id,
         expected_revision=ready.revision,
     )
+    accepted_artifacts = ready.candidates[1].artifacts
+    assert accepted_artifacts is not None
 
     assert accepted.state.identity.card_id == "card-1"
     assert accepted.state.identity.source_image_uid == ready.source_image_uid
     assert accepted.semantic_profile == ready.semantic_profile
-    assert accepted.state.card == ready.candidates[1].artifacts.card
-    assert (
-        accepted.visual_recipe == ready.candidates[1].artifacts.visual_recipe
-    )
+    assert accepted.state.card == accepted_artifacts.card
+    assert accepted.visual_recipe == accepted_artifacts.visual_recipe
     assert accepted.state.active_image_uid == "image-1"
     assert cards.get("card-1") == accepted
     assert cards.get("missing") is None

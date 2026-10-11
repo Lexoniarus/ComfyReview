@@ -14,7 +14,6 @@ from comfyreview.application.card_battler_candidate_groups import (
     CardCandidate,
     CardCandidateGroup,
     CardCandidateGroupKind,
-    CardCandidateGroupRepository,
     CardCandidateGroupStatus,
     CardCandidateStatus,
     CompleteCardCandidateArtifacts,
@@ -23,17 +22,16 @@ from comfyreview.application.card_battler_card_pool import (
     CardPoolCard,
     CardPoolConflictError,
     CardPoolNotFoundError,
-    CardPoolRepository,
 )
 from comfyreview.application.card_battler_presentation import (
-    CardPresentationRealizer,
+    CardPresentation,
+    CardPresentationResult,
 )
 from comfyreview.application.card_battler_random import (
     DomainSeparatedCardRandom,
 )
-from comfyreview.application.card_battler_visual_projection import (
-    VisualPromptProjector,
-)
+from comfyreview.application.card_battler_semantics import SemanticImageProfile
+from comfyreview.application.card_battler_visuals import VisualPromptRecipe
 from comfyreview.domain.card_battler import (
     CardDevelopmentResult,
     StructuredCardSpec,
@@ -83,6 +81,50 @@ class CardDevelopmentStep(Protocol):
         ...
 
 
+class CardDevelopmentVisualProjector(Protocol):
+    """Project one developed Card without exposing a concrete collaborator."""
+
+    def project(
+        self,
+        semantic_profile: SemanticImageProfile,
+        card: StructuredCardSpec,
+        *,
+        explicit_seed: int,
+    ) -> VisualPromptRecipe:
+        """Return the complete deterministic recipe for one Candidate."""
+        ...
+
+
+class CardDevelopmentPresentationRealizer(Protocol):
+    """Refresh optional cosmetic text for one developed Candidate."""
+
+    def realize(
+        self,
+        semantic_profile: SemanticImageProfile,
+        card: StructuredCardSpec,
+        *,
+        existing: CardPresentation | None = None,
+    ) -> CardPresentationResult:
+        """Return cosmetic presentation without changing mechanics."""
+        ...
+
+
+class CardDevelopmentSourceQuery(Protocol):
+    """Resolve the current Card used to reserve development work."""
+
+    def get(self, card_id: str) -> CardPoolCard | None:
+        """Return one current pool Card."""
+        ...
+
+
+class CardDevelopmentGroupRepository(Protocol):
+    """Reserve a complete four-slot development group atomically."""
+
+    def create(self, group: CardCandidateGroup) -> CardCandidateGroup:
+        """Persist one immutable group reservation."""
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class CardDevelopmentCandidateComposition:
     """Carry four inspectable development Candidates for persistence."""
@@ -103,8 +145,8 @@ class CardDevelopmentCandidateComposer:
         self,
         *,
         development: CardDevelopmentStep,
-        visual_projector: VisualPromptProjector,
-        presentation_realizer: CardPresentationRealizer,
+        visual_projector: CardDevelopmentVisualProjector,
+        presentation_realizer: CardDevelopmentPresentationRealizer,
     ) -> None:
         self._development = development
         self._visual_projector = visual_projector
@@ -152,8 +194,8 @@ class CardDevelopmentCandidateGroupService:
     def __init__(
         self,
         *,
-        cards: CardPoolRepository,
-        groups: CardCandidateGroupRepository,
+        cards: CardDevelopmentSourceQuery,
+        groups: CardDevelopmentGroupRepository,
         identities: CardCandidateGroupIdentitySource,
         seeds: CardCandidateGroupSeedSource,
     ) -> None:

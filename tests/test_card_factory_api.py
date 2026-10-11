@@ -29,7 +29,7 @@ from tests.test_card_development_candidate_groups import _pool_card
 class _InitialGroups:
     def __init__(self, group) -> None:
         self.group = group
-        self.calls = []
+        self.calls: list[object] = []
 
     def reserve(self, image_uid):
         self.calls.append(image_uid)
@@ -39,7 +39,7 @@ class _InitialGroups:
 class _Groups:
     def __init__(self, group) -> None:
         self.group = group
-        self.calls = []
+        self.calls: list[object] = []
 
     def list_groups(self):
         return (self.group,)
@@ -64,7 +64,7 @@ class _Groups:
 class _Acceptance:
     def __init__(self, card) -> None:
         self.card = card
-        self.calls = []
+        self.calls: list[object] = []
 
     def accept(self, group_id, candidate_id, *, expected_revision):
         self.calls.append((group_id, candidate_id, expected_revision))
@@ -74,7 +74,7 @@ class _Acceptance:
 class _DevelopmentGroups:
     def __init__(self, group) -> None:
         self.group = group
-        self.calls = []
+        self.calls: list[object] = []
 
     def reserve(self, card_id, *, expected_revision):
         self.calls.append((card_id, expected_revision))
@@ -96,7 +96,7 @@ class _Deck:
     def __init__(self, card_id: str) -> None:
         self.deck = CardDeck(POC_DECK_ID, 1, ())
         self.card_id = card_id
-        self.calls = []
+        self.calls: list[object] = []
 
     def get(self):
         return self.deck

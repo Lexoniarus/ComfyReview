@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from threading import Event
-from types import SimpleNamespace
 
 import pytest
 
@@ -83,19 +82,30 @@ class _LifecycleGroups:
         return self.groups
 
 
+@dataclass(frozen=True)
+class _Revision:
+    revision: int
+
+
 class _LifecycleImages:
     def __init__(self, *, revision_changed: bool = True) -> None:
         self.revision_changed = revision_changed
-        self.submitted = []
-        self.synchronized = []
+        self.submitted: list[tuple[str, int]] = []
+        self.synchronized: list[tuple[str, int]] = []
 
-    def submit(self, group_id, *, expected_revision):
+    def submit(self, group_id: str, *, expected_revision: int) -> object:
         self.submitted.append((group_id, expected_revision))
+        return None
 
-    def synchronize(self, group_id, *, expected_revision):
+    def synchronize(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+    ) -> _Revision:
         self.synchronized.append((group_id, expected_revision))
         increment = 1 if self.revision_changed else 0
-        return SimpleNamespace(revision=expected_revision + increment)
+        return _Revision(expected_revision + increment)
 
 
 def test_lifecycle_processor_dispatches_composition_submission_and_polling(

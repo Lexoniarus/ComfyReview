@@ -97,6 +97,31 @@ class CardPoolRepository(Protocol):
         ...
 
 
+class CardCandidateAcceptanceRepository(Protocol):
+    """Persist only the two atomic Candidate acceptance transitions."""
+
+    def accept_initial_candidate(
+        self,
+        group_id: str,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+        card_id: str,
+    ) -> CardPoolCard:
+        """Create one Card from an initial Candidate by group CAS."""
+        ...
+
+    def accept_development_candidate(
+        self,
+        group_id: str,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+    ) -> CardPoolCard:
+        """Replace one current Card from a development Candidate."""
+        ...
+
+
 class InitialCardCandidateAcceptancePolicy:
     """Validate the business facts required for initial Candidate acceptance."""
 
@@ -194,7 +219,7 @@ class CardCandidateAcceptanceService:
         self,
         *,
         groups: ProtocolCardCandidateGroupQuery,
-        cards: CardPoolRepository,
+        cards: CardCandidateAcceptanceRepository,
         identities: CardIdentitySource,
         policy: InitialCardCandidateAcceptancePolicy,
         development_policy: DevelopmentCardCandidateAcceptancePolicy
