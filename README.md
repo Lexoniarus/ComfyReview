@@ -42,6 +42,20 @@ Wichtige Werte:
 | `COMFYREVIEW_WORKFLOWS_DIR` | Workflow-Dateien |
 | `COMFYREVIEW_DATABASE` | Kanonische ComfyReview-SQLite-Datei |
 | `COMFYREVIEW_PORT` | Lokaler HTTP-Port (Standard 8000) |
+| `COMFYREVIEW_LM_STUDIO_BASE_URL` | Optionaler lokaler LM-Studio-Endpunkt |
+
+Die lokale Modellgrundlage ist derzeit ein **technischer POC-Baustein**, kein
+fertiger Card-Factory-Workflow. Sie stellt typisierte Model-Lifecycle-, Text-,
+Vision- und JSON-Schema-Inferenzgrenzen bereit. LM Studio wird beim App-Start
+weder verbunden noch gestartet und Modelle werden nicht vorsorglich geladen.
+Erst ein späterer, explizit verdrahteter Use Case darf diese Provider nutzen.
+
+Die vollständigen optionalen Variablen stehen in [`.env.example`](.env.example):
+ein API-Token, getrennte List-/Load-/Inference-/Unload-Timeouts sowie Vision-
+und Textmodell. Ein vorhandenes Token wird ausschließlich als Bearer-Header
+gesendet. Ein grüner Fake-Transport- oder CI-Test ist ausdrücklich kein
+Nachweis eines realen LM-Studio- oder Modell-Smokes; diese Abnahme bleibt beim
+Projektinhaber.
 
 **Wichtig bei vorhandenen lokalen Daten:** Startup migriert keine unbekannte alte Datenbank still auf v18. Vor einem Upgrade die [getrennte Betriebs-/Migrationsanleitung](docs/OPERATIONS.md) und [Datenarchitektur](docs/DATA_ARCHITECTURE.md) prüfen. Datenbank, generierte Bilder, Modelle, Geheimnisse und persönliche Pfade gehören **nicht** ins Git-Repository.
 

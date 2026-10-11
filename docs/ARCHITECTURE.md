@@ -123,6 +123,44 @@ prove Cocos Editor import, rendering, hitboxes, Web/native asset behavior or a
 real backend image smoke; final manual acceptance remains with the project
 owner.
 
+### 2.3 Local-model lifecycle and inference foundation
+
+The local-model foundation is optional and is not yet a runtime-wired Card
+Factory. `Settings` defines the LM Studio base URL, optional bearer token,
+separate list/load/inference/unload timeouts and explicit Vision/Text model
+keys. Reading settings performs no connection, model discovery, loading or
+inference. The app process never starts LM Studio itself.
+
+Application code owns immutable requests/results, typed failures and the
+single `LocalModelRuntime` lifecycle owner. The runtime chooses an already
+loaded instance deterministically as a borrowed lease or loads an owned
+instance. Borrowed instances are never unloaded. Owned instances are unloaded
+only after their final reference-counted lease is released. A failed final
+unload remains retryable and blocks a new lease for that model; its cleanup
+failure does not replace a previously successful inference result or a primary
+inference failure.
+
+Provider code owns the HTTP boundary. `UrlLibLmStudioJsonTransport` applies
+the optional bearer token and normalizes timeout, connection, HTTP and JSON
+failures without exposing credentials or private response bodies. The native
+lifecycle adapter uses `/api/v1/models`, `/api/v1/models/load` and
+`/api/v1/models/unload`. Stateless bounded text/vision inference uses
+`/api/v1/chat`. The provider never decides whether an instance is borrowed or
+owned.
+
+Schema-constrained inference uses the OpenAI-compatible
+`/v1/chat/completions` endpoint with a strict JSON-Schema response format.
+Request schemas are snapshotted, limited to 64 KiB, checked as Draft 2020-12
+and may use only local static references. Responses are size-bounded, reject
+duplicate keys and non-finite numbers, and are independently validated with
+Draft 2020-12 before typed application data is returned. Provider-side schema
+enforcement is therefore an aid, not application authority.
+
+No HTTP route, database write, Card-Battler session or startup model load is
+introduced by this foundation. Fake-transport tests and CI validate the
+contracts but do not establish a real LM Studio, hardware or model smoke; the
+project owner performs that final manual acceptance.
+
 ## 3. Canonical identity and runtime data
 
 The canonical database has an explicit schema version. Schema v18 is the active
