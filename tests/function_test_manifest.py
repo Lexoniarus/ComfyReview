@@ -29,6 +29,10 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_candidate_acceptance.py::"
         "test_acceptance_policy_requires_terminal_group_and_completed_candidate"
     ),
+    "comfyreview.application.card_battler_card_pool:DevelopmentCardCandidateAcceptancePolicy.select": (
+        "tests/test_card_candidate_acceptance.py::"
+        "test_development_acceptance_requires_exact_completed_action"
+    ),
     "comfyreview.application.card_battler_card_pool:CardCandidateAcceptanceService.accept": (
         "tests/test_card_candidate_acceptance.py::"
         "test_acceptance_service_delegates_one_revision_safe_card_identity"

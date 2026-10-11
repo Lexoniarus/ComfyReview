@@ -78,6 +78,16 @@ class CardPoolRepository(Protocol):
         """Atomically accept one initial Candidate and complete its group."""
         ...
 
+    def accept_development_candidate(
+        self,
+        group_id: str,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+    ) -> CardPoolCard:
+        """Atomically replace one Card state from a development Candidate."""
+        ...
+
     def get(self, card_id: str) -> CardPoolCard | None:
         """Return one current confirmed Card."""
         ...
@@ -128,6 +138,55 @@ class InitialCardCandidateAcceptancePolicy:
         return candidate
 
 
+class DevelopmentCardCandidateAcceptancePolicy:
+    """Validate one comparison-ready adjacent-tier Candidate selection."""
+
+    @staticmethod
+    def select(
+        group: CardCandidateGroup,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+    ) -> CardCandidate:
+        """Return one completed Development Candidate or reject the state."""
+        if group.revision != expected_revision:
+            raise CardPoolConflictError("Candidate group revision is stale")
+        if (
+            group.kind is not CardCandidateGroupKind.DEVELOPMENT
+            or group.source_card_id is None
+            or group.source_card_revision is None
+        ):
+            raise CardPoolConflictError(
+                "Development acceptance requires a source Card revision"
+            )
+        if group.status not in {
+            CardCandidateGroupStatus.READY,
+            CardCandidateGroupStatus.PARTIAL_FAILURE,
+        }:
+            raise CardPoolConflictError(
+                "Candidate group is not comparison-ready"
+            )
+        candidate = next(
+            (
+                item
+                for item in group.candidates
+                if item.candidate_id == candidate_id
+            ),
+            None,
+        )
+        if candidate is None:
+            raise CardPoolNotFoundError(candidate_id)
+        if (
+            candidate.status is not CardCandidateStatus.COMPLETED
+            or candidate.artifacts is None
+            or candidate.artifacts.development is None
+        ):
+            raise CardPoolConflictError(
+                "Only a completed Development Candidate can be accepted"
+            )
+        return candidate
+
+
 class CardCandidateAcceptanceService:
     """Accept comparison-ready Candidates into the persistent Card pool."""
 
@@ -138,11 +197,16 @@ class CardCandidateAcceptanceService:
         cards: CardPoolRepository,
         identities: CardIdentitySource,
         policy: InitialCardCandidateAcceptancePolicy,
+        development_policy: DevelopmentCardCandidateAcceptancePolicy
+        | None = None,
     ) -> None:
         self._groups = groups
         self._cards = cards
         self._identities = identities
         self._policy = policy
+        self._development_policy = (
+            development_policy or DevelopmentCardCandidateAcceptancePolicy()
+        )
 
     def accept(
         self,
@@ -155,16 +219,27 @@ class CardCandidateAcceptanceService:
         group = self._groups.get(group_id)
         if group is None:
             raise CardPoolNotFoundError(group_id)
-        self._policy.select(
+        if group.kind is CardCandidateGroupKind.INITIAL:
+            self._policy.select(
+                group,
+                candidate_id,
+                expected_revision=expected_revision,
+            )
+            return self._cards.accept_initial_candidate(
+                group_id,
+                candidate_id,
+                expected_revision=expected_revision,
+                card_id=self._identities.new_card_id(),
+            )
+        self._development_policy.select(
             group,
             candidate_id,
             expected_revision=expected_revision,
         )
-        return self._cards.accept_initial_candidate(
+        return self._cards.accept_development_candidate(
             group_id,
             candidate_id,
             expected_revision=expected_revision,
-            card_id=self._identities.new_card_id(),
         )
 
 

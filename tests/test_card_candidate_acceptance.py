@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from comfyreview.application.card_battler_candidate_groups import (
+    CardCandidateGroupKind,
     CardCandidateGroupStatus,
     CardCandidateStatus,
 )
@@ -15,9 +16,11 @@ from comfyreview.application.card_battler_card_pool import (
     CardCandidateAcceptanceService,
     CardPoolConflictError,
     CardPoolNotFoundError,
+    DevelopmentCardCandidateAcceptancePolicy,
     InitialCardCandidateAcceptancePolicy,
 )
 from tests.test_card_candidate_generation_policy import _composed_group
+from tests.test_card_development_candidate_groups import _Development
 
 
 class _Groups:
@@ -34,6 +37,7 @@ class _Cards:
     def __init__(self, result) -> None:
         self.result = result
         self.calls = []
+        self.development_calls = []
 
     def accept_initial_candidate(
         self,
@@ -44,6 +48,18 @@ class _Cards:
         card_id,
     ):
         self.calls.append((group_id, candidate_id, expected_revision, card_id))
+        return self.result
+
+    def accept_development_candidate(
+        self,
+        group_id,
+        candidate_id,
+        *,
+        expected_revision,
+    ):
+        self.development_calls.append(
+            (group_id, candidate_id, expected_revision)
+        )
         return self.result
 
 
@@ -149,3 +165,81 @@ def test_acceptance_service_delegates_one_revision_safe_card_identity(
             identities=_Identities(),
             policy=InitialCardCandidateAcceptancePolicy(),
         ).accept("missing", "candidate", expected_revision=1)
+
+
+def test_development_acceptance_requires_exact_completed_action(
+    tmp_path,
+) -> None:
+    initial = _ready_group(tmp_path)
+    candidates = []
+    for candidate in initial.candidates:
+        assert candidate.artifacts is not None
+        development = _Development().advance(candidate.artifacts.card)
+        candidates.append(
+            replace(
+                candidate,
+                artifacts=replace(
+                    candidate.artifacts,
+                    card=development.card,
+                    visual_recipe=replace(
+                        candidate.artifacts.visual_recipe,
+                        tier_ordinal=development.card.tier_ordinal,
+                    ),
+                    development=development,
+                ),
+            )
+        )
+    group = replace(
+        initial,
+        kind=CardCandidateGroupKind.DEVELOPMENT,
+        source_card_id="card-1",
+        source_card_revision=1,
+        candidates=tuple(candidates),
+    )
+    policy = DevelopmentCardCandidateAcceptancePolicy()
+
+    assert (
+        policy.select(
+            group,
+            group.candidates[0].candidate_id,
+            expected_revision=group.revision,
+        )
+        == group.candidates[0]
+    )
+    without_action = replace(
+        group,
+        candidates=(
+            replace(
+                group.candidates[0],
+                artifacts=replace(
+                    group.candidates[0].artifacts,
+                    development=None,
+                ),
+            ),
+            *group.candidates[1:],
+        ),
+    )
+    with pytest.raises(CardPoolConflictError, match="Development Candidate"):
+        policy.select(
+            without_action,
+            without_action.candidates[0].candidate_id,
+            expected_revision=without_action.revision,
+        )
+
+    cards = _Cards(SimpleNamespace(state="developed"))
+    result = CardCandidateAcceptanceService(
+        groups=_Groups(group),
+        cards=cards,
+        identities=_Identities(),
+        policy=InitialCardCandidateAcceptancePolicy(),
+        development_policy=policy,
+    ).accept(
+        group.group_id,
+        group.candidates[2].candidate_id,
+        expected_revision=group.revision,
+    )
+    assert result.state == "developed"
+    assert cards.calls == []
+    assert cards.development_calls == [
+        (group.group_id, group.candidates[2].candidate_id, group.revision)
+    ]
