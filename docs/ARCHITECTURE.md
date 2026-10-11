@@ -259,6 +259,13 @@ persisted `primary` output. Candidate acceptance atomically changes the active
 image reference and visual tier; semantic profile, imprint and structured Card
 rules remain unchanged.
 
+The optional Card Factory graph is composed by one lazy
+`CardFactoryPrototypeRuntime`. Building the normal application container does
+not open the model database or connect to LM Studio or ComfyUI. The first Card
+use resolves the active ruleset and then caches one shared graph containing the
+model resource, local-model runtime, deterministic policies, Card-only
+generation adapters and session services for the process lifetime.
+
 ## 3. Canonical identity and runtime data
 
 The canonical database has an explicit schema version. Schema v18 is the active

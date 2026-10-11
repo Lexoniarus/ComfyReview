@@ -59,6 +59,7 @@ from comfyreview.bootstrap import (
     build_application_container,
     create_app,
 )
+from comfyreview.card_battler_runtime import CardFactoryPrototypeRuntime
 from comfyreview.providers import (
     CanonicalOutputImageCatalog,
     OutputFileUrlMapper,
@@ -166,6 +167,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         ),
         card_battler_model=cast(CardBattlerModelRepository, object()),
         card_imprint_mapper=cast(CardImprintMapper, object()),
+        card_factory_runtime=cast(CardFactoryPrototypeRuntime, object()),
         output_images=_EmptyOutputImageCatalog(),
         file_urls=OutputFileUrlMapper(settings.output_root),
         image_contexts=cast(ImageContextQueryService, object()),
@@ -313,6 +315,10 @@ def test_default_container_wires_canonical_review_runtime(
         SqliteCardBattlerModelRepository,
     )
     assert isinstance(container.card_imprint_mapper, CardImprintMapper)
+    assert isinstance(
+        container.card_factory_runtime,
+        CardFactoryPrototypeRuntime,
+    )
     assert not settings.card_battler_model_database_path.exists()
     assert isinstance(
         container.output_images,
@@ -358,3 +364,29 @@ def test_default_container_wires_canonical_review_runtime(
     assert len(container.character_catalog.list_public()) == 6
     assert isinstance(container.character_prompts, CharacterPromptComposer)
     assert container.character_prompts.compose("aiko").variant_id == "baseline"
+
+
+def test_card_factory_runtime_builds_its_optional_graph_only_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = CardFactoryPrototypeRuntime(
+        settings=cast(Settings, object()),
+        model_resource=cast(Any, object()),
+        image_contexts=cast(ImageContextQueryService, object()),
+        image_resolver=cast(Any, object()),
+        comfyui=cast(Any, object()),
+        blueprints=cast(Any, object()),
+    )
+    service_graph = cast(Any, object())
+    calls = 0
+
+    def build() -> Any:
+        nonlocal calls
+        calls += 1
+        return service_graph
+
+    monkeypatch.setattr(runtime, "_build", build)
+
+    assert runtime.get() is service_graph
+    assert runtime.get() is service_graph
+    assert calls == 1

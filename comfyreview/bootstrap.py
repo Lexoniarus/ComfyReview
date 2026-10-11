@@ -74,6 +74,7 @@ from comfyreview.application.character_catalog import CharacterCatalogService
 from comfyreview.application.character_prompt_composer import (
     CharacterPromptComposer,
 )
+from comfyreview.card_battler_runtime import CardFactoryPrototypeRuntime
 from comfyreview.observability import (
     RequestTracingMiddleware,
     configure_logging,
@@ -164,6 +165,7 @@ class ApplicationContainer:
     card_battler_runtime_schema: CardBattlerRuntimeSchemaLifecycle
     card_battler_model: CardBattlerModelRepository
     card_imprint_mapper: CardImprintMapper
+    card_factory_runtime: CardFactoryPrototypeRuntime
     output_images: OutputImageCatalog
     file_urls: OutputFileUrlMapper
     image_contexts: ImageContextQueryService
@@ -393,6 +395,14 @@ def build_application_container(
         ),
         card_battler_model=card_battler_model,
         card_imprint_mapper=CardImprintMapper(card_battler_model),
+        card_factory_runtime=CardFactoryPrototypeRuntime(
+            settings=configured,
+            model_resource=card_battler_model_resource,
+            image_contexts=image_contexts,
+            image_resolver=output_images,
+            comfyui=comfyui_provider,
+            blueprints=blueprints,
+        ),
         output_images=output_images,
         file_urls=file_urls,
         image_contexts=image_contexts,
