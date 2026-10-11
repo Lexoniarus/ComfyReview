@@ -24,6 +24,7 @@ from comfyreview.application import (
     CardSessionConflictError,
     CardSessionDevelopmentLockedError,
     CardSessionNotFoundError,
+    CardSessionOperationState,
     CardSessionRepository,
     CardSourceEligibilityError,
     CardSourceEligibilityPolicy,
@@ -317,7 +318,7 @@ def test_session_get_reports_unknown_identity() -> None:
 
 
 def test_develop_requires_accepted_image_and_exact_revision() -> None:
-    service, _, _, _, development = _service()
+    service, _, _, sessions, development = _service()
     session = service.create("image-1")
     with pytest.raises(CardSessionDevelopmentLockedError, match="accepted"):
         service.develop(session.session_id, expected_revision=1)
@@ -325,6 +326,14 @@ def test_develop_requires_accepted_image_and_exact_revision() -> None:
 
     with pytest.raises(CardSessionConflictError, match="stale"):
         service.develop(session.session_id, expected_revision=0)
+    assert development.calls == 0
+
+    sessions.items[session.session_id] = replace(
+        session,
+        operation_state=CardSessionOperationState.GENERATING,
+    )
+    with pytest.raises(CardSessionConflictError, match="progress"):
+        service.develop(session.session_id, expected_revision=1)
     assert development.calls == 0
 
 

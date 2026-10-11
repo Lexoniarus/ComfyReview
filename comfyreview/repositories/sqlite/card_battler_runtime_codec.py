@@ -36,8 +36,16 @@ from comfyreview.domain.card_battler import (
     StructuredCardSpec,
 )
 
+RuntimeEncodedValue = (
+    SemanticImageProfile
+    | CardImprint
+    | StructuredCardSpec
+    | VisualPromptRecipe
+    | CardPresentation
+)
 
-def encode_value(value: object) -> str:
+
+def encode_value(value: RuntimeEncodedValue) -> str:
     """Serialize one immutable runtime value with stable JSON ordering."""
     return json.dumps(
         asdict(value),
@@ -358,28 +366,28 @@ def _optional_text(value: dict[str, Any], key: str) -> str | None:
     item = value.get(key)
     if item is not None and not isinstance(item, str):
         raise ValueError(f"runtime field {key} must be optional text")
-    return cast(str | None, item)
+    return item
 
 
 def _integer(value: dict[str, Any], key: str) -> int:
     item = value.get(key)
     if type(item) is not int:
         raise ValueError(f"runtime field {key} must be an integer")
-    return cast(int, item)
+    return item
 
 
 def _optional_integer(value: dict[str, Any], key: str) -> int | None:
     item = value.get(key)
     if item is not None and type(item) is not int:
         raise ValueError(f"runtime field {key} must be an optional integer")
-    return cast(int | None, item)
+    return item
 
 
 def _boolean(value: dict[str, Any], key: str) -> bool:
     item = value.get(key)
     if type(item) is not bool:
         raise ValueError(f"runtime field {key} must be a boolean")
-    return cast(bool, item)
+    return item
 
 
 def _optional_parameter_value(

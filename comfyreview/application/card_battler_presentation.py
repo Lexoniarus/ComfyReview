@@ -178,7 +178,7 @@ class CardPresentationRealizer:
         card: StructuredCardSpec,
         existing: CardPresentation | None,
     ) -> str:
-        traits = [
+        traits: list[JsonValue] = [
             {
                 "lineage_key": trait.lineage_key,
                 "mechanic_key": trait.mechanic.key,
@@ -186,38 +186,42 @@ class CardPresentationRealizer:
             }
             for trait in card.traits
         ]
+        signals: list[JsonValue] = [
+            {
+                "concept_key": signal.concept_key,
+                "strength_milli": signal.strength_milli,
+            }
+            for signal in semantic_profile.signals
+        ]
+        semantic_document: dict[str, JsonValue] = {
+            "summary": semantic_profile.summary,
+            "subjects": list(semantic_profile.subjects),
+            "actions": list(semantic_profile.actions),
+            "mood": list(semantic_profile.mood),
+            "environment": list(semantic_profile.environment),
+            "objects": list(semantic_profile.objects),
+            "signals": signals,
+        }
+        imprint_document: dict[str, JsonValue] = {
+            "world_style": card.imprint.world_style,
+            "card_class": card.imprint.card_class,
+            "combat_role": card.imprint.combat_role,
+            "trait_lineage": card.imprint.trait_lineage,
+        }
+        card_document: dict[str, JsonValue] = {
+            "rarity_key": card.rarity_key,
+            "level": card.level,
+            "tier_ordinal": card.tier_ordinal,
+            "attack": card.stats.attack,
+            "defense": card.stats.defense,
+            "traits": traits,
+        }
         document: dict[str, JsonValue] = {
             "contract_revision": CARD_PRESENTATION_CONTRACT_REVISION,
             "locale": "de-DE",
-            "semantic_profile": {
-                "summary": semantic_profile.summary,
-                "subjects": list(semantic_profile.subjects),
-                "actions": list(semantic_profile.actions),
-                "mood": list(semantic_profile.mood),
-                "environment": list(semantic_profile.environment),
-                "objects": list(semantic_profile.objects),
-                "signals": [
-                    {
-                        "concept_key": signal.concept_key,
-                        "strength_milli": signal.strength_milli,
-                    }
-                    for signal in semantic_profile.signals
-                ],
-            },
-            "imprint": {
-                "world_style": card.imprint.world_style,
-                "card_class": card.imprint.card_class,
-                "combat_role": card.imprint.combat_role,
-                "trait_lineage": card.imprint.trait_lineage,
-            },
-            "card_spec": {
-                "rarity_key": card.rarity_key,
-                "level": card.level,
-                "tier_ordinal": card.tier_ordinal,
-                "attack": card.stats.attack,
-                "defense": card.stats.defense,
-                "traits": traits,
-            },
+            "semantic_profile": semantic_document,
+            "imprint": imprint_document,
+            "card_spec": card_document,
             "instruction": (
                 "Use mechanics only as immutable context. Do not restate or "
                 "explain them in output."

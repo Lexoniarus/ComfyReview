@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -37,7 +37,9 @@ class _ModelRepository:
     def resolve_ruleset(self):
         return self.ruleset
 
-    def semantic_concepts(self, ruleset):
+    def semantic_concepts(
+        self, ruleset
+    ) -> tuple[SemanticConceptDefinition, ...]:
         assert ruleset == self.ruleset
         return (
             SemanticConceptDefinition(
@@ -146,7 +148,7 @@ def test_semantic_analyzer_uses_controlled_vocabulary_and_stable_profile() -> (
     assert request.inference.image_data_url.startswith(
         "data:image/png;base64,"
     )
-    schema = request.schema_document()
+    schema = cast(dict[str, Any], request.schema_document())
     signal_schema = schema["properties"]["signals"]["items"]
     assert signal_schema["properties"]["concept_key"]["enum"] == [
         "calm",
@@ -200,6 +202,107 @@ def test_semantic_contract_remains_compatible_and_validates_fact_groups() -> (
         )
     with pytest.raises(ValueError, match="hash"):
         CardSourceImage("image", "image/png", b"png", "wrong")
+
+
+def test_semantic_value_contract_rejects_invalid_boundaries() -> None:
+    with pytest.raises(ValueError, match="concept key"):
+        SemanticSignal(" ", 500)
+    with pytest.raises(ValueError, match="integer"):
+        SemanticSignal("calm", cast(int, True))
+    with pytest.raises(ValueError, match="between"):
+        SemanticSignal("calm", 1001)
+    with pytest.raises(ValueError, match="image_uid"):
+        SemanticImageProfile(" ", "revision", ())
+    with pytest.raises(ValueError, match="semantic_revision"):
+        SemanticImageProfile("image", " ", ())
+    with pytest.raises(ValueError, match="duplicate"):
+        SemanticImageProfile(
+            "image",
+            "revision",
+            (SemanticSignal("calm", 400), SemanticSignal("calm", 500)),
+        )
+    with pytest.raises(ValueError, match="summary"):
+        SemanticImageProfile("image", "revision", (), summary="x" * 241)
+    with pytest.raises(ValueError, match="subjects contains"):
+        SemanticImageProfile(
+            "image",
+            "revision",
+            (),
+            subjects=cast(tuple[str, ...], "person"),
+        )
+    with pytest.raises(ValueError, match="item limit"):
+        SemanticImageProfile(
+            "image",
+            "revision",
+            (),
+            subjects=tuple(f"person-{index}" for index in range(9)),
+        )
+
+    content = b"source"
+    content_hash = hashlib.sha256(content).hexdigest()
+    with pytest.raises(ValueError, match="image_uid"):
+        CardSourceImage(" ", "image/png", content, content_hash)
+    with pytest.raises(ValueError, match="MIME"):
+        CardSourceImage("image", "image/gif", content, content_hash)
+    with pytest.raises(ValueError, match="non-empty bytes"):
+        CardSourceImage("image", "image/png", b"", "empty")
+    oversized = b"x" * (16 * 1024 * 1024 + 1)
+    with pytest.raises(ValueError, match="size limit"):
+        CardSourceImage(
+            "image",
+            "image/png",
+            oversized,
+            hashlib.sha256(oversized).hexdigest(),
+        )
+
+
+def test_semantic_analyzer_rejects_missing_vocabulary_and_wrong_input() -> (
+    None
+):
+    analyzer, _, _ = _analyzer(_document())
+    with pytest.raises(TypeError, match="CardSourceImage"):
+        analyzer.analyze(cast(CardSourceImage, object()))
+
+    class _EmptyModelRepository(_ModelRepository):
+        def semantic_concepts(
+            self, ruleset
+        ) -> tuple[SemanticConceptDefinition, ...]:
+            assert ruleset == self.ruleset
+            return ()
+
+    empty = SemanticImageAnalyzer(
+        model_repository=cast(
+            CardBattlerModelRepository,
+            _EmptyModelRepository(),
+        ),
+        runtime=LocalModelRuntime(_LifecycleProvider()),
+        inference=_StructuredInference(_document()),
+        vision_model_id="vision",
+    )
+    with pytest.raises(SemanticImageAnalysisError, match="no concepts"):
+        empty.analyze(_source_image())
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        [],
+        {**_document(), "unexpected": True},
+        {**_document(), "summary": "x" * 241},
+        {**_document(), "subjects": "person"},
+        {**_document(), "subjects": ["person", 5]},
+        {**_document(), "subjects": [""]},
+        {**_document(), "signals": "calm"},
+        {**_document(), "signals": [{}]},
+    ],
+)
+def test_semantic_analyzer_rejects_malformed_structured_documents(
+    document,
+) -> None:
+    analyzer, _, _ = _analyzer(document)
+
+    with pytest.raises(SemanticImageAnalysisError):
+        analyzer.analyze(_source_image())
 
 
 class _Resolver:

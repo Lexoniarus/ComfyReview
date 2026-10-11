@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any, cast
 
 import pytest
 
@@ -15,7 +16,9 @@ from comfyreview.application import (
     LocalModelDescriptor,
     LocalModelInstance,
     LocalModelLifecycleError,
+    LocalModelProvider,
     LocalModelRuntime,
+    LocalStructuredInferenceRequest,
     LocalStructuredInferenceResult,
     SemanticImageProfile,
     SemanticSignal,
@@ -54,7 +57,7 @@ class _Inference:
     ) -> None:
         self.document = document
         self.failure = failure
-        self.requests = []
+        self.requests: list[LocalStructuredInferenceRequest] = []
 
     def infer_structured(self, request):
         self.requests.append(request)
@@ -191,7 +194,7 @@ def test_refresh_preserves_title_and_excludes_it_from_output_schema() -> None:
 
     assert result.presentation is not None
     assert result.presentation.card_title == "Unveränderter Titel"
-    schema = inference.requests[0].schema_document()
+    schema = cast(dict[str, Any], inference.requests[0].schema_document())
     assert "card_title" not in schema["properties"]
     assert (
         json.loads(inference.requests[0].inference.user_text)[
@@ -263,8 +266,93 @@ def test_presentation_rejects_mismatched_semantics_before_model_use() -> None:
     assert inference.requests == []
 
 
+def test_presentation_rejects_revision_and_existing_trait_mismatches() -> None:
+    realizer, inference = _realizer({})
+    mismatched_revision = SemanticImageProfile("image-1", "other", ())
+    with pytest.raises(ValueError, match="revision"):
+        realizer.realize(mismatched_revision, _card())
+    existing = CardPresentation(
+        "Titel",
+        "Beschreibung",
+        ("Name A", "Name B"),
+    )
+    with pytest.raises(ValueError, match="traits"):
+        realizer.realize(_profile(), _card(), existing=existing)
+    assert inference.requests == []
+
+
+def test_presentation_model_acquire_failure_degrades_safely() -> None:
+    class _OfflineLifecycleProvider:
+        def list_models(self):
+            raise LocalModelConnectionError("offline")
+
+        def load_model(self, model_id):
+            raise AssertionError(model_id)
+
+        def unload_model(self, instance):
+            raise AssertionError(instance)
+
+    realizer = CardPresentationRealizer(
+        runtime=LocalModelRuntime(
+            cast(LocalModelProvider, _OfflineLifecycleProvider())
+        ),
+        inference=_Inference({}),
+        text_model_id="text",
+    )
+
+    assert realizer.realize(_profile(), _card()) == CardPresentationResult(
+        None,
+        CardPresentationStatus.INFERENCE_FAILED,
+    )
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        [],
+        {
+            "card_title": "Titel",
+            "short_description": "Beschreibung",
+            "trait_display_names": [],
+            "flavor_text": None,
+        },
+        {
+            "card_title": "Titel",
+            "short_description": "Beschreibung",
+            "trait_display_names": ["Name"],
+            "flavor_text": 5,
+        },
+        {
+            "card_title": 5,
+            "short_description": "Beschreibung",
+            "trait_display_names": ["Name"],
+            "flavor_text": None,
+        },
+        {
+            "card_title": "",
+            "short_description": "Beschreibung",
+            "trait_display_names": ["Name"],
+            "flavor_text": None,
+        },
+    ],
+)
+def test_presentation_structural_failures_degrade_safely(document) -> None:
+    realizer, _ = _realizer(document)
+
+    assert realizer.realize(_profile(), _card()) == CardPresentationResult(
+        None,
+        CardPresentationStatus.INVALID_OUTPUT,
+    )
+
+
 def test_presentation_values_reject_ambiguous_or_inconsistent_state() -> None:
     with pytest.raises(ValueError, match="sequence"):
-        CardPresentation("Titel", "Beschreibung", "Name")
+        CardPresentation(
+            "Titel",
+            "Beschreibung",
+            cast(tuple[str, ...], "Name"),
+        )
+    with pytest.raises(ValueError, match="must not be empty"):
+        CardPresentation("Titel", "Beschreibung", ())
     with pytest.raises(ValueError, match="inconsistent"):
         CardPresentationResult(None, CardPresentationStatus.COMPLETE)

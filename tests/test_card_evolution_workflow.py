@@ -15,6 +15,7 @@ from comfyreview.application import (
     GenerationPromptSnapshot,
     GenerationRequest,
     GenerationSamplerSettings,
+    StagedCardReferenceImage,
     WorkflowCompiler,
 )
 from comfyreview.providers import (
@@ -85,7 +86,7 @@ def test_card_evolution_blueprint_binds_reference_and_img2img_defaults() -> (
 class _UploadTransport:
     def __init__(self, response: MultipartUploadResponse) -> None:
         self.response = response
-        self.calls = []
+        self.calls: list[tuple[Path, dict[str, object]]] = []
 
     def upload(self, path, **kwargs):
         self.calls.append((path, kwargs))
@@ -100,6 +101,23 @@ def _image() -> CardSourceImage:
         content,
         hashlib.sha256(content).hexdigest(),
     )
+
+
+@pytest.mark.parametrize(
+    ("relative_name", "content_hash", "message"),
+    [
+        ("/absolute.png", "hash", "relative"),
+        ("folder/../escape.png", "hash", "traverse"),
+        ("reference.png", "", "hash"),
+    ],
+)
+def test_staged_reference_contract_rejects_unsafe_values(
+    relative_name: str,
+    content_hash: str,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        StagedCardReferenceImage(relative_name, content_hash)
 
 
 def test_card_reference_stager_uploads_content_addressed_png() -> None:

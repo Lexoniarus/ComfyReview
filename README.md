@@ -10,7 +10,7 @@ ComfyReview hilft beim **Bewerten, Vergleichen, Kuratieren und Analysieren** gen
 - **Playground / Generator / ComfyUI-Integration** mit Workflow-Blueprint v4, nativer Generierung, Lifecycle und Output-Collection.
 - **Prompt-/LoRA-Katalog, Settings und Analytics** sowie Frontend V2 aus Jinja-Templates und nativen JavaScript-Modulen.
 - **Canonical SQLite Schema v18 ist im Code implementiert.** Ob die **private** laufende Datenbank bereits den finalen Normalisierungs-/Cutover-Schritt durchlaufen hat, ist daraus **nicht** ableitbar.
-- **Card Battler ist derzeit ein aktiver POC**: getestete Mechanik-, Karten-, Entwicklungs- und Visual-Prompt-Bausteine, aber kein vollständig integriertes spielbares Match-/Deck-Frontend.
+- **Card Battler ist derzeit ein aktiver POC**: getestete Mechanik-, Karten-, Entwicklungs- und Visual-Prompt-Bausteine sowie ein funktionaler Card-Factory-Workshop mit isolierter Session-/Candidate-Runtime, aber kein spielbares Match-/Deck-Frontend.
 
 [Nachweisbarer Code](docs/IMPLEMENTATION_AUDIT.md) · [Kurzstatus](docs/project_status.md) · [Laufende Arbeiten](docs/ACTIVE_WORK.md) · [Card-Battler-POC](docs/pocs/card-battler.md).
 
@@ -72,8 +72,11 @@ Ranking, Arena oder die normale Generator-Historie geschrieben.
 
 Die revision-sichere POC-API liegt unter `/api/v2/card-factory/`: Sie listet
 STANDARD-Quellbilder, erstellt und liest Sessions, entwickelt genau einen Tier
-und verwaltet vier getrennte Candidate-Slots. Eine funktionale Workshop-Seite
-und die reale LM-Studio-/ComfyUI-Abnahme folgen noch.
+und verwaltet vier getrennte Candidate-Slots. Die funktionalen Seiten
+`/card-factory` und `/card-workshop/{session_id}` machen diesen Ablauf
+bedienbar. Ein automatisierter Fake-Provider-Test beweist die persistierte
+Referenzkette über zwei Generationen; die reale LM-Studio-/ComfyUI- und
+Bildqualitätsabnahme durch den Projektinhaber bleibt offen.
 
 ## Qualität und Mitwirkung
 

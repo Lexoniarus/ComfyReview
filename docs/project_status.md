@@ -21,7 +21,7 @@ Diese Feststellungen bezeichnen **vorhandenen und eingebundenen Code**, nicht di
 
 | Thema | Tatsächliche Einordnung |
 | --- | --- |
-| **Card Battler** | **Aktiver POC in ComfyReview.** Getestete Karten-/Trait-/Mechanik-/Visual-Prompt-Algorithmen existieren; kein vollständig integrierter, spielbarer Karten-/Deck-/PvE-Match-Flow in der geprüften API/UI. [POC](pocs/card-battler.md) |
+| **Card Battler** | **Aktiver POC in ComfyReview.** Getestete Karten-/Trait-/Mechanik-/Visual-Prompt-Algorithmen und ein funktionaler Card-Factory-Workshop mit isolierten persistenten Sessions/Candidates existieren; kein Collection-/Deck-/PvE-Match-Flow und noch keine reale Providerabnahme. [POC](pocs/card-battler.md) |
 | **Generator** | Jüngst stark überarbeitet. Die vorhandenen Services sind angebunden, aber weitere Bedien-/Provider-Abnahmen und Änderungen sind möglich |
 | **Katalog und Datenbank** | Normalisierung/Rebuild, Schema und Testabdeckung sind umgesetzt. Die **private reale Datenbank**, redaktionelle Mappings, operativer `--replace`-Cutover und Akzeptanz sind davon getrennt und nicht aus Git als vollständig abgeschlossen nachweisbar |
 | **Abnahme und Integration** | Manuelle visuelle/operative Akzeptanz und die Integration der Refactor-Basis in `master` sind eigene Entscheidungen |

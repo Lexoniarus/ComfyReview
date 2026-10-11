@@ -17,9 +17,10 @@ but the later game is **not** obtained by treating every current or previously
 drafted engineering boundary as permanent.
 
 **Current Card Battler POC:** tested read-only model adapters,
-CardImprint mapping, stat/mechanic/trait materialization and visual prompt
-projection exist in ComfyReview. They are **being developed**, not a finished
-card collection, deck engine or PvE game. [POC status](pocs/card-battler.md).
+CardImprint mapping, stat/mechanic/trait materialization, visual prompt
+projection and a functional Card Factory workshop exist in ComfyReview. They
+are **being developed**, not a finished card collection, deck engine or PvE
+game. [POC status](pocs/card-battler.md).
 
 **Current Generator/Database work:** the native Generator was recently
 overhauled and is wired into the application; the catalogue/database
@@ -77,10 +78,11 @@ provenance. Character rows, promotions and manual variants remain exact.
 ### 2.1 Card Battler model and isolated POC runtime resources
 
 **Status:** the read-only external model adapter is registered, with **lazy
-first-use validation**. The default file `data/card_battler.sqlite3`
-is **not shipped** with the repository and its actual authored contents
-cannot be verified here. This is a separate model/design resource, not
-ComfyReview's writable canonical schema v18 and not a gameplay endpoint.
+first-use validation**. The default file `data/card_battler.sqlite3` is a
+required Card Battler resource and must ship with a usable Card Battler
+distribution; it is never created or repaired from application code. This is
+a separate model/design resource, not ComfyReview's writable canonical schema
+v18 and not a gameplay endpoint.
 
 The pre-persistence Card Battler implementation reads design and rules facts
 from the external `card_battler.sqlite3` model database. The composition root
@@ -220,10 +222,10 @@ candidate for the current tier, advances exactly once through
 and refreshes optional presentation text. It never reruns Stage 1 or imprint
 mapping, and the repository CAS is the only state mutation.
 
-No HTTP route, candidate-generation command or startup model load is
-introduced by these boundaries. Fake-provider tests validate the contracts but
-do not establish a real LM Studio, hardware or model smoke; the project owner
-performs that final manual acceptance.
+The Card Factory HTTP and workshop boundaries compose these services lazily;
+normal application startup still performs no model load. Fake-provider tests
+validate the contracts but do not establish a real LM Studio, hardware or
+model smoke; the project owner performs that final manual acceptance.
 
 ### 2.4 Card evolution image handoff
 
@@ -275,6 +277,13 @@ Its source query reuses the canonical image service with a repository-side
 delegate to `CardFactoryPrototypeService`; every mutation carries an expected
 session revision. HTTP projections expose typed artifacts and mounted URLs,
 never SQLite rows or local paths.
+
+The pages `/card-factory` and `/card-workshop/{session_id}` use native ES
+modules over the shared browser `ApiClient`. The server projects eligibility,
+available actions and candidate acceptance state; the browser only dispatches
+commands and renders confirmed facts. Its lifecycle owner aborts in-flight
+requests, removes listeners and stops Candidate polling once all four slots
+are terminal.
 
 ## 3. Canonical identity and runtime data
 

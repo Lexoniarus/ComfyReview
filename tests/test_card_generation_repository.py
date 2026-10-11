@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -42,7 +43,7 @@ _CAPABILITIES = (
 class _ComfyUi:
     def __init__(self, capabilities=_CAPABILITIES) -> None:
         self.capabilities = capabilities
-        self.graphs = []
+        self.graphs: list[dict[str, Any]] = []
 
     def discover_capabilities(self):
         return ComfyUiCapabilities(

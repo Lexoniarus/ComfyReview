@@ -150,6 +150,50 @@ def test_session_repository_round_trips_across_repository_instances(
     assert reloaded == session
 
 
+def test_session_contract_rejects_inconsistent_identity_and_tiers() -> None:
+    session = _session()
+    with pytest.raises(ValueError, match="identities"):
+        replace(session, session_id="")
+    with pytest.raises(ValueError, match="revision"):
+        replace(session, revision=0)
+    with pytest.raises(ValueError, match="visual tier"):
+        replace(session, active_visual_tier=-1)
+    with pytest.raises(ValueError, match="semantics"):
+        replace(
+            session,
+            semantic_profile=replace(
+                session.semantic_profile,
+                image_uid="other-image",
+            ),
+        )
+    with pytest.raises(ValueError, match="imprint"):
+        replace(
+            session,
+            imprint=replace(session.imprint, source_image_uid="other-image"),
+        )
+    with pytest.raises(ValueError, match="semantic revision"):
+        replace(
+            session,
+            semantic_profile=replace(
+                session.semantic_profile,
+                semantic_revision="other-revision",
+            ),
+        )
+    with pytest.raises(ValueError, match="spec"):
+        replace(
+            session,
+            card=replace(
+                session.card,
+                imprint=replace(session.imprint, explicit_seed=43),
+            ),
+        )
+    with pytest.raises(ValueError, match="visual recipe"):
+        replace(
+            session,
+            visual_recipe=replace(session.visual_recipe, tier_ordinal=2),
+        )
+
+
 def test_session_repository_applies_exact_compare_and_swap(
     tmp_path: Path,
 ) -> None:
