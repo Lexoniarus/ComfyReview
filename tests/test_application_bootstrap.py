@@ -49,6 +49,10 @@ from comfyreview.application import (
     WorkflowDefaultsService,
     WorkspacePreferencesService,
 )
+from comfyreview.application.character_catalog import CharacterCatalogService
+from comfyreview.application.character_prompt_composer import (
+    CharacterPromptComposer,
+)
 from comfyreview.bootstrap import (
     ApplicationContainer,
     build_application_container,
@@ -206,6 +210,8 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
         lora_drafts=cast(LoraDraftSelectionService, object()),
         lora_triggers=cast(LoraTriggerValidationService, object()),
         image_content_levels=cast(ImageContentLevelService, object()),
+        character_catalog=cast(CharacterCatalogService, object()),
+        character_prompts=cast(CharacterPromptComposer, object()),
     )
 
 
@@ -315,3 +321,7 @@ def test_default_container_wires_canonical_review_runtime(
     assert isinstance(container.arena_service, ArenaService)
     assert isinstance(container.curation_service, CurationService)
     assert isinstance(container.canonical_schema, CanonicalSchemaManager)
+    assert isinstance(container.character_catalog, CharacterCatalogService)
+    assert len(container.character_catalog.list_public()) == 6
+    assert isinstance(container.character_prompts, CharacterPromptComposer)
+    assert container.character_prompts.compose("aiko").variant_id == "baseline"
