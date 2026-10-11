@@ -7,11 +7,16 @@ from threading import Event, Lock, Thread
 from typing import Protocol
 
 from comfyreview.application.card_battler_candidate_groups import (
+    CardCandidateGroupKind,
     CardCandidateGroupRepository,
     CardCandidateStatus,
 )
 from comfyreview.application.card_battler_candidate_image_service import (
     CardCandidateImageService,
+)
+from comfyreview.application.card_battler_card_pool import CardPoolRepository
+from comfyreview.application.card_battler_development_groups import (
+    CardDevelopmentCandidateComposer,
 )
 from comfyreview.application.card_battler_factory import CardFactory
 from comfyreview.application.card_battler_semantics import (
@@ -90,13 +95,108 @@ class InitialCardCandidateGroupProcessor:
         return True
 
 
+class DevelopmentCardCandidateGroupProcessor:
+    """Compose queued development groups from one current confirmed Card."""
+
+    def __init__(
+        self,
+        *,
+        groups: CardCandidateGroupRepository,
+        cards: CardPoolRepository,
+        composer: CardDevelopmentCandidateComposer,
+    ) -> None:
+        self._groups = groups
+        self._cards = cards
+        self._composer = composer
+        self._logger = logging.getLogger("comfyreview.card_battler.candidates")
+
+    def process_next(self) -> bool:
+        """Compose one development group without analysis or remapping."""
+        group = self._groups.claim_next_queued(
+            CardCandidateGroupKind.DEVELOPMENT
+        )
+        if group is None:
+            return False
+        self._logger.info(
+            "card_battler.development_group.composition_started",
+            extra={"group_id": group.group_id},
+        )
+        try:
+            if (
+                group.source_card_id is None
+                or group.source_card_revision is None
+            ):
+                raise ValueError("development group source Card is missing")
+            card = self._cards.get(group.source_card_id)
+            if (
+                card is None
+                or card.state.revision != group.source_card_revision
+            ):
+                raise ValueError("development source Card revision changed")
+            composition = self._composer.compose(
+                card,
+                tuple(
+                    candidate.materialization_seed
+                    for candidate in group.candidates
+                ),
+            )
+            persisted = self._groups.complete_development_composition(
+                group.group_id,
+                expected_revision=group.revision,
+                candidates=composition.candidates,
+            )
+        except Exception as error:
+            self._groups.fail_composition(
+                group.group_id,
+                expected_revision=group.revision,
+                failure_category=type(error).__name__,
+            )
+            self._logger.warning(
+                "card_battler.development_group.composition_failed",
+                extra={
+                    "group_id": group.group_id,
+                    "error_type": type(error).__name__,
+                },
+            )
+            return True
+        self._logger.info(
+            "card_battler.development_group.composition_completed",
+            extra={
+                "group_id": persisted.group_id,
+                "group_revision": persisted.revision,
+            },
+        )
+        return True
+
+
+class CardCandidateCompositionCoordinator:
+    """Prioritize initial analysis before bounded development composition."""
+
+    def __init__(
+        self,
+        *,
+        initial: InitialCardCandidateGroupProcessor,
+        development: DevelopmentCardCandidateGroupProcessor,
+    ) -> None:
+        self._initial = initial
+        self._development = development
+
+    def recover_interrupted(self) -> int:
+        """Fail all composition work interrupted before process startup."""
+        return self._initial.recover_interrupted()
+
+    def process_next(self) -> bool:
+        """Compose at most one initial or development group."""
+        return self._initial.process_next() or self._development.process_next()
+
+
 class CardCandidateGroupLifecycleProcessor:
     """Advance composition, submission, or observation by one bounded pass."""
 
     def __init__(
         self,
         *,
-        composition: InitialCardCandidateGroupProcessor,
+        composition: CardCandidateGroupProcessingPass,
         groups: CardCandidateGroupRepository,
         images: CardCandidateImageService,
     ) -> None:

@@ -1,6 +1,18 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_candidate_processing:DevelopmentCardCandidateGroupProcessor.process_next": (
+        "tests/test_card_development_group_processing.py::"
+        "test_development_processor_composes_without_analysis_or_mapping"
+    ),
+    "comfyreview.application.card_battler_candidate_processing:CardCandidateCompositionCoordinator.recover_interrupted": (
+        "tests/test_card_development_group_processing.py::"
+        "test_composition_coordinator_prioritizes_initial_groups"
+    ),
+    "comfyreview.application.card_battler_candidate_processing:CardCandidateCompositionCoordinator.process_next": (
+        "tests/test_card_development_group_processing.py::"
+        "test_composition_coordinator_prioritizes_initial_groups"
+    ),
     "comfyreview.application.card_battler_development_groups:development_candidate_seeds": (
         "tests/test_card_development_candidate_groups.py::"
         "test_development_candidate_seeds_are_stable_and_revision_separated"
