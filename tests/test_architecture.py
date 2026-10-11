@@ -147,13 +147,18 @@ def test_application_core_combines_core_and_service_rules(
     assert _rules_for_path("unmanaged/example.py") == ()
 
 
-def test_allows_schema_ddl_only_in_central_legacy_adapter(
+def test_allows_schema_ddl_only_in_registered_schema_adapters(
     tmp_path: Path,
 ) -> None:
     _write_module(
         tmp_path,
         "comfyreview/repositories/sqlite/legacy_schema.py",
         'DDL = "CREATE TABLE allowed (id INTEGER)"\n',
+    )
+    _write_module(
+        tmp_path,
+        "comfyreview/repositories/sqlite/card_battler_runtime_schema.py",
+        'DDL = "CREATE TABLE allowed_too (id INTEGER)"\n',
     )
 
     assert collect_architecture_violations(tmp_path) == {}

@@ -74,7 +74,7 @@ generation-referenced old rows as hidden provenance and prevents authored
 composition fallback from resolving any composition containing that
 provenance. Character rows, promotions and manual variants remain exact.
 
-### 2.1 Card Battler model resource (pre-persistence prototype)
+### 2.1 Card Battler model and isolated POC runtime resources
 
 **Status:** the read-only external model adapter is registered, with **lazy
 first-use validation**. The default file `data/card_battler.sqlite3`
@@ -97,8 +97,24 @@ or process restart.
 Schema requirements are registered in named read-area groups. A model table
 cannot become authoritative for a new adapter until its required columns are
 part of the shared validation contract. This database remains model/design
-input only; no card identity or other runtime game fact is persisted before
-the post-proof persistence phase.
+input only.
+
+The evolving Card Factory proof uses a second, deliberately isolated writable
+store, `card_battler_runtime.sqlite3`. Its dedicated schema owner may create a
+completely absent schema-v1 file atomically and validates every existing file;
+it never upgrades or repairs an unknown schema during startup. Ordinary Card
+repositories contain no DDL. The store is limited to prototype sessions,
+candidate slots, Card-specific generation lifecycle and Card-generated output
+identity. It is not the canonical ComfyReview review/catalog database and does
+not create Collection, Deck, Battle or XP facts.
+
+The main `comfyreview.sqlite3` remains the read source for an initial canonical
+image and its content eligibility. Card workflows never write their sessions,
+generations or outputs there. The two databases therefore have no cross-file
+foreign keys or dual writes; source image UID and content hash are captured as
+provenance in the Card runtime store. Existing compiler, provider and
+generation services are reused with separately injected Card persistence
+adapters rather than forked.
 
 ### 2.2 Standalone Cocos game-client POC
 

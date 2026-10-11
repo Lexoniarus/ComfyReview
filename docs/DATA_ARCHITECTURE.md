@@ -23,6 +23,14 @@ Every business fact has one writable authoritative home. Review, Arena and
 Curation runtime writes now go only to `comfyreview.sqlite3`; the old files are
 read-only import sources for these concerns. There are no dual-writes.
 
+The Card Factory proof is an explicit bounded exception with its own
+`card_battler_runtime.sqlite3`. It owns only Card-POC sessions, candidate slots,
+Card-specific generation lifecycle and their output identities. The normal
+canonical database is read for an eligible source image but receives no Card
+writes. The separate `card_battler.sqlite3` remains a read-only authored
+model/rules resource. No foreign key crosses these database files, and the
+prototype store is not a final Collection or Character Chronicles schema.
+
 Stable IDs are identity. Paths are mutable evidence and file attributes:
 
 ```text

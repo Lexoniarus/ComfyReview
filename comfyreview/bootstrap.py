@@ -18,6 +18,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaLifecycle,
     CardBattlerModelRepository,
+    CardBattlerRuntimeSchemaLifecycle,
     CardImprintMapper,
     CatalogEvidenceService,
     CompiledLoraGraphPolicy,
@@ -132,6 +133,9 @@ from comfyreview.repositories.sqlite import (
     SqliteWorkspacePreferencesRepository,
 )
 from comfyreview.repositories.sqlite.canonical_schema import SCHEMA_VERSION
+from comfyreview.repositories.sqlite.card_battler_runtime_schema import (
+    CardBattlerRuntimeSchemaManager,
+)
 from comfyreview.revalidating_static_files import RevalidatingStaticFiles
 from comfyreview.settings import Settings, load_settings
 from routers.api_v2_router import router as api_v2_router
@@ -157,6 +161,7 @@ class ApplicationContainer:
 
     settings: Settings
     canonical_schema: CanonicalSchemaLifecycle
+    card_battler_runtime_schema: CardBattlerRuntimeSchemaLifecycle
     card_battler_model: CardBattlerModelRepository
     card_imprint_mapper: CardImprintMapper
     output_images: OutputImageCatalog
@@ -383,6 +388,9 @@ def build_application_container(
         canonical_schema=CanonicalSchemaManager(
             configured.canonical_database_path
         ),
+        card_battler_runtime_schema=CardBattlerRuntimeSchemaManager(
+            configured.card_battler_runtime_database_path
+        ),
         card_battler_model=card_battler_model,
         card_imprint_mapper=CardImprintMapper(card_battler_model),
         output_images=output_images,
@@ -535,6 +543,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
         _prepare_directories(resources.settings)
         resources.canonical_schema.prepare_startup()
+        resources.card_battler_runtime_schema.prepare_startup()
         resources.generation_worker.start()
         try:
             yield

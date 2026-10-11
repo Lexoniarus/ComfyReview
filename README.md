@@ -41,6 +41,8 @@ Wichtige Werte:
 | `COMFYREVIEW_COMFYUI_BASE_URL` | ComfyUI-API-Endpunkt |
 | `COMFYREVIEW_WORKFLOWS_DIR` | Workflow-Dateien |
 | `COMFYREVIEW_DATABASE` | Kanonische ComfyReview-SQLite-Datei |
+| `COMFYREVIEW_CARD_BATTLER_MODEL_DATABASE` | Read-only Card-Regel-/Modelldatenbank |
+| `COMFYREVIEW_CARD_BATTLER_RUNTIME_DATABASE` | Isolierte schreibbare Card-POC-Runtime |
 | `COMFYREVIEW_PORT` | Lokaler HTTP-Port (Standard 8000) |
 | `COMFYREVIEW_LM_STUDIO_BASE_URL` | Optionaler lokaler LM-Studio-Endpunkt |
 
@@ -58,6 +60,12 @@ Nachweis eines realen LM-Studio- oder Modell-Smokes; diese Abnahme bleibt beim
 Projektinhaber.
 
 **Wichtig bei vorhandenen lokalen Daten:** Startup migriert keine unbekannte alte Datenbank still auf v18. Vor einem Upgrade die [getrennte Betriebs-/Migrationsanleitung](docs/OPERATIONS.md) und [Datenarchitektur](docs/DATA_ARCHITECTURE.md) prüfen. Datenbank, generierte Bilder, Modelle, Geheimnisse und persönliche Pfade gehören **nicht** ins Git-Repository.
+
+Der Card-Factory-POC trennt seine Daten zusätzlich: Die externe
+`card_battler.sqlite3` bleibt unveränderliche Model-/Regelquelle, während
+`card_battler_runtime.sqlite3` ausschließlich POC-Sessions, Kandidaten und
+Card-Generationen aufnehmen darf. Diese Einträge werden nicht in Review,
+Ranking, Arena oder die normale Generator-Historie geschrieben.
 
 ## Qualität und Mitwirkung
 

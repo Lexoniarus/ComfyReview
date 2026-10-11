@@ -30,6 +30,7 @@ class Settings:
     data_directory: Path
     canonical_database_path: Path
     card_battler_model_database_path: Path
+    card_battler_runtime_database_path: Path
     templates_directory: Path
     pool_limit: int
     lora_export_root: Path
@@ -180,6 +181,11 @@ def load_settings(
         "COMFYREVIEW_CARD_BATTLER_MODEL_DATABASE",
         data_directory / "card_battler.sqlite3",
     )
+    card_battler_runtime_database_path = _path(
+        values,
+        "COMFYREVIEW_CARD_BATTLER_RUNTIME_DATABASE",
+        data_directory / "card_battler_runtime.sqlite3",
+    )
     workflows_directory = _path(
         values,
         "COMFYREVIEW_WORKFLOWS_DIR",
@@ -194,6 +200,9 @@ def load_settings(
         data_directory=data_directory,
         canonical_database_path=canonical_database_path,
         card_battler_model_database_path=card_battler_model_database_path,
+        card_battler_runtime_database_path=(
+            card_battler_runtime_database_path
+        ),
         templates_directory=base / "templates",
         pool_limit=_integer(values, "COMFYREVIEW_POOL_LIMIT", 128),
         lora_export_root=_path(

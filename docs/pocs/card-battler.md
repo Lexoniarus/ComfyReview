@@ -14,6 +14,7 @@
 | Mechaniken/Stats | [Materialisierung und Regeltext](../../comfyreview/application/card_battler_rules.py), [Tests](../../tests/test_card_battler_rule_rendering.py) | Keine ausführbare vollständige Matchsimulation |
 | Tier/Trait-Entwicklung | [Service](../../comfyreview/application/card_battler_development_service.py), [Golden Path](../../tests/test_card_battler_development_golden_path.py) | Kein integrierter Post-Match-Experience-/Evolution-Flow |
 | Visuelle Projektion | [Visual-Prompt-Projektion](../../comfyreview/application/card_battler_visual_projection.py) | Kein fertig gerendertes Card-Face und keine spielerseitige Komposition |
+| Isolierte POC-Runtime | [Versionierter Schema-Owner](../../comfyreview/repositories/sqlite/card_battler_runtime_schema.py) | Noch keine verdrahteten Session-/Factory-Befehle oder reale Providerprobe |
 
 Die [App](../../comfyreview/bootstrap.py) erzeugt Modell-Adapter und Mapper; die [registrierten API-Router](../../routers/api_v2/__init__.py) bieten jedoch **keine** vollständigen Card-Crafting-/Deck-/Match-Operationen. Genau diese Trennung ist wichtig: **funktionierender Bibliotheks-Code ≠ spielbarer Battler**.
 
@@ -79,7 +80,11 @@ sowie die getrennte
 **Nicht** als fertiger End-to-End-Ablauf nachgewiesen ist dagegen die
 automatische Erstellung des semantischen Profils aus einem realen Bild samt
 Spielerfreigabe und vollständiger Kartenübernahme. Bildanalysemodell,
-Provider, Prüf-UI und Persistenzvertrag bleiben offen.
+Provider und Prüf-UI bleiben offen. Der erste Persistenzvertrag ist nun als
+isolierte `card_battler_runtime.sqlite3` festgelegt: Die normale
+`comfyreview.sqlite3` wird nur zur Quellbildauflösung gelesen, während die
+read-only `card_battler.sqlite3` ausschließlich Regel-/Modelldaten liefert.
+Der vorhandene Schema-Owner beweist noch keinen verdrahteten End-to-End-Flow.
 
 Dieser Ablauf beschreibt das gewünschte **Spielerlebnis des ersten Versuchs**.
 Er schreibt weder das Datenbankschema noch einen bestimmten LLM-Provider,

@@ -27,6 +27,10 @@ from comfyreview.repositories.sqlite.card_battler_model_resource import (
     CardBattlerModelTableRequirement,
     SqliteCardBattlerModelResource,
 )
+from comfyreview.repositories.sqlite.card_battler_runtime_schema import (
+    CARD_BATTLER_RUNTIME_SCHEMA_VERSION,
+    CardBattlerRuntimeSchemaManager,
+)
 from comfyreview.repositories.sqlite.catalog_evidence import (
     SqliteCatalogEvidenceRepository,
 )
@@ -117,6 +121,8 @@ __all__ = [
     "CardBattlerModelSchemaRequirement",
     "CardBattlerModelTableRequirement",
     "CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS",
+    "CARD_BATTLER_RUNTIME_SCHEMA_VERSION",
+    "CardBattlerRuntimeSchemaManager",
     "SqliteCatalogEvidenceRepository",
     "LegacySchemaManager",
     "SqliteOutputImageRepository",

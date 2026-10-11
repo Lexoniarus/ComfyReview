@@ -133,6 +133,11 @@ from comfyreview.application.card_battler_rules import (
     CanonicalRuleRenderingError,
     MechanicMaterializer,
 )
+from comfyreview.application.card_battler_runtime import (
+    CardBattlerRuntimeSchemaError,
+    CardBattlerRuntimeSchemaLifecycle,
+    CardBattlerRuntimeSchemaReport,
+)
 from comfyreview.application.card_battler_trait_selection import (
     InitialTraitCandidateScore,
     InitialTraitSelection,
@@ -618,6 +623,9 @@ __all__ = [
     "CardBattlerRulesetRef",
     "CardBattlerMappingPolicy",
     "CardBattlerRngPolicy",
+    "CardBattlerRuntimeSchemaError",
+    "CardBattlerRuntimeSchemaLifecycle",
+    "CardBattlerRuntimeSchemaReport",
     "CardBalancePolicy",
     "CardDevelopmentModelRepository",
     "CardDevelopmentPolicy",

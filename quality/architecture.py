@@ -30,6 +30,7 @@ _SCHEMA_DDL_PREFIXES: Final = (
     "DROP TRIGGER ",
 )
 _SCHEMA_ADAPTERS: Final = {
+    "comfyreview/repositories/sqlite/card_battler_runtime_schema.py",
     "comfyreview/repositories/sqlite/canonical_schema.py",
     "comfyreview/repositories/sqlite/legacy_schema.py",
 }
