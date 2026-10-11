@@ -2,6 +2,27 @@
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
     (
+        "comfyreview.application.card_battler_generation_prompt:"
+        "CardEvolutionDebugPromptRenderer.render"
+    ): (
+        "tests/test_card_battler_generation_prompt.py::"
+        "test_card_evolution_debug_renderer_has_stable_golden_vectors"
+    ),
+    (
+        "comfyreview.application.card_battler_generation_prompt:"
+        "CardEvolutionComfyUiPromptRenderer.render"
+    ): (
+        "tests/test_card_battler_generation_prompt.py::"
+        "test_card_evolution_comfyui_renderer_has_stable_golden_vectors"
+    ),
+    (
+        "comfyreview.application.card_battler_generation_prompt:"
+        "CardEvolutionPromptAdapter.adapt"
+    ): (
+        "tests/test_card_battler_generation_prompt.py::"
+        "test_card_prompt_adapter_preserves_scopes_weights_and_order"
+    ),
+    (
         "comfyreview.application.local_model_structured_inference:"
         "LocalStructuredInferenceRequest.schema_document"
     ): (
