@@ -31,30 +31,38 @@ from comfyreview.domain.card_battler import (
     StructuredCardSpec,
     TraitDevelopmentAction,
 )
-from tests.test_card_battler_session_repository import _session
+from tests.card_battler_fixtures import (
+    absent_presentation,
+    card_source_image,
+    semantic_profile,
+    structured_card,
+    visual_recipe,
+)
 
 
 def _pool_card() -> CardPoolCard:
-    session = _session()
+    source = card_source_image()
+    profile = semantic_profile()
+    card = structured_card()
     identity = CardIdentity(
         "card-1",
-        session.source_image_uid,
-        session.source_content_hash,
-        session.semantic_profile.semantic_revision,
-        session.imprint,
+        source.image_uid,
+        source.content_hash,
+        profile.semantic_revision,
+        card.imprint,
     )
     return CardPoolCard(
         state=CardState(
             identity,
             1,
-            session.card,
+            card,
             "accepted-image",
             "accepted-hash",
-            session.card.tier_ordinal,
+            card.tier_ordinal,
         ),
-        semantic_profile=session.semantic_profile,
-        visual_recipe=session.visual_recipe,
-        presentation=session.presentation,
+        semantic_profile=profile,
+        visual_recipe=visual_recipe(),
+        presentation=absent_presentation(),
         accepted_group_id="initial-group",
         accepted_candidate_id="initial-candidate",
     )

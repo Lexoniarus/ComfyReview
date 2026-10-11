@@ -21,7 +21,7 @@ from comfyreview.repositories.sqlite.card_battler_candidate_groups import (
 from comfyreview.repositories.sqlite.card_battler_runtime_schema import (
     CardBattlerRuntimeSchemaManager,
 )
-from tests.test_card_battler_evolution import _recipe
+from tests.card_battler_fixtures import visual_recipe
 from tests.test_card_battler_factory import _factory, _profile
 from tests.test_card_candidate_group_reservation import _service
 
@@ -45,7 +45,7 @@ def _composed_group(tmp_path: Path):
         group_seed=group.group_seed,
     )
     candidates = tuple(
-        replace(candidate, visual_recipe=_recipe())
+        replace(candidate, visual_recipe=visual_recipe())
         for candidate in composition.candidates
     )
     persisted = repository.complete_composition(

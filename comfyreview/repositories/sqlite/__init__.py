@@ -15,9 +15,6 @@ from comfyreview.repositories.sqlite.canonical_schema import (
 from comfyreview.repositories.sqlite.card_battler_candidate_groups import (
     SqliteCardCandidateGroupRepository,
 )
-from comfyreview.repositories.sqlite.card_battler_candidates import (
-    SqliteCardCandidateRepository,
-)
 from comfyreview.repositories.sqlite.card_battler_card_pool import (
     SqliteCardPoolRepository,
 )
@@ -46,9 +43,6 @@ from comfyreview.repositories.sqlite.card_battler_model_resource import (
 from comfyreview.repositories.sqlite.card_battler_runtime_schema import (
     CARD_BATTLER_RUNTIME_SCHEMA_VERSION,
     CardBattlerRuntimeSchemaManager,
-)
-from comfyreview.repositories.sqlite.card_battler_sessions import (
-    SqliteCardSessionRepository,
 )
 from comfyreview.repositories.sqlite.catalog_evidence import (
     SqliteCatalogEvidenceRepository,
@@ -138,7 +132,6 @@ __all__ = [
     "SqliteCardDeckRepository",
     "SqliteCardGenerationOutputRepository",
     "SqliteCardGenerationRepository",
-    "SqliteCardCandidateRepository",
     "SqliteCardCandidateGroupRepository",
     "SqliteCardPoolRepository",
     "SqliteCardMaterializationModelRepository",
@@ -148,7 +141,6 @@ __all__ = [
     "CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS",
     "CARD_BATTLER_RUNTIME_SCHEMA_VERSION",
     "CardBattlerRuntimeSchemaManager",
-    "SqliteCardSessionRepository",
     "SqliteCatalogEvidenceRepository",
     "LegacySchemaManager",
     "SqliteOutputImageRepository",

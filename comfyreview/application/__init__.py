@@ -59,17 +59,6 @@ from comfyreview.application.card_battler_development_improvement import (
 from comfyreview.application.card_battler_development_service import (
     CardDevelopmentService,
 )
-from comfyreview.application.card_battler_evolution import (
-    CARD_EVOLUTION_GENERATION_POLICY_REVISION,
-    CardCandidateRepository,
-    CardCandidateStatus,
-    CardEvolutionCandidate,
-    CardEvolutionGenerationPolicy,
-    CardEvolutionService,
-    CardGenerationLifecycle,
-    CardGenerationOutputQuery,
-    CardSessionReferenceImageProvider,
-)
 from comfyreview.application.card_battler_evolution_images import (
     CardReferenceImageStager,
     StagedCardReferenceImage,
@@ -160,9 +149,6 @@ from comfyreview.application.card_battler_preview import (
     CardSourceEligibilityPolicy,
     CardSourceEligibilityReason,
 )
-from comfyreview.application.card_battler_prototype import (
-    CardFactoryPrototypeService,
-)
 from comfyreview.application.card_battler_random import (
     DomainSeparatedCardRandom,
 )
@@ -182,25 +168,6 @@ from comfyreview.application.card_battler_semantics import (
     CardSourceImageProvider,
     SemanticImageAnalysisError,
     SemanticImageAnalyzer,
-)
-from comfyreview.application.card_battler_session_queries import (
-    CardFactorySessionQueryService,
-    CardFactorySessionSnapshot,
-)
-from comfyreview.application.card_battler_session_service import (
-    CardFactorySessionService,
-    CardSessionDevelopmentLockedError,
-    CardSessionIdentitySource,
-    CardSourceEligibilityError,
-)
-from comfyreview.application.card_battler_sessions import (
-    CardActiveImageKind,
-    CardSession,
-    CardSessionCapacityError,
-    CardSessionConflictError,
-    CardSessionNotFoundError,
-    CardSessionOperationState,
-    CardSessionRepository,
 )
 from comfyreview.application.card_battler_trait_selection import (
     InitialTraitCandidateScore,
@@ -699,36 +666,13 @@ __all__ = [
     "DeterministicCardArtifacts",
     "CardReferenceImageStager",
     "StagedCardReferenceImage",
-    "CARD_EVOLUTION_GENERATION_POLICY_REVISION",
-    "CardCandidateRepository",
-    "CardCandidateStatus",
-    "CardEvolutionCandidate",
-    "CardEvolutionGenerationPolicy",
-    "CardEvolutionService",
-    "CardGenerationLifecycle",
-    "CardGenerationOutputQuery",
-    "CardSessionReferenceImageProvider",
     "CompatibilityRelation",
     "CommonCardMaterializer",
     "CardStatMaterializer",
     "CardSourceImage",
     "CardSourceImageProvider",
-    "CardActiveImageKind",
-    "CardSession",
-    "CardSessionCapacityError",
-    "CardSessionConflictError",
-    "CardSessionNotFoundError",
-    "CardSessionOperationState",
-    "CardSessionRepository",
-    "CardFactorySessionService",
-    "CardFactorySessionQueryService",
-    "CardFactorySessionSnapshot",
-    "CardSessionDevelopmentLockedError",
-    "CardSessionIdentitySource",
     "CardSourceEligibilityDecision",
-    "CardSourceEligibilityError",
     "CardSourceEligibilityPolicy",
-    "CardFactoryPrototypeService",
     "CardSourceEligibilityReason",
     "CardPresentation",
     "CardPresentationRealizer",

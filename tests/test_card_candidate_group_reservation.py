@@ -28,7 +28,7 @@ from comfyreview.application.card_battler_semantics import (
 )
 from comfyreview.application.image_queries import ImageContextQueryService
 from comfyreview.application.workspace_settings import ContentLevel
-from tests.test_card_battler_session_service import _source
+from tests.card_battler_fixtures import card_source_image
 
 
 class _ImageContexts:
@@ -51,7 +51,7 @@ class _SourceImages:
         self.calls += 1
         if self._unavailable:
             raise FileNotFoundError(image_uid)
-        return _source()
+        return card_source_image()
 
 
 class _Identities:

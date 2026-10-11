@@ -35,7 +35,7 @@ from comfyreview.repositories.sqlite.card_battler_candidate_groups import (
 from comfyreview.repositories.sqlite.card_battler_generations import (
     SqliteCardGenerationOutputRepository,
 )
-from tests.test_card_battler_session_service import _source
+from tests.card_battler_fixtures import card_source_image
 from tests.test_card_candidate_generation_policy import _composed_group
 
 
@@ -46,7 +46,7 @@ class _ReferenceImages:
 
     def load(self, group):
         self.calls += 1
-        source = _source()
+        source = card_source_image()
         if self._changed:
             return type(source)(
                 source.image_uid,

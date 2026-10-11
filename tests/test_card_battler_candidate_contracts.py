@@ -22,7 +22,14 @@ from comfyreview.domain.card_battler import (
     CardIdentity,
     CardState,
 )
-from tests.test_card_battler_session_repository import _session
+from tests.card_battler_fixtures import (
+    absent_presentation,
+    card_imprint,
+    card_source_image,
+    semantic_profile,
+    structured_card,
+    visual_recipe,
+)
 
 
 def _slots(group_id: str) -> tuple[CardCandidate, ...]:
@@ -101,11 +108,10 @@ def test_submitted_candidate_requires_generation_provenance() -> None:
             status=CardCandidateStatus.SUBMITTED,
             materialization_seed=queued.materialization_seed,
         )
-    session = _session()
     artifacts = CompleteCardCandidateArtifacts(
-        session.card,
-        session.visual_recipe,
-        session.presentation,
+        structured_card(),
+        visual_recipe(),
+        absent_presentation(),
         queued.materialization_seed,
     )
     with pytest.raises(ValueError, match="generation provenance"):
@@ -121,29 +127,32 @@ def test_submitted_candidate_requires_generation_provenance() -> None:
 
 
 def test_confirmed_card_state_retains_identity_dna_and_tier() -> None:
-    session = _session()
+    source = card_source_image()
+    imprint = card_imprint()
+    profile = semantic_profile()
+    card = structured_card()
     identity = CardIdentity(
         card_id="card-1",
-        source_image_uid=session.source_image_uid,
-        source_content_hash=session.source_content_hash,
-        semantic_revision=session.semantic_profile.semantic_revision,
-        imprint=session.imprint,
+        source_image_uid=source.image_uid,
+        source_content_hash=source.content_hash,
+        semantic_revision=profile.semantic_revision,
+        imprint=imprint,
     )
     state = CardState(
         identity=identity,
         revision=1,
-        card=session.card,
+        card=card,
         active_image_uid="output-1",
         active_content_hash="output-hash",
-        visual_tier=session.card.tier_ordinal,
+        visual_tier=card.tier_ordinal,
     )
 
-    assert state.card.imprint == session.imprint
+    assert state.card.imprint == imprint
     with pytest.raises(ValueError, match="visual tier"):
         CardState(
             identity=identity,
             revision=1,
-            card=session.card,
+            card=card,
             active_image_uid="output-1",
             active_content_hash="output-hash",
             visual_tier=99,
