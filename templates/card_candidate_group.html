@@ -1,0 +1,57 @@
+{% extends "_v2_base.html" %} {% set page_title = "Kartenvergleich ·
+ComfyReview" %} {% set active_nav = "card_factory" %} {% block styles %}
+<link
+  rel="stylesheet"
+  href="/static/css/v2/card-factory.css?v=20261012-compare"
+/>
+{% endblock %} {% block content %}
+<main
+  class="card-workshop-shell card-poc-surface"
+  data-card-candidate-group
+  data-group-id="{{ group_id }}"
+>
+  <header class="card-workshop-header">
+    <div>
+      <p class="card-factory-kicker">Card Battler · Vierkartenvergleich</p>
+      <h1 data-comparison-title>Candidate Group</h1>
+      <p class="muted" data-comparison-summary>Gruppe wird geladen …</p>
+    </div>
+    <div class="card-workshop-actions">
+      <span
+        class="card-factory-status"
+        data-comparison-status
+        aria-live="polite"
+        >Laden …</span
+      >
+      <button class="secondary-button" type="button" data-reject-group>
+        Satz verwerfen
+      </button>
+      <button class="secondary-button" type="button" data-retry-group>
+        Neu analysieren
+      </button>
+      <a class="secondary-button" href="/card-candidate-groups">Alle Gruppen</a>
+    </div>
+  </header>
+  <section class="comparison-context" aria-label="Gemeinsame Karten-DNA">
+    <figure class="card-reference-frame">
+      <img data-comparison-source alt="Aktive Gruppenreferenz" />
+    </figure>
+    <div>
+      <h2 class="comparison-context-title">Gemeinsame DNA</h2>
+      <dl class="card-fact-list" data-comparison-facts></dl>
+    </div>
+    <div>
+      <h2 class="comparison-context-title">Semantik</h2>
+      <div class="card-tag-list" data-comparison-semantic></div>
+      <h2 class="comparison-context-title">Imprint</h2>
+      <dl class="card-fact-list" data-comparison-imprint></dl>
+    </div>
+  </section>
+  <section class="complete-card-grid" data-comparison-candidates></section>
+</main>
+{% endblock %} {% block scripts %}
+<script
+  type="module"
+  src="/static/js/entries/card-candidate-group.js?v=20261012-compare"
+></script>
+{% endblock %}

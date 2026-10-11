@@ -232,6 +232,116 @@
   font-size: var(--font-size-caption);
 }
 
+.comparison-context {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) minmax(14rem, 0.8fr) minmax(
+      18rem,
+      1.2fr
+    );
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+  padding: var(--space-5);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--card-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.comparison-context-title {
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.comparison-context-title:not(:first-child) {
+  margin-top: var(--space-5);
+}
+
+.complete-card-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.complete-card-candidate {
+  display: grid;
+  overflow: hidden;
+  min-width: 0;
+  border: 0.125rem solid rgb(65 217 255 / 26%);
+  border-radius: 1rem;
+  background: linear-gradient(160deg, #15243a, #09101c 58%, #182a43);
+  box-shadow: 0 1.2rem 2.8rem rgb(0 0 0 / 38%);
+}
+
+.complete-card-candidate[data-status="completed"] {
+  border-color: rgb(65 217 255 / 62%);
+}
+
+.complete-card-candidate[data-status="failed"] {
+  border-color: rgb(251 113 133 / 52%);
+}
+
+.complete-card-candidate > header {
+  display: grid;
+  gap: var(--space-1);
+  min-height: 5.4rem;
+  align-content: center;
+  padding: var(--space-3);
+}
+
+.complete-card-eyebrow {
+  color: var(--card-energy);
+  font-size: var(--font-size-caption);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.complete-card-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.complete-card-candidate > img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.complete-card-body {
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.complete-card-body > p {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.complete-card-candidate > details {
+  margin: 0 var(--space-3) var(--space-3);
+  padding: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.complete-card-candidate > details summary {
+  color: var(--color-text);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.complete-card-candidate > footer {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding: var(--space-3);
+  border-top: 0.0625rem solid var(--color-border);
+  background: rgb(4 9 16 / 44%);
+}
+
 .candidate-group-empty {
   margin: 0;
   padding: var(--space-4);
@@ -494,6 +604,10 @@
   .card-inspector-column {
     grid-column: 1 / -1;
   }
+
+  .complete-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (width <= 56rem) {
@@ -509,7 +623,9 @@
   }
 
   .card-workshop-grid,
-  .card-candidate-grid {
+  .card-candidate-grid,
+  .complete-card-grid,
+  .comparison-context {
     grid-template-columns: 1fr;
   }
 

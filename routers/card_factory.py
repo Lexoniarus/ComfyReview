@@ -27,11 +27,11 @@ def card_candidate_groups_page(request: Request):
     )
 
 
-@router.get("/card-workshop/{session_id}")
-def card_workshop_page(request: Request, session_id: str):
-    """Render one revision-safe Card workshop shell."""
+@router.get("/card-candidate-groups/{group_id}")
+def card_candidate_group_page(request: Request, group_id: str):
+    """Render one four-Card comparison shell."""
     return templates.TemplateResponse(
         request=request,
-        name="card_workshop.html",
-        context={"request": request, "session_id": session_id},
+        name="card_candidate_group.html",
+        context={"request": request, "group_id": group_id},
     )
