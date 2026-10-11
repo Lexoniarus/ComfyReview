@@ -1,0 +1,20 @@
+{
+  "characters/aiko.json": "44cb903b7bf780804d01abfeea5c50ceaaae24b4a5c52f13c9b6a1cb6954dab4",
+  "characters/hina.json": "a1e6885a33cf34c272ceba1d9fbedd9a08bef7e8134db9e214bcfeed7e2b8354",
+  "characters/kaori.json": "fca9f34b48732617d892b03b257544184b0bc111a5f1be1b07dccb04e9a24cc3",
+  "characters/mitsuki.json": "7db1fdae94786727eb72028117b22fa24e61534be24abbee93654205bf0bceda",
+  "characters/natsumi.json": "866fd738abe96c66910fddac624d147b1031fe634dc9126b1395a80ce66d280d",
+  "characters/saki.json": "d6689399504cfaa9e260c2ee0f3695276f624ed0630b92f50e0d1be68333aa95",
+  "prompts/characters/aiko.md": "8c544f554292cdf8462bec3e82983c7ab099a3097de3e2e048f4fce382a2d8fb",
+  "prompts/characters/hina.md": "43f304645b11d3f82674a8d56d1b2c890d5c9263664b30701fd72604ab7e20f6",
+  "prompts/characters/kaori.md": "3b0de0448b2f33c7fd153d8787553cbbc3379daf7f93561e679ec3792ac5d05d",
+  "prompts/characters/mitsuki.md": "2207ee0aa4a5b319c22774401cf4c9c138d1d774a1e0290b66b757328ebe2e10",
+  "prompts/characters/natsumi.md": "1fe9533846b008ffa0844d75adaa7325252d5b2007a79a3cd2ca0fae5e28457d",
+  "prompts/characters/saki.md": "5ad6d491dd03cc34cc40e3f82ea6e06cbb5c4a21a8e1cccc7644960ed5d3e47d",
+  "sources/Aiko.md": "9845678785a09387099f82f050f9d5577c090ea69da374ee283c92c18b559bd2",
+  "sources/Hina.md": "cbde89bdcd935e776b6e37b10539896a22920346a60841d9cb85c560e5c39f12",
+  "sources/Kaori.md": "9b2a40c1d1a4c05f3ebba1eb977e51cef301aea8ad84620fb2f7f50f0a8c7bcc",
+  "sources/Mitsuki.md": "c308aee6e39e73a524ffc89a6eb512f52dbbf59008763b1c0fcab40c1449735a",
+  "sources/Natsumi.md": "1f31ea101124edaa7f4848728cf73bd649b2bbb53d61a9ef48358cd328a12c60",
+  "sources/Saki.md": "36ef4fbbfcc7c811890630ccaca5cc75a499310397a3e7c8f22d778582e220b0"
+}
