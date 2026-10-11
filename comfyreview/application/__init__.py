@@ -350,6 +350,13 @@ from comfyreview.application.local_model_runtime import (
     LocalModelLease,
     LocalModelRuntime,
 )
+from comfyreview.application.local_model_structured_inference import (
+    JsonValue,
+    LocalModelStructuredOutputError,
+    LocalStructuredInferenceProvider,
+    LocalStructuredInferenceRequest,
+    LocalStructuredInferenceResult,
+)
 from comfyreview.application.local_models import (
     LocalModelConnectionError,
     LocalModelDescriptor,
@@ -808,6 +815,7 @@ __all__ = [
     "ImageOrder",
     "ImageQueryValidationError",
     "ImageScope",
+    "JsonValue",
     "LegacySchemaIssue",
     "LegacySchemaReport",
     "LegacySchemaValidationError",
@@ -830,6 +838,7 @@ __all__ = [
     "LocalModelError",
     "LocalModelInstance",
     "LocalModelInferenceError",
+    "LocalModelStructuredOutputError",
     "LocalModelLease",
     "LocalModelLifecycleError",
     "LocalModelProtocolError",
@@ -837,6 +846,9 @@ __all__ = [
     "LocalModelRuntime",
     "LocalModelTimeoutError",
     "LocalModelUnavailableError",
+    "LocalStructuredInferenceProvider",
+    "LocalStructuredInferenceRequest",
+    "LocalStructuredInferenceResult",
     "CompiledLoraGraphPolicy",
     "LoraGraphValidationError",
     "LoraReclassificationImpact",
