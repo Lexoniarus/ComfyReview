@@ -4,6 +4,7 @@
  * Temporary room/phone visuals and the remaining buttons are created by code.
  */
 import { _decorator, Component, Label, Node } from "cc";
+import { CanonicalImagePreview } from "./CanonicalImagePreview";
 import { GameShellViewBuilder, type GameShellView } from "./GameShellView";
 import {
   INITIAL_GAME_SHELL_STATE,
@@ -32,11 +33,19 @@ export class GameShellController extends Component {
   @property({ type: Node })
   public cardsPanel: Node | null = null;
 
+  @property({ type: Node })
+  public avatarPreviewNode: Node | null = null;
+
   @property({ type: Label })
   public viewStatusLabel: Label | null = null;
 
+  // Optional existing ComfyReview demo image, not required for mock navigation.
+  @property
+  public demoAvatarImageUid = "";
+
   private state: Readonly<GameShellState> = INITIAL_GAME_SHELL_STATE;
   private view: GameShellView | null = null;
+  private avatarLoaded = false;
 
   protected onLoad(): void {
     if (!this.roomRoot || !this.phoneOverlay) {
@@ -83,6 +92,23 @@ export class GameShellController extends Component {
     if (newState === this.state) return;
     this.state = newState;
     this.render();
+    this.syncOptionalAvatar();
+  }
+
+  private syncOptionalAvatar(): void {
+    const preview = this.avatarPreviewNode?.getComponent(CanonicalImagePreview);
+    const imageUid = this.demoAvatarImageUid.trim();
+    const shouldShow =
+      isPhonePanelVisible(this.state, "messages") &&
+      Boolean(imageUid) &&
+      Boolean(preview);
+    if (shouldShow && !this.avatarLoaded) {
+      this.avatarLoaded = true;
+      preview?.setImageUid(imageUid);
+    } else if (!shouldShow && this.avatarLoaded) {
+      this.avatarLoaded = false;
+      preview?.setImageUid("");
+    }
   }
 
   private render(): void {
@@ -108,6 +134,8 @@ export class GameShellController extends Component {
 
   protected onDestroy(): void {
     // Generated UI nodes and their Button listeners are owned by the scene.
+    // CanonicalImagePreview owns/disposes its optional image resources.
     this.view = null;
+    this.avatarLoaded = false;
   }
 }

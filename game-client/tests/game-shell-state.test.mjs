@@ -99,6 +99,8 @@ test("editor-backed runtime and optional installer source are identical", () => 
   for (const path of [
     "GameShellController.ts",
     "GameShellView.ts",
+    "CanonicalImagePreview.ts",
+    "runtime/ComfyReviewImageApi.ts",
     "runtime/GameShellState.ts",
   ]) {
     const cocos = new URL(`../cocos/assets/scripts/${path}`, import.meta.url);
@@ -111,4 +113,26 @@ test("editor-backed runtime and optional installer source are identical", () => 
       readFileSync(fileURLToPath(starter), "utf8"),
     );
   }
+});
+
+test("stale remote preview assets are released before returning", () => {
+  const previewPath = new URL(
+    "../cocos/assets/scripts/CanonicalImagePreview.ts",
+    import.meta.url,
+  );
+  const source = readFileSync(fileURLToPath(previewPath), "utf8");
+  const ownership = source.indexOf("image.addRef()");
+  const staleCheck = source.indexOf(
+    "if (this.disposed || current !== this.version)",
+    ownership,
+  );
+  const staleRelease = source.indexOf("source.decRef()", staleCheck);
+  const staleReturn = source.indexOf("return", staleRelease);
+  const textureCreation = source.indexOf("new Texture2D()", staleReturn);
+
+  assert.ok(ownership >= 0);
+  assert.ok(staleCheck > ownership);
+  assert.ok(staleRelease > staleCheck);
+  assert.ok(staleReturn > staleRelease);
+  assert.ok(textureCreation > staleReturn);
 });
