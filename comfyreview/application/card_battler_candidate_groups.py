@@ -238,3 +238,33 @@ class CardCandidateGroupRepository(Protocol):
     def get(self, group_id: str) -> CardCandidateGroup | None:
         """Return one group with its ordered candidate slots."""
         ...
+
+    def claim_next_queued(self) -> CardCandidateGroup | None:
+        """Atomically claim the oldest queued group for composition."""
+        ...
+
+    def complete_composition(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+        semantic_profile: SemanticImageProfile,
+        imprint: CardImprint,
+        candidates: tuple[CompleteCardCandidateArtifacts, ...],
+    ) -> CardCandidateGroup:
+        """Persist one successful four-Card composition by CAS."""
+        ...
+
+    def fail_composition(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+        failure_category: str,
+    ) -> CardCandidateGroup:
+        """Persist one controlled composition failure by CAS."""
+        ...
+
+    def fail_interrupted_compositions(self) -> int:
+        """Fail composing groups left behind by an interrupted process."""
+        ...
