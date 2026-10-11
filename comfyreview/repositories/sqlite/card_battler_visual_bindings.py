@@ -107,11 +107,7 @@ class _SqliteCardVisualBindingReader:
                 source_column=source_column,
             )
         )
-        identities = tuple(
-            (item.source_type, item.source_key, item.atom_key, item.scope)
-            for item in bindings
-        )
-        if len(identities) != len(set(identities)):
+        if len(bindings) != len(set(bindings)):
             raise self._invalid("visual prompt bindings are ambiguous")
         return tuple(
             sorted(

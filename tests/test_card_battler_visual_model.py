@@ -354,6 +354,34 @@ def test_visual_model_rejects_invalid_binding_facts(
             repository.prompt_atom_exclusions()
 
 
+def test_visual_model_allows_tier_specific_binding_override(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "tier-override.sqlite3"
+    _create_model_database(path)
+    _execute(
+        path,
+        "INSERT INTO semantic_prompt_atoms "
+        "SELECT 2, concept_id, prompt_atom_id, scope, 'required', 1050, "
+        "2, max_tier_id, selection_weight_milli, prompt_group_id, 5, "
+        "intensity_channel, 'tier override' "
+        "FROM semantic_prompt_atoms WHERE id = 1",
+    )
+
+    bindings = _repository(path).prompt_bindings()
+
+    assert len(bindings) == 8
+    overridden = tuple(
+        item
+        for item in bindings
+        if item.source_type == "semantic"
+        and item.source_key == "alpha"
+        and item.atom_key == "alpha"
+    )
+    assert tuple(item.mode for item in overridden) == ("required", "optional")
+    assert overridden[0].min_tier_ordinal == 2
+
+
 def test_visual_model_rejects_cross_ruleset_binding_references(
     tmp_path: Path,
 ) -> None:
