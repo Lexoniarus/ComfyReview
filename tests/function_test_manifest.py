@@ -1,6 +1,22 @@
 """Behavior-test ownership for every concrete public Python-core callable."""
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
+    "comfyreview.application.card_battler_candidate_group_catalog:CardCandidateGroupCatalogService.list_groups": (
+        "tests/test_card_candidate_group_catalog.py::"
+        "test_group_catalog_lists_reads_and_rejects_terminal_groups"
+    ),
+    "comfyreview.application.card_battler_candidate_group_catalog:CardCandidateGroupCatalogService.get": (
+        "tests/test_card_candidate_group_catalog.py::"
+        "test_group_catalog_lists_reads_and_rejects_terminal_groups"
+    ),
+    "comfyreview.application.card_battler_candidate_group_catalog:CardCandidateGroupCatalogService.reject": (
+        "tests/test_card_candidate_group_catalog.py::"
+        "test_group_catalog_lists_reads_and_rejects_terminal_groups"
+    ),
+    "comfyreview.application.card_battler_candidate_group_catalog:CardCandidateGroupCatalogService.retry_initial": (
+        "tests/test_card_candidate_group_catalog.py::"
+        "test_group_catalog_retry_reserves_a_fresh_initial_analysis"
+    ),
     "comfyreview.application.card_battler_deck:CardDeckPolicy.add": (
         "tests/test_card_deck_service.py::"
         "test_deck_policy_enforces_unique_cards_capacity_and_exact_order"

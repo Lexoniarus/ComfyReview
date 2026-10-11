@@ -124,6 +124,20 @@ class SqliteCardCandidateGroupRepository:
         finally:
             connection.close()
 
+    def list_groups(self) -> tuple[CardCandidateGroup, ...]:
+        """Return all persisted groups in stable newest-first order."""
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            rows = connection.execute(
+                """
+                SELECT group_id FROM card_candidate_groups
+                ORDER BY created_at DESC, group_id DESC
+                """
+            ).fetchall()
+        finally:
+            connection.close()
+        return tuple(self._required(str(row["group_id"])) for row in rows)
+
     def claim_next_queued(
         self,
         kind: CardCandidateGroupKind = CardCandidateGroupKind.INITIAL,
@@ -359,6 +373,59 @@ class SqliteCardCandidateGroupRepository:
         finally:
             connection.close()
         return tuple(self._required(str(row["group_id"])) for row in rows)
+
+    def reject(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+    ) -> CardCandidateGroup:
+        """Reject one terminal unaccepted Candidate group by CAS."""
+        connection = connect_existing(self._database_path)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            next_revision = expected_revision + 1
+            group = connection.execute(
+                """
+                UPDATE card_candidate_groups SET revision = ?, status = ?,
+                    updated_at = datetime('now')
+                WHERE group_id = ? AND revision = ?
+                  AND status IN ('ready', 'partial_failure', 'failed')
+                """,
+                (
+                    next_revision,
+                    CardCandidateGroupStatus.REJECTED.value,
+                    group_id,
+                    expected_revision,
+                ),
+            )
+            if group.rowcount != 1:
+                raise CardCandidateGroupConflictError(
+                    "Candidate group rejection revision is stale"
+                )
+            candidates = connection.execute(
+                """
+                UPDATE card_candidates SET group_revision = ?,
+                    status = CASE
+                        WHEN status = 'completed' THEN 'rejected'
+                        ELSE status
+                    END,
+                    updated_at = datetime('now')
+                WHERE group_id = ? AND group_revision = ?
+                """,
+                (next_revision, group_id, expected_revision),
+            )
+            if candidates.rowcount != 4:
+                raise CardCandidateGroupConflictError(
+                    "Candidate group no longer has four slots"
+                )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        return self._required(group_id)
 
     def mark_submitted(
         self,

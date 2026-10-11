@@ -266,6 +266,10 @@ class CardCandidateGroupRepository(Protocol):
         """Return one group with its ordered candidate slots."""
         ...
 
+    def list_groups(self) -> tuple[CardCandidateGroup, ...]:
+        """Return all persisted groups in stable newest-first order."""
+        ...
+
     def claim_next_queued(
         self,
         kind: CardCandidateGroupKind = CardCandidateGroupKind.INITIAL,
@@ -311,6 +315,15 @@ class CardCandidateGroupRepository(Protocol):
 
     def generating_groups(self) -> tuple[CardCandidateGroup, ...]:
         """Return groups that still need image lifecycle work."""
+        ...
+
+    def reject(
+        self,
+        group_id: str,
+        *,
+        expected_revision: int,
+    ) -> CardCandidateGroup:
+        """Reject one terminal unaccepted Candidate group by CAS."""
         ...
 
     def mark_submitted(

@@ -42,6 +42,42 @@ def test_sqlite_group_reservation_is_atomic_and_read_only_round_trips(
     assert repository.get(group.group_id) == group
 
 
+def test_sqlite_group_catalog_lists_and_rejects_terminal_groups(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "card-runtime.sqlite3"
+    repository = _repository(tmp_path)
+    group = _service(repository)[0].reserve("image-1")
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute(
+            "UPDATE card_candidate_groups SET status = 'failed' "
+            "WHERE group_id = ?",
+            (group.group_id,),
+        )
+        connection.execute(
+            "UPDATE card_candidates SET status = 'failed' WHERE group_id = ?",
+            (group.group_id,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert tuple(item.group_id for item in repository.list_groups()) == (
+        group.group_id,
+    )
+    rejected = repository.reject(group.group_id, expected_revision=1)
+
+    assert rejected.status is CardCandidateGroupStatus.REJECTED
+    assert rejected.revision == 2
+    assert all(
+        item.group_revision == 2 and item.status is CardCandidateStatus.FAILED
+        for item in rejected.candidates
+    )
+    with pytest.raises(CardCandidateGroupConflictError, match="stale"):
+        repository.reject(group.group_id, expected_revision=1)
+
+
 def test_sqlite_repository_claims_and_completes_four_candidate_artifacts(
     tmp_path: Path,
 ) -> None:
