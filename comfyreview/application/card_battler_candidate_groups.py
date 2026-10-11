@@ -286,3 +286,38 @@ class CardCandidateGroupRepository(Protocol):
     def fail_interrupted_compositions(self) -> int:
         """Fail composing groups left behind by an interrupted process."""
         ...
+
+    def mark_submitted(
+        self,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+        generation_uid: str,
+        recipe_hash: str,
+        generation_policy_revision: str,
+    ) -> CardCandidateGroup:
+        """Attach one submitted generation and advance the group revision."""
+        ...
+
+    def mark_generation_failed(
+        self,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+        failure_category: str,
+        recipe_hash: str | None = None,
+        generation_policy_revision: str | None = None,
+    ) -> CardCandidateGroup:
+        """Fail one candidate generation and refresh aggregate status."""
+        ...
+
+    def mark_completed(
+        self,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+        output_image_uid: str,
+        output_content_hash: str,
+    ) -> CardCandidateGroup:
+        """Attach one validated primary output and refresh group status."""
+        ...

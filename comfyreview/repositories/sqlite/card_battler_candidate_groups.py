@@ -15,6 +15,9 @@ from comfyreview.application.card_battler_candidate_groups import (
 )
 from comfyreview.application.card_battler_semantics import SemanticImageProfile
 from comfyreview.domain.card_battler import CardImprint
+from comfyreview.repositories.sqlite.card_battler_candidate_generation_state import (
+    SqliteCardCandidateGenerationStateWriter,
+)
 from comfyreview.repositories.sqlite.card_battler_candidate_group_codec import (
     decode_candidate_group,
 )
@@ -32,6 +35,9 @@ class SqliteCardCandidateGroupRepository:
 
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path).resolve()
+        self._generation_state = SqliteCardCandidateGenerationStateWriter(
+            self._database_path
+        )
 
     def create(self, group: CardCandidateGroup) -> CardCandidateGroup:
         """Atomically insert one new group and its four reserved slots."""
@@ -312,6 +318,79 @@ class SqliteCardCandidateGroupRepository:
             raise
         finally:
             connection.close()
+
+    def mark_submitted(
+        self,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+        generation_uid: str,
+        recipe_hash: str,
+        generation_policy_revision: str,
+    ) -> CardCandidateGroup:
+        """Attach one submitted generation and advance the group revision."""
+        self._generation_state.mark_submitted(
+            candidate_id,
+            expected_revision=expected_revision,
+            generation_uid=generation_uid,
+            recipe_hash=recipe_hash,
+            generation_policy_revision=generation_policy_revision,
+        )
+        return self._required_group_for_candidate(candidate_id)
+
+    def mark_generation_failed(
+        self,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+        failure_category: str,
+        recipe_hash: str | None = None,
+        generation_policy_revision: str | None = None,
+    ) -> CardCandidateGroup:
+        """Fail one generation slot and refresh aggregate group status."""
+        self._generation_state.mark_failed(
+            candidate_id,
+            expected_revision=expected_revision,
+            failure_category=failure_category,
+            recipe_hash=recipe_hash,
+            generation_policy_revision=generation_policy_revision,
+        )
+        return self._required_group_for_candidate(candidate_id)
+
+    def mark_completed(
+        self,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+        output_image_uid: str,
+        output_content_hash: str,
+    ) -> CardCandidateGroup:
+        """Attach one validated primary output and refresh group status."""
+        self._generation_state.mark_completed(
+            candidate_id,
+            expected_revision=expected_revision,
+            output_image_uid=output_image_uid,
+            output_content_hash=output_content_hash,
+        )
+        return self._required_group_for_candidate(candidate_id)
+
+    def _required_group_for_candidate(
+        self,
+        candidate_id: str,
+    ) -> CardCandidateGroup:
+        connection = connect_read_only(self._database_path, rows=True)
+        try:
+            row = connection.execute(
+                "SELECT group_id FROM card_candidates WHERE candidate_id = ?",
+                (candidate_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+        if row is None:
+            raise CardCandidateGroupConflictError(
+                "Card candidate generation transition failed"
+            )
+        return self._required(str(row["group_id"]))
 
     @staticmethod
     def _candidate_rows_for_update(
