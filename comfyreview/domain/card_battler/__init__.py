@@ -8,6 +8,13 @@ from comfyreview.domain.card_battler.cards import (
     CardStats,
     StructuredCardSpec,
 )
+from comfyreview.domain.card_battler.collection import CardIdentity, CardState
+from comfyreview.domain.card_battler.decks import (
+    POC_DECK_CAPACITY,
+    POC_DECK_ID,
+    CardDeck,
+    CardDeckEntry,
+)
 from comfyreview.domain.card_battler.development import (
     CARD_DEVELOPMENT_ALGORITHM_REVISION,
     CardDevelopmentPlan,
@@ -40,6 +47,10 @@ __all__ = [
     "CardDevelopmentProvenance",
     "CardDevelopmentResult",
     "CardImprint",
+    "CardIdentity",
+    "CardState",
+    "CardDeck",
+    "CardDeckEntry",
     "CardRulesProvenance",
     "CardStats",
     "DevelopmentTier",
@@ -56,6 +67,8 @@ __all__ = [
     "MaterializedTrait",
     "MaterializedUsageLimit",
     "PrimaryTraitAction",
+    "POC_DECK_CAPACITY",
+    "POC_DECK_ID",
     "StructuredCardSpec",
     "TraitDevelopmentAction",
 ]
