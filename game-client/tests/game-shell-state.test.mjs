@@ -6,7 +6,7 @@ import {
   INITIAL_GAME_SHELL_STATE,
   isPhonePanelVisible,
   reduceGameShellState,
-} from "../cocos/assets/scripts/runtime/GameShellState.ts";
+} from "../starter/assets/scripts/runtime/GameShellState.ts";
 
 const dispatch = (...actions) =>
   actions.reduce(

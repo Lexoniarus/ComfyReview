@@ -100,6 +100,29 @@ part of the shared validation contract. This database remains model/design
 input only; no card identity or other runtime game fact is persisted before
 the post-proof persistence phase.
 
+### 2.2 Standalone Cocos game-client POC
+
+`game-client/cocos` is an editor-created Cocos Creator 3.8.8 project for a
+presentation-only room and smartphone shell. It is not part of the FastAPI
+runtime and owns no game rules, persistence, social state, cards or model
+calls. Its deterministic navigation is isolated in a pure TypeScript state
+module; an optional read-only adapter resolves canonical `image_uid` values
+through the existing `/api/v2/images/{image_uid}` contract and accepts only
+same-origin `/files/` URLs.
+
+The checked-in starter sources mirror the editor-backed controller, view,
+state, image preview and API adapter. The installer prevalidates every target,
+never overwrites an existing different file and rolls back only files and
+empty directories created by its own failed run. The local development proxy
+binds only to `127.0.0.1` and forwards only `/api/v2/` and `/files/`; it is not
+a deployment or authentication boundary.
+
+The shared quality gate runs the headless navigation/API tests, the pure
+TypeScript contract and the Python support-script tests. Those checks do not
+prove Cocos Editor import, rendering, hitboxes, Web/native asset behavior or a
+real backend image smoke; final manual acceptance remains with the project
+owner.
+
 ## 3. Canonical identity and runtime data
 
 The canonical database has an explicit schema version. Schema v18 is the active

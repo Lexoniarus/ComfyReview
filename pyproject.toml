@@ -32,7 +32,7 @@ typeCheckingMode = "standard"
 exclude = [".venv", "data", "output"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "game-client/tests"]
 addopts = ["--strict-markers"]
 
 [tool.coverage.run]

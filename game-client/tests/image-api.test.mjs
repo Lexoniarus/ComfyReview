@@ -62,7 +62,7 @@ test("non-objects and invalid URLs are rejected", () => {
 });
 
 test("UID is encoded and validation prevents path confusion", async () => {
-  const api = new ComfyReviewImageApi(BASE, async (_url) => valid("a b", ""));
+  const api = new ComfyReviewImageApi(BASE, async () => valid("a b", ""));
   await api.loadImageReference("a b");
   for (const bad of ["", " bad", "../bad", "..", "x/y", "x?y", "x#y", "a\\b"]) {
     await assert.rejects(api.loadImageReference(bad), ImageApiError);

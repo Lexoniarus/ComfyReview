@@ -23,7 +23,12 @@ export default [
     },
   },
   {
-    files: ["frontend-tests/**/*.js", "frontend-e2e/**/*.js", "*.config.js"],
+    files: [
+      "frontend-tests/**/*.js",
+      "frontend-e2e/**/*.js",
+      "game-client/tests/**/*.mjs",
+      "*.config.js",
+    ],
     languageOptions: {
       ecmaVersion: 2024,
       globals: {
