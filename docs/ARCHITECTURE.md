@@ -17,9 +17,10 @@ but the later game is **not** obtained by treating every current or previously
 drafted engineering boundary as permanent.
 
 **Current Card Battler POC:** tested read-only model adapters,
-CardImprint mapping, stat/mechanic/trait materialization and visual prompt
-projection exist in ComfyReview. They are **being developed**, not a finished
-card collection, deck engine or PvE game. [POC status](pocs/card-battler.md).
+CardImprint mapping, stat/mechanic/trait materialization, visual prompt
+projection and a functional Card Factory workshop exist in ComfyReview. They
+are **being developed**, not a finished card collection, deck engine or PvE
+game. [POC status](pocs/card-battler.md).
 
 **Current Generator/Database work:** the native Generator was recently
 overhauled and is wired into the application; the catalogue/database
@@ -74,13 +75,14 @@ generation-referenced old rows as hidden provenance and prevents authored
 composition fallback from resolving any composition containing that
 provenance. Character rows, promotions and manual variants remain exact.
 
-### 2.1 Card Battler model resource (pre-persistence prototype)
+### 2.1 Card Battler model and isolated POC runtime resources
 
 **Status:** the read-only external model adapter is registered, with **lazy
-first-use validation**. The default file `data/card_battler.sqlite3`
-is **not shipped** with the repository and its actual authored contents
-cannot be verified here. This is a separate model/design resource, not
-ComfyReview's writable canonical schema v18 and not a gameplay endpoint.
+first-use validation**. The default file `data/card_battler.sqlite3` is a
+required Card Battler resource and must ship with a usable Card Battler
+distribution; it is never created or repaired from application code. This is
+a separate model/design resource, not ComfyReview's writable canonical schema
+v18 and not a gameplay endpoint.
 
 The pre-persistence Card Battler implementation reads design and rules facts
 from the external `card_battler.sqlite3` model database. The composition root
@@ -97,8 +99,24 @@ or process restart.
 Schema requirements are registered in named read-area groups. A model table
 cannot become authoritative for a new adapter until its required columns are
 part of the shared validation contract. This database remains model/design
-input only; no card identity or other runtime game fact is persisted before
-the post-proof persistence phase.
+input only.
+
+The evolving Card Factory proof uses a second, deliberately isolated writable
+store, `card_battler_runtime.sqlite3`. Its dedicated schema owner may create a
+completely absent schema-v1 file atomically and validates every existing file;
+it never upgrades or repairs an unknown schema during startup. Ordinary Card
+repositories contain no DDL. The store is limited to prototype sessions,
+candidate slots, Card-specific generation lifecycle and Card-generated output
+identity. It is not the canonical ComfyReview review/catalog database and does
+not create Collection, Deck, Battle or XP facts.
+
+The main `comfyreview.sqlite3` remains the read source for an initial canonical
+image and its content eligibility. Card workflows never write their sessions,
+generations or outputs there. The two databases therefore have no cross-file
+foreign keys or dual writes; source image UID and content hash are captured as
+provenance in the Card runtime store. Existing compiler, provider and
+generation services are reused with separately injected Card persistence
+adapters rather than forked.
 
 ### 2.2 Standalone Cocos game-client POC
 
@@ -125,8 +143,8 @@ owner.
 
 ### 2.3 Local-model lifecycle and inference foundation
 
-The local-model foundation is optional and is not yet a runtime-wired Card
-Factory. `Settings` defines the LM Studio base URL, optional bearer token,
+The local-model foundation is wired lazily into the Card Factory runtime.
+`Settings` defines the LM Studio base URL, optional bearer token,
 separate list/load/inference/unload timeouts and explicit Vision/Text model
 keys. Reading settings performs no connection, model discovery, loading or
 inference. The app process never starts LM Studio itself.
@@ -156,10 +174,116 @@ duplicate keys and non-finite numbers, and are independently validated with
 Draft 2020-12 before typed application data is returned. Provider-side schema
 enforcement is therefore an aid, not application authority.
 
-No HTTP route, database write, Card-Battler session or startup model load is
-introduced by this foundation. Fake-transport tests and CI validate the
-contracts but do not establish a real LM Studio, hardware or model smoke; the
-project owner performs that final manual acceptance.
+The Card Factory Stage-1 boundary now adds an injectable
+`SemanticImageAnalyzer`. It leases the configured vision model through the
+single runtime owner, submits a closed structured-output schema, validates the
+result again against the active read-only semantic vocabulary and returns only
+game-free visible-image facts plus controlled signals. A semantic revision
+binds the contract revision, model key, source-image hash and normalized
+result. The analyzer neither resolves paths nor decides Card rules.
+
+Source bytes are obtained through `CanonicalCardSourceImageProvider`, which
+first delegates UID resolution and output-root validation to the existing
+canonical review-image resolver. Only the resulting validated path is read;
+the application receives UID, MIME type, bytes and content hash, never the
+path. This avoids a second `image_uid` lookup policy.
+
+Stage 3 is an independent, optional cosmetic boundary.
+`CardPresentationRealizer` receives the already final semantic profile,
+imprint, structured Card specification and canonical rule text, but may return
+only a title, short non-mechanical description, one display name per trait and
+optional flavor. Its closed schema and application validation reject numeric
+or reserved mechanical syntax. A refresh preserves the existing title. Model,
+schema or policy failure yields no presentation and never changes the valid
+Card specification or authoritative rules.
+
+The reusable `CardFactory` composes these existing collaborators in one
+direction: Stage 1, `CardImprintMapper`, `CommonCardMaterializer`,
+`VisualPromptProjector`, then optional Stage 3. Its explicit deterministic
+seed is derived from source-image identity and semantic revision under
+`card-source-seed-v1`; intermediate mapping, specification and recipe remain
+inspectable. The Factory contains no eligibility, HTTP, session or persistence
+rules.
+
+Prototype session persistence is a separate application port implemented by
+`SqliteCardSessionRepository`. It stores immutable source-image provenance,
+the original semantic profile and imprint, plus the current specification,
+visual recipe, optional presentation and active image reference. Updates use a
+monotone revision and one short `BEGIN IMMEDIATE` compare-and-swap; external
+calls never occur inside that transaction. The repository has a hard bounded
+capacity and never silently evicts sessions.
+
+`CardFactorySessionService` owns the current create/develop commands. Create
+first obtains live canonical image facts, applies the focused STANDARD-content
+eligibility policy, resolves accessible bytes through the canonical adapter,
+runs the Factory once and persists revision one. Develop requires an accepted
+candidate for the current tier, advances exactly once through
+`CardDevelopmentService`, then reprojects visuals from the original semantics
+and refreshes optional presentation text. It never reruns Stage 1 or imprint
+mapping, and the repository CAS is the only state mutation.
+
+The Card Factory HTTP and workshop boundaries compose these services lazily;
+normal application startup still performs no model load. Fake-provider tests
+validate the contracts but do not establish a real LM Studio, hardware or
+model smoke; the project owner performs that final manual acceptance.
+
+### 2.4 Card evolution image handoff
+
+Card evolution uses a dedicated `card-evolution` v1 workflow rather than
+modifying the normal character blueprint. Its explicit `reference_image` role
+binds the existing `GenerationRequest.reference_image` to `LoadImage`; the
+built-in graph scales to 1024 square, VAE-encodes, samples with default denoise
+0.55, decodes and scales the primary output to 1080 square. The checkpoint is
+configured independently through `COMFYREVIEW_CARD_EVOLUTION_CHECKPOINT`.
+
+`ComfyUiCardReferenceImageStager` uploads already validated PNG bytes to
+ComfyUI `/upload/image` under the reserved input subfolder
+`comfyreview/card-battler/`, using a content-hash filename. Application code
+receives only the returned relative `LoadImage` name and hash. The provider
+owns multipart HTTP, timeout and response validation; paths do not cross into
+the application boundary.
+
+Card-specific generation lifecycle and output adapters implement the existing
+`GenerationRepository` and `GenerationOutputRepository` ports against the
+isolated runtime DB. They allow a separately composed `GenerationService` to
+reuse the same compiler, ComfyUI provider, capability validation and output
+collector without writing normal canonical generation history. Collected files
+must resolve beneath the shared output root's reserved `card-battler/`
+subdirectory; only a relative path and content hash are stored in the Card DB.
+
+`CardEvolutionService` reserves exactly four deterministic slots in one Card
+runtime transaction, then stages and submits outside the lock. Each request is
+built only from the current visual recipe and active reference, with separate
+`evolution:<tier>:candidate:<slot>` seed domains. Submission failures are
+stored per slot. Synchronization delegates job observation and output
+collection to the shared generation infrastructure and accepts only one
+persisted `primary` output. Candidate acceptance atomically changes the active
+image reference and visual tier; semantic profile, imprint and structured Card
+rules remain unchanged.
+
+The Card Factory graph is composed by one lazy
+`CardFactoryPrototypeRuntime`. Building the normal application container does
+not open the model database or connect to LM Studio or ComfyUI. The first Card
+use resolves the active ruleset and then caches one shared graph containing the
+model resource, local-model runtime, deterministic policies, Card-only
+generation adapters and session services for the process lifetime.
+`card_battler.sqlite3` is a required read-only resource for Card Battler use and
+is intended to ship with the feature; absence or contract mismatch fails the
+Card request explicitly rather than creating or repairing model data.
+
+`routers/api_v2/card_factory.py` translates the prototype HTTP contract only.
+Its source query reuses the canonical image service with a repository-side
+`STANDARD` effective-content filter. Create, Get, Develop, Generate and Accept
+delegate to `CardFactoryPrototypeService`; every mutation carries an expected
+session revision. HTTP projections expose typed artifacts and mounted URLs,
+never SQLite rows or local paths.
+
+The pages `/card-factory` and `/card-workshop/{session_id}` use native ES
+modules over the shared browser `ApiClient`. The server projects eligibility,
+available actions and candidate acceptance state; the browser only dispatches
+commands and renders confirmed facts. Its lifecycle owner aborts in-flight
+requests, removes listeners and stops Candidate polling once all four slots
+are terminal.
 
 ## 3. Canonical identity and runtime data
 

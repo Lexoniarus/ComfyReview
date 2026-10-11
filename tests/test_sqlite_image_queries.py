@@ -10,6 +10,7 @@ import pytest
 
 from comfyreview.application import (
     ComfyUiCapabilities,
+    ContentLevel,
     ImageGeneratorHandoffService,
 )
 from comfyreview.application.image_generator_handoff import (
@@ -425,6 +426,34 @@ def test_sqlite_image_queries_apply_canonical_content_visibility(
     visible = repository.list_images(ImageQuery())
     assert visible.total == 2
     assert repository.get_image("image-3") is not None
+
+
+def test_image_query_filters_by_effective_content_level(
+    tmp_path: Path,
+) -> None:
+    database_path = _seed_scope_database(tmp_path)
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.execute(
+            "UPDATE generations SET inferred_content_level = 'lewd' "
+            "WHERE generation_uid = 'generation-image-2'"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    page = SqliteImageContextRepository(database_path).list_images(
+        ImageQuery(
+            filters=ImageFilter(effective_content_level=ContentLevel.STANDARD)
+        )
+    )
+
+    assert page.total == 3
+    assert {item.image_uid for item in page.entries} == {
+        "image-1",
+        "image-3",
+        "image-unclassified",
+    }
 
 
 def test_content_visibility_predicate_rejects_unsafe_aliases() -> None:

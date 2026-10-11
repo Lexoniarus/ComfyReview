@@ -1343,6 +1343,10 @@ def test_settings_derive_model_path_from_configured_data_directory(
         settings.card_battler_model_database_path
         == (data_directory / "card_battler.sqlite3").resolve()
     )
+    assert (
+        settings.card_battler_runtime_database_path
+        == (data_directory / "card_battler_runtime.sqlite3").resolve()
+    )
     assert not data_directory.exists()
 
 
@@ -1360,6 +1364,23 @@ def test_settings_respect_explicit_model_database_override(
 
     assert settings.card_battler_model_database_path == model_path.resolve()
     assert not model_path.exists()
+
+
+def test_card_battler_runtime_database_path_can_be_overridden(
+    tmp_path: Path,
+) -> None:
+    runtime_path = tmp_path / "isolated" / "runtime.sqlite3"
+
+    settings = load_settings(
+        base_directory=tmp_path,
+        environ={
+            "COMFYREVIEW_CARD_BATTLER_RUNTIME_DATABASE": str(runtime_path)
+        },
+    )
+
+    assert (
+        settings.card_battler_runtime_database_path == runtime_path.resolve()
+    )
 
 
 def test_valid_model_reads_metadata_ruleset_and_foundational_catalogs(

@@ -18,6 +18,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaLifecycle,
     CardBattlerModelRepository,
+    CardBattlerRuntimeSchemaLifecycle,
     CardImprintMapper,
     CatalogEvidenceService,
     CompiledLoraGraphPolicy,
@@ -73,6 +74,7 @@ from comfyreview.application.character_catalog import CharacterCatalogService
 from comfyreview.application.character_prompt_composer import (
     CharacterPromptComposer,
 )
+from comfyreview.card_battler_runtime import CardFactoryPrototypeRuntime
 from comfyreview.observability import (
     RequestTracingMiddleware,
     configure_logging,
@@ -132,10 +134,14 @@ from comfyreview.repositories.sqlite import (
     SqliteWorkspacePreferencesRepository,
 )
 from comfyreview.repositories.sqlite.canonical_schema import SCHEMA_VERSION
+from comfyreview.repositories.sqlite.card_battler_runtime_schema import (
+    CardBattlerRuntimeSchemaManager,
+)
 from comfyreview.revalidating_static_files import RevalidatingStaticFiles
 from comfyreview.settings import Settings, load_settings
 from routers.api_v2_router import router as api_v2_router
 from routers.arena_router import router as arena_router
+from routers.card_factory import router as card_factory_router
 from routers.index_router import router as index_router
 from routers.playground import router as playground_router
 from routers.settings_router import router as settings_router
@@ -157,8 +163,10 @@ class ApplicationContainer:
 
     settings: Settings
     canonical_schema: CanonicalSchemaLifecycle
+    card_battler_runtime_schema: CardBattlerRuntimeSchemaLifecycle
     card_battler_model: CardBattlerModelRepository
     card_imprint_mapper: CardImprintMapper
+    card_factory_runtime: CardFactoryPrototypeRuntime
     output_images: OutputImageCatalog
     file_urls: OutputFileUrlMapper
     image_contexts: ImageContextQueryService
@@ -383,8 +391,19 @@ def build_application_container(
         canonical_schema=CanonicalSchemaManager(
             configured.canonical_database_path
         ),
+        card_battler_runtime_schema=CardBattlerRuntimeSchemaManager(
+            configured.card_battler_runtime_database_path
+        ),
         card_battler_model=card_battler_model,
         card_imprint_mapper=CardImprintMapper(card_battler_model),
+        card_factory_runtime=CardFactoryPrototypeRuntime(
+            settings=configured,
+            model_resource=card_battler_model_resource,
+            image_contexts=image_contexts,
+            image_resolver=output_images,
+            comfyui=comfyui_provider,
+            blueprints=blueprints,
+        ),
         output_images=output_images,
         file_urls=file_urls,
         image_contexts=image_contexts,
@@ -535,6 +554,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     async def lifespan(_application: FastAPI) -> AsyncIterator[None]:
         _prepare_directories(resources.settings)
         resources.canonical_schema.prepare_startup()
+        resources.card_battler_runtime_schema.prepare_startup()
         resources.generation_worker.start()
         try:
             yield
@@ -566,6 +586,7 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
     application.include_router(settings_router)
     application.include_router(top_router)
     application.include_router(arena_router)
+    application.include_router(card_factory_router)
     application.include_router(stats_router)
     application.include_router(playground_router)
     return application

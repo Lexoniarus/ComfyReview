@@ -59,6 +59,27 @@ from comfyreview.application.card_battler_development_improvement import (
 from comfyreview.application.card_battler_development_service import (
     CardDevelopmentService,
 )
+from comfyreview.application.card_battler_evolution import (
+    CARD_EVOLUTION_GENERATION_POLICY_REVISION,
+    CardCandidateRepository,
+    CardCandidateStatus,
+    CardEvolutionCandidate,
+    CardEvolutionGenerationPolicy,
+    CardEvolutionService,
+    CardGenerationLifecycle,
+    CardGenerationOutputQuery,
+    CardSessionReferenceImageProvider,
+)
+from comfyreview.application.card_battler_evolution_images import (
+    CardReferenceImageStager,
+    StagedCardReferenceImage,
+)
+from comfyreview.application.card_battler_factory import (
+    CARD_SOURCE_SEED_REVISION,
+    CardFactory,
+    CardFactoryResult,
+    DeterministicCardArtifacts,
+)
 from comfyreview.application.card_battler_generation_prompt import (
     CardEvolutionComfyUiPromptRenderer,
     CardEvolutionDebugPromptRenderer,
@@ -125,6 +146,22 @@ from comfyreview.application.card_battler_model import (
     TraitLineageDefinition,
     WorldStyleDefinition,
 )
+from comfyreview.application.card_battler_presentation import (
+    CARD_PRESENTATION_CONTRACT_REVISION,
+    CardPresentation,
+    CardPresentationRealizer,
+    CardPresentationResult,
+    CardPresentationStatus,
+    CardPresentationValidationError,
+)
+from comfyreview.application.card_battler_preview import (
+    CardSourceEligibilityDecision,
+    CardSourceEligibilityPolicy,
+    CardSourceEligibilityReason,
+)
+from comfyreview.application.card_battler_prototype import (
+    CardFactoryPrototypeService,
+)
 from comfyreview.application.card_battler_random import (
     DomainSeparatedCardRandom,
 )
@@ -132,6 +169,37 @@ from comfyreview.application.card_battler_rules import (
     CanonicalRuleRenderer,
     CanonicalRuleRenderingError,
     MechanicMaterializer,
+)
+from comfyreview.application.card_battler_runtime import (
+    CardBattlerRuntimeSchemaError,
+    CardBattlerRuntimeSchemaLifecycle,
+    CardBattlerRuntimeSchemaReport,
+)
+from comfyreview.application.card_battler_semantics import (
+    SEMANTIC_PROFILE_CONTRACT_REVISION,
+    CardSourceImage,
+    CardSourceImageProvider,
+    SemanticImageAnalysisError,
+    SemanticImageAnalyzer,
+)
+from comfyreview.application.card_battler_session_queries import (
+    CardFactorySessionQueryService,
+    CardFactorySessionSnapshot,
+)
+from comfyreview.application.card_battler_session_service import (
+    CardFactorySessionService,
+    CardSessionDevelopmentLockedError,
+    CardSessionIdentitySource,
+    CardSourceEligibilityError,
+)
+from comfyreview.application.card_battler_sessions import (
+    CardActiveImageKind,
+    CardSession,
+    CardSessionCapacityError,
+    CardSessionConflictError,
+    CardSessionNotFoundError,
+    CardSessionOperationState,
+    CardSessionRepository,
 )
 from comfyreview.application.card_battler_trait_selection import (
     InitialTraitCandidateScore,
@@ -618,12 +686,53 @@ __all__ = [
     "CardBattlerRulesetRef",
     "CardBattlerMappingPolicy",
     "CardBattlerRngPolicy",
+    "CardBattlerRuntimeSchemaError",
+    "CardBattlerRuntimeSchemaLifecycle",
+    "CardBattlerRuntimeSchemaReport",
     "CardBalancePolicy",
     "CardDevelopmentModelRepository",
     "CardDevelopmentPolicy",
+    "CardFactory",
+    "CardFactoryResult",
+    "DeterministicCardArtifacts",
+    "CardReferenceImageStager",
+    "StagedCardReferenceImage",
+    "CARD_EVOLUTION_GENERATION_POLICY_REVISION",
+    "CardCandidateRepository",
+    "CardCandidateStatus",
+    "CardEvolutionCandidate",
+    "CardEvolutionGenerationPolicy",
+    "CardEvolutionService",
+    "CardGenerationLifecycle",
+    "CardGenerationOutputQuery",
+    "CardSessionReferenceImageProvider",
     "CompatibilityRelation",
     "CommonCardMaterializer",
     "CardStatMaterializer",
+    "CardSourceImage",
+    "CardSourceImageProvider",
+    "CardActiveImageKind",
+    "CardSession",
+    "CardSessionCapacityError",
+    "CardSessionConflictError",
+    "CardSessionNotFoundError",
+    "CardSessionOperationState",
+    "CardSessionRepository",
+    "CardFactorySessionService",
+    "CardFactorySessionQueryService",
+    "CardFactorySessionSnapshot",
+    "CardSessionDevelopmentLockedError",
+    "CardSessionIdentitySource",
+    "CardSourceEligibilityDecision",
+    "CardSourceEligibilityError",
+    "CardSourceEligibilityPolicy",
+    "CardFactoryPrototypeService",
+    "CardSourceEligibilityReason",
+    "CardPresentation",
+    "CardPresentationRealizer",
+    "CardPresentationResult",
+    "CardPresentationStatus",
+    "CardPresentationValidationError",
     "InitialTraitCandidateScore",
     "InitialTraitSelection",
     "InitialTraitSelector",
@@ -651,6 +760,8 @@ __all__ = [
     "CompatibilityFact",
     "FallbackCandidate",
     "SemanticAffinity",
+    "SemanticImageAnalysisError",
+    "SemanticImageAnalyzer",
     "CandidateScore",
     "CardImprint",
     "CardImprintMapper",
@@ -659,6 +770,9 @@ __all__ = [
     "MappingDecision",
     "SemanticImageProfile",
     "SemanticSignal",
+    "SEMANTIC_PROFILE_CONTRACT_REVISION",
+    "CARD_PRESENTATION_CONTRACT_REVISION",
+    "CARD_SOURCE_SEED_REVISION",
     "Sha256CounterV1",
     "CardClassDefinition",
     "CombatRoleDefinition",

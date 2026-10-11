@@ -92,6 +92,7 @@ class ImageFilter:
     set_key: str = ""
     minimum_average_rating: float | None = None
     minimum_rating_count: int = 0
+    effective_content_level: ContentLevel | None = None
 
 
 @dataclass(frozen=True, slots=True)

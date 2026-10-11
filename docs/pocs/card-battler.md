@@ -2,27 +2,37 @@
 
 **Dokumentklasse:** `IN_PROGRESS` – aktiver ComfyReview-POC, kein fertig spielbares Gesamtprodukt.
 
-**Status (2026-10-09):** **Aktiv in Entwicklung und Erprobung.** Dies ist **keine** implementierte vollständige Spielfunktion und **kein** fixierter Bauplan für Character Chronicles.
+**Status (2026-10-11):** **Aktiv in Entwicklung und Erprobung.** Dies ist **keine** implementierte vollständige Spielfunktion und **kein** fixierter Bauplan für Character Chronicles.
 
 ## Technisch bereits in ComfyReview nachweisbar
 
 | Teilgebiet | Code / Evidenz | Was das noch nicht beweist |
 | --- | --- | --- |
 | Kartendomäne | [Immutable Card-/Trait-Fakten](../../comfyreview/domain/card_battler) | Keine durchgehende Spieler-Kartenlebenszeit |
-| Externes Modell | [Read-only Card Battler SQLite Model](../../comfyreview/repositories/sqlite/card_battler_model_resource.py), [Tests](../../tests/test_card_battler_model.py) | Produktionsinhalt der externen Modell-DB ist nicht eingecheckt |
-| Card-Imprint-Mapping | [Deterministischer Mapper](../../comfyreview/application/card_battler_mapping.py) | Noch kein Kartenentwicklungs-Befehl in der öffentlichen API |
+| Externes Modell | [Read-only Card Battler SQLite Model](../../comfyreview/repositories/sqlite/card_battler_model_resource.py), [Tests](../../tests/test_card_battler_model.py) | Für Card Battler erforderlich und später mitzuliefern; reale Inhaltsabnahme bleibt offen |
+| Card-Imprint-Mapping | [Deterministischer Mapper](../../comfyreview/application/card_battler_mapping.py) | Noch keine reale Bild-/Modellabnahme |
 | Mechaniken/Stats | [Materialisierung und Regeltext](../../comfyreview/application/card_battler_rules.py), [Tests](../../tests/test_card_battler_rule_rendering.py) | Keine ausführbare vollständige Matchsimulation |
 | Tier/Trait-Entwicklung | [Service](../../comfyreview/application/card_battler_development_service.py), [Golden Path](../../tests/test_card_battler_development_golden_path.py) | Kein integrierter Post-Match-Experience-/Evolution-Flow |
 | Visuelle Projektion | [Visual-Prompt-Projektion](../../comfyreview/application/card_battler_visual_projection.py) | Kein fertig gerendertes Card-Face und keine spielerseitige Komposition |
+| Semantische Bildanalyse | [Strikter Stage-1-Analyzer](../../comfyreview/application/card_battler_semantics.py), [kanonischer Bildadapter](../../comfyreview/providers/card_source_images.py) | Noch keine reale Modellabnahme |
+| Kosmetische Kartentexte | [Stage-3-Realizer](../../comfyreview/application/card_battler_presentation.py) | Keine Autorität über Regeln und noch keine reale Modellabnahme |
+| Wiederverwendbare Factory | [Orchestrator](../../comfyreview/application/card_battler_factory.py) | API und Workshop verdrahtet; reale Modell-/Bildqualitätsabnahme fehlt |
+| Isolierte POC-Runtime | [Versionierter Schema-Owner](../../comfyreview/repositories/sqlite/card_battler_runtime_schema.py), [Session-Repository](../../comfyreview/repositories/sqlite/card_battler_sessions.py), [Create/Develop-Service](../../comfyreview/application/card_battler_session_service.py) | Revision-sichere API und UI vorhanden; reale Providerprobe fehlt |
+| Img2img-Handoff | [Dedizierter Blueprint](../../data/workflows/card-evolution/v1.json), [Multipart-Stager](../../comfyreview/providers/comfyui_uploads.py), [Vierer-Orchestrator](../../comfyreview/application/card_battler_evolution.py) | Vier Slots, API, UI und automatisierter Zwei-Generationen-Referenznachweis vorhanden; reale ComfyUI-Abnahme fehlt |
 
-Die [App](../../comfyreview/bootstrap.py) erzeugt Modell-Adapter und Mapper; die [registrierten API-Router](../../routers/api_v2/__init__.py) bieten jedoch **keine** vollständigen Card-Crafting-/Deck-/Match-Operationen. Genau diese Trennung ist wichtig: **funktionierender Bibliotheks-Code ≠ spielbarer Battler**.
+Die [App](../../comfyreview/bootstrap.py) verdrahtet den Card-Factory-POC lazy;
+der [Card-Factory-Router](../../routers/api_v2/card_factory.py) bietet Create,
+Get, Develop, Generate und Accept. Es gibt weiterhin **keine** Collection-,
+Deck- oder Match-Operationen. Genau diese Trennung ist wichtig:
+**funktionierender POC-Workflow ≠ spielbarer Battler**.
 
 ## Konkreter Erstversuch: eine Karte von der Bildwahl bis zur Sammlung
 
-**Status:** aktuell vereinbarter **ComfyReview-Entwicklungs-POC**,
-noch **kein** nachgewiesenes End-to-End-Feature. Zunächst sollen
-**Kartenerzeugung und -entwicklung** erprobt werden; eine fertige
-Match-Engine ist dafür keine Voraussetzung.
+**Status:** aktuell vereinbarter **ComfyReview-Entwicklungs-POC**. Der
+technische Create-/Candidate-/Accept-/Develop-Ablauf ist mit Fake-Providern
+durchgängig automatisiert nachgewiesen; ein realer LM-Studio-/ComfyUI-Lauf und
+die fachliche Bildqualitätsabnahme fehlen weiterhin. Eine fertige Match-Engine
+ist dafür keine Voraussetzung.
 
 **Wichtig ist der Unterschied zum späteren Spiel:** Im **ComfyReview-POC**
 darf der Nutzer alle vier vorgeschlagenen Bilder verwerfen und neue
@@ -76,10 +86,17 @@ typisierten [`SemanticImageProfile` und den deterministischen
 `CardImprintMapper`](../../comfyreview/application/card_battler_mapping.py)
 sowie die getrennte
 [Regel-/Wertematerialisierung](../../comfyreview/application/card_battler_common.py).
-**Nicht** als fertiger End-to-End-Ablauf nachgewiesen ist dagegen die
-automatische Erstellung des semantischen Profils aus einem realen Bild samt
-Spielerfreigabe und vollständiger Kartenübernahme. Bildanalysemodell,
-Provider, Prüf-UI und Persistenzvertrag bleiben offen.
+Ein injizierbarer Stage-1-Analyzer und ein Adapter über die bestehende
+kanonische Bildauflösung sind inzwischen implementiert und isoliert getestet.
+**Nicht** als real abgenommen sind dagegen die Modellinferenz, tatsächliche
+ComfyUI-Bildentwicklung, Spielerfreigabe und vollständige Kartenübernahme in
+eine Collection. Runtime-Komposition, Session-Befehle und die funktionale
+Prüf-UI sind implementiert und automatisiert getestet. Der Persistenzvertrag
+ist als isolierte `card_battler_runtime.sqlite3` umgesetzt: Die normale
+`comfyreview.sqlite3` wird nur zur Quellbildauflösung gelesen, während die
+read-only `card_battler.sqlite3` ausschließlich Regel-/Modelldaten liefert.
+Die Regel-/Modelldatenbank ist für Card Battler erforderlich und muss mit der
+Funktion ausgeliefert werden; die Anwendung erzeugt oder repariert sie nicht.
 
 Dieser Ablauf beschreibt das gewünschte **Spielerlebnis des ersten Versuchs**.
 Er schreibt weder das Datenbankschema noch einen bestimmten LLM-Provider,
@@ -89,22 +106,24 @@ und geprüft werden, ersetzen aber nicht die noch fehlende Integration.
 
 ### Technische Lücken, die der Erstversuch tatsächlich prüfen muss
 
-Der aktuelle [ComfyUI-Blueprint v4](../../data/workflows/default-character/v4.json)
-verwendet `EmptySD3LatentImage` und besitzt keinen direkt gebundenen
-Quellbild-Eingang. Die bestehende Text-zu-Bild-Generierung kann zwar neue
-Ergebnisse produzieren, garantiert aber **keine visuelle Kontinuität**
-zum ausgewählten Quellbild. Ob passende Varianten durch andere
-Konditionierung, einen separaten Workflow oder einen weiteren Ansatz
-erzeugt werden, ist **offen** und muss praktisch erprobt werden.
-Vier technisch fertige PNGs allein erfüllen diesen POC daher nicht.
+Der allgemeine [ComfyUI-Blueprint v4](../../data/workflows/default-character/v4.json)
+bleibt ein Text-zu-Bild-Workflow. Für Card Evolution existiert deshalb der
+separate [Blueprint `card-evolution/v1`](../../data/workflows/card-evolution/v1.json),
+der das aktive Referenzbild über `LoadImage`, VAE-Encoding und img2img-Sampling
+bindet. Compilation, Upload, vier stabile Requests und die Referenzkette über
+zwei Generationen sind automatisiert geprüft. Ob der Workflow mit dem realen
+Checkpoint die gewünschte visuelle Kontinuität und Qualität erreicht, muss der
+Projektinhaber weiterhin praktisch abnehmen. Vier technisch fertige PNGs
+allein erfüllen diesen POC nicht.
 
-Auch das bisherige `SemanticImageProfile` speichert typisierte
-Konzeptsignale mit Stärken, aber **noch keine eigenständige Zuordnung**
-von sichtbaren Beobachtungen, Interpretationen und Unsicherheiten.
-Die fachliche Trennung in Stufe 1 ist somit ein **Abnahmeziel**,
-nicht schon als implementiertes Bildverständnis nachgewiesen.
-Weder eine bestimmte VLM-/LLM-Lösung noch eine neue API wird
-hierdurch vorab festgelegt.
+Das erweiterte `SemanticImageProfile` speichert eine kurze Zusammenfassung,
+begrenzte sichtbare Faktengruppen und kontrollierte Konzeptsignale mit
+Stärken. Das ist eine implementierte, spielmechanikfreie Vertragsgrenze, aber
+noch kein Nachweis, dass das konfigurierte reale Vision-Modell Bilder fachlich
+ausreichend versteht. Modellqualität und Unsicherheitsdarstellung bleiben
+deshalb Abnahmeziele statt behaupteter Ergebnisse; die vorhandene Prüf-UI
+macht die gelieferten Fakten sichtbar, beweist aber nicht deren fachliche
+Richtigkeit.
 
 ## Minimale Oberfläche für den Versuch
 
@@ -114,9 +133,11 @@ vergleichen**, **eines zu übernehmen oder alle abzulehnen und vier neue
 Varianten anzufordern**, sowie die **bestätigte Karte in einer kleinen
 Sammlung erneut aufzurufen und weiterzuentwickeln**.
 
-Dafür waren **eine oder zwei schlanke Frontend-Seiten** als erste Lösung
-angedacht, nicht die vollständige spätere Card-Battler-/Social-/VN-UI.
-Die konkrete Aufteilung und technische Umsetzung werden am POC erprobt.
+Dafür existieren die zwei schlanken Seiten `/card-factory` für die Quellwahl
+und `/card-workshop/{session_id}` für Fakten, Karte, Recipe und vier
+Candidate-Slots. Sie verwenden die serverseitige Projektion und enthalten
+keine Spielregeln. Das ist nicht die vollständige spätere
+Card-Battler-/Social-/VN-UI.
 Eine Sammlung von 40 Karten belegt noch **keinen** spielbaren Kampf- oder
 Deckbauablauf; diese Integration muss separat nachgewiesen werden.
 
@@ -190,7 +211,14 @@ bis zu dem sämtliche künftigen Konzepte bereits entschieden sein müssten.
 
 ## Ausdrücklich noch offen
 
-Offen bleiben **Umsetzung und Abnahme** dieses Ablaufs: Kartenzustand und Persistenz, konkrete Frontend-Aufteilung, Karteninhalt-/Bildvarianten-Erzeugung, Weiterentwicklungsdetails und Versionierung sowie Deck-/Kampfregeln, Integration und der spätere Einsatz in Character Chronicles. Der **erste Spielerablauf und das 40-Karten-Testziel** sind damit benannt, aber keine fertige Funktion und kein dauerhaft bindender Architektur- oder Balancing-Vertrag. Es gibt weiterhin **keinen vorgeschriebenen 7-Phasen-Implementierungsplan**.
+Offen bleiben insbesondere die **reale Abnahme** von Semantik und
+Bildvarianten, das Verwerfen/erneute Erzeugen kompletter Candidate-Sätze, die
+Übernahme in eine Collection, ältere bestätigte Versionen sowie Deck-/Kampf-
+regeln und der spätere Einsatz in Character Chronicles. Der funktionale
+Workshop ist ein technischer POC, keine fertige Spielfunktion. Das
+40-Karten-Testziel ist kein dauerhaft bindender Architektur- oder
+Balancing-Vertrag. Es gibt weiterhin **keinen vorgeschriebenen
+7-Phasen-Implementierungsplan**.
 
 Der bereits vor dem Dokumentenimport geschriebene [Card-Battler-Zielplan vom 2026-10-02](../archive/card-battler-target-2026-10-02.md) und die umfangreichen [Chronicles-Battler-Konzepttexte](../character-chronicles/sources/README.md) enthalten fachlich und technisch möglicherweise wertvolle Ideen. Sie sind **Referenzmaterial**, nicht das automatische Architekturmandat für den aktuellen POC.
 

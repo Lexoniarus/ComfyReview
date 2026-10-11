@@ -193,8 +193,9 @@ Routes call services. They do not execute SQL or external provider calls.
   the production composition root on a separate port. A rehearsal database
   changed by manual checks is never promoted; final replacement rebuilds a
   fresh database from the still hash-matching source and reviewed mapping.
-- Schema DDL exists only in the explicit canonical and legacy schema managers;
-  architecture tests reject DDL in ordinary repositories, services and routes.
+- Schema DDL exists only in the explicit canonical, legacy and isolated Card
+  POC runtime schema managers; architecture tests reject DDL in ordinary
+  repositories, services and routes.
 - Normal repositories open existing files in `rw` mode and never create or
   upgrade schemas as a side effect of a query or mutation.
 - Known additive legacy repair uses `python -m comfyreview legacy-db upgrade`;

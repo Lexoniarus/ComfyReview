@@ -97,6 +97,78 @@ FUNCTION_TEST_MANIFEST: dict[str, str] = {
         "tests/test_card_battler_visual_projection.py::"
         "test_visual_prompt_projector_builds_stable_golden_recipe"
     ),
+    "comfyreview.application.card_battler_semantics:SemanticImageAnalyzer.analyze": (
+        "tests/test_card_battler_semantics.py::"
+        "test_semantic_analyzer_uses_controlled_vocabulary_and_stable_profile"
+    ),
+    "comfyreview.application.card_battler_presentation:CardPresentationRealizer.realize": (
+        "tests/test_card_battler_presentation.py::"
+        "test_presentation_realizer_builds_cosmetic_text_and_stable_input"
+    ),
+    "comfyreview.application.card_battler_factory:CardFactory.compose": (
+        "tests/test_card_battler_factory.py::"
+        "test_factory_composes_existing_collaborators_in_order"
+    ),
+    "comfyreview.application.card_battler_factory:CardFactory.create": (
+        "tests/test_card_battler_factory.py::"
+        "test_factory_runs_stage_one_once_and_keeps_presentation_degradation"
+    ),
+    "comfyreview.application.card_battler_preview:CardSourceEligibilityPolicy.evaluate": (
+        "tests/test_card_battler_session_service.py::"
+        "test_session_create_requires_standard_accessible_source"
+    ),
+    "comfyreview.application.card_battler_session_service:CardFactorySessionService.create": (
+        "tests/test_card_battler_session_service.py::"
+        "test_session_create_persists_factory_result_once"
+    ),
+    "comfyreview.application.card_battler_session_service:CardFactorySessionService.get": (
+        "tests/test_card_battler_session_service.py::"
+        "test_session_get_reports_unknown_identity"
+    ),
+    "comfyreview.application.card_battler_session_service:CardFactorySessionService.develop": (
+        "tests/test_card_battler_session_service.py::"
+        "test_develop_preserves_semantics_imprint_and_active_reference"
+    ),
+    "comfyreview.application.card_battler_evolution:CardEvolutionGenerationPolicy.build_requests": (
+        "tests/test_card_battler_evolution.py::"
+        "test_generation_policy_builds_four_stable_fresh_requests"
+    ),
+    "comfyreview.application.card_battler_evolution:CardEvolutionService.generate_candidates": (
+        "tests/test_card_battler_evolution.py::"
+        "test_evolution_service_returns_four_slots_with_partial_failures"
+    ),
+    "comfyreview.application.card_battler_evolution:CardEvolutionService.synchronize": (
+        "tests/test_card_battler_evolution.py::"
+        "test_evolution_service_synchronizes_completed_primary_outputs"
+    ),
+    "comfyreview.application.card_battler_evolution:CardEvolutionService.accept": (
+        "tests/test_card_battler_evolution.py::"
+        "test_candidate_repository_accepts_only_current_completed_slot"
+    ),
+    "comfyreview.application.card_battler_session_queries:CardFactorySessionQueryService.get": (
+        "tests/test_card_battler_evolution.py::"
+        "test_session_query_synchronizes_generating_batch_before_projection"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.create": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.get": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.develop": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.generate_candidates": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
+    "comfyreview.application.card_battler_prototype:CardFactoryPrototypeService.accept_candidate": (
+        "tests/test_card_battler_evolution.py::"
+        "test_prototype_service_delegates_revision_safe_use_cases"
+    ),
     "comfyreview.application.card_battler_development_service:CardDevelopmentService.advance": (
         "tests/test_card_battler_development_service.py::"
         "test_card_development_service_advances_one_tier_and_one_improvement"

@@ -16,6 +16,7 @@ from comfyreview.application import (
     ArenaService,
     CanonicalSchemaReport,
     CardBattlerModelRepository,
+    CardBattlerRuntimeSchemaReport,
     CardImprintMapper,
     CatalogEvidenceService,
     CurationImage,
@@ -58,12 +59,14 @@ from comfyreview.bootstrap import (
     build_application_container,
     create_app,
 )
+from comfyreview.card_battler_runtime import CardFactoryPrototypeRuntime
 from comfyreview.providers import (
     CanonicalOutputImageCatalog,
     OutputFileUrlMapper,
 )
 from comfyreview.repositories.sqlite import (
     CanonicalSchemaManager,
+    CardBattlerRuntimeSchemaManager,
     SqliteCardBattlerModelRepository,
 )
 from comfyreview.settings import Settings, load_settings
@@ -88,6 +91,20 @@ class _RecordingCanonicalSchema:
 
     def validate(self) -> CanonicalSchemaReport:
         return CanonicalSchemaReport(schema_version=1)
+
+
+class _RecordingCardRuntimeSchema:
+    def __init__(self, settings: Settings, events: list[str]) -> None:
+        self._settings = settings
+        self._events = events
+
+    def prepare_startup(self) -> CardBattlerRuntimeSchemaReport:
+        assert self._settings.data_directory.is_dir()
+        self._events.append("card-runtime")
+        return CardBattlerRuntimeSchemaReport(True, 1)
+
+    def validate(self) -> CardBattlerRuntimeSchemaReport:
+        return CardBattlerRuntimeSchemaReport(False, 1)
 
 
 class _EmptyOutputImageCatalog:
@@ -145,8 +162,12 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     return ApplicationContainer(
         settings=settings,
         canonical_schema=_RecordingCanonicalSchema(settings, events),
+        card_battler_runtime_schema=_RecordingCardRuntimeSchema(
+            settings, events
+        ),
         card_battler_model=cast(CardBattlerModelRepository, object()),
         card_imprint_mapper=cast(CardImprintMapper, object()),
+        card_factory_runtime=cast(CardFactoryPrototypeRuntime, object()),
         output_images=_EmptyOutputImageCatalog(),
         file_urls=OutputFileUrlMapper(settings.output_root),
         image_contexts=cast(ImageContextQueryService, object()),
@@ -215,7 +236,7 @@ def _container(tmp_path: Path, events: list[str]) -> ApplicationContainer:
     )
 
 
-def test_lifespan_prepares_only_the_canonical_runtime_schema(
+def test_lifespan_prepares_canonical_and_card_runtime_schemas(
     tmp_path: Path,
 ) -> None:
     events: list[str] = []
@@ -227,13 +248,18 @@ def test_lifespan_prepares_only_the_canonical_runtime_schema(
     assert not container.settings.data_directory.exists()
 
     with TestClient(application):
-        assert events == ["canonical", "worker-start"]
+        assert events == ["canonical", "card-runtime", "worker-start"]
         assert container.settings.trash_root.is_dir()
         assert container.settings.lora_export_root.is_dir()
         assert container.settings.workflows_directory.is_dir()
         assert container.settings.comfyui_checkpoints_directory.is_dir()
 
-    assert events == ["canonical", "worker-start", "worker-stop"]
+    assert events == [
+        "canonical",
+        "card-runtime",
+        "worker-start",
+        "worker-stop",
+    ]
 
 
 def test_lifespan_preserves_schema_order_when_application_body_fails(
@@ -246,7 +272,12 @@ def test_lifespan_preserves_schema_order_when_application_body_fails(
         with TestClient(application):
             raise RuntimeError("application failed")
 
-    assert events == ["canonical", "worker-start", "worker-stop"]
+    assert events == [
+        "canonical",
+        "card-runtime",
+        "worker-start",
+        "worker-stop",
+    ]
 
 
 def test_static_modules_require_browser_revalidation(tmp_path: Path) -> None:
@@ -284,6 +315,10 @@ def test_default_container_wires_canonical_review_runtime(
         SqliteCardBattlerModelRepository,
     )
     assert isinstance(container.card_imprint_mapper, CardImprintMapper)
+    assert isinstance(
+        container.card_factory_runtime,
+        CardFactoryPrototypeRuntime,
+    )
     assert not settings.card_battler_model_database_path.exists()
     assert isinstance(
         container.output_images,
@@ -321,7 +356,37 @@ def test_default_container_wires_canonical_review_runtime(
     assert isinstance(container.arena_service, ArenaService)
     assert isinstance(container.curation_service, CurationService)
     assert isinstance(container.canonical_schema, CanonicalSchemaManager)
+    assert isinstance(
+        container.card_battler_runtime_schema,
+        CardBattlerRuntimeSchemaManager,
+    )
     assert isinstance(container.character_catalog, CharacterCatalogService)
     assert len(container.character_catalog.list_public()) == 6
     assert isinstance(container.character_prompts, CharacterPromptComposer)
     assert container.character_prompts.compose("aiko").variant_id == "baseline"
+
+
+def test_card_factory_runtime_builds_its_graph_only_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = CardFactoryPrototypeRuntime(
+        settings=cast(Settings, object()),
+        model_resource=cast(Any, object()),
+        image_contexts=cast(ImageContextQueryService, object()),
+        image_resolver=cast(Any, object()),
+        comfyui=cast(Any, object()),
+        blueprints=cast(Any, object()),
+    )
+    service_graph = cast(Any, object())
+    calls = 0
+
+    def build() -> Any:
+        nonlocal calls
+        calls += 1
+        return service_graph
+
+    monkeypatch.setattr(runtime, "_build", build)
+
+    assert runtime.get() is service_graph
+    assert runtime.get() is service_graph
+    assert calls == 1

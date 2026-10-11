@@ -30,6 +30,7 @@ class Settings:
     data_directory: Path
     canonical_database_path: Path
     card_battler_model_database_path: Path
+    card_battler_runtime_database_path: Path
     templates_directory: Path
     pool_limit: int
     lora_export_root: Path
@@ -38,6 +39,7 @@ class Settings:
     default_unrated_only: bool
     soft_delete_to_trash: bool
     comfyui_base_url: str
+    card_evolution_checkpoint: str
     lm_studio_base_url: str
     lm_studio_api_token: str | None
     lm_studio_vision_model: str
@@ -180,6 +182,11 @@ def load_settings(
         "COMFYREVIEW_CARD_BATTLER_MODEL_DATABASE",
         data_directory / "card_battler.sqlite3",
     )
+    card_battler_runtime_database_path = _path(
+        values,
+        "COMFYREVIEW_CARD_BATTLER_RUNTIME_DATABASE",
+        data_directory / "card_battler_runtime.sqlite3",
+    )
     workflows_directory = _path(
         values,
         "COMFYREVIEW_WORKFLOWS_DIR",
@@ -194,6 +201,9 @@ def load_settings(
         data_directory=data_directory,
         canonical_database_path=canonical_database_path,
         card_battler_model_database_path=card_battler_model_database_path,
+        card_battler_runtime_database_path=(
+            card_battler_runtime_database_path
+        ),
         templates_directory=base / "templates",
         pool_limit=_integer(values, "COMFYREVIEW_POOL_LIMIT", 128),
         lora_export_root=_path(
@@ -220,6 +230,10 @@ def load_settings(
         comfyui_base_url=values.get(
             "COMFYREVIEW_COMFYUI_BASE_URL",
             "http://127.0.0.1:8188",
+        ),
+        card_evolution_checkpoint=values.get(
+            "COMFYREVIEW_CARD_EVOLUTION_CHECKPOINT",
+            "NetaYumev35_pretrained_all_in_one.safetensors",
         ),
         lm_studio_base_url=values.get(
             "COMFYREVIEW_LM_STUDIO_BASE_URL",

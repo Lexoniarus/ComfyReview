@@ -1,0 +1,42 @@
+{% extends "_v2_base.html" %} {% set page_title = "Card Factory · ComfyReview"
+%} {% set active_nav = "card_factory" %} {% block styles %}
+<link rel="stylesheet" href="/static/css/v2/card-factory.css?v=20261011-poc1" />
+{% endblock %} {% block content %}
+<main class="card-factory-shell" data-card-factory-sources>
+  <header class="card-factory-hero">
+    <div>
+      <p class="card-factory-kicker">Card Battler · Prototype</p>
+      <h1>Card Factory</h1>
+      <p class="muted">
+        Wähle ein bestehendes STANDARD-Bild. Die visuelle Analyse läuft genau
+        einmal beim Erstellen der Session.
+      </p>
+    </div>
+    <span
+      class="card-factory-status"
+      data-card-factory-status
+      aria-live="polite"
+      >Quellen werden geladen …</span
+    >
+  </header>
+  <section
+    class="card-source-grid"
+    data-card-source-grid
+    aria-label="Verfügbare Quellbilder"
+  ></section>
+  <nav class="card-source-pagination" aria-label="Quellbildseiten">
+    <button type="button" class="secondary-button" data-source-previous>
+      Zurück
+    </button>
+    <span data-source-page>–</span>
+    <button type="button" class="secondary-button" data-source-next>
+      Weiter
+    </button>
+  </nav>
+</main>
+{% endblock %} {% block scripts %}
+<script
+  type="module"
+  src="/static/js/entries/card-factory.js?v=20261011-poc1"
+></script>
+{% endblock %}

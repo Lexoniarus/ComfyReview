@@ -37,6 +37,10 @@ def test_load_settings_uses_documented_defaults_without_writes(
     assert settings.lm_studio_load_timeout_seconds == 180.0
     assert settings.lm_studio_inference_timeout_seconds == 180.0
     assert settings.lm_studio_unload_timeout_seconds == 30.0
+    assert (
+        settings.card_evolution_checkpoint
+        == "NetaYumev35_pretrained_all_in_one.safetensors"
+    )
     assert settings.ssl_enabled is False
     assert not settings.output_root.exists()
     assert not settings.data_directory.exists()
@@ -57,6 +61,7 @@ def test_environment_overrides_env_file_without_mutating_process(
                 "COMFYREVIEW_HOST='env-file-host'",
                 "COMFYREVIEW_PORT=9000",
                 'COMFYREVIEW_COMFYUI_BASE_URL="http://example.test:8188"',
+                "COMFYREVIEW_CARD_EVOLUTION_CHECKPOINT=card-model.safetensors",
                 "COMFYREVIEW_OUTPUT_ROOT=ignored-output",
                 "COMFYREVIEW_DATA_DIR=",
                 "COMFYREVIEW_DATABASE=ignored.sqlite3",
@@ -98,6 +103,7 @@ def test_environment_overrides_env_file_without_mutating_process(
     assert settings.app_host == "env-file-host"
     assert settings.app_port == 8123
     assert settings.comfyui_base_url == "http://example.test:8188"
+    assert settings.card_evolution_checkpoint == "card-model.safetensors"
     assert settings.output_root == custom_output.resolve()
     assert settings.data_directory == (tmp_path / "data").resolve()
     assert settings.canonical_database_path == custom_database.resolve()

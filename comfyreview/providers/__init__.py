@@ -1,9 +1,25 @@
 """Concrete external-system providers used by the composition root."""
 
+from comfyreview.providers.card_reference_images import (
+    CanonicalCardSessionReferenceImageProvider,
+    CardRuntimeOutputQuery,
+)
+from comfyreview.providers.card_session_identities import (
+    UuidCardSessionIdentitySource,
+)
+from comfyreview.providers.card_source_images import (
+    CanonicalCardSourceImageProvider,
+)
 from comfyreview.providers.comfyui import (
     JsonHttpResponse,
     NativeComfyUiProvider,
     UrlLibJsonTransport,
+)
+from comfyreview.providers.comfyui_uploads import (
+    ComfyUiCardReferenceImageStager,
+    MultipartUploadResponse,
+    MultipartUploadTransport,
+    UrlLibMultipartUploadTransport,
 )
 from comfyreview.providers.curation_files import LocalCurationFileManager
 from comfyreview.providers.file_urls import OutputFileUrlMapper
@@ -38,6 +54,14 @@ from comfyreview.providers.prompt_identities import (
 
 __all__ = [
     "CanonicalOutputImageCatalog",
+    "CanonicalCardSourceImageProvider",
+    "UuidCardSessionIdentitySource",
+    "CanonicalCardSessionReferenceImageProvider",
+    "CardRuntimeOutputQuery",
+    "ComfyUiCardReferenceImageStager",
+    "MultipartUploadResponse",
+    "MultipartUploadTransport",
+    "UrlLibMultipartUploadTransport",
     "LocalCurationFileManager",
     "LocalGenerationOutputSource",
     "LocalGenerationOutputRecoverySource",

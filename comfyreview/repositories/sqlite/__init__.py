@@ -12,8 +12,15 @@ from comfyreview.repositories.sqlite.canonical_schema import (
     CanonicalSchemaManager,
     CanonicalSchemaValidationError,
 )
+from comfyreview.repositories.sqlite.card_battler_candidates import (
+    SqliteCardCandidateRepository,
+)
 from comfyreview.repositories.sqlite.card_battler_development_model import (
     SqliteCardDevelopmentModelRepository,
+)
+from comfyreview.repositories.sqlite.card_battler_generations import (
+    SqliteCardGenerationOutputRepository,
+    SqliteCardGenerationRepository,
 )
 from comfyreview.repositories.sqlite.card_battler_materialization_model import (
     SqliteCardMaterializationModelRepository,
@@ -26,6 +33,13 @@ from comfyreview.repositories.sqlite.card_battler_model_resource import (
     CardBattlerModelSchemaRequirement,
     CardBattlerModelTableRequirement,
     SqliteCardBattlerModelResource,
+)
+from comfyreview.repositories.sqlite.card_battler_runtime_schema import (
+    CARD_BATTLER_RUNTIME_SCHEMA_VERSION,
+    CardBattlerRuntimeSchemaManager,
+)
+from comfyreview.repositories.sqlite.card_battler_sessions import (
+    SqliteCardSessionRepository,
 )
 from comfyreview.repositories.sqlite.catalog_evidence import (
     SqliteCatalogEvidenceRepository,
@@ -112,11 +126,17 @@ __all__ = [
     "CanonicalSchemaValidationError",
     "SqliteCardBattlerModelRepository",
     "SqliteCardDevelopmentModelRepository",
+    "SqliteCardGenerationOutputRepository",
+    "SqliteCardGenerationRepository",
+    "SqliteCardCandidateRepository",
     "SqliteCardMaterializationModelRepository",
     "SqliteCardBattlerModelResource",
     "CardBattlerModelSchemaRequirement",
     "CardBattlerModelTableRequirement",
     "CARD_BATTLER_MODEL_SCHEMA_REQUIREMENTS",
+    "CARD_BATTLER_RUNTIME_SCHEMA_VERSION",
+    "CardBattlerRuntimeSchemaManager",
+    "SqliteCardSessionRepository",
     "SqliteCatalogEvidenceRepository",
     "LegacySchemaManager",
     "SqliteOutputImageRepository",

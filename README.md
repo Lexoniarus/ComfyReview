@@ -10,7 +10,7 @@ ComfyReview hilft beim **Bewerten, Vergleichen, Kuratieren und Analysieren** gen
 - **Playground / Generator / ComfyUI-Integration** mit Workflow-Blueprint v4, nativer Generierung, Lifecycle und Output-Collection.
 - **Prompt-/LoRA-Katalog, Settings und Analytics** sowie Frontend V2 aus Jinja-Templates und nativen JavaScript-Modulen.
 - **Canonical SQLite Schema v18 ist im Code implementiert.** Ob die **private** laufende Datenbank bereits den finalen Normalisierungs-/Cutover-Schritt durchlaufen hat, ist daraus **nicht** ableitbar.
-- **Card Battler ist derzeit ein aktiver POC**: getestete Mechanik-, Karten-, Entwicklungs- und Visual-Prompt-Bausteine, aber kein vollständig integriertes spielbares Match-/Deck-Frontend.
+- **Card Battler ist derzeit ein aktiver POC**: getestete Mechanik-, Karten-, Entwicklungs- und Visual-Prompt-Bausteine sowie ein funktionaler Card-Factory-Workshop mit isolierter Session-/Candidate-Runtime, aber kein spielbares Match-/Deck-Frontend.
 
 [Nachweisbarer Code](docs/IMPLEMENTATION_AUDIT.md) · [Kurzstatus](docs/project_status.md) · [Laufende Arbeiten](docs/ACTIVE_WORK.md) · [Card-Battler-POC](docs/pocs/card-battler.md).
 
@@ -39,16 +39,20 @@ Wichtige Werte:
 | --- | --- |
 | `COMFYREVIEW_OUTPUT_ROOT` | Lokales Bildausgabeverzeichnis |
 | `COMFYREVIEW_COMFYUI_BASE_URL` | ComfyUI-API-Endpunkt |
+| `COMFYREVIEW_CARD_EVOLUTION_CHECKPOINT` | Checkpoint für den isolierten Card-img2img-Workflow |
 | `COMFYREVIEW_WORKFLOWS_DIR` | Workflow-Dateien |
 | `COMFYREVIEW_DATABASE` | Kanonische ComfyReview-SQLite-Datei |
+| `COMFYREVIEW_CARD_BATTLER_MODEL_DATABASE` | Read-only Card-Regel-/Modelldatenbank |
+| `COMFYREVIEW_CARD_BATTLER_RUNTIME_DATABASE` | Isolierte schreibbare Card-POC-Runtime |
 | `COMFYREVIEW_PORT` | Lokaler HTTP-Port (Standard 8000) |
 | `COMFYREVIEW_LM_STUDIO_BASE_URL` | Optionaler lokaler LM-Studio-Endpunkt |
 
-Die lokale Modellgrundlage ist derzeit ein **technischer POC-Baustein**, kein
-fertiger Card-Factory-Workflow. Sie stellt typisierte Model-Lifecycle-, Text-,
-Vision- und JSON-Schema-Inferenzgrenzen bereit. LM Studio wird beim App-Start
-weder verbunden noch gestartet und Modelle werden nicht vorsorglich geladen.
-Erst ein späterer, explizit verdrahteter Use Case darf diese Provider nutzen.
+Die lokale Modellgrundlage ist in den **Card-Factory-POC** verdrahtet, aber noch
+nicht durch einen realen Modell-Smoke des Projektinhabers abgenommen. Sie stellt
+typisierte Model-Lifecycle-, Text-, Vision- und JSON-Schema-Inferenzgrenzen
+bereit. LM Studio wird beim App-Start weder verbunden noch gestartet und
+Modelle werden nicht vorsorglich geladen; erst ein Card-Factory-Aufruf baut den
+gemeinsamen Runtime-Graph lazy auf.
 
 Die vollständigen optionalen Variablen stehen in [`.env.example`](.env.example):
 ein API-Token, getrennte List-/Load-/Inference-/Unload-Timeouts sowie Vision-
@@ -58,6 +62,21 @@ Nachweis eines realen LM-Studio- oder Modell-Smokes; diese Abnahme bleibt beim
 Projektinhaber.
 
 **Wichtig bei vorhandenen lokalen Daten:** Startup migriert keine unbekannte alte Datenbank still auf v18. Vor einem Upgrade die [getrennte Betriebs-/Migrationsanleitung](docs/OPERATIONS.md) und [Datenarchitektur](docs/DATA_ARCHITECTURE.md) prüfen. Datenbank, generierte Bilder, Modelle, Geheimnisse und persönliche Pfade gehören **nicht** ins Git-Repository.
+
+Der Card-Factory-POC trennt seine Daten zusätzlich: Die externe
+`card_battler.sqlite3` ist für Card-Battler-Funktionen eine erforderliche,
+mitzuliefernde unveränderliche Model-/Regelquelle, während
+`card_battler_runtime.sqlite3` ausschließlich POC-Sessions, Kandidaten und
+Card-Generationen aufnehmen darf. Diese Einträge werden nicht in Review,
+Ranking, Arena oder die normale Generator-Historie geschrieben.
+
+Die revision-sichere POC-API liegt unter `/api/v2/card-factory/`: Sie listet
+STANDARD-Quellbilder, erstellt und liest Sessions, entwickelt genau einen Tier
+und verwaltet vier getrennte Candidate-Slots. Die funktionalen Seiten
+`/card-factory` und `/card-workshop/{session_id}` machen diesen Ablauf
+bedienbar. Ein automatisierter Fake-Provider-Test beweist die persistierte
+Referenzkette über zwei Generationen; die reale LM-Studio-/ComfyUI- und
+Bildqualitätsabnahme durch den Projektinhaber bleibt offen.
 
 ## Qualität und Mitwirkung
 
