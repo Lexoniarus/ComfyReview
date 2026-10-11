@@ -76,10 +76,12 @@ class _Generations:
         *,
         failing_slots: tuple[int, ...] = (),
         ambiguous_slots: tuple[int, ...] = (),
+        prefix: str = "generation",
     ) -> None:
         self._database_path = database_path
         self._failing_slots = set(failing_slots)
         self._ambiguous_slots = set(ambiguous_slots)
+        self._prefix = prefix
         self.requests = []
         self.observed: dict[str, str] = {}
 
@@ -88,7 +90,7 @@ class _Generations:
         self.requests.append(request)
         if slot in self._failing_slots:
             raise GenerationMutationError(f"slot {slot} failed")
-        generation_uid = f"generation-{slot}"
+        generation_uid = f"{self._prefix}-{slot}"
         connection = sqlite3.connect(self._database_path)
         try:
             connection.execute(
@@ -129,6 +131,7 @@ def _service(
     generations: _Generations,
     *,
     changed_reference: bool = False,
+    reference_images=None,
 ):
     database_path = tmp_path / "card-runtime.sqlite3"
     outputs = SqliteCardGenerationOutputRepository(
@@ -138,7 +141,11 @@ def _service(
     return (
         CardCandidateImageService(
             groups=SqliteCardCandidateGroupRepository(database_path),
-            reference_images=_ReferenceImages(changed=changed_reference),
+            reference_images=(
+                _ReferenceImages(changed=changed_reference)
+                if reference_images is None
+                else reference_images
+            ),
             stager=_Stager(),
             policy=CardCandidateGenerationPolicy(
                 checkpoint="card.safetensors"

@@ -16,6 +16,9 @@ from comfyreview.repositories.sqlite.card_battler_candidate_group_codec import (
 from comfyreview.repositories.sqlite.card_battler_card_pool_codec import (
     decode_pool_card,
 )
+from comfyreview.repositories.sqlite.card_battler_development_acceptance import (
+    SqliteCardDevelopmentAcceptanceWriter,
+)
 from comfyreview.repositories.sqlite.connection import (
     connect_existing,
     connect_read_only,
@@ -28,6 +31,9 @@ class SqliteCardPoolRepository:
     def __init__(self, database_path: Path) -> None:
         self._database_path = Path(database_path).resolve()
         self._acceptance = InitialCardCandidateAcceptancePolicy()
+        self._development_acceptance = SqliteCardDevelopmentAcceptanceWriter(
+            self._database_path
+        )
 
     def accept_initial_candidate(
         self,
@@ -155,6 +161,21 @@ class SqliteCardPoolRepository:
             raise
         finally:
             connection.close()
+        return self._required(card_id)
+
+    def accept_development_candidate(
+        self,
+        group_id: str,
+        candidate_id: str,
+        *,
+        expected_revision: int,
+    ) -> CardPoolCard:
+        """Atomically replace one Card state from a development Candidate."""
+        card_id = self._development_acceptance.accept(
+            group_id,
+            candidate_id,
+            expected_revision=expected_revision,
+        )
         return self._required(card_id)
 
     def get(self, card_id: str) -> CardPoolCard | None:
