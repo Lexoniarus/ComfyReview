@@ -2,6 +2,13 @@
 
 FUNCTION_TEST_MANIFEST: dict[str, str] = {
     (
+        "comfyreview.application.character_prompt_composer:"
+        "CharacterPromptComposer.compose"
+    ): (
+        "tests/test_character_prompts.py::"
+        "test_composer_is_stable_and_c1_voice_is_only_baseline_voice"
+    ),
+    (
         "comfyreview.application.character_catalog:"
         "CharacterCatalogService.list_public"
     ): (

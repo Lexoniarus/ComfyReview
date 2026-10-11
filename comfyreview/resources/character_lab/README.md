@@ -23,3 +23,20 @@ All personality proposals are unapproved experiments; non-null experimental
 `base_personality_type` or `base_axis_vector` values fail closed in this C1
 adapter. The source discrepancy for Saki (17 in the dossier versus 18+ for
 future Academy entry) is preserved for a later explicit author decision.
+
+## C2a prompt resources
+
+The ten additional v8.2-authored text files are byte-preserved under
+`prompts/global_speaker.md`, `prompts/variants/` and
+`prompts/candidates/`. They are not replacements for
+`prompts/characters/`. The read-only `FilePromptCatalog` validates
+the complete resource set at construction and exposes full SHA-256 source
+revisions. `CharacterPromptComposer` uses the already existing C1 catalog
+as its only character-identity and original-voice source.
+
+The default is `baseline` with the original voice. The only experimental
+voice substitution is an explicit `voice_candidate_p2` selection and is
+reported as `experimental_candidate` with a separate composition revision.
+It never edits or promotes an original C1 voice. `voice_precise` changes
+style guidance only. The result contains system instructions, **not** chat
+history, RAG snippets, biographies or conversational messages.
