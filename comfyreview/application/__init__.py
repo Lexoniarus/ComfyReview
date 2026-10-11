@@ -60,8 +60,12 @@ from comfyreview.application.card_battler_development_service import (
     CardDevelopmentService,
 )
 from comfyreview.application.card_battler_generation_prompt import (
+    CardEvolutionComfyUiPromptRenderer,
+    CardEvolutionDebugPromptRenderer,
     CardEvolutionPromptAdapter,
     CardEvolutionPromptHandoff,
+    CardEvolutionPromptRenderingError,
+    RenderedCardEvolutionPrompts,
 )
 from comfyreview.application.card_battler_mapping import (
     CandidateScore,
@@ -661,8 +665,12 @@ __all__ = [
     "DevelopmentTierDefinition",
     "DevelopmentTierModel",
     "DomainSeparatedCardRandom",
+    "CardEvolutionComfyUiPromptRenderer",
+    "CardEvolutionDebugPromptRenderer",
     "CardEvolutionPromptAdapter",
     "CardEvolutionPromptHandoff",
+    "CardEvolutionPromptRenderingError",
+    "RenderedCardEvolutionPrompts",
     "CanonicalRuleRenderer",
     "CanonicalRuleRenderingError",
     "MechanicMaterializer",

@@ -6,9 +6,15 @@ from copy import deepcopy
 from dataclasses import replace
 from typing import Literal
 
+import pytest
+
 from comfyreview.application.card_battler_generation_prompt import (
+    CardEvolutionComfyUiPromptRenderer,
+    CardEvolutionDebugPromptRenderer,
     CardEvolutionPromptAdapter,
     CardEvolutionPromptHandoff,
+    CardEvolutionPromptRenderingError,
+    RenderedCardEvolutionPrompts,
 )
 from comfyreview.application.card_battler_visuals import (
     VISUAL_PROMPT_PROJECTION_REVISION,
@@ -17,7 +23,10 @@ from comfyreview.application.card_battler_visuals import (
     VisualPromptProvenance,
     VisualPromptRecipe,
 )
-from comfyreview.domain.prompts import PromptAtomUsage
+from comfyreview.domain.prompts import (
+    PromptAtomUsage,
+    render_prompt_atom_usages,
+)
 
 
 def _atom(
@@ -99,3 +108,59 @@ def test_card_evolution_prompt_adapter_preserves_empty_scopes() -> None:
 
     assert result.positive_atoms == ()
     assert result.negative_atoms == ()
+
+
+def test_card_evolution_debug_renderer_has_stable_golden_vectors() -> None:
+    handoff = CardEvolutionPromptAdapter.adapt(_recipe())
+
+    result = CardEvolutionDebugPromptRenderer.render(handoff)
+
+    assert result == RenderedCardEvolutionPrompts(
+        positive_prompt=(
+            "{glowing freckles:1.14}, {wide angle:1.00}, {storm clouds:0.88}"
+        ),
+        negative_prompt="{motion blur:1.25}, {extra limbs:1.00}",
+    )
+
+
+def test_card_evolution_comfyui_renderer_has_stable_golden_vectors() -> None:
+    handoff = CardEvolutionPromptAdapter.adapt(_recipe())
+
+    result = CardEvolutionComfyUiPromptRenderer.render(handoff)
+
+    assert result == RenderedCardEvolutionPrompts(
+        positive_prompt=(
+            "(glowing freckles:1.14), (wide angle:1.00), (storm clouds:0.88)"
+        ),
+        negative_prompt="(motion blur:1.25), (extra limbs:1.00)",
+    )
+    assert render_prompt_atom_usages(handoff.positive_atoms) == (
+        "(glowing freckles:1.137), wide angle, (storm clouds:0.875)"
+    )
+
+
+@pytest.mark.parametrize(
+    ("atom", "message"),
+    [
+        (PromptAtomUsage("  ", 1000), "text must be non-empty"),
+        (PromptAtomUsage("valid", 0), "weight must be positive"),
+    ],
+)
+def test_card_evolution_renderers_reject_invalid_atoms(
+    atom: PromptAtomUsage, message: str
+) -> None:
+    handoff = CardEvolutionPromptHandoff((atom,), ())
+
+    with pytest.raises(CardEvolutionPromptRenderingError, match=message):
+        CardEvolutionDebugPromptRenderer.render(handoff)
+
+
+def test_card_evolution_renderers_preserve_empty_channels() -> None:
+    empty = CardEvolutionPromptHandoff((), ())
+
+    assert CardEvolutionDebugPromptRenderer.render(empty) == (
+        RenderedCardEvolutionPrompts("", "")
+    )
+    assert CardEvolutionComfyUiPromptRenderer.render(empty) == (
+        RenderedCardEvolutionPrompts("", "")
+    )
